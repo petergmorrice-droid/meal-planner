@@ -30,7 +30,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#fafafa] text-zinc-900 overflow-hidden select-none">
+    <div className="flex flex-col h-screen bg-[#fafafa] text-zinc-900 overflow-hidden">
       <main className="flex-1 overflow-hidden relative flex flex-col">
         {activeTab === 'cookbook' && <CookBookTab store={store} onNavigateTab={handleNavigateTab} />}
         {activeTab === 'planning' && (
@@ -114,7 +114,7 @@ function TabButton({
       <div className="flex items-center justify-center h-5 shrink-0">
         {icon}
       </div>
-      <span className="text-[9px] sm:text-[11px] tracking-tight mt-0.5 whitespace-nowrap truncate w-full text-center">{label}</span>
+      <span className="text-[11px] sm:text-[11px] tracking-tight mt-0.5 whitespace-nowrap truncate w-full text-center">{label}</span>
     </button>
   );
 }

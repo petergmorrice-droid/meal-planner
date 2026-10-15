@@ -238,7 +238,7 @@ export function IngredientTriageModal({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-amber-900">Map Ingredient</span>
-                <span className="text-[10px] font-extrabold bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded-full font-mono">
+                <span className="text-[11px] font-extrabold bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded-full font-mono">
                   {currentIndex + 1} of {unmappedItems.length}
                 </span>
               </div>
@@ -266,18 +266,18 @@ export function IngredientTriageModal({
             isEditingIngredient ? 'border-indigo-400 ring-2 ring-indigo-500/10 shadow-xs' : 'border-zinc-200/90'
           }`}>
             <div className="flex items-center justify-between gap-2 mb-1.5">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                 {activeSuggestions.length === 0 ? 'Suggested Grocery Name' : 'Recipe Ingredient'}
               </span>
               <div className="flex items-center gap-1.5">
                 {currentItem.ingredient.suggestedAisle && !isEditingIngredient && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-150">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-150">
                     <Sparkles className="w-2.5 h-2.5 text-emerald-500" />
                     <span>Aisle: {currentItem.ingredient.suggestedAisle}</span>
                   </span>
                 )}
                 {isEditingIngredient && (
-                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-150">
+                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-150">
                     Editing Ingredient
                   </span>
                 )}
@@ -287,7 +287,7 @@ export function IngredientTriageModal({
             {isEditingIngredient ? (
               <div className="space-y-2.5 pt-1 animate-in fade-in duration-150">
                 <div>
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
                     Ingredient Name
                   </label>
                   <input
@@ -306,7 +306,7 @@ export function IngredientTriageModal({
 
                 <div className="grid grid-cols-12 gap-2">
                   <div className="col-span-3">
-                    <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
                       Qty
                     </label>
                     <input
@@ -320,7 +320,7 @@ export function IngredientTriageModal({
                   </div>
 
                   <div className="col-span-4">
-                    <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
                       Unit
                     </label>
                     <input
@@ -333,7 +333,7 @@ export function IngredientTriageModal({
                   </div>
 
                   <div className="col-span-5">
-                    <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
                       Aisle / Category
                     </label>
                     <select
@@ -393,7 +393,7 @@ export function IngredientTriageModal({
                     ({currentItem.ingredient.amount} {currentItem.ingredient.unit})
                   </span>
                 )}
-                <span className="text-[10px] text-zinc-400 group-hover:text-indigo-600 font-medium ml-auto flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
+                <span className="text-[11px] text-zinc-400 group-hover:text-indigo-600 font-medium ml-auto flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
                   <Pencil className="w-2.5 h-2.5" />
                   <span>Click to change</span>
                 </span>
@@ -408,7 +408,7 @@ export function IngredientTriageModal({
                 <Search className="w-3.5 h-3.5 text-zinc-500" />
                 <span>Search Grocery Database</span>
               </label>
-              <span className="text-[10px] text-zinc-400 font-medium">
+              <span className="text-[11px] text-zinc-400 font-medium">
                 {allGroceryItems.length} items in catalog
               </span>
             </div>
@@ -447,7 +447,7 @@ export function IngredientTriageModal({
                 <span className="text-[11px] font-bold text-zinc-700">
                   Search Results for &quot;{searchQuery}&quot;
                 </span>
-                <span className="text-[10px] text-zinc-400 font-medium font-mono">
+                <span className="text-[11px] text-zinc-400 font-medium font-mono">
                   {searchResults.length} match{searchResults.length === 1 ? '' : 'es'}
                 </span>
               </div>
@@ -481,11 +481,11 @@ export function IngredientTriageModal({
                             <span className="text-xs font-bold text-zinc-900 leading-tight">
                               {item.name}
                             </span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${getCategoryBadgeClass(item.category)}`}>
+                            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md border ${getCategoryBadgeClass(item.category)}`}>
                               {item.category}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-400">
+                          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-zinc-400">
                             {item.unit && <span>Unit: {item.unit}</span>}
                             {item.cost ? <span>• £{item.cost.toFixed(2)}</span> : null}
                             {Array.isArray(item.aliases) && item.aliases.length > 0 && (
@@ -529,7 +529,7 @@ export function IngredientTriageModal({
                   {activeSuggestions.length > 0 ? 'Suggested Matches' : 'No Direct Suggestions'}
                 </span>
                 {activeSuggestions.length > 0 && (
-                  <span className="text-[10px] text-zinc-400 font-medium">
+                  <span className="text-[11px] text-zinc-400 font-medium">
                     Top {activeSuggestions.length} candidates
                   </span>
                 )}
@@ -548,11 +548,11 @@ export function IngredientTriageModal({
                             <span className="text-xs font-bold text-zinc-900 leading-tight">
                               {suggestion.name}
                             </span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${getCategoryBadgeClass(suggestion.category)}`}>
+                            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md border ${getCategoryBadgeClass(suggestion.category)}`}>
                               {suggestion.category}
                             </span>
                           </div>
-                          <span className="block text-[10px] text-zinc-400 mt-0.5">
+                          <span className="block text-[11px] text-zinc-400 mt-0.5">
                             Match #{idx + 1} {suggestion.unit ? `• Unit: ${suggestion.unit}` : ''}
                           </span>
                         </div>

@@ -29,8 +29,6 @@ import {
   Zap,
   Sparkles,
   Info,
-  Coins,
-  Heart,
   AlertCircle,
   Eye,
   Leaf,
@@ -234,8 +232,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
     showPrepTime: true,
     showCookTime: true,
     showTotalTime: true,
-    showHealth: true,
-    showCost: true,
     showMethod: true,
     showEmojis: true,
   };
@@ -737,7 +733,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
           isAdhoc: false,
           isRecurring: true,
           planId: plan.id,
-          weekLabel: `Week of ${plan.startDate === currentMondayStr ? 'This Week' : plan.startDate === formatDateISO(new Date(getMonday(new Date()).getTime() + 7 * 24 * 60 * 60 * 1000)) ? 'Next Week' : formatWeekRange(plan.startDate)}`
+          weekLabel: `Week of ${plan.startDate === currentMondayStr ? 'This Week' : plan.startDate === nextMondayStr ? 'Next Week' : formatWeekRange(plan.startDate)}`
         });
       } else {
         if (!existing.userAdjusted) {
@@ -1087,7 +1083,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                     <div className="absolute right-0 top-full mt-2 w-56 max-h-[calc(100vh-140px)] overflow-y-auto bg-white rounded-2xl border border-zinc-200/90 shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
                       {/* Meal Rows Switcher */}
                       <div className="px-1 mb-2">
-                        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
                           Display Rows
                         </span>
                         <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-xl">
@@ -1121,15 +1117,13 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                       </div>
 
                       <div className="px-1 py-1 mb-1 border-t border-zinc-100">
-                        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block">Fields</span>
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Fields</span>
                       </div>
                       <div className="space-y-0.5 max-h-56 overflow-y-auto">
                         {Object.entries({
                           showPrepTime: 'Prep Time',
                           showCookTime: 'Cook Time',
                           showTotalTime: 'Total Time',
-                          showHealth: 'Health Score',
-                          showCost: 'Cost',
                           showMethod: 'Cooking Method',
                           showVegetarian: 'Vegetarian',
                           showVegan: 'Vegan',
@@ -1190,7 +1184,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                               setCookingFilter('all');
                               setDietaryFilter('all');
                             }}
-                            className="text-[10px] text-zinc-400 hover:text-zinc-900 font-medium cursor-pointer"
+                            className="text-[11px] text-zinc-400 hover:text-zinc-900 font-medium cursor-pointer"
                           >
                             Reset all
                           </button>
@@ -1200,7 +1194,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                       <div className="overflow-y-auto p-3 space-y-3 flex-1 scrollbar-thin">
                         {/* Dietary Section */}
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                          <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                             Dietary
                           </span>
                           <div className="grid grid-cols-3 gap-1">
@@ -1242,7 +1236,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
                         {/* Cooking Method Section */}
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                          <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                             Cooking Method / Appliance
                           </span>
                           <div className="grid grid-cols-2 gap-1">
@@ -1286,7 +1280,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
                         {/* Cook Time Section */}
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                          <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                             Time Needed
                           </span>
                           <div className="grid grid-cols-2 gap-1">
@@ -1339,7 +1333,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
                         {/* Tag / Category Section */}
                         <div>
-                          <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                          <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                             Category / Tag
                           </span>
                           <div className="max-h-44 overflow-y-auto space-y-0.5 pr-1">
@@ -1356,7 +1350,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                               }`}
                             >
                               <span>All Categories</span>
-                              <span className="text-[10px] opacity-70">{store.state.recipes.length}</span>
+                              <span className="text-[11px] opacity-70">{store.state.recipes.length}</span>
                             </button>
                             {allTags.map(tag => {
                               const count = store.state.recipes.filter((r: Recipe) => r.tags?.includes(tag)).length;
@@ -1375,7 +1369,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                                   }`}
                                 >
                                   <span>{tag}</span>
-                                  <span className="text-[10px] opacity-70">{count}</span>
+                                  <span className="text-[11px] opacity-70">{count}</span>
                                 </button>
                               );
                             })}
@@ -1440,7 +1434,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                           )}
 
                           {/* Inline Badges: Prep/Cook/Total times and Health/Cost/Vegi */}
-                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-zinc-600">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-zinc-600">
                             {prefs.showPrepTime && (
                               recipe.methodPrepTime && recipe.methodPrepTime.ninja && recipe.methodPrepTime.oven_hob && recipe.methodPrepTime.ninja !== recipe.methodPrepTime.oven_hob ? (
                                 <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700" title="Preparation time">
@@ -1476,28 +1470,9 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                               </span>
                             )}
 
-                            {prefs.showHealth && (
-                              <span 
-                                className="flex items-center gap-1 font-medium text-[10px] text-rose-600 bg-rose-50 border border-rose-200/80 px-1.5 py-0.5 rounded"
-                                title={`Health Score: ${recipe.healthScore}/10`}
-                              >
-                                <Heart className="w-2.5 h-2.5 fill-rose-500/20" />
-                                {recipe.healthScore}
-                              </span>
-                            )}
-
-                            {prefs.showCost && (
-                              <span 
-                                className="font-medium text-[10px] text-zinc-900 bg-zinc-100/90 border border-zinc-200/80 px-1.5 py-0.5 rounded tabular-nums"
-                                title={`Estimated cost: £${recipe.costEstimate}`}
-                              >
-                                £{recipe.costEstimate}
-                              </span>
-                            )}
-
                             {prefs.showVegetarian && (recipe.isVegetarian || recipe.tags?.some(t => ['vegetarian', 'vegi', 'veggie'].includes(t.toLowerCase()))) && (
                               <span 
-                                className="flex items-center gap-1 font-medium text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
+                                className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
                                 title="Vegetarian"
                               >
                                 <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
@@ -1507,7 +1482,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
                             {prefs.showVegan && (recipe.isVegan || recipe.tags?.some(t => ['vegan'].includes(t.toLowerCase()))) && (
                               <span 
-                                className="flex items-center gap-1 font-medium text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
+                                className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
                                 title="Vegan"
                               >
                                 <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
@@ -1522,7 +1497,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                           {prefs.showMethod && (
                             <div className="flex items-center gap-1">
                               <span
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
                                   hasNinja
                                     ? 'bg-amber-50 text-amber-900 border border-amber-300 font-semibold'
                                     : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
@@ -1534,7 +1509,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                               </span>
 
                               <span
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
                                   hasOvenHob
                                     ? 'bg-rose-50 text-rose-900 border border-rose-300 font-semibold'
                                     : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
@@ -1582,7 +1557,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
                         {/* Prep Time and Cook Time */}
                         {(prefs.showPrepTime || prefs.showCookTime || prefs.showTotalTime) && (
-                          <div className="flex flex-col gap-1 mb-1.5 text-[10px] font-medium text-zinc-600">
+                          <div className="flex flex-col gap-1 mb-1.5 text-[11px] font-medium text-zinc-600">
                             {prefs.showPrepTime && (
                               recipe.methodPrepTime && recipe.methodPrepTime.ninja && recipe.methodPrepTime.oven_hob && recipe.methodPrepTime.ninja !== recipe.methodPrepTime.oven_hob ? (
                                 <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700 w-fit" title="Preparation time">
@@ -1620,29 +1595,12 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                           </div>
                         )}
 
-                        {/* Health and Cost */}
-                        {(prefs.showHealth || prefs.showCost || prefs.showVegetarian || prefs.showVegan) && (
+                        {/* Diet labels */}
+                        {(prefs.showVegetarian || prefs.showVegan) && (
                           <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                            {prefs.showHealth && (
-                              <span 
-                                className="flex items-center gap-1 font-medium text-[10px] text-rose-600 bg-rose-50 border border-rose-200/80 px-1.5 py-0.5 rounded"
-                                title={`Health Score: ${recipe.healthScore}/10`}
-                              >
-                                <Heart className="w-2.5 h-2.5 fill-rose-500/20" />
-                                {recipe.healthScore}
-                              </span>
-                            )}
-                            {prefs.showCost && (
-                              <span 
-                                className="font-medium text-[10px] text-zinc-900 bg-zinc-100/90 border border-zinc-200/80 px-1.5 py-0.5 rounded tabular-nums"
-                                title={`Estimated cost: £${recipe.costEstimate}`}
-                              >
-                                £{recipe.costEstimate}
-                              </span>
-                            )}
                             {prefs.showVegetarian && (recipe.isVegetarian || recipe.tags?.some(t => ['vegetarian', 'vegi', 'veggie'].includes(t.toLowerCase()))) && (
                               <span 
-                                className="flex items-center gap-1 font-medium text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
+                                className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
                                 title="Vegetarian"
                               >
                                 <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
@@ -1651,7 +1609,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                             )}
                             {prefs.showVegan && (recipe.isVegan || recipe.tags?.some(t => ['vegan'].includes(t.toLowerCase()))) && (
                               <span 
-                                className="flex items-center gap-1 font-medium text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
+                                className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
                                 title="Vegan"
                               >
                                 <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
@@ -1668,7 +1626,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                           <div className="flex flex-wrap items-center gap-1">
                             {/* Ninja Combi */}
                             <span
-                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
                                 hasNinja
                                   ? 'bg-amber-50 text-amber-900 border border-amber-300 font-semibold'
                                   : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
@@ -1681,7 +1639,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
                             {/* Oven / Hob */}
                             <span
-                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
                                 hasOvenHob
                                   ? 'bg-rose-50 text-rose-900 border border-rose-300 font-semibold'
                                   : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
@@ -1713,7 +1671,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
               onClick={() => setShowWeekDropdown(false)} 
             />
             <div className="absolute left-2 sm:left-4 bottom-full mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-zinc-200 p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
-              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+              <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
                 Switch Week
               </div>
               
@@ -1738,7 +1696,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                         <div className="flex items-center gap-2">
                           <span className="block font-medium">{plan.startDate === currentMondayStr ? 'This Week' : plan.startDate === nextMondayStr ? 'Next Week' : formatWeekRange(plan.startDate)}</span>
                         </div>
-                        <span className="text-[10px] text-zinc-400">
+                        <span className="text-[11px] text-zinc-400">
                           {Object.values(plan.days).reduce((acc, d) => acc + d.meals.length, 0)} meals planned
                         </span>
                       </div>
@@ -1783,7 +1741,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                       <History className="w-3.5 h-3.5 text-zinc-500" />
                       <span>Past Weeks Archive</span>
                     </span>
-                    <span className="text-[10px] text-zinc-400 font-medium">Settings →</span>
+                    <span className="text-[11px] text-zinc-400 font-medium">Settings →</span>
                   </button>
                 )}
               </div>
@@ -1802,7 +1760,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
               >
                 <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />
                 <span className="text-xs font-semibold text-zinc-900">
-                  {currentPlan?.startDate === currentMondayStr ? 'This Week' : currentPlan?.startDate === formatDateISO(new Date(getMonday(new Date()).getTime() + 7 * 24 * 60 * 60 * 1000)) ? 'Next Week' : formatWeekStart(currentPlan?.startDate)}
+                  {currentPlan?.startDate === currentMondayStr ? 'This Week' : currentPlan?.startDate === nextMondayStr ? 'Next Week' : formatWeekStart(currentPlan?.startDate)}
                 </span>
                 {currentPlan?.status === 'finalized' ? (
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
@@ -1915,7 +1873,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                     <div className="flex justify-between items-center shrink-0 mb-1 sm:mb-2 border-b border-zinc-100 pb-1">
                       <div className="flex flex-col min-w-0">
                         <span className="text-xs font-bold text-zinc-900 tracking-wide">{day}</span>
-                        <span className="text-[10px] font-medium text-zinc-400">
+                        <span className="text-[11px] font-medium text-zinc-400">
                           {dayPlan?.date ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}
                         </span>
                       </div>
@@ -1953,7 +1911,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                             e.stopPropagation();
                             setAddingNoteToMeal({ dayName: day, meal });
                           }}
-                          className="mt-1 flex items-start gap-1 text-[10px] text-zinc-500 bg-zinc-50 hover:bg-zinc-100 px-1.5 py-1 rounded-md transition-colors cursor-pointer group/note"
+                          className="mt-1 flex items-start gap-1 text-[11px] text-zinc-500 bg-zinc-50 hover:bg-zinc-100 px-1.5 py-1 rounded-md transition-colors cursor-pointer group/note"
                           title={meal.note}
                         >
                           <FileText className="w-3 h-3 text-zinc-400 shrink-0 mt-0.5" />
@@ -1967,7 +1925,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                           {meal.sides.map((side) => (
                             <span 
                               key={side.id} 
-                              className="inline-flex items-center gap-0.5 text-[9px] font-medium text-zinc-600 bg-zinc-50 border border-zinc-200/60 rounded-md px-1.5 py-0.5 max-w-full truncate"
+                              className="inline-flex items-center gap-0.5 text-[11px] font-medium text-zinc-600 bg-zinc-50 border border-zinc-200/60 rounded-md px-1.5 py-0.5 max-w-full truncate"
                               title={`${side.name}: ${side.amount} ${side.unit}`}
                             >
                               <span>🍚</span>
@@ -1998,7 +1956,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                                 setEditingServingsMeal({ dayName: day, meal });
                               }
                             }}
-                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-700 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/60 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-700 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/60 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
                             title={`Cooking for ${meal.servings || 2} ${(meal.servings || 2) === 1 ? 'person' : 'people'}. Click to adjust.`}
                           >
                             <span className="text-zinc-400 select-none">👤</span>
@@ -2012,7 +1970,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                                 e.stopPropagation();
                                 setSidesEditingMeal({ dayName: day, meal });
                               }}
-                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100/75 border border-indigo-200/80 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100/75 border border-indigo-200/80 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
                               title="Manage sides for this meal"
                             >
                               <span>🍚</span>
@@ -2025,7 +1983,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                                 e.stopPropagation();
                                 setSidesEditingMeal({ dayName: day, meal });
                               }}
-                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-700 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/50 bg-zinc-50 border border-zinc-200/60 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-700 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/50 bg-zinc-50 border border-zinc-200/60 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
                               title="Add sides to this meal"
                             >
                               <span className="text-zinc-400">🍚</span>
@@ -2034,7 +1992,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                           )}
                         </div>
                       ) : (
-                        <span className="text-[9px] text-zinc-400 italic">No cooking</span>
+                        <span className="text-[11px] text-zinc-400 italic">No cooking</span>
                       )}
 
                       {/* Note button removed */}
@@ -2058,7 +2016,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                 >
                   <div className="flex flex-col shrink-0">
                     <span className="text-xs font-bold text-zinc-900 tracking-wide">{day}</span>
-                    <span className="text-[10px] font-medium text-zinc-400">
+                    <span className="text-[11px] font-medium text-zinc-400">
                       {dayPlan?.date ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}
                     </span>
                   </div>
@@ -2070,10 +2028,10 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                     <div className="w-7 h-7 rounded-lg bg-zinc-100 group-hover:bg-indigo-50 text-zinc-400 group-hover:text-indigo-600 flex items-center justify-center mb-1 transition-colors">
                       <Plus className="w-4 h-4" />
                     </div>
-                    <span className="text-[10px] font-medium text-zinc-500 group-hover:text-indigo-600 block transition-colors leading-tight">
+                    <span className="text-[11px] font-medium text-zinc-500 group-hover:text-indigo-600 block transition-colors leading-tight">
                       Add Meal
                     </span>
-                    <span className="text-[9px] text-zinc-400 hidden sm:block">
+                    <span className="text-[11px] text-zinc-400 hidden sm:block">
                       Drop or tap
                     </span>
                   </div>
@@ -2110,7 +2068,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
             {/* Quick Metadata Strip */}
             <div className="py-2 px-1 flex items-center justify-between gap-1.5 border-b border-zinc-100/80 text-[11px]">
               <div className="flex flex-wrap items-center gap-1.5 font-medium text-zinc-600">
-                <span className="font-bold text-zinc-900 bg-zinc-100 px-1.5 py-0.5 rounded shrink-0">£{assigningRecipe.costEstimate}</span>
                 {assigningRecipe.methodPrepTime && assigningRecipe.methodPrepTime.ninja && assigningRecipe.methodPrepTime.oven_hob && assigningRecipe.methodPrepTime.ninja !== assigningRecipe.methodPrepTime.oven_hob ? (
                   <span>Prep: <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500/20 inline" /> {assigningRecipe.methodPrepTime.ninja}m / <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500/20 inline" /> {assigningRecipe.methodPrepTime.oven_hob}m</span>
                 ) : (
@@ -2138,7 +2095,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
             </div>
             
             <div className="py-3 space-y-1.5 max-h-72 overflow-y-auto">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1">
                 Select which day to plan this meal:
               </span>
               {DAYS_OF_WEEK.map(day => {
@@ -2155,12 +2112,12 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                   >
                     <div>
                       <span className="font-semibold text-xs text-zinc-900 block">{day}</span>
-                      <span className="text-[10px] text-zinc-400">
+                      <span className="text-[11px] text-zinc-400">
                         {hasMeal ? `Replaces: ${currentMealName}` : 'Empty day'}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-medium text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[11px] font-medium text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity">
                         Assign
                       </span>
                       <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 transition-colors" />
@@ -2199,7 +2156,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
             <div className="overflow-y-auto py-3 space-y-4 flex-1 pr-1">
               {/* Quick choices */}
               <div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Quick Options</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Quick Options</span>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
@@ -2219,7 +2176,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                       <ShoppingBag className="w-4 h-4" />
                     </div>
                     <span className="font-semibold text-xs text-zinc-900 leading-tight">Takeout</span>
-                    <span className="text-[10px] text-zinc-400">Add note</span>
+                    <span className="text-[11px] text-zinc-400">Add note</span>
                   </button>
                   <button
                     type="button"
@@ -2239,7 +2196,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                       <Utensils className="w-4 h-4" />
                     </div>
                     <span className="font-semibold text-xs text-zinc-900 leading-tight">Eat Out</span>
-                    <span className="text-[10px] text-zinc-400">Add note</span>
+                    <span className="text-[11px] text-zinc-400">Add note</span>
                   </button>
                   <button
                     type="button"
@@ -2259,7 +2216,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                       <X className="w-4 h-4" />
                     </div>
                     <span className="font-semibold text-xs text-zinc-900 leading-tight">No Meal</span>
-                    <span className="text-[10px] text-zinc-400">Add note</span>
+                    <span className="text-[11px] text-zinc-400">Add note</span>
                   </button>
                 </div>
               </div>
@@ -2267,7 +2224,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
               {/* Batches if any */}
               {store.state.batches.length > 0 && (
                 <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Freezer Batches</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Freezer Batches</span>
                   <div className="border border-zinc-200 rounded-xl overflow-hidden divide-y divide-zinc-100 bg-white">
                     {store.state.batches.map((batch: BatchItem) => {
                       const recipe = batch.recipeId ? store.state.recipes.find((r: Recipe) => r.id === batch.recipeId) : null;
@@ -2284,7 +2241,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                             </div>
                             <div>
                               <span className="font-medium block text-zinc-900">{displayName}</span>
-                              <span className="text-[10px] text-zinc-500 flex items-center gap-1 mt-0.5">
+                              <span className="text-[11px] text-zinc-500 flex items-center gap-1 mt-0.5">
                                 <Snowflake className="w-2.5 h-2.5 text-cyan-600" />
                                 {batch.portions} {batch.portions === 1 ? 'portion' : 'portions'} available
                               </span>
@@ -2300,7 +2257,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
               {/* Cook Book Recipes */}
               <div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Cook Book Recipes</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Cook Book Recipes</span>
                 <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
                   {store.state.recipes.map((r: Recipe) => (
                     <button
@@ -2314,7 +2271,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                         </div>
                         <div className="truncate">
                           <span className="font-medium text-zinc-900 block truncate">{r.name}</span>
-                          <span className="text-[10px] text-zinc-400">{r.prepTime + r.cookTime}m • £{r.costEstimate}</span>
+                          <span className="text-[11px] text-zinc-400">{r.prepTime + r.cookTime}m</span>
                         </div>
                       </div>
                       <Plus className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
@@ -2386,7 +2343,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
             </div>
 
             <div className="py-5 flex flex-col items-center">
-              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Cooking For</span>
+              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Cooking For</span>
               
               <div className="flex items-center gap-4">
                 <button
@@ -2839,7 +2796,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                           {/* Day column label */}
                           <div className="w-20 shrink-0">
                             <span className="font-bold text-xs text-zinc-900 block">{day}</span>
-                            <span className="text-[10px] text-zinc-400 block">{dayDate}</span>
+                            <span className="text-[11px] text-zinc-400 block">{dayDate}</span>
                           </div>
 
                           {/* Meal Info */}
@@ -2864,7 +2821,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                                 <span className="font-semibold text-xs text-zinc-900 block truncate" title={meal.name}>
                                   {meal.name}
                                 </span>
-                                <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
+                                <div className="flex items-center gap-2 text-[11px] text-zinc-500 mt-0.5">
                                   {meal.type !== 'no_meal' && (
                                     <span className="flex items-center gap-1 font-medium text-zinc-700 bg-zinc-100 px-1.5 py-0.5 rounded">
                                       <span className="text-[11px] leading-none" role="img" aria-label="people">👤</span>
@@ -3151,8 +3108,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       <div className="absolute bottom-6 right-6 flex flex-col gap-3 hidden lg:flex pointer-events-none z-10">
         <div className="bg-white p-4 rounded-xl shadow-lg border border-zinc-200/90 w-64 pointer-events-auto">
           <div className="flex items-center justify-between mb-2.5">
-            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Freezer Status</h4>
-            <span className="text-[10px] bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded font-medium">
+            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Freezer Status</h4>
+            <span className="text-[11px] bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded font-medium">
               {store.state.batches.reduce((acc: number, b: BatchItem) => acc + b.portions, 0)} Meals left
             </span>
           </div>
@@ -3314,7 +3271,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
               <span>🥗</span>
               <span>Manage Sides for {meal.name}</span>
             </h3>
-            <p className="text-[10px] text-zinc-500 font-medium mt-0.5">{dayName} Meal Plan</p>
+            <p className="text-[11px] text-zinc-500 font-medium mt-0.5">{dayName} Meal Plan</p>
           </div>
           <button 
             onClick={onClose}
@@ -3327,7 +3284,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
         <div className="p-5 overflow-y-auto space-y-4 flex-1 scrollbar-thin">
           {/* Selected Sides List */}
           <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Chosen Sides</h4>
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Chosen Sides</h4>
             {chosenSides.length === 0 ? (
               <div className="text-center py-4 bg-zinc-50 rounded-xl border border-dashed border-zinc-200">
                 <span className="text-xs text-zinc-400">No sides added yet.</span>
@@ -3338,7 +3295,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                   <div key={side.id} className="flex items-center justify-between p-2.5 bg-zinc-50 border border-zinc-200/80 rounded-xl">
                     <div className="min-w-0 pr-2">
                       <span className="font-semibold text-xs text-zinc-900 block truncate">{side.name}</span>
-                      <span className="text-[10px] text-zinc-400">{side.category || 'Pantry'}</span>
+                      <span className="text-[11px] text-zinc-400">{side.category || 'Pantry'}</span>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-lg p-0.5">
@@ -3377,7 +3334,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
 
           {/* Popular Sides */}
           <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Frequent / Popular</h4>
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Frequent / Popular</h4>
             <div className="flex flex-wrap gap-1.5">
               {/* Special 'None' Option */}
               <button
@@ -3414,7 +3371,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
 
           {/* Search Bar */}
           <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Search Grocery Database</h4>
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Search Grocery Database</h4>
             <div className="relative">
               <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -3437,7 +3394,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                     className="w-full text-left px-3 py-2 text-xs hover:bg-zinc-50 flex items-center justify-between transition-colors cursor-pointer"
                   >
                     <span className="font-medium text-zinc-900">{item.name}</span>
-                    <span className="text-[10px] text-zinc-400 font-semibold">{item.category}</span>
+                    <span className="text-[11px] text-zinc-400 font-semibold">{item.category}</span>
                   </button>
                 ))}
 
@@ -3465,7 +3422,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                     <Database className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Triage Custom Side</span>
                   </h5>
-                  <p className="text-[10px] text-indigo-800/80 mt-0.5">Map "{triageSideName}" to grocery database so it aggregates perfectly.</p>
+                  <p className="text-[11px] text-indigo-800/80 mt-0.5">Map "{triageSideName}" to grocery database so it aggregates perfectly.</p>
                 </div>
                 <button
                   type="button"
@@ -3478,7 +3435,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <label className="block text-[10px] font-semibold text-indigo-950 mb-1">Aisle / Category</label>
+                  <label className="block text-[11px] font-semibold text-indigo-950 mb-1">Aisle / Category</label>
                   <select
                     value={triageCategory}
                     onChange={e => setTriageCategory(e.target.value)}
@@ -3493,7 +3450,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-indigo-950 mb-1">Unit</label>
+                  <label className="block text-[11px] font-semibold text-indigo-950 mb-1">Unit</label>
                   <input
                     type="text"
                     placeholder="g, pack, head..."
@@ -3505,7 +3462,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
               </div>
 
               <div className="text-xs">
-                <label className="block text-[10px] font-semibold text-indigo-950 mb-1">Default Amount / Increment</label>
+                <label className="block text-[11px] font-semibold text-indigo-950 mb-1">Default Amount / Increment</label>
                 <div className="flex items-center gap-1.5 bg-white border border-indigo-200/80 rounded-lg p-0.5 w-fit">
                   <button
                     type="button"

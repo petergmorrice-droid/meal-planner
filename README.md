@@ -8,12 +8,12 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 
 | Tab | What it does |
 | --- | --- |
-| **Cookbook** | Your recipe book. Paste a recipe and Gemini copies it in exactly as written (or describe one and Gemini writes it). Each ingredient is linked to a product on your grocery list. |
+| **Cookbook** | Your recipe book. Paste a recipe and Gemini copies it in exactly as written (or describe one and Gemini writes it). Each ingredient is linked to a product on your grocery list. Text can be selected and copied. |
 | **Planning** | Pick meals for each day of the week, up to 4 weeks ahead. Finalise a week to build its shopping list. |
 | **Shop** | Shopping list grouped by aisle, generated from the week's meals plus staples and extras. |
 | **Cook** | This week's cooking schedule with step-by-step cook mode (oven/hob or Ninja). |
 | **Freezer** | Batch-cooked meals in the freezer, which can be dropped into a week's plan. |
-| **Settings** | Past weeks, grocery database, household, and connections (GitHub sync + Gemini key). |
+| **Settings** | Past weeks, grocery database, household, connections (GitHub sync + Gemini key), and backup. |
 
 ## Where the data lives
 
@@ -28,22 +28,46 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 There is no server and no database to pay for. The built app is a set of
 static files that can be hosted for free anywhere.
 
-## Putting it online (single file)
+## Putting it online
 
-`npm run build:single` produces `dist-single/index.html`: the entire app in
-one file. To host it free on GitHub Pages:
+`npm run build:single` produces the app in `dist-single/`: the whole app in
+one `index.html`, plus four small files that let it open without signal and
+be added to the home screen (`sw.js`, `manifest.webmanifest`, `icon-192.png`,
+`icon-512.png`). To host it free on GitHub Pages:
 
 1. On github.com, create a new **public** repository (e.g. `meal-planner`).
-2. **Add file → Upload files**, upload `index.html`, and commit.
+2. **Add file → Upload files**, drag in all five files together, and commit.
 3. **Settings → Pages**: set *Source* to "Deploy from a branch", branch
    `main`, folder `/ (root)`, and save.
 4. After a minute the app is at `https://<your-username>.github.io/meal-planner/`.
-   Add it to each phone's home screen from the browser's share menu.
+   Open it on each phone and add it to the home screen from the browser's
+   share menu (iPhone: Share → *Add to Home Screen*).
 
-To update, upload the new `index.html` over the old one. The code holds no
-passwords or keys (those are entered on each phone), so a public repository
-is fine. Keep the address the same between updates: each phone's saved
-settings belong to the address.
+To update, upload the new files over the old ones (all five; if only
+`index.html` changed that's enough, but uploading all is always safe). The
+code holds no passwords or keys (those are entered on each phone), so a
+public repository is fine. Keep the address the same between updates: each
+phone's saved settings belong to the address.
+
+**iPhone:** the home-screen app keeps its own storage, separate from Safari.
+The first time you open it from the home screen, enter the GitHub and Gemini
+details again (*Settings → connections*, choose **Pull**) and everything
+comes down from the Gist.
+
+## Opening without signal
+
+After the app has been opened once with signal, it opens without any: in
+the supermarket, on a train, in airplane mode. Your lists and recipes are
+already kept on the phone; changes made offline are uploaded when the phone
+is back online.
+
+- With signal, the app checks for a newer version (waiting at most 3
+  seconds), so an update you upload shows up the next time it's opened.
+- With no or very weak signal, the saved copy opens straight away.
+- Gemini and syncing need signal; everything else works without it.
+
+This is done by `public/sw.js` (a "service worker"). It only saves the app's
+own files; your data is never sent anywhere new.
 
 > Earlier versions used a Firebase database created by AI Studio. The current
 > version does not read from it. If any old data only exists there, it would
@@ -177,6 +201,8 @@ Main files:
 - `src/services/geminiService.ts` — Gemini calls (copying a recipe, suggesting products)
 - `src/components/*Tab.tsx` — one file per tab
 - `src/types.ts` — data shapes (Recipe, MealPlan, ShoppingListItem, …)
+- `public/` — `sw.js` (opening without signal), the manifest and icons
+  (`scripts/make-icons.py` draws the icons)
 
 ## History
 
@@ -204,3 +230,10 @@ Main files:
   can't link itself. Notes ("finely chopped") are kept and shown, units like
   "small bunch" or "heaped tbsp" are understood, and free-from labels are no
   longer put on pasta or cheese dishes.
+- `Opens without signal, plus quick fixes` — the app can be added to the
+  home screen and opens with no signal. Shopping amounts read as you buy
+  them (1 kg, not 1000 g; milk in pints). Cook mode and recipes show kitchen
+  fractions (½ onion, not 0.5). Recipe text can be selected and copied, and
+  the smallest text is bigger. The made-up cost and health figures, the
+  sample-data button and the developer tools in Settings are gone. "Next
+  week" labels no longer slip a day in the week the clocks change.

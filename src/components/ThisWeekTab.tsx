@@ -772,7 +772,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                     onClick={() => setShowWeekDropdown(false)} 
                   />
                   <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-zinc-200 p-2 z-40 animate-in fade-in slide-in-from-top-2">
-                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                    <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
                       Switch Week
                     </div>
                     
@@ -804,17 +804,17 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                                   {plan.startDate === currentMondayStr ? 'This Week' : plan.startDate === nextMondayStr ? 'Next Week' : formatWeekRange(plan.startDate)}
                                 </span>
                                 {isCurrent && (
-                                  <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200/60 shrink-0">
+                                  <span className="text-[11px] font-semibold px-1 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200/60 shrink-0">
                                     This Week
                                   </span>
                                 )}
                                 {isNext && (
-                                  <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60 shrink-0">
+                                  <span className="text-[11px] font-semibold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60 shrink-0">
                                     Next Week
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[10px] text-zinc-400 mt-0.5 block">
+                              <span className="text-[11px] text-zinc-400 mt-0.5 block">
                                 {mealCount} {mealCount === 1 ? 'meal' : 'meals'} planned
                               </span>
                             </div>
@@ -918,13 +918,13 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                   </div>
 
                   {isToday && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold tracking-wider uppercase bg-emerald-600 text-white shadow-2xs">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[11px] sm:text-[11px] font-bold tracking-wider uppercase bg-emerald-600 text-white shadow-2xs">
                       <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                       Today
                     </span>
                   )}
                   {!isToday && meta.isTomorrow && (
-                    <span className="inline-flex items-center px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold text-zinc-600 bg-zinc-200/80">
+                    <span className="inline-flex items-center px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[11px] sm:text-[11px] font-semibold text-zinc-600 bg-zinc-200/80">
                       Tomorrow
                     </span>
                   )}
@@ -1020,12 +1020,12 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                                   ) : (
                                     <>
                                       {meal.type === 'leftover' && (
-                                        <div className="absolute bottom-0 inset-x-0 bg-amber-900/80 text-white text-[7px] sm:text-[8px] font-bold text-center py-0.5 backdrop-blur-xs">
+                                        <div className="absolute bottom-0 inset-x-0 bg-amber-900/80 text-white text-[11px] sm:text-[11px] font-bold text-center py-0.5 backdrop-blur-xs">
                                           Reheat
                                         </div>
                                       )}
                                       {meal.type === 'batch' && (
-                                        <div className="absolute bottom-0 inset-x-0 bg-cyan-900/80 text-white text-[7px] sm:text-[8px] font-bold text-center py-0.5 backdrop-blur-xs">
+                                        <div className="absolute bottom-0 inset-x-0 bg-cyan-900/80 text-white text-[11px] sm:text-[11px] font-bold text-center py-0.5 backdrop-blur-xs">
                                           Freezer
                                         </div>
                                       )}
@@ -1046,7 +1046,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                                   {isCooked ? (
                                     <>
                                       <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
-                                      <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-wider mt-0.5 text-emerald-700">Cooked</span>
+                                      <span className="text-[11px] sm:text-[11px] font-bold uppercase tracking-wider mt-0.5 text-emerald-700">Cooked</span>
                                     </>
                                   ) : (
                                     <>
@@ -1056,7 +1056,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                                        meal.type === 'batch' ? <Snowflake className="w-4 h-4 sm:w-5 sm:h-5" /> :
                                        meal.type === 'no_meal' ? <X className="w-4 h-4 sm:w-5 sm:h-5" /> :
                                        <ChefHat className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />}
-                                      <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-wider mt-0.5 opacity-90">
+                                      <span className="text-[11px] sm:text-[11px] font-bold uppercase tracking-wider mt-0.5 opacity-90">
                                         {meal.type === 'takeout' ? 'Takeout' :
                                          meal.type === 'eating_out' ? 'Dine Out' :
                                          meal.type === 'leftover' ? 'Reheat' :
@@ -1072,7 +1072,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                             {/* Meal Info and Metadata */}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wider ${
+                                <span className={`text-[11px] sm:text-[11px] font-bold uppercase tracking-wider ${
                                   isCooked ? 'text-zinc-500' :
                                   meal.type === 'recipe' ? 'text-emerald-700' :
                                   meal.type === 'leftover' ? 'text-amber-700' :
@@ -1084,7 +1084,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                                 </span>
 
                                 {isCooked && (
-                                  <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                                  <span className="inline-flex items-center gap-0.5 text-[11px] sm:text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
                                     <Check className="w-2.5 h-2.5 stroke-3" />
                                     Cooked
                                   </span>
@@ -1105,7 +1105,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                                 {meal.sides && meal.sides.length > 0 && (
                                   <>
                                     <span aria-hidden="true">·</span>
-                                    <span className="inline-flex items-center gap-1 text-indigo-700 font-semibold bg-indigo-50/50 border border-indigo-100 rounded px-1.5 py-0.2 text-[10px]">
+                                    <span className="inline-flex items-center gap-1 text-indigo-700 font-semibold bg-indigo-50/50 border border-indigo-100 rounded px-1.5 py-0.2 text-[11px]">
                                       🥗 {meal.sides.map(s => `${s.name} (${s.amount}${s.unit})`).join(', ')}
                                     </span>
                                   </>
@@ -1114,7 +1114,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
 
                               {/* Contextual Smart Notice: Double Cook */}
                               {!isCooked && doubleCookInfo.isDoubleCook && (
-                                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/80 text-[10px] sm:text-[11px] font-medium shadow-3xs">
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/80 text-[11px] sm:text-[11px] font-medium shadow-3xs">
                                   <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
                                   <span>
                                     <strong>Cook Double:</strong> {doubleCookInfo.totalServings} portions (extra for {doubleCookInfo.leftoverDays.join(' & ')})
@@ -1124,7 +1124,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
 
                               {/* Contextual Smart Notice: Leftovers source */}
                               {!isCooked && meal.type === 'leftover' && autoNote && (
-                                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/70 text-[10px] sm:text-[11px] font-medium shadow-3xs">
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/70 text-[11px] sm:text-[11px] font-medium shadow-3xs">
                                   <RotateCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
                                   <span>{autoNote}</span>
                                 </div>
@@ -1132,7 +1132,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
 
                               {/* Contextual Smart Notice: Freezer Batch */}
                               {!isCooked && meal.type === 'batch' && (
-                                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-cyan-50 text-cyan-900 border border-cyan-200/70 text-[10px] sm:text-[11px] font-medium shadow-3xs">
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-cyan-50 text-cyan-900 border border-cyan-200/70 text-[11px] sm:text-[11px] font-medium shadow-3xs">
                                   <Snowflake className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-600 shrink-0" />
                                   <span>Freezer batch — thaw or reheat</span>
                                 </div>
@@ -1228,10 +1228,10 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <FileText className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-700 shrink-0" />
-                              <span className="font-bold text-[9px] sm:text-[10px] uppercase tracking-wider text-amber-800 shrink-0">Note:</span>
+                              <span className="font-bold text-[11px] sm:text-[11px] uppercase tracking-wider text-amber-800 shrink-0">Note:</span>
                               <span className="text-[11px] sm:text-xs text-amber-950 font-medium truncate leading-normal">{effectiveNote}</span>
                             </div>
-                            <span className="text-[10px] text-amber-700 font-bold opacity-70 group-hover/note:opacity-100 transition-opacity shrink-0">
+                            <span className="text-[11px] text-amber-700 font-bold opacity-70 group-hover/note:opacity-100 transition-opacity shrink-0">
                               Edit
                             </span>
                           </div>
@@ -1246,7 +1246,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                                 e.stopPropagation();
                                 setEditingNoteMeal({ dayName, meal, noteText: '' });
                               }}
-                              className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 text-[11px] sm:text-[11px] text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
                               title="Add note to this meal"
                             >
                               <Plus className="w-3 h-3 text-zinc-400" />
@@ -1317,7 +1317,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                       <ArrowRight className="w-3.5 h-3.5" />
                       Replace
                     </span>
-                    <span className={`text-[10px] ${rescheduleData.mode === 'replace' ? 'text-zinc-300' : 'text-zinc-400'}`}>
+                    <span className={`text-[11px] ${rescheduleData.mode === 'replace' ? 'text-zinc-300' : 'text-zinc-400'}`}>
                       Overwrites target meal
                     </span>
                   </button>
@@ -1335,7 +1335,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                       <ArrowLeftRight className="w-3.5 h-3.5" />
                       Swap Days
                     </span>
-                    <span className={`text-[10px] ${rescheduleData.mode === 'swap' ? 'text-zinc-300' : 'text-zinc-400'}`}>
+                    <span className={`text-[11px] ${rescheduleData.mode === 'swap' ? 'text-zinc-300' : 'text-zinc-400'}`}>
                       Exchange both days
                     </span>
                   </button>
@@ -1385,7 +1385,7 @@ export default function ThisWeekTab({ store, onNavigateTab }: ThisWeekTabProps) 
                           <span>{dName}</span>
                           {isTarget && !isInvalidLeftover && <Check className="w-3 h-3 text-emerald-600" />}
                         </div>
-                        <span className="text-[10px] text-zinc-400 block mt-0.5 font-normal truncate max-w-[100px]">
+                        <span className="text-[11px] text-zinc-400 block mt-0.5 font-normal truncate max-w-[100px]">
                           {isCurrent 
                             ? 'Current day' 
                             : isInvalidLeftover

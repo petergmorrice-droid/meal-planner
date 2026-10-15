@@ -10,6 +10,14 @@
   }
 }
 
+/* Text (recipes, notes, lists) can be selected and copied; controls can't,
+   so a long press on a button doesn't start selecting its label. */
+button, nav, [role="button"], input[type="checkbox"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 /* Minimalist scrollbars */
 ::-webkit-scrollbar {
   width: 5px;

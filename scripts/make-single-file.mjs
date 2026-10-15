@@ -1,11 +1,14 @@
 // Turns the normal build (dist/index.html + assets/*.js + assets/*.css) into ONE
 // self-contained index.html, so the whole app can be put online by uploading a
-// single file (e.g. to a GitHub Pages repository).
+// handful of files (e.g. to a GitHub Pages repository). The few small files
+// that can't be inlined (sw.js for opening without signal, the manifest and
+// icons for installing on the home screen) are copied next to it.
 //
 // Usage: node scripts/make-single-file.mjs [buildDir] [outDir]
 //   defaults: dist  ->  dist-single
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const buildDir = path.resolve(process.argv[2] || 'dist');
 const outDir = path.resolve(process.argv[3] || 'dist-single');
@@ -50,3 +53,20 @@ fs.mkdirSync(outDir, { recursive: true });
 const outFile = path.join(outDir, 'index.html');
 fs.writeFileSync(outFile, html);
 console.log(`Inlined ${scripts} script(s) and ${styles} stylesheet(s) -> ${outFile} (${Math.round(Buffer.byteLength(html) / 1024)} KB)`);
+
+// Copy the files that must stay separate. sw.js gets a version stamp so phones
+// replace their saved copy of the app when a new version is uploaded.
+const version = crypto.createHash('sha256').update(html).digest('hex').slice(0, 12);
+const extras = [];
+for (const entry of fs.readdirSync(buildDir, { withFileTypes: true })) {
+  if (!entry.isFile() || entry.name === 'index.html' || entry.name.endsWith('.map')) continue;
+  const from = path.join(buildDir, entry.name);
+  const to = path.join(outDir, entry.name);
+  if (entry.name === 'sw.js') {
+    fs.writeFileSync(to, fs.readFileSync(from, 'utf8').replace(/__BUILD_VERSION__/g, version));
+  } else {
+    fs.copyFileSync(from, to);
+  }
+  extras.push(entry.name);
+}
+console.log(`Also copied: ${extras.join(', ') || '(none)'}${extras.includes('sw.js') ? ` (version ${version})` : ''}`);

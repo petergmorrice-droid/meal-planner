@@ -161,6 +161,48 @@ export function formatAmount(amount: number): string {
   return String(rounded);
 }
 
+/**
+ * Large weights and volumes in bigger units for display: 1000 g -> 1 kg, 1500 ml -> 1.5 l.
+ * Returns null when the amount reads fine as it is. Only for showing; stored amounts keep their unit.
+ */
+export function largeUnitQuantity(amount: number, unit: string | undefined | null): { amount: number; unit: string } | null {
+  const u = canonicalUnit(unit);
+  if (!isFinite(amount) || amount < 1000) return null;
+  if (u === 'g') return { amount: Math.round(amount) / 1000, unit: 'kg' };
+  if (u === 'ml') return { amount: Math.round(amount) / 1000, unit: 'l' };
+  return null;
+}
+
+/** "1 kg", "1.5 l", "250 g", "2 cans", "3": a shopping amount as it should be read. */
+export function formatQuantity(amount: number, unit: string | undefined | null): string {
+  const big = largeUnitQuantity(amount, unit);
+  if (big) return `${formatAmount(big.amount)} ${big.unit}`;
+  const label = formatUnit(String(unit ?? ''), amount);
+  return label ? `${formatAmount(amount)} ${label}` : formatAmount(amount);
+}
+
+const NICE_FRACTIONS: [number, string][] = [[1 / 8, '⅛'], [1 / 4, '¼'], [1 / 3, '⅓'], [1 / 2, '½'], [2 / 3, '⅔'], [3 / 4, '¾']];
+
+/**
+ * An amount for cooking from: ½ onion, 1½ tbsp, 75 g, 133 g (not 133.33).
+ * Weights and volumes in g/ml are whole numbers from 10 up; other amounts use
+ * kitchen fractions when one is close, otherwise one decimal place.
+ * Zero (e.g. "salt, to taste") returns an empty string.
+ */
+export function formatCookingAmount(amount: number, unit?: string | null): string {
+  if (!isFinite(amount) || amount <= 0) return '';
+  const u = canonicalUnit(unit);
+  if (amount >= 10) return String(Math.round(amount));
+  if (u === 'g' || u === 'ml' || u === 'kg' || u === 'l') return String(Math.round(amount * 10) / 10);
+  const whole = Math.floor(amount + 0.04);
+  const rest = amount - whole;
+  if (Math.abs(rest) < 0.04) return String(whole);
+  for (const [value, glyph] of NICE_FRACTIONS) {
+    if (Math.abs(rest - value) < 0.04) return whole > 0 ? `${whole}${glyph}` : glyph;
+  }
+  return String(Math.round(amount * 10) / 10);
+}
+
 /** Parse a recipe amount that might arrive as text ("1/2", "1 1/2", "½", "2-3"). Returns NaN if unusable. */
 export function parseAmount(value: unknown): number {
   if (typeof value === 'number') return value;

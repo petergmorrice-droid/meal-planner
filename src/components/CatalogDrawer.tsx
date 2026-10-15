@@ -245,12 +245,12 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
                             <Heart className={`w-3.5 h-3.5 ${item.isFav ? 'fill-current' : ''}`} />
                           </button>
                         </div>
-                        <span className="text-[10px] font-medium text-zinc-400">
+                        <span className="text-[11px] font-medium text-zinc-400">
                           {item.category}
                         </span>
                         
                         {amount > 0 && (
-                          <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-sm animate-in zoom-in">
+                          <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-sm animate-in zoom-in">
                             {amount}
                           </div>
                         )}
@@ -270,7 +270,7 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
                           <span className="font-semibold text-sm text-zinc-900 truncate">
                             {item.name}
                           </span>
-                          <span className="text-[10px] font-medium text-zinc-400 truncate">
+                          <span className="text-[11px] font-medium text-zinc-400 truncate">
                             {item.category}
                           </span>
                         </div>
@@ -323,7 +323,7 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
               >
                 <div className="flex flex-col items-start">
                   <span className="font-bold text-sm">Add "{searchTerm.trim()}"</span>
-                  <span className="text-[10px] opacity-80">Custom Item</span>
+                  <span className="text-[11px] opacity-80">Custom Item</span>
                 </div>
                 <Plus className="w-5 h-5" />
               </button>

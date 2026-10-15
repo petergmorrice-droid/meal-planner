@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { IngredientTriageModal } from './IngredientTriageModal';
-import { buildCatalog, matchProduct, namesNeedingSuggestion, linkIngredients } from '../shopping';
+import { buildCatalog, matchProduct, namesNeedingSuggestion, linkIngredients, formatCookingAmount } from '../shopping';
 import { 
   parseRecipeApi, 
   suggestGroceryProductsApi,
@@ -275,7 +275,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
                             setCookingFilter('all');
                             setDietaryFilter('all');
                           }}
-                          className="text-[10px] text-zinc-400 hover:text-zinc-900 font-medium cursor-pointer"
+                          className="text-[11px] text-zinc-400 hover:text-zinc-900 font-medium cursor-pointer"
                         >
                           Reset filters
                         </button>
@@ -285,7 +285,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
                     <div className="overflow-y-auto p-3 space-y-3 flex-1 scrollbar-thin">
                       {/* Dietary Section */}
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                        <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                           Dietary
                         </span>
                       <div className="grid grid-cols-3 gap-1">
@@ -327,7 +327,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
 
                     {/* Cooking Method Section */}
                     <div className="mb-3">
-                      <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                      <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                         Cooking Method / Appliance
                       </span>
                       <div className="grid grid-cols-2 gap-1">
@@ -371,7 +371,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
 
                     {/* Time Section */}
                     <div className="mb-3">
-                      <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                      <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                         Total Time (Prep + Cook)
                       </span>
                       <div className="grid grid-cols-2 gap-1">
@@ -424,7 +424,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
 
                     {/* Tag Section */}
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                      <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                         Category
                       </span>
                       <div className="flex flex-wrap gap-1">
@@ -458,7 +458,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
 
                     {/* Display Fields Section */}
                     <div className="pt-3 border-t border-zinc-100">
-                      <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
+                      <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
                         Display Fields
                       </span>
                       <div className="grid grid-cols-2 gap-1">
@@ -549,7 +549,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
                   
                   {/* Time */}
                   {(prefs.showPrepTime || prefs.showCookTime || prefs.showTotalTime) && (
-                    <div className="flex flex-col gap-1 mb-1.5 text-[10px] font-medium text-zinc-600">
+                    <div className="flex flex-col gap-1 mb-1.5 text-[11px] font-medium text-zinc-600">
                       {prefs.showPrepTime && (
                         recipe.methodPrepTime && recipe.methodPrepTime.ninja && recipe.methodPrepTime.oven_hob && recipe.methodPrepTime.ninja !== recipe.methodPrepTime.oven_hob ? (
                           <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700 w-fit">
@@ -592,7 +592,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
                     <div className="flex flex-wrap items-center gap-1.5 mb-2">
                       {prefs.showVegetarian && (recipe.isVegetarian || recipe.tags?.some(t => ['vegetarian', 'vegi', 'veggie'].includes(t.toLowerCase()))) && (
                         <span 
-                          className="flex items-center gap-1 font-medium text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
+                          className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
                           title="Vegetarian"
                         >
                           <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
@@ -601,7 +601,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
                       )}
                       {prefs.showVegan && (recipe.isVegan || recipe.tags?.some(t => ['vegan'].includes(t.toLowerCase()))) && (
                         <span 
-                          className="flex items-center gap-1 font-medium text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
+                          className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
                           title="Vegan"
                         >
                           <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
@@ -618,7 +618,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
                     <div className="flex flex-wrap items-center gap-1">
                       {/* Ninja Combi */}
                       <span
-                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
                           (recipe.cookingMethods || ['oven_hob', 'ninja']).includes('ninja')
                             ? 'bg-amber-50 text-amber-900 border border-amber-300 font-semibold'
                             : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
@@ -631,7 +631,7 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
 
                       {/* Oven / Hob */}
                       <span
-                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
                           (recipe.cookingMethods || ['oven_hob', 'ninja']).includes('oven_hob')
                             ? 'bg-rose-50 text-rose-900 border border-rose-300 font-semibold'
                             : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
@@ -735,15 +735,6 @@ export default function CookBookTab({ store, onNavigateTab }: { store: any, onNa
       )}
     </div>
   );
-}
-
-function formatAmount(amount: number): string {
-  if (amount === 0) return '0';
-  if (Math.abs(amount - Math.round(amount)) < 0.001) {
-    return Math.round(amount).toString();
-  }
-  const rounded = Math.round(amount * 100) / 100;
-  return rounded.toString();
 }
 
 async function fetchJsonSafe(url: string, options?: RequestInit): Promise<any> {
@@ -995,7 +986,7 @@ export function RecipeModal({
                     <h2 className="text-sm sm:text-xl font-extrabold tracking-tight text-stone-900 leading-tight truncate max-w-[50vw] sm:max-w-none">
                       {editedRecipe.name}
                     </h2>
-                    <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-stone-500 font-semibold mt-0.5">
+                    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-stone-500 font-semibold mt-0.5">
                       <span>Prep: {editedRecipe.prepTime || 0}m</span>
                       <span aria-hidden="true" className="text-stone-300">·</span>
                       <span>Cook: {editedRecipe.cookTime || 0}m</span>
@@ -1051,7 +1042,7 @@ export function RecipeModal({
                         </button>
                       </div>
                       {aiError && (
-                        <span className="text-[9px] text-rose-600 font-semibold bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                        <span className="text-[11px] text-rose-600 font-semibold bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg flex items-center gap-1">
                           <span>{aiError}</span>
                           {aiError.includes('missing') && onNavigateTab && (
                             <button
@@ -1152,7 +1143,7 @@ export function RecipeModal({
                     {isEditing ? (
                       <>
                         <div>
-                          <label className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 sm:mb-1 block text-center sm:text-left">Prep (mins)</label>
+                          <label className="text-[11px] sm:text-[11px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 sm:mb-1 block text-center sm:text-left">Prep (mins)</label>
                           <input 
                             type="number" 
                             value={editedRecipe.prepTime || 0}
@@ -1161,7 +1152,7 @@ export function RecipeModal({
                           />
                         </div>
                         <div>
-                          <label className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 sm:mb-1 block text-center sm:text-left">Cook (mins)</label>
+                          <label className="text-[11px] sm:text-[11px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 sm:mb-1 block text-center sm:text-left">Cook (mins)</label>
                           <input 
                             type="number" 
                             value={editedRecipe.cookTime || 0}
@@ -1170,7 +1161,7 @@ export function RecipeModal({
                           />
                         </div>
                         <div>
-                          <label className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 sm:mb-1 block text-center sm:text-left">Total (mins)</label>
+                          <label className="text-[11px] sm:text-[11px] font-bold text-stone-400 uppercase tracking-wider mb-0.5 sm:mb-1 block text-center sm:text-left">Total (mins)</label>
                           <div className="w-full text-[11px] sm:text-xs font-extrabold text-stone-500 border border-stone-200 rounded-lg sm:rounded-xl px-1 py-1 bg-stone-100 shadow-2xs text-center font-mono select-none h-[26px] sm:h-[34px] flex items-center justify-center">
                             {(editedRecipe.prepTime || 0) + (editedRecipe.cookTime || 0)}m
                           </div>
@@ -1183,7 +1174,7 @@ export function RecipeModal({
                             <Clock className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 stroke-[1.8]" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <span className="text-[8px] sm:text-[9px] text-stone-400 font-bold uppercase tracking-wider block">Prep</span>
+                            <span className="text-[11px] sm:text-[11px] text-stone-400 font-bold uppercase tracking-wider block">Prep</span>
                             <span className="text-[11px] sm:text-sm font-extrabold text-stone-800 tracking-tight block">{editedRecipe.prepTime || 0} mins</span>
                           </div>
                         </div>
@@ -1192,7 +1183,7 @@ export function RecipeModal({
                             <Utensils className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 stroke-[1.8]" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <span className="text-[8px] sm:text-[9px] text-stone-400 font-bold uppercase tracking-wider block">Cook</span>
+                            <span className="text-[11px] sm:text-[11px] text-stone-400 font-bold uppercase tracking-wider block">Cook</span>
                             <span className="text-[11px] sm:text-sm font-extrabold text-stone-800 tracking-tight block">{editedRecipe.cookTime || 0} mins</span>
                           </div>
                         </div>
@@ -1201,7 +1192,7 @@ export function RecipeModal({
                             <Timer className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5 stroke-[1.8]" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <span className="text-[8px] sm:text-[9px] text-stone-400 font-bold uppercase tracking-wider block">Total</span>
+                            <span className="text-[11px] sm:text-[11px] text-stone-400 font-bold uppercase tracking-wider block">Total</span>
                             <span className="text-[11px] sm:text-sm font-extrabold text-stone-800 tracking-tight block">{(editedRecipe.prepTime || 0) + (editedRecipe.cookTime || 0)} mins</span>
                           </div>
                         </div>
@@ -1213,7 +1204,7 @@ export function RecipeModal({
                   <div className="pt-0.5">
                     {isEditing ? (
                       <div className="grid grid-cols-2 gap-1.5">
-                        <label className={`flex flex-col sm:flex-row items-center justify-center gap-1 text-[9px] sm:text-xs font-semibold p-1.5 rounded-xl border cursor-pointer transition-colors ${
+                        <label className={`flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] sm:text-xs font-semibold p-1.5 rounded-xl border cursor-pointer transition-colors ${
                           (editedRecipe.cookingMethods || ['ninja', 'oven_hob']).includes('ninja')
                             ? 'border-amber-200 bg-amber-50/50 text-amber-900 font-bold'
                             : 'border-stone-200 bg-stone-50/30 text-stone-400'
@@ -1237,7 +1228,7 @@ export function RecipeModal({
                           />
                         </label>
 
-                        <label className={`flex flex-col sm:flex-row items-center justify-center gap-1 text-[9px] sm:text-xs font-semibold p-1.5 rounded-xl border cursor-pointer transition-colors ${
+                        <label className={`flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] sm:text-xs font-semibold p-1.5 rounded-xl border cursor-pointer transition-colors ${
                           (editedRecipe.cookingMethods || ['ninja', 'oven_hob']).includes('oven_hob')
                             ? 'border-rose-200 bg-rose-50/50 text-rose-900 font-bold'
                             : 'border-stone-200 bg-stone-50/30 text-stone-400'
@@ -1271,7 +1262,7 @@ export function RecipeModal({
                           return (
                             <span
                               key={key}
-                              className={`inline-flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold border transition-all truncate text-center ${
+                              className={`inline-flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold border transition-all truncate text-center ${
                                 isIncluded
                                   ? colorClass
                                   : 'bg-stone-50 text-stone-400 border-stone-200/60'
@@ -1291,7 +1282,7 @@ export function RecipeModal({
                   <div className="pt-2 border-t border-stone-100">
                     {isEditing ? (
                       <div className="grid grid-cols-2 gap-1.5">
-                        <label className={`flex items-center justify-center gap-1.5 text-[9px] sm:text-xs font-semibold p-1.5 rounded-xl border cursor-pointer transition-colors ${
+                        <label className={`flex items-center justify-center gap-1.5 text-[11px] sm:text-xs font-semibold p-1.5 rounded-xl border cursor-pointer transition-colors ${
                           editedRecipe.isVegetarian
                             ? 'border-emerald-250 bg-emerald-50 text-emerald-900 font-bold'
                             : 'border-stone-250/30 bg-stone-50/10 text-stone-400'
@@ -1305,7 +1296,7 @@ export function RecipeModal({
                             className="rounded text-emerald-600 focus:ring-emerald-500 w-3 h-3 border-stone-300 cursor-pointer ml-1"
                           />
                         </label>
-                        <label className={`flex items-center justify-center gap-1.5 text-[9px] sm:text-xs font-semibold p-1.5 rounded-xl border cursor-pointer transition-colors ${
+                        <label className={`flex items-center justify-center gap-1.5 text-[11px] sm:text-xs font-semibold p-1.5 rounded-xl border cursor-pointer transition-colors ${
                           editedRecipe.isVegan
                             ? 'border-emerald-250 bg-emerald-50 text-emerald-900 font-bold'
                             : 'border-stone-250/30 bg-stone-50/10 text-stone-400'
@@ -1323,7 +1314,7 @@ export function RecipeModal({
                     ) : (
                       <div className="grid grid-cols-2 gap-1.5">
                         <span
-                          className={`inline-flex items-center justify-center gap-1.5 px-1.5 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold border transition-all truncate text-center ${
+                          className={`inline-flex items-center justify-center gap-1.5 px-1.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold border transition-all truncate text-center ${
                             isVeg
                               ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
                               : 'bg-stone-50 text-stone-400 border-stone-200/60'
@@ -1333,7 +1324,7 @@ export function RecipeModal({
                           <span className="truncate">Vegetarian</span>
                         </span>
                         <span
-                          className={`inline-flex items-center justify-center gap-1.5 px-1.5 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold border transition-all truncate text-center ${
+                          className={`inline-flex items-center justify-center gap-1.5 px-1.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold border transition-all truncate text-center ${
                             isVgn
                               ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
                               : 'bg-stone-50 text-stone-400 border-stone-200/60'
@@ -1351,7 +1342,7 @@ export function RecipeModal({
                 <div className="bg-white rounded-2xl border border-stone-200/60 p-4 sm:p-5 shadow-3xs space-y-3">
                   {/* Category / Tag list - unboxed elegant typography separators */}
                   {editedRecipe.tags && editedRecipe.tags.length > 0 && !isEditing && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] sm:text-xs font-bold tracking-wider text-emerald-700 uppercase">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs font-bold tracking-wider text-emerald-700 uppercase">
                       {editedRecipe.tags.slice(0, 6).map((tag, idx) => (
                         <React.Fragment key={tag}>
                           {idx > 0 && <span className="text-stone-300 font-normal">·</span>}
@@ -1370,7 +1361,7 @@ export function RecipeModal({
                   {/* Description Editor / Viewer */}
                   {isEditing ? (
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">Description</label>
+                      <label className="text-[11px] font-bold text-stone-400 uppercase tracking-wider block">Description</label>
                       <textarea
                         value={editedRecipe.description || ''}
                         onChange={(e) => setEditedRecipe({...editedRecipe, description: e.target.value})}
@@ -1412,7 +1403,7 @@ export function RecipeModal({
                     <div className="pt-4 border-t border-stone-200/80 flex items-center justify-between">
                       <div>
                         <span className="text-xs font-bold text-stone-800 block uppercase tracking-wider">Danger Zone</span>
-                        <span className="text-[10px] text-stone-400">This action permanently deletes this recipe</span>
+                        <span className="text-[11px] text-stone-400">This action permanently deletes this recipe</span>
                       </div>
                       <button
                         type="button"
@@ -1470,10 +1461,10 @@ export function RecipeModal({
                                   max="24"
                                   value={editedRecipe.servings || 2}
                                   onChange={e => setEditedRecipe({...editedRecipe, servings: parseInt(e.target.value) || 2})}
-                                  className="w-7 text-center text-[10px] font-bold text-stone-900 bg-transparent focus:outline-none focus:ring-0 p-0"
+                                  className="w-7 text-center text-[11px] font-bold text-stone-900 bg-transparent focus:outline-none focus:ring-0 p-0"
                                 />
                               ) : (
-                                <span className="font-extrabold text-stone-900 text-[10px] sm:text-xs tabular-nums">
+                                <span className="font-extrabold text-stone-900 text-[11px] sm:text-xs tabular-nums">
                                   {portions}
                                 </span>
                               )}
@@ -1519,7 +1510,7 @@ export function RecipeModal({
                             setCheckedIngredients({});
                           }}
                           disabled={Object.keys(checkedIngredients).length === 0}
-                          className="text-[10px] font-bold text-stone-400 hover:text-emerald-700 disabled:opacity-0 transition-all cursor-pointer"
+                          className="text-[11px] font-bold text-stone-400 hover:text-emerald-700 disabled:opacity-0 transition-all cursor-pointer"
                         >
                           Clear Checks
                         </button>
@@ -1529,7 +1520,7 @@ export function RecipeModal({
                     {!isIngredientsCollapsed && (
                       <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
                         {editedRecipe.ingredients.map((ing, idx) => {
-                          const scaledAmount = formatAmount(ing.amount * scale);
+                          const scaledAmount = formatCookingAmount(ing.amount * scale, ing.unit);
                           const isChecked = !!checkedIngredients[ing.id];
                           
                           if (isEditing) {
@@ -1605,25 +1596,25 @@ export function RecipeModal({
                                   {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
                                 </div>
                                 <div className="min-w-0">
-                                  <span className={`text-xs font-bold block tracking-tight ${
+                                  <span className={`text-sm font-bold block tracking-tight ${
                                     isChecked ? 'line-through text-stone-400 font-normal' : 'text-stone-800'
                                   }`}>
                                     {ing.name}
                                   </span>
                                   {ing.note && (
-                                    <span className="text-[11px] text-stone-500 block mt-0.5">{ing.note}</span>
+                                    <span className="text-xs text-stone-500 block mt-0.5">{ing.note}</span>
                                   )}
                                   {ing.category && (
-                                    <span className="text-[8px] uppercase tracking-wider text-stone-400 font-extrabold block mt-0.5">
+                                    <span className="text-[11px] uppercase tracking-wider text-stone-400 font-extrabold block mt-0.5">
                                       {ing.category}
                                     </span>
                                   )}
                                 </div>
                               </div>
-                              <span className={`text-xs font-bold tabular-nums shrink-0 ml-3 font-mono ${
+                              <span className={`text-sm font-bold tabular-nums shrink-0 ml-3 font-mono ${
                                 isChecked ? 'text-stone-400' : 'text-stone-900'
                               }`}>
-                                {scaledAmount} <span className="text-stone-500 font-medium text-[10px]">{ing.unit}</span>
+                                {scaledAmount} <span className="text-stone-500 font-medium text-xs">{ing.unit}</span>
                               </span>
                             </div>
                           );
@@ -1780,7 +1771,7 @@ export function RecipeModal({
                               <div className={`flex-1 pt-1.5 transition-all ${
                                 isStepCompleted ? 'opacity-50 text-stone-400 line-through' : 'text-stone-800'
                               }`}>
-                                <p className="text-xs sm:text-sm font-medium leading-relaxed">
+                                <p className="text-sm sm:text-base font-medium leading-relaxed">
                                   {scaleRecipeStepQuantities(step, editedRecipe.ingredients, scale)}
                                 </p>
                               </div>
@@ -1821,7 +1812,7 @@ export function RecipeModal({
                     {/* Alternative Generation Promoters (On-demand instructions) for existing recipes */}
                     {!isEditing && (
                       <div className="pt-4 border-t border-stone-200/60 mt-4 shrink-0 space-y-2">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">
                           On-Demand Appliance Generation
                         </span>
                         
@@ -2316,11 +2307,11 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                   <span className="text-rose-500 font-bold">*</span>
                 </span>
                 {!selectedAppliance ? (
-                  <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/70">
+                  <span className="text-[11px] text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/70">
                     Press a toggle to select
                   </span>
                 ) : (
-                  <span className="text-[10px] text-stone-400 font-medium">
+                  <span className="text-[11px] text-stone-400 font-medium">
                     {selectedAppliance === 'ninja' ? 'Ninja Combi selected' : 'Stove / Oven selected'}
                   </span>
                 )}
@@ -2359,7 +2350,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                       </div>
                     )}
                   </div>
-                  <p className={`text-[10px] leading-tight ${
+                  <p className={`text-[11px] leading-tight ${
                     selectedAppliance === 'oven_hob' ? 'text-rose-800/90 font-medium' : 'text-stone-400'
                   }`}>
                     Hob, pan-sear, pots & conventional oven
@@ -2398,7 +2389,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                       </div>
                     )}
                   </div>
-                  <p className={`text-[10px] leading-tight ${
+                  <p className={`text-[11px] leading-tight ${
                     selectedAppliance === 'ninja' ? 'text-amber-800/90 font-medium' : 'text-stone-400'
                   }`}>
                     Combi Meals, Combi Bake, Air Fry, Slow Cook & Steam
@@ -2478,7 +2469,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
               {/* Header */}
               <div className="px-5 py-4 border-b border-stone-200/60 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
                 <div>
-                  <div className="flex items-center gap-2 text-[10px] text-emerald-700 font-bold uppercase tracking-widest">
+                  <div className="flex items-center gap-2 text-[11px] text-emerald-700 font-bold uppercase tracking-widest">
                     <Sparkles className="w-3.5 h-3.5 text-emerald-500 animate-pulse shrink-0" />
                     <span>{creationMode === 'generate' ? 'AI Recipe Generation & Customize Stage' : 'Recipe Review & Customize Stage'}</span>
                   </div>
@@ -2515,7 +2506,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                   {/* Basic Info */}
                   <div className="bg-white p-4 rounded-2xl border border-stone-200/80 shadow-3xs space-y-3">
                     <div>
-                      <label className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">Recipe Name</label>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">Recipe Name</label>
                       <input
                         type="text"
                         value={reviewRecipe.name}
@@ -2526,7 +2517,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">Description</label>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">Description</label>
                       <textarea
                         value={reviewRecipe.description || ''}
                         onChange={(e) => setReviewRecipe({ ...reviewRecipe, description: e.target.value })}
@@ -2538,7 +2529,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                     {/* Prep & Cook Times for Active Appliance */}
                     <div className="grid grid-cols-2 gap-3 pt-1">
                       <div>
-                        <label className="text-[9px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">
+                        <label className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">
                           Prep Time (mins)
                         </label>
                         <input
@@ -2560,7 +2551,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                         />
                       </div>
                       <div>
-                        <label className="text-[9px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">
+                        <label className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">
                           Cook Time (mins)
                         </label>
                         <input
@@ -2585,7 +2576,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
 
                     {/* Tag Badges Checkboxes */}
                     <div className="pt-2">
-                      <label className="text-[9px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1.5">Dietary Toggles</label>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1.5">Dietary Toggles</label>
                       <div className="flex gap-2">
                         <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                           reviewRecipe.isVegetarian 
@@ -2644,8 +2635,8 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                   {/* Ingredients List */}
                   <div className="bg-white p-4 rounded-2xl border border-stone-200/80 shadow-3xs flex-1 flex flex-col min-h-[250px]">
                     <div className="flex justify-between items-center pb-2 border-b border-stone-150 mb-2 shrink-0">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Ingredients (serves {reviewRecipe.servings || 2})</span>
-                      <span className="text-[10px] text-stone-400 font-bold">({reviewRecipe.ingredients.length} items)</span>
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400">Ingredients (serves {reviewRecipe.servings || 2})</span>
+                      <span className="text-[11px] text-stone-400 font-bold">({reviewRecipe.ingredients.length} items)</span>
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-1.5 max-h-[300px] lg:max-h-[360px] pr-1.5 scrollbar-thin">
@@ -2694,7 +2685,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                               updated[idx].suggestedAisle = e.target.value;
                               setReviewRecipe({ ...reviewRecipe, ingredients: updated });
                             }}
-                            className="text-[10px] font-bold bg-white border border-stone-200 rounded-lg py-1 px-1 outline-none max-w-[90px]"
+                            className="text-[11px] font-bold bg-white border border-stone-200 rounded-lg py-1 px-1 outline-none max-w-[90px]"
                           >
                             {INGREDIENT_CATEGORIES.map(cat => (
                               <option key={cat} value={cat}>{cat}</option>
@@ -2746,10 +2737,10 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                   <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-150 shadow-3xs space-y-2.5 shrink-0">
                     <div className="flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">Smart AI Recipe Refiner</span>
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800">Smart AI Recipe Refiner</span>
                     </div>
                     
-                    <p className="text-[10px] text-emerald-700 font-medium leading-relaxed">
+                    <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
                       Need adjustments? Describe what you want to change (e.g., &quot;Make it gluten free&quot;, &quot;Add secondary cooking instructions&quot; or &quot;Add garlic bread to the recipe&quot;) and the AI will rewrite it.
                     </p>
 
@@ -2776,7 +2767,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                         )}
                       </button>
                     </div>
-                    {refineError && <p className="text-rose-600 text-[10px] font-semibold mt-1">{refineError}</p>}
+                    {refineError && <p className="text-rose-600 text-[11px] font-semibold mt-1">{refineError}</p>}
                   </div>
                 </div>
 
@@ -2786,22 +2777,22 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                   {/* Tabs header & make-default trigger */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-stone-200/60 shrink-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Step-by-Step Instructions</span>
-                      <span className="text-[10px] text-stone-400 font-bold">({activeInstructions.length} steps)</span>
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400">Step-by-Step Instructions</span>
+                      <span className="text-[11px] text-stone-400 font-bold">({activeInstructions.length} steps)</span>
                     </div>
 
                     {/* Active Tab default status and action */}
                     {methodsToDisplay.length > 0 && (
                       <div className="flex items-center gap-2">
                         {methodsToDisplay[0] === activeReviewMethod ? (
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 px-2 py-1 rounded-lg flex items-center gap-1">
+                          <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/70 px-2 py-1 rounded-lg flex items-center gap-1">
                             <Sparkles className="w-3 h-3 text-amber-500 fill-amber-500/25" />
                             <span>Default Cooking Method</span>
                           </span>
                         ) : (
                           <button
                             onClick={() => makeMethodDefault(activeReviewMethod)}
-                            className="text-[10px] font-extrabold text-stone-600 hover:text-stone-900 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-lg px-2 py-1 transition-colors flex items-center gap-1 cursor-pointer"
+                            className="text-[11px] font-extrabold text-stone-600 hover:text-stone-900 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-lg px-2 py-1 transition-colors flex items-center gap-1 cursor-pointer"
                           >
                             <span>Set {activeReviewMethod === 'ninja' ? 'Ninja Combi' : 'Oven/Hob'} as Default</span>
                           </button>
@@ -2922,7 +2913,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
 
                   {/* Alternative Generation Promoters (On-demand instructions) */}
                   <div className="pt-4 border-t border-stone-200/60 mt-4 shrink-0 space-y-2">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 block mb-1">
                       On-Demand Appliance Generation
                     </span>
                     
@@ -2980,7 +2971,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
 
               {/* Footer Panel */}
               <div className="px-5 py-4 bg-white border-t border-stone-200/60 flex items-center justify-between shrink-0">
-                <div className="text-[10px] font-bold text-stone-400 flex items-center gap-1.5">
+                <div className="text-[11px] font-bold text-stone-400 flex items-center gap-1.5">
                   <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
                   <span>Double check ingredients and steps before saving.</span>
                 </div>

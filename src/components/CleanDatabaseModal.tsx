@@ -340,7 +340,7 @@ export function CleanDatabaseModal({
               <span className="font-bold text-zinc-800">
                 Suggestion {currentIndex + 1} of {actions.length}
               </span>
-              <div className="flex items-center gap-1.5 text-[10px]">
+              <div className="flex items-center gap-1.5 text-[11px]">
                 {acceptedActions.length > 0 && (
                   <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
                     ✓ {acceptedActions.length} accepted
@@ -522,7 +522,7 @@ export function CleanDatabaseModal({
                     )}
                   </div>
 
-                  <span className="text-[10px] font-mono text-zinc-400">
+                  <span className="text-[11px] font-mono text-zinc-400">
                     #{currentIndex + 1}
                   </span>
                 </div>
@@ -558,18 +558,18 @@ export function CleanDatabaseModal({
                           className="p-3 rounded-xl border bg-indigo-50/40 border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs flex items-center justify-between gap-3"
                         >
                           <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-700 uppercase tracking-wider">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
                               <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                               <span>Keep as Primary</span>
                             </div>
                             <div className="font-extrabold text-sm text-zinc-950 truncate mt-0.5">
                               {primaryName}
                             </div>
-                            <div className="text-[10px] text-zinc-500">
+                            <div className="text-[11px] text-zinc-500">
                               {primaryItem?.category || 'General'} · step: {primaryItem?.increment || 1} {primaryItem?.unit || 'item'}
                             </div>
                           </div>
-                          <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/80 px-2 py-1 rounded-md shrink-0 border border-emerald-200">
+                          <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100/80 px-2 py-1 rounded-md shrink-0 border border-emerald-200">
                             Preserved
                           </span>
                         </div>
@@ -583,14 +583,14 @@ export function CleanDatabaseModal({
                           className="p-3 rounded-xl border bg-zinc-50 hover:bg-zinc-100/70 border-zinc-200 hover:border-zinc-300 transition-all cursor-pointer flex items-center justify-between gap-3 group"
                         >
                           <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 uppercase tracking-wider">
                               <Trash2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                               <span>Absorb & Save as Alias</span>
                             </div>
                             <div className="font-bold text-sm text-zinc-700 group-hover:text-zinc-900 truncate mt-0.5">
                               {secondaryName}
                             </div>
-                            <div className="text-[10px] text-zinc-400">
+                            <div className="text-[11px] text-zinc-400">
                               {secondaryItem?.category || 'General'} · step: {secondaryItem?.increment || 1} {secondaryItem?.unit || 'item'}
                             </div>
                           </div>
@@ -600,7 +600,7 @@ export function CleanDatabaseModal({
                               e.stopPropagation();
                               swapMergeDirection();
                             }}
-                            className="text-[10px] font-bold text-indigo-600 bg-white border border-indigo-200 px-2 py-1 rounded-md group-hover:bg-indigo-50 shrink-0 shadow-3xs"
+                            className="text-[11px] font-bold text-indigo-600 bg-white border border-indigo-200 px-2 py-1 rounded-md group-hover:bg-indigo-50 shrink-0 shadow-3xs"
                           >
                             Keep this instead ➔
                           </button>
@@ -628,21 +628,21 @@ export function CleanDatabaseModal({
                           <button
                             type="button"
                             onClick={() => updateCurrentAction({ newName: (currentAction.newName || primaryName).toLowerCase() })}
-                            className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-700 shadow-3xs cursor-pointer"
+                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-700 shadow-3xs cursor-pointer"
                           >
                             lowercase
                           </button>
                           <button
                             type="button"
                             onClick={() => updateCurrentAction({ newName: toTitleCase(currentAction.newName || primaryName) })}
-                            className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-700 shadow-3xs cursor-pointer"
+                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-700 shadow-3xs cursor-pointer"
                           >
                             Title Case
                           </button>
                           <button
                             type="button"
                             onClick={() => updateCurrentAction({ newName: primaryName })}
-                            className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-500 shadow-3xs cursor-pointer"
+                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-500 shadow-3xs cursor-pointer"
                           >
                             Reset
                           </button>
@@ -735,7 +735,7 @@ export function CleanDatabaseModal({
                 </div>
 
                 {/* Keyboard & gesture hint */}
-                <div className="text-[10px] text-zinc-400 text-center pt-2">
+                <div className="text-[11px] text-zinc-400 text-center pt-2">
                   Drag card left to reject, right to accept · Use keyboard ← / →
                 </div>
               </div>
@@ -769,17 +769,17 @@ export function CleanDatabaseModal({
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             {action.actionType === 'merge' && (
-                              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                              <span className="text-[11px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
                                 Merge
                               </span>
                             )}
                             {action.actionType === 'rename' && (
-                              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-sky-100 text-sky-800">
+                              <span className="text-[11px] font-bold uppercase px-1.5 py-0.5 rounded bg-sky-100 text-sky-800">
                                 Standardize
                               </span>
                             )}
                             {action.actionType === 'recategorize' && (
-                              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                              <span className="text-[11px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
                                 Aisle
                               </span>
                             )}
@@ -789,7 +789,7 @@ export function CleanDatabaseModal({
                               {action.actionType === 'recategorize' && `Move "${prim?.name}" to ${action.newAisle}`}
                             </span>
                           </div>
-                          <div className="text-[10px] text-zinc-400 truncate mt-0.5">
+                          <div className="text-[11px] text-zinc-400 truncate mt-0.5">
                             {action.reason}
                           </div>
                         </div>

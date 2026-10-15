@@ -262,7 +262,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   Add Batch Meal Ingredients
                 </h2>
                 {weekLabel && (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 hidden sm:inline-block">
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 hidden sm:inline-block">
                     {weekLabel}
                   </span>
                 )}
@@ -349,7 +349,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                         key={p}
                         type="button"
                         onClick={() => handlePortionChange(p)}
-                        className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors cursor-pointer ${
+                        className={`text-[11px] font-semibold px-2 py-1 rounded-lg border transition-colors cursor-pointer ${
                           portions === p 
                             ? 'bg-indigo-600 text-white border-indigo-600' 
                             : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
@@ -426,12 +426,12 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                           {item.name}
                         </span>
                         {item.category && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-500 border border-zinc-200/60 font-medium hidden sm:inline-block">
+                          <span className="text-[11px] px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-500 border border-zinc-200/60 font-medium hidden sm:inline-block">
                             {item.category}
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-zinc-400">
+                      <span className="text-[11px] text-zinc-400">
                         Base: {item.baseAmount} {item.baseUnit || 'item'}
                       </span>
                     </div>
@@ -659,7 +659,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                                 <h4 className="font-bold text-xs text-zinc-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
                                   {recipe.name}
                                 </h4>
-                                <span className="text-[10px] font-semibold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded shrink-0">
+                                <span className="text-[11px] font-semibold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded shrink-0">
                                   Serves {recipe.servings || 2}
                                 </span>
                               </div>
@@ -668,14 +668,14 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                                 {recipe.description || `${recipe.ingredients.length} ingredients`}
                               </p>
 
-                              <div className="text-[10px] text-zinc-500 bg-zinc-50 p-1.5 rounded-lg border border-zinc-100 line-clamp-1 mb-2">
+                              <div className="text-[11px] text-zinc-500 bg-zinc-50 p-1.5 rounded-lg border border-zinc-100 line-clamp-1 mb-2">
                                 <span className="font-medium text-zinc-600">Includes: </span>
                                 {ingPreview}
                                 {recipe.ingredients.length > 3 && ` +${recipe.ingredients.length - 3} more`}
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-between pt-2 border-t border-zinc-100 mt-auto text-[10px] text-zinc-400">
+                            <div className="flex items-center justify-between pt-2 border-t border-zinc-100 mt-auto text-[11px] text-zinc-400">
                               <div className="flex items-center gap-2">
                                 {totalTime > 0 && (
                                   <span className="flex items-center gap-0.5">
@@ -722,7 +722,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
                       <div>
                         <span className="text-xs font-bold text-zinc-700 block">Portions</span>
-                        <span className="text-[10px] text-zinc-400">Number of servings this batch will make</span>
+                        <span className="text-[11px] text-zinc-400">Number of servings this batch will make</span>
                       </div>
                       <div className="flex items-center bg-zinc-100 rounded-xl p-0.5 border border-zinc-200">
                         <button

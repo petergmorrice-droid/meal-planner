@@ -1,5 +1,5 @@
 import { ShoppingListItem } from '../types';
-import { canonicalUnit, formatUnit, formatAmount } from '../shopping';
+import { canonicalUnit, formatUnit, formatQuantity } from '../shopping';
 
 export interface AggregatedQuantity {
   amount: number | string;
@@ -22,10 +22,7 @@ export function aggregateIngredients(items: ShoppingListItem[]): AggregatedQuant
     groups.set(unit, (groups.get(unit) || 0) + amount);
   });
 
-  const show = (unit: string, amount: number) => {
-    const label = formatUnit(unit, amount);
-    return label ? `${formatAmount(amount)} ${label}` : formatAmount(amount);
-  };
+  const show = (unit: string, amount: number) => formatQuantity(amount, unit); // "1 kg", "2 cans"
 
   if (groups.size === 1) {
     const [unit, amount] = [...groups.entries()][0];

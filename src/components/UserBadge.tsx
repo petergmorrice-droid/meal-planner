@@ -21,7 +21,7 @@ export default function UserBadge({ identity, addedBy, lastModifiedBy }: UserBad
     return (
       <div 
         key={type}
-        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm transition-transform hover:scale-110 relative select-none ${
+        className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold text-white shadow-sm transition-transform hover:scale-110 relative select-none ${
           isPeter ? 'bg-indigo-500' : 'bg-emerald-500'
         }`}
         title={label}
@@ -64,7 +64,7 @@ export default function UserBadge({ identity, addedBy, lastModifiedBy }: UserBad
 
   return (
     <div 
-      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm relative group select-none ${
+      className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold text-white shadow-sm relative group select-none ${
         isPeter ? 'bg-indigo-500' : 'bg-emerald-500'
       }`}
       title={tooltip}

@@ -79,7 +79,7 @@ export const INITIAL_GROCERY_DATABASE: GroceryItem[] = [
   { id: 'gdb-76', name: 'Single Cream', unit: 'ml', increment: 150, category: 'Dairy' },
   { id: 'gdb-77', name: 'Double Cream', unit: 'ml', increment: 150, category: 'Dairy' },
   { id: 'gdb-78', name: 'Sour Cream', unit: 'pack', increment: 1, category: 'Dairy' },
-  { id: 'gdb-79', name: 'Milk', unit: 'ml', increment: 500, category: 'Dairy' },
+  { id: 'gdb-79', name: 'Milk', unit: 'pint', increment: 1, category: 'Dairy' },
   { id: 'gdb-80', name: 'Butter', unit: 'g', increment: 250, category: 'Dairy' },
   { id: 'gdb-81', name: 'Eggs', unit: 'egg', increment: 6, category: 'Dairy' },
   { id: 'gdb-82', name: 'Yogurt', unit: 'pack', increment: 1, category: 'Dairy' },

@@ -6,6 +6,7 @@ import {
   stepForItem, toBase, missingExtraProducts, EXTRA_PRODUCTS, INITIAL_GROCERY_DATABASE,
   matchProductDetailed, linkIngredients, namesNeedingSuggestion, productByName,
 } from '../.test-build/shopping.mjs';
+import * as S from '../.test-build/shopping.mjs';
 
 let failures = 0;
 let passes = 0;
@@ -126,7 +127,7 @@ test('single ingredients: realistic UK shop quantities', () => {
   const cases = [
     ['beef mince', 500, 'g', '500 g'], ['beef mince', 450, 'g', '500 g'], ['beef mince', 0.75, 'kg', '750 g'], ['chicken breasts', 2, '', '500 g'],
     ['chicken breast', 300, 'g', '500 g'], ['onion', 2, '', '2'], ['onion', 0.5, 'piece', '1'], ['red onion', 1, 'large', '1'], ['carrots', 2, '', '200 g'],
-    ['eggs', 3, '', '6 eggs'], ['eggs', 8, '', '12 eggs'], ['milk', 300, 'ml', '500 ml'], ['milk', 1, 'pint', '1000 ml'], ['butter', 25, 'g', '250 g'], ['butter', 2, 'tbsp', '250 g'],
+    ['eggs', 3, '', '6 eggs'], ['eggs', 8, '', '12 eggs'], ['milk', 300, 'ml', '1 pint'], ['milk', 1, 'pint', '1 pint'], ['milk', 1.2, 'l', '3 pints'], ['butter', 25, 'g', '250 g'], ['butter', 2, 'tbsp', '250 g'],
     ['double cream', 200, 'ml', '300 ml'], ['penne', 150, 'g', '200 g'], ['basmati rice', 150, 'g', '200 g'], ['lemon', 1, '', '1'], ['lemon juice', 2, 'tbsp', '1'],
     ['lime juice', 3, 'tbsp', '3'], ['coriander', 1, 'handful', '1 bunch'], ['basil', 0.25, 'bunch', '1 bunch'], ['spring onions', 4, '', '1 bunch'],
     ['celery', 2, 'sticks', '1 bunch'], ['potatoes', 800, 'g', '1000 g'], ['potatoes', 4, '', '1000 g'], ['kidney beans', 1, 'can', '1 can'],
@@ -227,9 +228,30 @@ test('user changes to the grocery list are respected (pack sizes, custom items, 
   assert.equal(matchProduct(c, 'moo juice')?.name, 'Milk');
 });
 
+test('amounts read the way you buy and cook them', () => {
+  const { formatQuantity, largeUnitQuantity, formatCookingAmount } = S;
+  assert.equal(formatQuantity(1000, 'g'), '1 kg'); assert.equal(formatQuantity(1250, 'g'), '1.25 kg');
+  assert.equal(formatQuantity(1500, 'ml'), '1.5 l'); assert.equal(formatQuantity(750, 'g'), '750 g');
+  assert.equal(formatQuantity(2, 'can'), '2 cans'); assert.equal(formatQuantity(3, ''), '3'); assert.equal(formatQuantity(4, 'pints'), '4 pints');
+  assert.equal(largeUnitQuantity(999, 'g'), null); assert.equal(largeUnitQuantity(2000, 'cans'), null);
+  const c = (n, u) => formatCookingAmount(n, u);
+  assert.equal(c(0.5), '½'); assert.equal(c(1.5, 'tbsp'), '1½'); assert.equal(c(0.25, 'tsp'), '¼'); assert.equal(c(0.333), '⅓');
+  assert.equal(c(0.67), '⅔'); assert.equal(c(2), '2'); assert.equal(c(0.5, 'x 400g tin'), '½'); assert.equal(c(1.2), '1.2');
+  assert.equal(c(75, 'g'), '75'); assert.equal(c(133.33, 'g'), '133'); assert.equal(c(2.5, 'g'), '2.5'); assert.equal(c(0, 'g'), '');
+});
+
+test('built-in defaults that changed are updated only if you never edited them', () => {
+  const db = S.INITIAL_GROCERY_DATABASE.map((i) => (i.id === 'gdb-79' ? { ...i, unit: 'ml', increment: 500 } : i));
+  const upd = S.outdatedDefaults(db);
+  assert.equal(upd.length, 1); assert.equal(upd[0].unit, 'pint'); assert.equal(upd[0].increment, 1);
+  const edited = db.map((i) => (i.id === 'gdb-79' ? { ...i, unit: 'l', increment: 1 } : i));
+  assert.deepEqual(S.outdatedDefaults(edited), [], 'your own setting is kept');
+  assert.deepEqual(S.outdatedDefaults(S.INITIAL_GROCERY_DATABASE), [], 'new data already has pints');
+});
+
 test('hand-added items: "1" means one pack', () => {
   const t = (n, s) => { const r = quantityForAddedItem(cat, n, s); return `${r.amount}${r.unit ? ' ' + r.unit : ''}`; };
-  assert.equal(t('Milk', 1), '500 ml'); assert.equal(t('Eggs', 1), '6 eggs'); assert.equal(t('Chopped Tomatoes', 2), '2 cans');
+  assert.equal(t('Milk', 1), '1 pint'); assert.equal(t('Eggs', 1), '6 eggs'); assert.equal(t('Chopped Tomatoes', 2), '2 cans');
   assert.equal(t('Bread', 1), '1 loaf'); assert.equal(t('Something new', 1), '1 item');
   assert.equal(stepForItem(cat, { name: 'Beef Mince', unit: 'g' }), 250); assert.equal(stepForItem(cat, { name: 'Eggs', unit: 'eggs' }), 6);
 });

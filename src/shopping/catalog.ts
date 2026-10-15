@@ -289,7 +289,29 @@ export const EXTRA_PRODUCTS: ExtraProduct[] = [
 ];
 
 /** Bumped when EXTRA_PRODUCTS changes; the store adds new products to the shared grocery list once per version. */
-export const CATALOG_VERSION = 2;
+export const CATALOG_VERSION = 3;
+
+/**
+ * Built-in products whose default way of buying changed in a later version.
+ * Applied only if the product still has the old default (your own edits win).
+ */
+const DEFAULT_CHANGES: { id: string; from: Partial<GroceryItem>; to: Partial<GroceryItem> }[] = [
+  // v3: milk is sold in pints in the UK (1, 2, 4 pints), not 500 ml steps
+  { id: 'gdb-79', from: { unit: 'ml', increment: 500 }, to: { unit: 'pint', increment: 1 } },
+];
+
+/** Grocery items that still have an old built-in default, updated to the new one. */
+export function outdatedDefaults(groceryDatabase: GroceryItem[] | undefined | null): GroceryItem[] {
+  const list = Array.isArray(groceryDatabase) ? groceryDatabase : [];
+  const out: GroceryItem[] = [];
+  for (const change of DEFAULT_CHANGES) {
+    const item = list.find((i) => i.id === change.id);
+    if (!item) continue;
+    const unchanged = Object.entries(change.from).every(([k, v]) => (item as any)[k] === v);
+    if (unchanged) out.push({ ...item, ...change.to });
+  }
+  return out;
+}
 
 const EXTRA_BY_ID = new Map(EXTRA_PRODUCTS.map((p) => [p.item.id, p]));
 

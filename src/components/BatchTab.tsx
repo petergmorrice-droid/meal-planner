@@ -74,7 +74,7 @@ export default function BatchTab({ store }: { store: any }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-sm text-zinc-900 truncate">{displayName}</h3>
-                    <span className="text-[10px] bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium shrink-0">
+                    <span className="text-[11px] bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium shrink-0">
                       {batch.portions} {batch.portions === 1 ? 'meal' : 'meals'}
                     </span>
                   </div>

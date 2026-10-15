@@ -30,7 +30,7 @@ import {
 import { ShoppingListItem, Recipe, MealPlan, DayPlan } from '../types';
 import { useGracefulCheckoff } from '../hooks/useGracefulCheckoff';
 import { aggregateIngredients } from '../utils/aggregation';
-import { matchProduct, groupingKey, canonicalUnit, formatUnit } from '../shopping';
+import { matchProduct, groupingKey, canonicalUnit, formatUnit, largeUnitQuantity, formatAmount as formatShopAmount, unitInfo } from '../shopping';
 import ShopAisleGroup from './ShopAisleGroup';
 import CatalogDrawer from './CatalogDrawer';
 import EditItemDrawer from './EditItemDrawer';
@@ -944,7 +944,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                       onClick={() => setShowWeekDropdown(false)} 
                     />
                     <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-zinc-200 p-2 z-40 animate-in fade-in slide-in-from-top-2">
-                      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                      <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
                         Switch Shopping Week
                       </div>
                       
@@ -973,17 +973,17 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-medium text-zinc-900">{plan.startDate === currentMondayStr ? 'This Week' : plan.startDate === nextMondayStr ? 'Next Week' : formatWeekRange(plan.startDate)}</span>
                                   {isNextWeek && (
-                                    <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                                    <span className="text-[11px] font-semibold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60">
                                       Next Week
                                     </span>
                                   )}
                                   {isThisWeek && (
-                                    <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200/60">
+                                    <span className="text-[11px] font-semibold px-1 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200/60">
                                       This Week
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-[10px] text-zinc-400">
+                                <span className="text-[11px] text-zinc-400">
                                   {itemCount} {itemCount === 1 ? 'item' : 'items'} on list
                                 </span>
                               </div>
@@ -1062,7 +1062,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                   />
                   <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl border border-zinc-200/90 shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="px-1 mb-1">
-                      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
                         View Layout
                       </span>
                       <div className="space-y-1">
@@ -1135,7 +1135,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                     </div>
 
                     <div className="border-t border-zinc-100 my-2 pt-2 px-1">
-                      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5 font-bold">
+                      <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5 font-bold">
                         List Options
                       </span>
                       <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer text-xs font-semibold text-zinc-700 select-none">
@@ -1279,8 +1279,8 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
                         openSections.adhoc ? 'rotate-180' : ''
                       }`} />
-                      <h3 className="font-bold text-[10px] uppercase tracking-wider text-zinc-400">Items</h3>
-                      <span className="text-[10px] font-semibold text-zinc-400">
+                      <h3 className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">Items</h3>
+                      <span className="text-[11px] font-semibold text-zinc-400">
                         ({adhocItems.filter(i => !i.checked).length})
                       </span>
                     </div>
@@ -1292,7 +1292,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                           e.stopPropagation();
                           setShowCatalogModal(true);
                         }}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
                       >
                         <Plus className="w-2.5 h-2.5" />
                         <span>Add Item</span>
@@ -1346,11 +1346,11 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
                         openSections.recurring ? 'rotate-180' : ''
                       }`} />
-                      <h3 className="font-bold text-[10px] uppercase tracking-wider text-zinc-400">
+                      <h3 className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
                         <span className="hidden sm:inline">Recurring Staples</span>
                         <span className="sm:hidden">Staples</span>
                       </h3>
-                      <span className="text-[10px] font-semibold text-zinc-400">
+                      <span className="text-[11px] font-semibold text-zinc-400">
                         ({recurringItems.filter(i => !i.checked).length})
                       </span>
                     </div>
@@ -1362,7 +1362,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                           e.stopPropagation();
                           setShowEditStaplesModal(true);
                         }}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
                         title="Manage Staples"
                       >
                         <Sliders className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
@@ -1410,8 +1410,8 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
                         openSections.planned ? 'rotate-180' : ''
                       }`} />
-                      <h3 className="font-bold text-[10px] uppercase tracking-wider text-zinc-400">Meal Ingredients</h3>
-                      <span className="text-[10px] font-semibold text-zinc-400">
+                      <h3 className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">Meal Ingredients</h3>
+                      <span className="text-[11px] font-semibold text-zinc-400">
                         ({plannedItems.filter(i => !i.checked).length})
                       </span>
                     </div>
@@ -1425,7 +1425,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                             e.stopPropagation();
                             onNavigateTab('planning', activePlan?.id);
                           }}
-                          className="inline-flex items-center text-[10px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
+                          className="inline-flex items-center text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
                           title="View plan in Planner tab"
                         >
                           <span>View Plan</span>
@@ -1505,8 +1505,8 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
                         openSections.batch ? 'rotate-180' : ''
                       }`} />
-                      <h3 className="font-bold text-[10px] uppercase tracking-wider text-zinc-400">Batch Meals</h3>
-                      <span className="text-[10px] font-semibold text-zinc-400">
+                      <h3 className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">Batch Meals</h3>
+                      <span className="text-[11px] font-semibold text-zinc-400">
                         ({batchItems.filter(i => !i.checked).length})
                       </span>
                     </div>
@@ -1518,7 +1518,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                           e.stopPropagation();
                           setShowBatchModal(true);
                         }}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
                       >
                         <Plus className="w-2.5 h-2.5" />
                         <span>Add Batch</span>
@@ -1582,17 +1582,17 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                             isOpen ? 'rotate-180' : ''
                           }`} />
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                               Aisle {group.info.order}
                             </span>
-                            <span className="text-[10px] text-zinc-300">·</span>
+                            <span className="text-[11px] text-zinc-300">·</span>
                             <h3 className="font-bold text-xs text-zinc-900">{group.info.name}</h3>
-                            <span className="text-[10px] text-zinc-400 font-normal hidden sm:inline">— {group.info.description}</span>
+                            <span className="text-[11px] text-zinc-400 font-normal hidden sm:inline">— {group.info.description}</span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-semibold text-zinc-400">
+                          <span className="text-[11px] font-semibold text-zinc-400">
                             ({pendingAisleCount})
                           </span>
                         </div>
@@ -1628,7 +1628,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
               <div className="space-y-3">
                 {!dropCompletedToBottom ? (
                   <div className="space-y-1.5">
-                    <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[10px] block px-1">
+                    <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
                       All Items ({allViewItems.length})
                     </span>
                     {arrangeListItems(allViewItems).map(item => (
@@ -1651,7 +1651,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                   <>
                     {allViewItems.filter(i => !i.checked).length > 0 && (
                       <div className="space-y-1.5">
-                        <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[10px] block px-1">
+                        <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
                           To Buy ({allViewItems.filter(i => !i.checked).length})
                         </span>
                         {sortItems(allViewItems.filter(i => !i.checked)).map(item => (
@@ -1674,7 +1674,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
 
                     {allViewItems.filter(i => i.checked).length > 0 && (
                       <div className="space-y-1.5 pt-2">
-                        <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[10px] block px-1">
+                        <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
                           Checked Off ({allViewItems.filter(i => i.checked).length})
                         </span>
                         {sortItems(allViewItems.filter(i => i.checked)).map(item => (
@@ -1879,16 +1879,30 @@ function ShoppingItemRow({
 
   const [localVal, setLocalVal] = React.useState<string>('');
 
-  React.useEffect(() => {
+  // What the box shows: "1 kg" rather than "1000 g"; the item itself keeps its own unit.
+  const shownVal = React.useMemo(() => {
+    const big = largeUnitQuantity(item.amount, item.unit);
+    if (big) return `${formatShopAmount(big.amount)} ${big.unit}`;
     const displayUnit = item.unit && !['whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', ''].includes(item.unit.toLowerCase().trim()) ? ` ${item.unit}` : '';
-    setLocalVal(`${item.amount}${displayUnit}`);
+    return `${item.amount}${displayUnit}`;
   }, [item.amount, item.unit]);
 
+  React.useEffect(() => {
+    setLocalVal(shownVal);
+  }, [shownVal]);
+
   const handleBlurOrSubmit = () => {
-    if (onUpdateQtyAndUnit) {
-      const { amount, unit } = parseQtyAndUnit(localVal, item.unit || 'item');
-      onUpdateQtyAndUnit(item.id, amount, unit);
+    if (!onUpdateQtyAndUnit) return;
+    if (localVal.trim() === shownVal.trim()) return; // not changed: don't mark it as edited
+    let { amount, unit } = parseQtyAndUnit(localVal, item.unit || 'item');
+    // Typed "1.5 kg" for an item kept in grams: store 1500 g, so + / - still step in grams.
+    const typed = unitInfo(unit);
+    const own = unitInfo(item.unit);
+    if (typed.dimension !== 'count' && typed.dimension === own.dimension && typed.unit !== own.unit) {
+      amount = Math.round((amount * typed.factor) / own.factor * 100) / 100;
+      unit = item.unit;
     }
+    onUpdateQtyAndUnit(item.id, amount, unit);
   };
 
   return (
@@ -1921,7 +1935,7 @@ function ShoppingItemRow({
           {/* Title and Favourite */}
           <div className="flex items-center gap-1.5 justify-between pr-2">
             <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
-              <p className={`font-semibold text-xs text-zinc-900 leading-tight break-words ${checked ? 'line-through text-zinc-400 font-medium' : ''}`}>
+              <p className={`font-semibold text-sm text-zinc-900 leading-tight break-words ${checked ? 'line-through text-zinc-400 font-medium' : ''}`}>
                 {item.name}
               </p>
 
@@ -1945,7 +1959,7 @@ function ShoppingItemRow({
 
               {item.checkCupboard && !checked && (
                 <span
-                  className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5 shrink-0"
+                  className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5 shrink-0"
                   title="Store-cupboard item: check you have it before buying"
                 >
                   check cupboard
@@ -1954,7 +1968,7 @@ function ShoppingItemRow({
 
               {item.needsCheck && !checked && (
                 <span
-                  className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-1.5 py-0.5 shrink-0"
+                  className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-1.5 py-0.5 shrink-0"
                   title={item.quantityNote || 'Part of this amount could not be worked out from the recipe'}
                 >
                   check amount
@@ -1968,7 +1982,7 @@ function ShoppingItemRow({
                     e.stopPropagation();
                     onResetToRequired?.(item, requirement.requiredAmount);
                   }}
-                  className="inline-flex items-center gap-0.5 text-[9px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/60 px-1 py-0.2 rounded hover:bg-amber-100 transition-colors cursor-pointer shrink-0"
+                  className="inline-flex items-center gap-0.5 text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/60 px-1 py-0.2 rounded hover:bg-amber-100 transition-colors cursor-pointer shrink-0"
                   title={`${requirement.requiredAmount} required for meal plan. Click to restore.`}
                 >
                   <Info className="w-2.5 h-2.5 text-amber-600" />
@@ -1998,7 +2012,7 @@ function ShoppingItemRow({
 
           {/* Subtext info (for recipes, batch cooking details) */}
           {((requiredFor && requiredFor.length > 0) || (!requiredFor && item.isBatch && item.batchRecipeName) || (!requiredFor && item.recipeNames && item.recipeNames.length > 0) || item.quantityNote) && (
-            <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5 flex-wrap">
+            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5 flex-wrap">
               {requiredFor && requiredFor.length > 0 && (
                 <span className="truncate max-w-[200px]">
                   For: {requiredFor.join(', ')}
@@ -2032,7 +2046,7 @@ function ShoppingItemRow({
         {isPending && (
           <button
             onClick={undo}
-            className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 active:bg-emerald-100 transition-colors cursor-pointer"
+            className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 active:bg-emerald-100 transition-colors cursor-pointer"
           >
             Undo
           </button>
@@ -2059,7 +2073,7 @@ function ShoppingItemRow({
                   e.currentTarget.blur();
                 }
               }}
-              className="text-[10px] font-bold text-zinc-800 w-11 sm:w-14 text-center bg-transparent border-0 p-0 outline-none focus:ring-0 focus:bg-white rounded px-0.5 select-text"
+              className="text-[11px] font-bold text-zinc-800 w-11 sm:w-14 text-center bg-transparent border-0 p-0 outline-none focus:ring-0 focus:bg-white rounded px-0.5 select-text"
             />
             <button
               type="button"
@@ -2392,7 +2406,7 @@ function ShoppingModeView({
               <button
                 type="button"
                 onClick={() => setFilter('all')}
-                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                   filter === 'all' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-500 hover:text-zinc-900'
                 }`}
               >
@@ -2401,7 +2415,7 @@ function ShoppingModeView({
               <button
                 type="button"
                 onClick={() => setFilter('to_buy')}
-                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                   filter === 'to_buy' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600 hover:text-zinc-900'
                 }`}
               >
@@ -2410,7 +2424,7 @@ function ShoppingModeView({
               <button
                 type="button"
                 onClick={() => setFilter('bought')}
-                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                   filter === 'bought' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600 hover:text-zinc-900'
                 }`}
               >
@@ -2424,7 +2438,7 @@ function ShoppingModeView({
                 type="button"
                 id="btn-shopping-mode-view-options"
                 onClick={() => setShowViewOptions(!showViewOptions)}
-                className={`h-7 px-2 sm:h-8 sm:px-2.5 rounded-lg sm:rounded-xl border flex items-center gap-1 transition-all cursor-pointer shadow-2xs text-[10px] sm:text-xs font-bold ${
+                className={`h-7 px-2 sm:h-8 sm:px-2.5 rounded-lg sm:rounded-xl border flex items-center gap-1 transition-all cursor-pointer shadow-2xs text-[11px] sm:text-xs font-bold ${
                   showViewOptions
                     ? 'bg-indigo-600 text-white border-indigo-600'
                     : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600 hover:text-zinc-900'
@@ -2444,7 +2458,7 @@ function ShoppingModeView({
                   />
                   <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl border border-zinc-200/90 shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="px-1 mb-1">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
                         View Layout
                       </span>
                       <div className="space-y-1">
@@ -2514,7 +2528,7 @@ function ShoppingModeView({
                     </div>
 
                     <div className="border-t border-zinc-100 my-2 pt-2 px-1">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5 font-bold">
+                      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5 font-bold">
                         List Options
                       </span>
                       <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer text-xs font-semibold text-zinc-700 select-none">
@@ -2622,11 +2636,11 @@ function ShoppingModeView({
                   >
                     <div className="flex items-center gap-1.5">
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="font-bold text-[10px] uppercase tracking-wider text-zinc-400">
+                      <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
                         Items
                       </span>
                     </div>
-                    <span className="text-[10px] font-semibold text-zinc-400">
+                    <span className="text-[11px] font-semibold text-zinc-400">
                       {adhocModeItems.filter(i => !i.checked).length} left
                     </span>
                   </button>
@@ -2657,7 +2671,7 @@ function ShoppingModeView({
                       className="flex items-center gap-1.5 hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left min-w-0"
                     >
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="font-bold text-[10px] uppercase tracking-wider text-zinc-400 truncate max-w-[130px] sm:max-w-none">
+                      <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400 truncate max-w-[130px] sm:max-w-none">
                         <span className="hidden sm:inline">Recurring Staples</span>
                         <span className="sm:hidden">Staples</span>
                       </span>
@@ -2670,14 +2684,14 @@ function ShoppingModeView({
                           e.stopPropagation();
                           onEditStaples();
                         }}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
                         title="Manage Staples"
                       >
                         <Sliders className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
                         <span>Manage</span>
                       </button>
 
-                      <span className="text-[10px] font-semibold text-zinc-400 shrink-0">
+                      <span className="text-[11px] font-semibold text-zinc-400 shrink-0">
                         {recurringModeItems.filter(i => !i.checked).length} left
                       </span>
                     </div>
@@ -2709,11 +2723,11 @@ function ShoppingModeView({
                   >
                     <div className="flex items-center gap-1.5">
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="font-bold text-[10px] uppercase tracking-wider text-zinc-400">
+                      <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
                         Meal Ingredients
                       </span>
                     </div>
-                    <span className="text-[10px] font-semibold text-zinc-400">
+                    <span className="text-[11px] font-semibold text-zinc-400">
                       {plannedModeItems.filter(i => !i.checked).length} left
                     </span>
                   </button>
@@ -2744,11 +2758,11 @@ function ShoppingModeView({
                   >
                     <div className="flex items-center gap-1.5">
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="font-bold text-[10px] uppercase tracking-wider text-zinc-400">
+                      <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
                         Batch Meals
                       </span>
                     </div>
-                    <span className="text-[10px] font-semibold text-zinc-400">
+                    <span className="text-[11px] font-semibold text-zinc-400">
                       {batchModeItems.filter(i => !i.checked).length} left
                     </span>
                   </button>
@@ -2793,7 +2807,7 @@ function ShoppingModeView({
               <>
                 {filteredItems.filter(i => !i.checked).length > 0 && (
                   <div className="space-y-2">
-                    <span className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] block px-1">
+                    <span className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
                       To Buy ({filteredItems.filter(i => !i.checked).length})
                     </span>
                     <div className="space-y-2">
@@ -2810,7 +2824,7 @@ function ShoppingModeView({
 
                 {filteredItems.filter(i => i.checked).length > 0 && (
                   <div className="space-y-2 pt-2">
-                    <span className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] block px-1">
+                    <span className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
                       Checked Off ({filteredItems.filter(i => i.checked).length})
                     </span>
                     <div className="space-y-2">
@@ -2870,6 +2884,8 @@ function ShoppingModeItemRow({
               if (item.displayQuantity) return item.displayQuantity;
               const rawUnit = item.unit ? item.unit.toLowerCase().trim() : '';
               const isCount = !rawUnit || ['whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', ''].includes(rawUnit);
+              const big = typeof item.amount === 'number' ? largeUnitQuantity(item.amount, item.unit) : null;
+              if (big) return `${formatShopAmount(big.amount)} ${big.unit}`;
               return isCount ? `Qty: ${item.amount}` : `${item.amount}${item.unit ? ' ' + item.unit : ''}`;
             })()}
           </span>
@@ -3109,7 +3125,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                       className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 text-left transition-colors border-b border-zinc-50 last:border-0 cursor-pointer"
                     >
                       <span className="text-xs font-semibold text-zinc-850">{suggestion.name}</span>
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 bg-zinc-100 text-zinc-500 rounded">
+                      <span className="text-[11px] font-medium px-1.5 py-0.5 bg-zinc-100 text-zinc-500 rounded">
                         {suggestion.category}
                       </span>
                     </button>
@@ -3136,11 +3152,11 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                         <p className="font-semibold text-xs text-zinc-900 truncate">
                           {item.name}
                         </p>
-                        <span className={`text-[9px] font-medium px-1.5 py-0.2 rounded border ${aisleInfo.colorClass}`}>
+                        <span className={`text-[11px] font-medium px-1.5 py-0.2 rounded border ${aisleInfo.colorClass}`}>
                           {aisleInfo.name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
+                      <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5">
                         <span className="font-semibold text-zinc-700">
                           {item.amount}{item.unit && !['whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', ''].includes(item.unit.toLowerCase().trim()) ? ` ${item.unit}` : ''}
                         </span>
@@ -3232,7 +3248,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
 
             <div className="p-4 space-y-3.5">
               <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Item Name</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Item Name</label>
                 <input
                   type="text"
                   disabled
@@ -3243,7 +3259,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Quantity</label>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Quantity</label>
                   <input
                     type="number"
                     min="0.1"
@@ -3255,7 +3271,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Unit (override)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Unit (override)</label>
                   <input
                     type="text"
                     placeholder="e.g. litre, pack"
@@ -3267,7 +3283,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Aisle Category</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Aisle Category</label>
                 <select
                   value={editingStapleCategory}
                   onChange={(e) => setEditingStapleCategory(e.target.value)}

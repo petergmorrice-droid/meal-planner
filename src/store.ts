@@ -9,8 +9,7 @@ import {
   cleanDays, DAYS_OF_WEEK
 } from './utils';
 import { INITIAL_GROCERY_DATABASE } from './utils/initialGroceryDb';
-import { ensureRecipeBreakdowns } from './utils/recipeBreakdowns';
-import { createSamplePastWeeks, createEmptyPlan } from './utils';
+import { createEmptyPlan } from './utils';
 import { useDeviceIdentity } from './hooks/useDeviceIdentity';
 import {
   getGistConfig, saveGistConfig, clearGistConfig,
@@ -19,7 +18,7 @@ import {
 import {
   mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, addTombstones, dropDefaultsMissingFrom
 } from './services/syncMerge';
-import { CATALOG_VERSION, missingExtraProducts } from './shopping';
+import { CATALOG_VERSION, missingExtraProducts, outdatedDefaults } from './shopping';
 
 /** How often to check GitHub for the other phone's changes while the app is open. */
 export const SYNC_POLL_SECONDS = 20;
@@ -335,14 +334,18 @@ export function useStore() {
   }, [githubConfig?.gistId, githubConfig?.pat]);
 
   // One-off: add products from newer versions of the built-in product list (spices, herbs...)
-  // to the shared grocery list. Runs once per data set; the other phone gets them via sync.
+  // and update built-in defaults that changed (milk in pints) to the shared grocery list. Runs once per data set; the other phone gets them via sync.
   useEffect(() => {
     const current = stateRef.current;
     if ((current.preferences?.catalogVersion ?? 1) >= CATALOG_VERSION) return;
     const additions = missingExtraProducts(current.groceryDatabase);
+    const updated = new Map(outdatedDefaults(current.groceryDatabase).map((i) => [i.id, i]));
     commit(current, {
       ...current,
-      groceryDatabase: [...(current.groceryDatabase || INITIAL_GROCERY_DATABASE), ...additions],
+      groceryDatabase: [
+        ...(current.groceryDatabase || INITIAL_GROCERY_DATABASE).map((i) => updated.get(i.id) || i),
+        ...additions,
+      ],
       preferences: { ...(current.preferences || DEFAULT_PREFERENCES), catalogVersion: CATALOG_VERSION },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -356,16 +359,14 @@ export function useStore() {
   );
 
   const addRecipe = async (recipe: Recipe) => {
-    const withBreakdowns = ensureRecipeBreakdowns(recipe);
-    withBreakdowns.addedBy = currentUser;
-    const nextRecipes = [...state.recipes.filter(r => r.id !== withBreakdowns.id), withBreakdowns];
+    const toSave = { ...recipe, addedBy: currentUser };
+    const nextRecipes = [...state.recipes.filter(r => r.id !== toSave.id), toSave];
     commit(state, { ...state, recipes: nextRecipes });
   };
 
   const updateRecipe = async (recipe: Recipe) => {
-    const withBreakdowns = ensureRecipeBreakdowns(recipe);
-    withBreakdowns.lastModifiedBy = currentUser;
-    const nextRecipes = state.recipes.map(r => r.id === withBreakdowns.id ? withBreakdowns : r);
+    const toSave = { ...recipe, lastModifiedBy: currentUser };
+    const nextRecipes = state.recipes.map(r => r.id === toSave.id ? toSave : r);
     commit(state, { ...state, recipes: nextRecipes });
   };
 
@@ -419,38 +420,6 @@ export function useStore() {
     commit(state, { ...state, mealPlans: finalPlans });
   };
 
-  const repairDatabase = async () => {
-    const plansByDate = new Map<string, MealPlan[]>();
-    state.mealPlans.forEach(p => {
-      if (!plansByDate.has(p.startDate)) plansByDate.set(p.startDate, []);
-      plansByDate.get(p.startDate)!.push(p);
-    });
-
-    const finalPlans: MealPlan[] = [];
-    for (const [startDate, plans] of plansByDate.entries()) {
-      plans.sort((a, b) => {
-        const aCorrect = a.id === `plan-${a.startDate}` ? 1 : 0;
-        const bCorrect = b.id === `plan-${b.startDate}` ? 1 : 0;
-        if (aCorrect !== bCorrect) return bCorrect - aCorrect;
-        return (b.lastModifiedAt || 0) - (a.lastModifiedAt || 0);
-      });
-
-      const bestPlan = plans[0];
-      const cleanDaysData = { ...bestPlan.days };
-      for (const day of Object.keys(cleanDaysData)) {
-        if (cleanDaysData[day]?.meals?.length > 1) {
-          cleanDaysData[day].meals = [cleanDaysData[day].meals[0]];
-        }
-      }
-
-      const correctId = `plan-${bestPlan.startDate}`;
-      const updatedPlan = { ...bestPlan, id: correctId, days: cleanDaysData };
-      finalPlans.push(updatedPlan);
-    }
-
-    commit(state, { ...state, mealPlans: finalPlans });
-  };
-
   const duplicatePlanToWeek = async (sourcePlanId: string, targetStartDate: string) => {
     const source = state.mealPlans.find(p => p.id === sourcePlanId);
     if (!source) return;
@@ -488,20 +457,6 @@ export function useStore() {
     nextMealPlans.push(newPlan);
 
     commit(state, { ...state, mealPlans: nextMealPlans });
-  };
-
-  const seedSamplePastWeeks = async () => {
-    const sample = createSamplePastWeeks();
-    const existingDates = new Set(state.mealPlans.map(p => p.startDate));
-    const toAdd = sample.filter(p => !existingDates.has(p.startDate));
-
-    if (toAdd.length === 0) return;
-
-    toAdd.forEach(plan => {
-      plan.lastModifiedAt = Date.now();
-    });
-
-    commit(state, { ...state, mealPlans: [...state.mealPlans, ...toAdd] });
   };
 
   const clearPastWeeks = async () => {
@@ -794,9 +749,7 @@ export function useStore() {
     updateRecipe,
     deleteRecipe,
     updateMealPlan,
-    repairDatabase,
     duplicatePlanToWeek,
-    seedSamplePastWeeks,
     clearPastWeeks,
     addBatch,
     updateBatch,

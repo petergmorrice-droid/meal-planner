@@ -129,7 +129,7 @@ export function createEmptyPlan(mondayDate: Date): MealPlan {
 }
 
 import { getCatalog } from './utils/shoppingConversion';
-import { buildShoppingLines, matchKey, type IngredientInput, type Catalog } from './shopping';
+import { buildShoppingLines, matchKey, formatCookingAmount, type IngredientInput, type Catalog } from './shopping';
 
 export * from './utils/shoppingConversion';
 
@@ -339,10 +339,6 @@ export function getGroceryAisle(item: { name: string; category?: string }): Food
   return 'pantry_spices';
 }
 
-export function createSamplePastWeeks(): import('./types').MealPlan[] {
-  return [];
-}
-
 export function cleanDays(days: Record<string, import('./types').DayPlan>): Record<string, import('./types').DayPlan> {
   const cleaned: Record<string, import('./types').DayPlan> = {};
   for (const dayName in days) {
@@ -387,6 +383,8 @@ export function parseQtyAndUnit(text: string, defaultUnit: string = 'item'): { a
 }
 
 export function parseNumberValue(valStr: string): number {
+  const mixed = valStr.trim().match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (mixed && parseFloat(mixed[3]) !== 0) return parseFloat(mixed[1]) + parseFloat(mixed[2]) / parseFloat(mixed[3]);
   if (valStr.includes('/')) {
     const parts = valStr.split('/');
     const num = parseFloat(parts[0]);
@@ -399,20 +397,8 @@ export function parseNumberValue(valStr: string): number {
 }
 
 export function formatScaledNumber(num: number): string {
-  if (Math.abs(num - Math.round(num)) < 0.05) {
-    return Math.round(num).toString();
-  }
-  const dec = num % 1;
-  const whole = Math.floor(num);
-  const wholeStr = whole > 0 ? `${whole} ` : '';
-  
-  if (Math.abs(dec - 0.25) < 0.05) return `${wholeStr}1/4`;
-  if (Math.abs(dec - 0.5) < 0.05) return `${wholeStr}1/2`;
-  if (Math.abs(dec - 0.75) < 0.05) return `${wholeStr}3/4`;
-  if (Math.abs(dec - 0.333) < 0.05 || Math.abs(dec - 0.33) < 0.05) return `${wholeStr}1/3`;
-  if (Math.abs(dec - 0.666) < 0.05 || Math.abs(dec - 0.66) < 0.05) return `${wholeStr}2/3`;
-
-  return Number(num.toFixed(num % 1 === 0 ? 0 : num % 0.1 === 0 ? 1 : 2)).toString();
+  // Kitchen-friendly: "½", "1½", "250" (see formatCookingAmount)
+  return formatCookingAmount(num) || '0';
 }
 
 export function scaleRecipeStepQuantities(step: string, ingredients: any[], scale: number): string {
@@ -451,7 +437,7 @@ export function scaleRecipeStepQuantities(step: string, ingredients: any[], scal
     'tin', 'tins', 'pan', 'pans', 'tray', 'trays', 'serves', 'servings', 'portions', 'portion'
   ]);
 
-  const numberRegex = /(\d+\/\d+|\d+(?:\.\d+)?)/g;
+  const numberRegex = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)/g; // "1 1/2", "1/2", "1.5"
 
   let result = '';
   let lastIndex = 0;
@@ -736,7 +722,7 @@ export function syncRecurringStaplesForPlan(
   if (!plan || !plan.id) return shoppingList;
 
   const currentMondayStr = formatDateISO(getMonday(new Date()));
-  const nextMondayDate = new Date(getMonday(new Date()).getTime() + 7 * 24 * 60 * 60 * 1000);
+  const nextMondayDate = getNextMonday(new Date()); // calendar days, so clock changes can't shift it
   const nextMondayStr = formatDateISO(nextMondayDate);
 
   const weekLabel = `Week of ${

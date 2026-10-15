@@ -1,8 +1,9 @@
 // Recipe import: what Gemini copies is saved unchanged, then scaled and shopped for by the app.
 // Run with: npm test
 import assert from 'node:assert/strict';
+process.env.TZ = 'Europe/London'; // UK clock changes matter for the week maths below
 import {
-  normalizeParsedRecipe, generateShoppingListForPlan, scaleRecipeStepQuantities,
+  normalizeParsedRecipe, generateShoppingListForPlan, scaleRecipeStepQuantities, getMonday, getNextMonday, formatDateISO,
   buildCatalog, linkIngredients, canonicalUnit, INITIAL_GROCERY_DATABASE,
 } from '../.test-build/recipeImport.mjs';
 
@@ -194,6 +195,23 @@ test('Cook mode scales the copied method for the people you\'re cooking for', ()
   assert.equal(half(COPIED.bolognese.instructions[1]), 'Add the garlic and 250g beef mince and brown for 5 mins.');
   assert.equal(half(COPIED.bolognese.instructions[3]), 'Cook 200g spaghetti following pack instructions. Serve with parmesan.');
   assert.ok(half(COPIED.bolognese.instructions[0]).includes('10 mins'), 'cooking times must not be scaled');
+});
+
+test('Cook mode shows kitchen fractions and scales "1 1/2" as one amount', () => {
+  const ings = [{ name: 'onion', amount: 1, unit: '' }, { name: 'olive oil', amount: 1.5, unit: 'tbsp' }];
+  assert.equal(scaleRecipeStepQuantities('Fry 1 onion in 1 1/2 tbsp olive oil for 5 mins.', ings, 0.5), 'Fry ½ onion in ¾ tbsp olive oil for 5 mins.');
+  assert.equal(scaleRecipeStepQuantities('Add 400g beef mince.', [{ name: 'beef mince', amount: 400, unit: 'g' }], 1 / 3), 'Add 133g beef mince.');
+});
+
+test('"next week" is right in the weeks the clocks change', () => {
+  const cases = [
+    ['2026-10-19T09:00', '2026-10-26'], ['2026-10-25T12:00', '2026-10-26'], ['2026-10-24T23:30', '2026-10-26'],
+    ['2027-03-22T08:00', '2027-03-29'], ['2027-03-28T12:00', '2027-03-29'], ['2026-10-15T21:00', '2026-10-19'],
+  ];
+  for (const [now, want] of cases) {
+    assert.equal(formatDateISO(getNextMonday(new Date(now))), want, now);
+    assert.equal(formatDateISO(getMonday(new Date(now))) < want, true);
+  }
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

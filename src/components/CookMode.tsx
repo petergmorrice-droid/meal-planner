@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { formatCookingAmount } from '../shopping';
 import { 
   ChevronLeft, 
   ChefHat, 
@@ -332,10 +333,10 @@ export default function CookMode({
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
                   {dayName === 'Cookbook' ? 'Cookbook' : `${dayName}`} Mode
                 </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-bold border border-emerald-100 uppercase tracking-wider shrink-0">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-100 uppercase tracking-wider shrink-0">
                   Active Cook
                 </span>
               </div>
@@ -381,7 +382,7 @@ export default function CookMode({
                       setSelectedCookingMethod(m);
                       setActiveStepIndex(0);
                     }}
-                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
                       selectedCookingMethod === m
                         ? 'bg-white text-zinc-900 shadow-3xs font-extrabold border border-zinc-200/30'
                         : 'text-zinc-500 hover:text-zinc-900'
@@ -433,7 +434,7 @@ export default function CookMode({
       {meals.length > 1 && (
         <div className="bg-white border-b border-zinc-100 px-4 py-1.5 shrink-0 z-30">
           <div className="max-w-6xl mx-auto w-full flex items-center gap-2 overflow-x-auto scrollbar-none py-0.5">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider shrink-0 mr-1">Meals Today:</span>
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider shrink-0 mr-1">Meals Today:</span>
             {meals.map((m) => {
               const isSelected = m.id === activeMealId;
               return (
@@ -497,7 +498,7 @@ export default function CookMode({
             <button
               type="button"
               onClick={() => setCheckedIngredients({})}
-              className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer"
+              className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer"
             >
               Reset Checklist
             </button>
@@ -511,8 +512,7 @@ export default function CookMode({
           
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
             {recipe.ingredients.map((ing, idx) => {
-              const scaledAmount = ing.amount * scale;
-              const formattedAmount = Number(scaledAmount.toFixed(scaledAmount % 1 === 0 ? 0 : 1));
+              const formattedAmount = formatCookingAmount(ing.amount * scale, ing.unit);
               const isChecked = checkedIngredients[ing.id] || false;
 
               return (
@@ -531,14 +531,14 @@ export default function CookMode({
                     className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer mt-0.5"
                   />
                   <div className="min-w-0 flex-1">
-                    <span className={`text-xs font-semibold leading-relaxed ${isChecked ? 'line-through text-zinc-400' : 'text-zinc-800'}`}>
+                    <span className={`text-sm font-semibold leading-relaxed ${isChecked ? 'line-through text-zinc-400' : 'text-zinc-800'}`}>
                       {ing.name}
                     </span>
                     {ing.note && (
-                      <span className={`text-xs leading-relaxed ${isChecked ? 'text-zinc-400' : 'text-zinc-500'}`}>, {ing.note}</span>
+                      <span className={`text-sm leading-relaxed ${isChecked ? 'text-zinc-400' : 'text-zinc-500'}`}>, {ing.note}</span>
                     )}
                     {ing.amount > 0 && (
-                      <span className="text-[10px] font-mono text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded ml-2 font-bold whitespace-nowrap">
+                      <span className="text-xs font-mono text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded ml-2 font-bold whitespace-nowrap">
                         {formattedAmount} {ing.unit}
                       </span>
                     )}
@@ -616,7 +616,7 @@ export default function CookMode({
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs sm:text-sm leading-relaxed ${
+                      <p className={`text-sm sm:text-base leading-relaxed ${
                         isActive 
                           ? 'text-zinc-950 font-semibold' 
                           : 'text-zinc-600'
@@ -783,7 +783,7 @@ function CookingTimer({ durationMinutes }: CookingTimerProps) {
         <button
           type="button"
           onClick={handleToggle}
-          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
+          className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
             hasFinished
               ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
               : isRunning
@@ -796,7 +796,7 @@ function CookingTimer({ durationMinutes }: CookingTimerProps) {
         <button
           type="button"
           onClick={handleReset}
-          className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg bg-zinc-200 text-zinc-700 hover:bg-zinc-300 transition-colors cursor-pointer"
+          className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg bg-zinc-200 text-zinc-700 hover:bg-zinc-300 transition-colors cursor-pointer"
         >
           Reset
         </button>

@@ -1,4 +1,3 @@
-import { DevConsoleTable } from './DevConsoleTable';
 import React, { useState, useMemo } from 'react';
 import { 
   Calendar, 
@@ -16,7 +15,6 @@ import {
   BookOpen,
   Plus,
   Minus,
-  Bug,
   Users,
   Heart,
   Sparkles,
@@ -48,11 +46,9 @@ interface SettingsTabProps {
     resetPreferences: () => void;
     updateMealPlan: (plan: MealPlan) => void;
     duplicatePlanToWeek: (sourcePlanId: string, targetStartDate: string) => void;
-    seedSamplePastWeeks: () => void;
     clearPastWeeks: () => void;
     exportAllData: () => string;
     importAllData: (data: string) => boolean;
-    repairDatabase: () => Promise<void>;
     updateShoppingList?: (list: any[]) => void;
     updateGroceryDatabase?: (db: GroceryItem[]) => void;
     updateGroceryOverride?: (id: string, updates: Partial<GroceryItem>) => void;
@@ -464,8 +460,6 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
     showPrepTime: true,
     showCookTime: true,
     showTotalTime: true,
-    showHealth: true,
-    showCost: true,
     showMethod: true,
     showVegetarian: true,
     showVegan: true,
@@ -630,7 +624,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
     { id: 'grocery_db', label: 'grocery database', icon: BookOpen, desc: 'Standard shopping units and steps' },
     { id: 'household', label: 'my household', icon: Users, desc: 'Portions & multi-cooker preferences' },
     { id: 'github', label: 'connections', icon: Cloud, desc: 'Sync with private GitHub Gist and configure Gemini AI' },
-    { id: 'system', label: 'system', icon: Bug, desc: 'Backup, repair and dev inspection logs' }
+    { id: 'system', label: 'backup', icon: Download, desc: 'Download, restore and reset' }
   ] as const;
 
   return (
@@ -752,17 +746,8 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
                   {pastPlans.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-zinc-150 p-6 text-center space-y-3">
-                      <p className="text-xs text-zinc-500">No completed weeks in archive.</p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          store.seedSamplePastWeeks();
-                          showToast('Sample past weeks loaded');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                      >
-                        <span>Seed Sample Past Weeks</span>
-                      </button>
+                      <p className="text-xs text-zinc-500">No finished weeks yet.</p>
+                      <p className="text-[11px] text-zinc-400">Once a week is over it appears here, where you can look back at it or copy it to a new week.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -795,7 +780,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                                     {formatWeekRange(plan.startDate)}
                                   </span>
                                   {/* Clean metadata without boxes */}
-                                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 mt-0.5">
+                                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mt-0.5">
                                     <span>{metrics.mealsCount} planned dinners</span>
                                     <span aria-hidden="true">·</span>
                                     <span>mon, {formatWeekStart(plan.startDate)}</span>
@@ -809,7 +794,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                                       e.stopPropagation();
                                       setExpandedPlanIds(prev => ({ ...prev, [plan.id]: true }));
                                     }}
-                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md text-[10px] font-bold cursor-pointer"
+                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md text-[11px] font-bold cursor-pointer"
                                   >
                                     Reuse
                                   </button>
@@ -832,7 +817,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                                   <div className="bg-zinc-900 text-white rounded-lg p-3 space-y-3.5 border border-zinc-850">
                                     <div className="min-w-0">
                                       <h4 className="text-[11px] font-bold text-white">Duplicate Whole Plan</h4>
-                                      <p className="text-[10px] text-zinc-400 mt-0.5 leading-normal">
+                                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-normal">
                                         Clone this week's schedules directly into any active or upcoming week.
                                       </p>
                                     </div>
@@ -875,7 +860,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                                         const meals = day?.meals || [];
                                         return (
                                           <div key={dayName} className="p-2 bg-white rounded-lg border border-zinc-150 text-[11px]">
-                                            <div className="flex items-center justify-between font-bold border-b border-zinc-100 pb-1 text-[10px] text-zinc-500">
+                                            <div className="flex items-center justify-between font-bold border-b border-zinc-100 pb-1 text-[11px] text-zinc-500">
                                               <span>{dayName}</span>
                                               <span>{day?.date}</span>
                                             </div>
@@ -886,7 +871,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                                                 <div key={meal.id} className="mt-1 flex items-center justify-between text-zinc-700 font-medium">
                                                   <span className="truncate">{meal.name}</span>
                                                   {/* Metadata unboxed text */}
-                                                  <span className="text-[9px] text-zinc-400 shrink-0 font-semibold lowercase">
+                                                  <span className="text-[11px] text-zinc-400 shrink-0 font-semibold lowercase">
                                                     · {meal.type}
                                                   </span>
                                                 </div>
@@ -901,7 +886,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                                       <button
                                         type="button"
                                         onClick={() => copyWeekSummary(plan)}
-                                        className="text-[10px] font-bold text-zinc-500 hover:text-zinc-800 hover:underline flex items-center gap-1"
+                                        className="text-[11px] font-bold text-zinc-500 hover:text-zinc-800 hover:underline flex items-center gap-1"
                                       >
                                         <Copy className="w-3 h-3" />
                                         <span>Copy text breakdown</span>
@@ -935,7 +920,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                           <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
                             🧹 Grocery Database Health
                           </h3>
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-md">
+                          <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-md">
                             Gemini AI
                           </span>
                         </div>
@@ -1096,7 +1081,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                               {item.name}
                             </span>
                             {/* Metadata unboxed text with typographic middots */}
-                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-medium mt-0.5 lowercase">
+                            <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium mt-0.5 lowercase">
                               <span>{item.category}</span>
                               <span aria-hidden="true" className="text-zinc-300">·</span>
                               <span>step: {item.increment} {item.unit || 'item'}</span>
@@ -1267,7 +1252,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                       <div className="p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-xl space-y-2 text-xs">
                         <div className="flex justify-between items-center">
                           <span className="font-semibold text-zinc-500">Sync Status:</span>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase ${
+                          <span className={`font-bold px-2 py-0.5 rounded text-[11px] uppercase ${
                             store.syncStatus === 'synced' ? 'bg-emerald-100 text-emerald-700' :
                             store.syncStatus === 'loading' ? 'bg-amber-100 text-amber-700 animate-pulse' :
                             store.syncStatus === 'error' ? 'bg-rose-100 text-rose-700' : 'bg-zinc-100 text-zinc-700'
@@ -1286,7 +1271,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                           </div>
                         )}
                         {store.syncError && (
-                          <div className="p-2 bg-rose-50 text-rose-700 text-[10px] rounded border border-rose-100 font-medium">
+                          <div className="p-2 bg-rose-50 text-rose-700 text-[11px] rounded border border-rose-100 font-medium">
                             Error: {store.syncError}
                           </div>
                         )}
@@ -1334,7 +1319,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                       }
                     }} className="space-y-4">
                       <div>
-                        <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
+                        <label className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
                           GitHub Personal Access Token (PAT)
                         </label>
                         <input
@@ -1346,14 +1331,14 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                           placeholder="ghp_..."
                           className="w-full text-xs px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
                         />
-                        <span className="text-[9px] text-zinc-400 block mt-1">
+                        <span className="text-[11px] text-zinc-400 block mt-1">
                           Needs 'gist' permission. You can generate one in GitHub Settings &gt; Developer settings.
                         </span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
+                          <label className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
                             Gist ID (Leave empty to create new)
                           </label>
                           <input
@@ -1367,7 +1352,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                         </div>
 
                         <div>
-                          <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
+                          <label className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
                             Initial Sync Strategy
                           </label>
                           <select
@@ -1425,7 +1410,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
+                      <label className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
                         Gemini API Key
                       </label>
                       <input
@@ -1435,7 +1420,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                         placeholder="AIzaSy..."
                         className="w-full text-xs px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
                       />
-                      <span className="text-[9px] text-zinc-400 block mt-1">
+                      <span className="text-[11px] text-zinc-400 block mt-1">
                         Get a free or paid API key from the <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Google AI Studio Console</a>.
                       </span>
                     </div>
@@ -1482,32 +1467,16 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
               <div className="space-y-4 animate-in fade-in duration-150">
                 <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
                   <div className="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                    <Zap className="w-4 h-4 text-zinc-400" />
-                    <h3 className="text-sm font-bold text-zinc-900 lowercase">database repair</h3>
+                    <Sparkles className="w-4 h-4 text-zinc-400" />
+                    <h3 className="text-sm font-bold text-zinc-900 lowercase">tidy the grocery list</h3>
                   </div>
 
                   <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-150 space-y-2">
                     <p className="text-[11px] text-zinc-500 leading-normal">
-                      Resolve double planner entries, merge duplicate days, and enforce exactly 1 primary meal per slot in Firestore.
+                      Gemini looks for duplicate or oddly named products on your grocery list and suggests merges. You approve each change.
                     </p>
 
                     <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm("Execute full database repair and merge duplicate plan dates?")) {
-                            store.repairDatabase().then(() => {
-                              showToast("Repair complete!");
-                            }).catch(() => {
-                              showToast("Repair finished with warnings.");
-                            });
-                          }
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-xs"
-                      >
-                        <span>Execute Full Repair</span>
-                      </button>
-
                       <button
                         type="button"
                         onClick={() => setIsCleanDbModalOpen(true)}
@@ -1557,31 +1526,6 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                   </div>
                 </div>
 
-                {/* State Inspector */}
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
-                  <div className="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                    <Bug className="w-4 h-4 text-zinc-400" />
-                    <h3 className="text-sm font-bold text-zinc-950 lowercase">developer console</h3>
-                  </div>
-
-                  <div className="space-y-4">
-                    <DevConsoleTable 
-                      title="Recipes" 
-                      description="Recipes database with MACRO calculations"
-                      data={store.state.recipes || []} 
-                    />
-                    <DevConsoleTable 
-                      title="Meal Plans" 
-                      description="Weekly dinner and takeout details"
-                      data={store.state.mealPlans || []} 
-                    />
-                    <DevConsoleTable 
-                      title="Shopping List" 
-                      description="Current consolidated grocery lines"
-                      data={store.state.shoppingList || []} 
-                    />
-                  </div>
-                </div>
               </div>
             )}
 
@@ -1613,7 +1557,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
               setIsAddPopupOpen(false);
             }} className="p-4 space-y-3.5">
               <div>
-                <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Item Name</label>
+                <label className="text-[11px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Item Name</label>
                 <input
                   type="text"
                   required
@@ -1627,7 +1571,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Standard Unit</label>
+                  <label className="text-[11px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Standard Unit</label>
                   <input
                     type="text"
                     required
@@ -1638,7 +1582,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Step Increment</label>
+                  <label className="text-[11px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Step Increment</label>
                   <input
                     type="number"
                     min="0.01"
@@ -1652,7 +1596,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Aisle Category</label>
+                <label className="text-[11px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Aisle Category</label>
                 <select
                   value={dbNewCategory}
                   onChange={(e) => setDbNewCategory(e.target.value)}
@@ -1712,7 +1656,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
             <div className="p-4 space-y-3.5">
               <div>
-                <label className="text-[10px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Item Name</label>
+                <label className="text-[11px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Item Name</label>
                 <input
                   type="text"
                   required
@@ -1725,7 +1669,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Standard Unit</label>
+                  <label className="text-[11px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Standard Unit</label>
                   <input
                     type="text"
                     required
@@ -1735,7 +1679,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Step Increment</label>
+                  <label className="text-[11px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Step Increment</label>
                   <input
                     type="number"
                     min="0.01"
@@ -1749,7 +1693,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Aisle Category</label>
+                <label className="text-[11px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Aisle Category</label>
                 <select
                   value={editingItemCategory}
                   onChange={(e) => setEditingItemCategory(e.target.value)}
