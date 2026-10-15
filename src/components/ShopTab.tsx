@@ -30,6 +30,7 @@ import {
 import { ShoppingListItem, Recipe, MealPlan, DayPlan } from '../types';
 import { useGracefulCheckoff } from '../hooks/useGracefulCheckoff';
 import { aggregateIngredients } from '../utils/aggregation';
+import { matchProduct, groupingKey, canonicalUnit, formatUnit } from '../shopping';
 import ShopAisleGroup from './ShopAisleGroup';
 import CatalogDrawer from './CatalogDrawer';
 import EditItemDrawer from './EditItemDrawer';
@@ -52,6 +53,8 @@ import {
   DAYS_OF_WEEK,
   getIngredientStep,
   convertToShoppingQuantity,
+  quantityForAddedItem,
+  getCatalog,
   findGroceryDatabaseMatch,
   parseQtyAndUnit,
   syncRecurringStaplesForPlan,
@@ -284,12 +287,18 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
 
     const recipes = store.state.recipes || [];
     const targetItems = generateShoppingListForPlan(activePlan, recipes);
+    const catalog = getCatalog();
+    const lineKeyFor = (name: string, unit?: string, amount?: number, groceryId?: string) => {
+      const product = matchProduct(catalog, name, { unit, amount, groceryId });
+      return product ? `p:${product.id}` : `n:${groupingKey(name)}`;
+    };
 
     targetItems.forEach(target => {
       const recipeSet = new Set<string>();
       const nightSet = new Set<string>();
       const breakdown: MealRequirementDetail[] = [];
       const normItemName = target.name.toLowerCase().trim();
+      const targetKey = target.groceryId ? `p:${target.groceryId}` : lineKeyFor(target.name);
 
       Object.entries(activePlan.days).forEach(([dayKey, dayPlan]) => {
         const dp = dayPlan as DayPlan;
@@ -315,7 +324,8 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
             const scale = mealServings / (baseServings || 2);
 
             recipe.ingredients.forEach(ing => {
-              if (ing.name.toLowerCase().trim() === normItemName) {
+              if (!ing || !ing.name) return;
+              if (lineKeyFor(ing.name, ing.unit, ing.amount, ing.groceryId) === targetKey) {
                 const scaled = Math.round(ing.amount * scale * 100) / 100;
                 recipeSet.add(recipe.name);
                 nightSet.add(dayName);
@@ -562,19 +572,25 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
         !item.checked && item.planId === activePlan.id && item.name.toLowerCase() === newItem.name.toLowerCase()
       );
 
+      const converted = quantityForAddedItem(newItem.name, newItem.amount);
       if (existingIndex > -1) {
+        const existing = currentList[existingIndex];
+        // Same unit: add whole packs. Different unit (older items): leave the amount and let the user adjust.
+        const sameUnit = canonicalUnit(existing.unit) === canonicalUnit(converted.unit);
+        const newAmount = sameUnit ? Math.round((existing.amount + converted.amount) * 100) / 100 : existing.amount;
         currentList[existingIndex] = {
-          ...currentList[existingIndex],
-          amount: currentList[existingIndex].amount + newItem.amount
+          ...existing,
+          amount: newAmount,
+          unit: sameUnit ? formatUnit(canonicalUnit(converted.unit), newAmount) : existing.unit
         };
       } else {
-        const converted = convertToShoppingQuantity(newItem.name, newItem.amount);
         currentList.push({
           id: crypto.randomUUID(),
           name: newItem.name,
           amount: converted.amount,
           unit: converted.unit || (converted.amount === 1 ? 'item' : 'items'),
           category: newItem.category || converted.category || '',
+          groceryId: converted.groceryId,
           checked: false,
           isAdhoc: true,
           isBatch: false,
@@ -629,26 +645,11 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
       if (i.id === id) {
         const currentAmount = i.amount || 1;
         const newAmount = Math.max(step, currentAmount + actualDelta);
-        let nextUnit = i.unit;
-        if (i.isAdhoc) {
-          const normUnit = (i.unit || '').toLowerCase().trim();
-          if (!normUnit || ['item', 'items'].includes(normUnit)) {
-            nextUnit = newAmount === 1 ? 'item' : 'items';
-          } else {
-            const singular = normUnit.replace(/s$/, '').replace(/loaves$/, 'loaf');
-            if (['bulb', 'fillet', 'breast', 'head', 'piece', 'pack', 'slice', 'wrap', 'can', 'tin', 'pot', 'whole', 'loaf'].includes(singular)) {
-              if (newAmount === 1) {
-                nextUnit = singular;
-              } else {
-                nextUnit = singular === 'loaf' ? 'loaves' : `${singular}s`;
-              }
-            }
-          }
-        } else if (i.unit && (i.unit.includes('400g can') || i.unit.includes('can'))) {
-          nextUnit = newAmount === 1 ? '400g can' : '400g cans';
-        } else if (i.unit && (i.unit.includes('pot (150ml)') || i.unit.includes('pot'))) {
-          nextUnit = newAmount === 1 ? 'pot (150ml)' : 'pots (150ml)';
-        }
+        // Keep the same unit, just singular/plural to match the new amount ("1 can" / "2 cans").
+        const rawUnit = (i.unit || '').toLowerCase().trim();
+        const nextUnit = /^items?$/.test(rawUnit)
+          ? (newAmount === 1 ? 'item' : 'items')
+          : formatUnit(canonicalUnit(i.unit), newAmount);
         return {
           ...i,
           amount: newAmount,
@@ -723,7 +724,11 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
           name: ing.name,
           amount: converted.amount,
           unit: converted.unit || ing.unit || 'item',
-          category: ing.category || converted.category || '',
+          category: converted.category || ing.category || '',
+          groceryId: converted.groceryId,
+          checkCupboard: converted.checkCupboard,
+          needsCheck: converted.needsCheck,
+          quantityNote: converted.quantityNote,
           checked: false,
           isAdhoc: false,
           isBatch: true,
@@ -1938,6 +1943,24 @@ function ShoppingItemRow({
                 </span>
               )}
 
+              {item.checkCupboard && !checked && (
+                <span
+                  className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5 shrink-0"
+                  title="Store-cupboard item: check you have it before buying"
+                >
+                  check cupboard
+                </span>
+              )}
+
+              {item.needsCheck && !checked && (
+                <span
+                  className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-1.5 py-0.5 shrink-0"
+                  title={item.quantityNote || 'Part of this amount could not be worked out from the recipe'}
+                >
+                  check amount
+                </span>
+              )}
+
               {isBelowRequirement && (
                 <button
                   type="button"
@@ -1974,7 +1997,7 @@ function ShoppingItemRow({
           </div>
 
           {/* Subtext info (for recipes, batch cooking details) */}
-          {((requiredFor && requiredFor.length > 0) || (!requiredFor && item.isBatch && item.batchRecipeName) || (!requiredFor && item.recipeNames && item.recipeNames.length > 0)) && (
+          {((requiredFor && requiredFor.length > 0) || (!requiredFor && item.isBatch && item.batchRecipeName) || (!requiredFor && item.recipeNames && item.recipeNames.length > 0) || item.quantityNote) && (
             <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5 flex-wrap">
               {requiredFor && requiredFor.length > 0 && (
                 <span className="truncate max-w-[200px]">
@@ -1991,6 +2014,12 @@ function ShoppingItemRow({
               {!requiredFor && item.recipeNames && item.recipeNames.length > 0 && (
                 <span className="truncate max-w-[200px]">
                   for {item.recipeNames.join(', ')}
+                </span>
+              )}
+
+              {item.quantityNote && (
+                <span className={item.needsCheck ? 'text-rose-600' : 'text-zinc-500'}>
+                  {item.quantityNote}
                 </span>
               )}
             </div>
@@ -2073,6 +2102,9 @@ interface AggregatedShoppingListItem {
   recipeNames?: string[];
   underlyingIds: string[];
   description: string;
+  checkCupboard?: boolean;
+  needsCheck?: boolean;
+  quantityNote?: string;
 }
 
 interface ShoppingModeViewProps {
@@ -2117,21 +2149,17 @@ function ShoppingModeView({
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const getGroupingKey = (name: string): string => {
-    let key = name.toLowerCase().trim();
-    if (key.length > 3 && key.endsWith('s')) {
-      if (!key.endsWith('ss') && !['hummus', 'couscous', 'asparagus'].includes(key)) {
-        key = key.slice(0, -1);
-      }
-    }
-    return key;
+  // Same product = same row, whatever it's called ("Chicken breasts" / "chicken breast fillets").
+  const getGroupingKey = (name: string, groceryId?: string): string => {
+    const product = matchProduct(getCatalog(), name, { groceryId });
+    return product ? `p:${product.id}` : `n:${groupingKey(name)}`;
   };
 
   // Aggregate items with matching normalized names
   const aggregatedItems = useMemo(() => {
     const groups: Record<string, ShoppingListItem[]> = {};
     items.forEach(item => {
-      const key = getGroupingKey(item.name);
+      const key = getGroupingKey(item.name, item.groceryId);
       if (!groups[key]) {
         groups[key] = [];
       }
@@ -2225,7 +2253,10 @@ function ShoppingModeView({
         batchRecipeName: canonical.batchRecipeName,
         recipeNames: Array.from(recipeNameSet),
         underlyingIds,
-        description
+        description,
+        checkCupboard: groupItems.every(i => i.checkCupboard),
+        needsCheck: groupItems.some(i => i.needsCheck),
+        quantityNote: groupItems.map(i => i.quantityNote).filter(Boolean).join('; ') || undefined
       });
     });
 
@@ -2849,7 +2880,21 @@ function ShoppingModeItemRow({
               {item.description}
             </span>
           )}
+
+          {item.checkCupboard && !item.checked && (
+            <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5">
+              check cupboard
+            </span>
+          )}
+          {item.needsCheck && !item.checked && (
+            <span className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-1.5 py-0.5" title={item.quantityNote}>
+              check amount
+            </span>
+          )}
         </div>
+        {item.quantityNote && !item.checked && (
+          <p className={`text-xs mt-1 ${item.needsCheck ? 'text-rose-600' : 'text-zinc-500'}`}>{item.quantityNote}</p>
+        )}
       </div>
 
       {/* Right: Large Tick Box */}

@@ -5,6 +5,8 @@ export interface Ingredient {
   unit: string;
   category?: string;
   suggestedAisle?: string;
+  /** The grocery-list product this ingredient was linked to when the recipe was saved. */
+  groceryId?: string;
 }
 
 export type CookingMethod = 'ninja' | 'oven_hob';
@@ -121,6 +123,13 @@ export interface ShoppingListItem {
   weekLabel?: string; // e.g. "Week of 1 Sep – 7 Sep"
   recipeNames?: string[];
   userAdjusted?: boolean;
+  /** Grocery-list product this line is for. */
+  groceryId?: string;
+  /** Store-cupboard staple: check you have it before buying. */
+  checkCupboard?: boolean;
+  /** Part of the amount couldn't be worked out from the recipe; see quantityNote. */
+  needsCheck?: boolean;
+  quantityNote?: string;
 }
 
 export interface RecurringItem {
@@ -161,6 +170,8 @@ export interface UserPreferences {
   defaultTakeoutCost?: number;
   defaultEatingOutCost?: number;
   targetHealthScore?: number;
+  /** Which version of the built-in product list has been added to the grocery list. */
+  catalogVersion?: number;
 }
 
 export interface GroceryItem {
@@ -198,7 +209,10 @@ export interface CleanDatabaseResponse {
  */
 export interface SyncMeta {
   tombstones: Record<string, number>;
+  /** Time the settings as a whole were last saved (older data), or -1 for a new phone's defaults. */
   preferencesModifiedAt?: number;
+  /** Time each individual setting was last changed. */
+  preferencesFieldModifiedAt?: Record<string, number>;
   overridesModifiedAt?: Record<string, number>;
 }
 

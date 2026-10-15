@@ -17,8 +17,9 @@ import {
   fetchGist, saveGist, createPrivateGist, GistConfig
 } from './services/gistStorage';
 import {
-  mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, addTombstones
+  mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, addTombstones, dropDefaultsMissingFrom
 } from './services/syncMerge';
+import { CATALOG_VERSION, missingExtraProducts } from './shopping';
 
 /** How often to check GitHub for the other phone's changes while the app is open. */
 export const SYNC_POLL_SECONDS = 20;
@@ -56,6 +57,12 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   ]
 };
 
+/**
+ * Mark things a phone starts with (empty weeks, the built-in grocery list) as
+ * defaults, so when it first syncs they never replace the household's real data.
+ */
+const asDefaults = <T extends object>(items: T[]): T[] => items.map(i => ({ ...i, lastModifiedAt: -1 }));
+
 const getInitialMealPlans = (): MealPlan[] => {
   try {
     const saved = localStorage.getItem('mealPlannerMealPlans');
@@ -71,10 +78,10 @@ const getInitialMealPlans = (): MealPlan[] => {
   const nextMonday = new Date(currentMonday);
   nextMonday.setDate(currentMonday.getDate() + 7);
 
-  return [
+  return asDefaults([
     createEmptyPlan(currentMonday),
     createEmptyPlan(nextMonday)
-  ];
+  ]);
 };
 
 /** Make sure every list exists, whatever shape the data arrived in. */
@@ -85,7 +92,7 @@ const normalizeState = (s: Partial<AppState> | null | undefined): AppState => ({
   batches: s?.batches || [],
   shoppingList: s?.shoppingList || [],
   preferences: s?.preferences || { ...DEFAULT_PREFERENCES },
-  groceryDatabase: s?.groceryDatabase || INITIAL_GROCERY_DATABASE,
+  groceryDatabase: s?.groceryDatabase || asDefaults(INITIAL_GROCERY_DATABASE),
   groceryOverrides: s?.groceryOverrides || {},
 });
 
@@ -139,14 +146,15 @@ const getInitialState = (): AppState => {
   } catch (e) {}
 
   // Fallback to legacy local storage structures if they exist
-  let legacyDb = INITIAL_GROCERY_DATABASE;
+  let legacyDb = asDefaults(INITIAL_GROCERY_DATABASE);
   let legacyOverrides = {};
+  let hasLegacyData = false;
   try {
     const legacyStateStr = localStorage.getItem('mealPlannerState');
     if (legacyStateStr) {
       const parsed = JSON.parse(legacyStateStr);
-      if (parsed.groceryDatabase) legacyDb = parsed.groceryDatabase;
-      if (parsed.groceryOverrides) legacyOverrides = parsed.groceryOverrides;
+      if (parsed.groceryDatabase) { legacyDb = parsed.groceryDatabase; hasLegacyData = true; }
+      if (parsed.groceryOverrides) { legacyOverrides = parsed.groceryOverrides; hasLegacyData = true; }
     }
   } catch (e) {}
 
@@ -155,6 +163,7 @@ const getInitialState = (): AppState => {
     const storedFavs = localStorage.getItem('mealPlannerCustomFavouritesObj');
     if (storedFavs) {
       legacyPrefs.favouriteItems = JSON.parse(storedFavs);
+      hasLegacyData = true;
     }
   } catch (e) {}
 
@@ -165,7 +174,9 @@ const getInitialState = (): AppState => {
     shoppingList: [],
     preferences: legacyPrefs,
     groceryDatabase: legacyDb,
-    groceryOverrides: legacyOverrides
+    groceryOverrides: legacyOverrides,
+    // A brand-new phone's default settings must never replace the household's real ones.
+    syncMeta: hasLegacyData ? undefined : { tombstones: {}, preferencesModifiedAt: -1 },
   });
 };
 
@@ -259,7 +270,7 @@ export function useStore() {
 
         let merged = stateRef.current;
         if (remote) {
-          merged = mergeAppStates(stateRef.current, remote);
+          merged = mergeAppStates(dropDefaultsMissingFrom(stateRef.current, remote), remote);
           if (!statesEqual(merged, stateRef.current)) {
             replaceState(normalizeState(merged));
             merged = stateRef.current;
@@ -322,6 +333,20 @@ export function useStore() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [githubConfig?.gistId, githubConfig?.pat]);
+
+  // One-off: add products from newer versions of the built-in product list (spices, herbs...)
+  // to the shared grocery list. Runs once per data set; the other phone gets them via sync.
+  useEffect(() => {
+    const current = stateRef.current;
+    if ((current.preferences?.catalogVersion ?? 1) >= CATALOG_VERSION) return;
+    const additions = missingExtraProducts(current.groceryDatabase);
+    commit(current, {
+      ...current,
+      groceryDatabase: [...(current.groceryDatabase || INITIAL_GROCERY_DATABASE), ...additions],
+      preferences: { ...(current.preferences || DEFAULT_PREFERENCES), catalogVersion: CATALOG_VERSION },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Shopping items that either of you removed, so they aren't regenerated automatically.
   const dismissedKey = getDismissedShoppingIds(state).join('|');
@@ -706,7 +731,7 @@ export function useStore() {
         gistFilesRef.current = saved.files;
       } else if (syncMode === 'merge') {
         if (remoteState) {
-          replaceState(normalizeState(mergeAppStates(stateRef.current, remoteState)));
+          replaceState(normalizeState(mergeAppStates(dropDefaultsMissingFrom(stateRef.current, remoteState), remoteState)));
         }
         const saved = await saveGist(config, stateRef.current, gistFilesRef.current);
         etagRef.current = saved.etag;

@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { X, Sparkles, Database, Search, Check, Plus, Tag, ArrowRight, Pencil } from 'lucide-react';
 import Fuse from 'fuse.js';
+import { buildCatalog } from '../shopping';
 import { GroceryItem } from '../types';
-import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
 
 interface TriageItem {
   ingredient: any;
@@ -63,35 +63,14 @@ export function IngredientTriageModal({
   }, [currentIndex, currentItem]);
 
   // Build the complete, unified grocery catalog from default DB + user overrides
+  // The same product list the shopping list uses: your grocery list with your edits and custom items.
   const allGroceryItems = useMemo<GroceryItem[]>(() => {
-    const overrides = store?.state?.groceryOverrides || {};
-    const itemMap = new Map<string, GroceryItem>();
-
-    // Seed with baseline database
-    INITIAL_GROCERY_DATABASE.forEach(item => {
-      itemMap.set(item.id, { ...item });
-    });
-
-    // Apply or append overrides / custom items
-    Object.entries(overrides).forEach(([id, override]: [string, any]) => {
-      if (itemMap.has(id)) {
-        itemMap.set(id, { ...itemMap.get(id)!, ...override });
-      } else {
-        itemMap.set(id, {
-          id,
-          name: override.name || 'Custom Item',
-          category: override.category || 'Pantry',
-          unit: override.unit || 'unit',
-          increment: override.increment || 1,
-          aliases: override.aliases || [],
-          cost: override.cost || 0,
-          ...override
-        });
-      }
-    });
-
-    return Array.from(itemMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [store?.state?.groceryOverrides]);
+    const catalog = buildCatalog(store?.state?.groceryDatabase, store?.state?.groceryOverrides);
+    return catalog.products
+      .filter(p => !p.sameAs)
+      .map(p => p.item)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [store?.state?.groceryDatabase, store?.state?.groceryOverrides]);
 
   // Fuse search index
   const fuse = useMemo(() => {

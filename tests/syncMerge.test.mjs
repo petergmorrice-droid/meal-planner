@@ -1,5 +1,5 @@
 // Tests for src/services/syncMerge.ts — run with: npm test
-import { mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, stableStringify } from '../.test-build/syncMerge.mjs';
+import { mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, stableStringify, dropDefaultsMissingFrom } from '../.test-build/syncMerge.mjs';
 import assert from 'node:assert/strict';
 
 let failures = 0;
@@ -19,10 +19,12 @@ test('merge is order-independent, repeatable and associative (2000 random cases)
   let seed = 42; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
   const mk = () => {
     const s = empty();
-    s.syncMeta = { tombstones: {}, preferencesModifiedAt: Math.floor(rnd() * 5), overridesModifiedAt: {} };
+    s.syncMeta = { tombstones: {}, preferencesModifiedAt: Math.floor(rnd() * 6) - 1, preferencesFieldModifiedAt: {}, overridesModifiedAt: {} };
     s.preferences = { currencySymbol: rnd() < 0.5 ? '£' : '€', x: Math.floor(rnd() * 3) };
+    if (rnd() < 0.5) s.preferences.y = Math.floor(rnd() * 3);
+    for (const k of ['currencySymbol', 'x', 'y']) if (rnd() < 0.4) s.syncMeta.preferencesFieldModifiedAt[k] = Math.floor(rnd() * 10);
     for (let i = 0; i < 6; i++) {
-      if (rnd() < 0.6) s.shoppingList.push({ id: 'i' + i, name: 'item' + i, checked: rnd() < 0.5, amount: Math.floor(rnd() * 3), lastModifiedAt: Math.floor(rnd() * 10) });
+      if (rnd() < 0.6) s.shoppingList.push({ id: 'i' + i, name: 'item' + i, checked: rnd() < 0.5, amount: Math.floor(rnd() * 3), lastModifiedAt: Math.floor(rnd() * 11) - 1 });
       if (rnd() < 0.3) s.syncMeta.tombstones['shoppingList:i' + i] = Math.floor(rnd() * 10);
       if (rnd() < 0.4) s.recipes.push({ id: 'r' + i, name: 'recipe' + Math.floor(rnd() * 3), lastModifiedAt: Math.floor(rnd() * 10) });
       if (rnd() < 0.2) s.syncMeta.tombstones['recipes:r' + i] = Math.floor(rnd() * 10);
@@ -137,6 +139,54 @@ test('saving an identical list changes nothing', () => {
   const p = new Phone(start); const before = p.state.shoppingList;
   p.edit((s) => ({ ...s, shoppingList: s.shoppingList.map((i) => ({ ...i })) }), 1000);
   assert.equal(p.state.shoppingList, before);
+});
+
+test('a new phone connecting never replaces the household settings, weeks or grocery list', () => {
+  // Real shared data (older format, no timestamps on settings)
+  const shared = { recipes: [{ id: 'r1', name: 'Lasagne' }], batches: [], shoppingList: [],
+    mealPlans: [{ id: 'plan-2026-10-19', startDate: '2026-10-19', days: { Monday: { meals: [{ id: 'm', type: 'recipe', recipeId: 'r1' }] } }, status: 'finalized', lastModifiedAt: 5 }],
+    preferences: { currencySymbol: '£', adultCount: 3, recurringItems: [{ id: 'rec', name: 'Oat Milk' }] },
+    groceryDatabase: [{ id: 'g1', name: 'Beef Mince (5%)' }, { id: 'g2', name: 'Onion' }], groceryOverrides: {} };
+  // Brand-new phone: defaults stamped -1, plus one real change (e.g. the product-list update)
+  let fresh = { recipes: [], batches: [], shoppingList: [],
+    mealPlans: [{ id: 'plan-2026-10-19', startDate: '2026-10-19', days: {}, status: 'not_started', lastModifiedAt: -1 }, { id: 'plan-2026-10-26', startDate: '2026-10-26', days: {}, status: 'not_started', lastModifiedAt: -1 }],
+    preferences: { currencySymbol: '£', adultCount: 2 },
+    groceryDatabase: [{ id: 'g1', name: 'Beef Mince', lastModifiedAt: -1 }, { id: 'g2', name: 'Onion', lastModifiedAt: -1 }, { id: 'g3', name: 'Merged Away', lastModifiedAt: -1 }],
+    groceryOverrides: {}, syncMeta: { tombstones: {}, preferencesModifiedAt: -1 } };
+  fresh = applyLocalChange(fresh, fresh, { ...fresh, preferences: { ...fresh.preferences, catalogVersion: 2 }, groceryDatabase: [...fresh.groceryDatabase, { id: 'gx', name: 'Ground Cumin' }] }, 1000);
+  // What the app does on its first sync: drop its own defaults that the shared list doesn't have, then merge.
+  const prepared = dropDefaultsMissingFrom(fresh, shared);
+  for (const m of [mergeAppStates(prepared, shared), mergeAppStates(shared, prepared)]) {
+    assert.equal(m.preferences.adultCount, 3, 'default adultCount replaced the real one');
+    assert.deepEqual(m.preferences.recurringItems, [{ id: 'rec', name: 'Oat Milk' }], 'staples lost');
+    assert.equal(m.preferences.catalogVersion, 2, 'the new phone\'s real change was lost');
+    assert.equal(m.mealPlans.find((p) => p.startDate === '2026-10-19').status, 'finalized', 'empty default week replaced the real plan');
+    assert.equal(m.groceryDatabase.find((g) => g.id === 'g1').name, 'Beef Mince (5%)', 'default grocery item replaced the edited one');
+    assert.ok(!m.groceryDatabase.some((g) => g.id === 'g3'), 'an item merged away came back from the defaults');
+    assert.ok(m.groceryDatabase.some((g) => g.id === 'gx'), 'new product was lost');
+  }
+  assert.ok(statesEqual(mergeAppStates(prepared, shared), mergeAppStates(shared, prepared)));
+});
+
+test('two phones changing different settings keep both changes', () => {
+  const start = empty(); start.preferences = { currencySymbol: '£', adultCount: 2, defaultServings: 2 };
+  const peter = new Phone(start), wife = new Phone(start);
+  peter.edit((s) => ({ ...s, preferences: { ...s.preferences, adultCount: 3 } }), 1000);
+  wife.edit((s) => ({ ...s, preferences: { ...s.preferences, defaultServings: 4 } }), 2000);
+  for (const m of [mergeAppStates(peter.state, wife.state), mergeAppStates(wife.state, peter.state)]) {
+    assert.equal(m.preferences.adultCount, 3); assert.equal(m.preferences.defaultServings, 4);
+  }
+});
+
+test('same setting changed on both phones: the later change wins; removing a setting sticks', () => {
+  const start = empty(); start.preferences = { currencySymbol: '£', budget: 80 };
+  const peter = new Phone(start), wife = new Phone(start);
+  peter.edit((s) => ({ ...s, preferences: { ...s.preferences, currencySymbol: '€' } }), 1000);
+  wife.edit((s) => ({ ...s, preferences: { ...s.preferences, currencySymbol: '$' } }), 2000);
+  assert.equal(mergeAppStates(peter.state, wife.state).preferences.currencySymbol, '$');
+  peter.edit((s) => { const p = { ...s.preferences }; delete p.budget; return { ...s, preferences: p }; }, 3000);
+  const m = mergeAppStates(peter.state, wife.state);
+  assert.ok(!('budget' in m.preferences), 'removed setting came back');
 });
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');

@@ -1,4 +1,5 @@
 import { Recipe, Ingredient, CookingMethod, GroceryItem } from '../types';
+import { getCatalog } from '../utils/shoppingConversion';
 
 /**
  * Gemini AI Integration Client-Side (BYOK Pattern)
@@ -632,9 +633,9 @@ const RECIPE_RESPONSE_SCHEMA = {
       items: {
         type: "OBJECT",
         properties: {
-          name: { type: "STRING", description: "Standardized ingredient name without vague amount prefixes" },
+          name: { type: "STRING", description: "Product name in the singular, exactly as on the grocery list when it is one of those products; no quantities or preparation" },
           amount: { type: "NUMBER", description: "Standardized positive decimal number (e.g. 1.0, 0.5, 0.25, 200). Never fractions or strings." },
-          unit: { type: "STRING", description: "Standard unit (e.g. g, ml, tbsp, tsp, cup, clove, piece, can, slice, pack)" },
+          unit: { type: "STRING", description: "One of: g, kg, ml, l, tsp, tbsp, cup, piece, clove, can, bunch, pack, slice, rasher, fillet, sprig, stick, pinch, handful" },
           category: { type: "STRING", description: "Produce, Meat & Seafood, Dairy, Bakery, Frozen, or Pantry" },
           suggestedAisle: { type: "STRING", description: "Produce, Meat & Seafood, Dairy, Bakery, Frozen, or Pantry" }
         },
@@ -729,6 +730,45 @@ CRITICAL FORMATTING INVARIANT:
 - ALWAYS return a structured JSON response matching the requested schema.
 - Exclude all per-recipe per-serving macros, health scores, and cost estimates.`;
 
+/**
+ * A clear error when Gemini can't do the job. We no longer fall back to the
+ * built-in parser for recipes: it guesses quantities badly (100 g -> 1 g) and
+ * those guesses went straight into the shopping list without anyone noticing.
+ */
+function geminiFailure(err: any, task: string): Error {
+  const raw = String(err?.message || err || '');
+  let reason = 'it may be busy or unreachable';
+  if (/quota|exhaust|rate|429/i.test(raw)) reason = "today's free Gemini limit may have been reached";
+  else if (/api key|permission|401|403/i.test(raw)) reason = 'the Gemini API key was not accepted (check Settings → connections)';
+  else if (/abort|timeout|network|fetch/i.test(raw)) reason = 'there was no connection, or it took too long';
+  else if (/json|unexpected token/i.test(raw)) reason = 'its answer could not be read';
+  return new Error(`Gemini couldn't ${task}: ${reason}. Nothing has been saved, so please try again in a minute.`);
+}
+
+/** Allowed ingredient units, so every recipe uses the same vocabulary. */
+const STANDARD_UNITS = 'g, kg, ml, l, tsp, tbsp, cup, piece, clove, can, bunch, pack, slice, rasher, fillet, sprig, stick, pinch, handful';
+
+/**
+ * Instructions for every recipe request: the usual rules plus the household's
+ * grocery-list names, so ingredients come back already standardised.
+ */
+function recipeSystemInstruction(): string {
+  let names: string[] = [];
+  try {
+    names = getCatalog().products.filter(p => !p.sameAs).map(p => p.name);
+  } catch {
+    names = [];
+  }
+  return `${RECIPE_SYSTEM_INSTRUCTION}
+
+INGREDIENT NAMING AND UNITS (used to build an accurate shopping list):
+- "name" is the product you would buy, in the SINGULAR, with no quantities, sizes or preparation (put "finely chopped" etc. in the method, not the name).
+- If the ingredient is one of these grocery-list products, use exactly that product's name: ${names.join(', ')}.
+- Otherwise use a short, plain UK supermarket name (e.g. "Chorizo", "Gochujang").
+- "unit" must be one of: ${STANDARD_UNITS}. Use "piece" for whole items (1 onion = 1 piece), "clove" for garlic cloves, "can" for tins (and put the weight in grams instead only if no can is used).
+- Prefer grams/ml for meat, fish, cheese, pasta, rice, flour and liquids; prefer pieces for fruit and veg bought individually.`;
+}
+
 export async function parseRecipeApi(text: string, cookingMethod: 'ninja' | 'oven_hob'): Promise<Recipe> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -766,13 +806,13 @@ Recipe Text:
 ${text}`;
 
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, RECIPE_SYSTEM_INSTRUCTION, RECIPE_RESPONSE_SCHEMA);
+    const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), RECIPE_RESPONSE_SCHEMA);
     const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const data = JSON.parse(cleanText);
     return validateAndNormalizeRecipe(data, selectedMethod, text);
   } catch (err) {
-    console.error('Gemini parseRecipeApi failed, falling back locally:', err);
-    return parseRecipeLocally(text, cookingMethod);
+    console.error('Gemini parseRecipeApi failed:', err);
+    throw geminiFailure(err, 'read this recipe');
   }
 }
 
@@ -810,13 +850,13 @@ CRITICAL INSTRUCTIONS:
 - Exclude all macros, health scores, and cost estimates.`;
 
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, RECIPE_SYSTEM_INSTRUCTION, RECIPE_RESPONSE_SCHEMA);
+    const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), RECIPE_RESPONSE_SCHEMA);
     const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const data = JSON.parse(cleanText);
     return validateAndNormalizeRecipe(data, selectedMethod, promptText);
   } catch (err) {
-    console.error('Gemini generateRecipeApi failed, falling back locally:', err);
-    return generateRecipeLocally(promptText, cookingMethod);
+    console.error('Gemini generateRecipeApi failed:', err);
+    throw geminiFailure(err, 'create this recipe');
   }
 }
 
@@ -842,7 +882,7 @@ CRITICAL INSTRUCTIONS:
 - Servings MUST remain 2.`;
 
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, RECIPE_SYSTEM_INSTRUCTION, RECIPE_RESPONSE_SCHEMA);
+    const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), RECIPE_RESPONSE_SCHEMA);
     const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const data = JSON.parse(cleanText);
     const validated = validateAndNormalizeRecipe(data, selectedMethod);
@@ -850,8 +890,8 @@ CRITICAL INSTRUCTIONS:
     validated.imageUrl = recipe.imageUrl;
     return validated;
   } catch (err) {
-    console.error('Gemini editRecipeApi failed, falling back locally:', err);
-    return editRecipeLocally(recipe, instruction);
+    console.error('Gemini editRecipeApi failed:', err);
+    throw geminiFailure(err, 'change this recipe');
   }
 }
 

@@ -128,110 +128,75 @@ export function createEmptyPlan(mondayDate: Date): MealPlan {
   };
 }
 
-import { 
-  convertToShoppingQuantity, 
-  getIngredientStep, 
-  isSauceOrCondiment, 
-  isMincedMeat, 
-  isCannedTomatoOrPulse 
-} from './utils/shoppingConversion';
+import { getCatalog } from './utils/shoppingConversion';
+import { buildShoppingLines, matchKey, type IngredientInput, type Catalog } from './shopping';
 
 export * from './utils/shoppingConversion';
 
-export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[]): ShoppingListItem[] {
+/**
+ * The shopping list for one week's plan: every recipe ingredient and side,
+ * scaled to the number of people, combined per product and rounded up to what
+ * you actually buy.
+ */
+export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], catalog?: Catalog): ShoppingListItem[] {
   if (!plan || !plan.days) return [];
   const weekLabel = `Week of ${formatWeekRange(plan.startDate)}`;
-
-  // Step 1: Accumulate raw ingredients across planned meals
-  const rawAccumulator = new Map<string, {
-    name: string;
-    rawAmount: number;
-    rawUnit: string;
-    category: string;
-    recipeNames: Set<string>;
-  }>();
+  const inputs: IngredientInput[] = [];
 
   (Object.values(plan.days) as DayPlan[]).forEach(day => {
     if (!day || !day.meals) return;
     day.meals.forEach(meal => {
       if ((meal.type === 'recipe' || meal.type === 'leftover') && meal.recipeId) {
         const recipe = recipes.find(r => r.id === meal.recipeId);
-        if (recipe && recipe.ingredients) {
+        if (recipe && Array.isArray(recipe.ingredients)) {
           const mealServings = meal.servings ?? 2;
-          const baseServings = recipe.servings ?? 2;
-          const scale = mealServings / (baseServings || 2);
-
+          const baseServings = recipe.servings && recipe.servings > 0 ? recipe.servings : 2;
+          const scale = mealServings / baseServings;
           recipe.ingredients.forEach(ing => {
-            const scaledAmount = Math.round(ing.amount * scale * 100) / 100;
-            const normName = ing.name.trim();
-            const key = normName.toLowerCase();
-
-            const existing = rawAccumulator.get(key);
-            if (existing) {
-              existing.rawAmount += scaledAmount;
-              existing.recipeNames.add(recipe.name);
-            } else {
-              rawAccumulator.set(key, {
-                name: normName,
-                rawAmount: scaledAmount,
-                rawUnit: (ing.unit || '').trim(),
-                category: ing.category || 'Pantry',
-                recipeNames: new Set([recipe.name])
-              });
-            }
+            if (!ing || !ing.name) return;
+            const amount = typeof ing.amount === 'number' ? ing.amount : parseFloat(String(ing.amount));
+            inputs.push({
+              name: ing.name,
+              amount: isFinite(amount) ? amount * scale : ing.amount,
+              unit: ing.unit,
+              category: ing.category,
+              groceryId: ing.groceryId,
+              source: recipe.name,
+            });
           });
         }
       }
 
       if (meal.sides && Array.isArray(meal.sides)) {
         meal.sides.forEach(side => {
-          const normName = side.name.trim();
-          const key = normName.toLowerCase();
-          const existing = rawAccumulator.get(key);
-          if (existing) {
-            existing.rawAmount += side.amount;
-            existing.recipeNames.add(`${meal.name} (Side)`);
-          } else {
-            rawAccumulator.set(key, {
-              name: normName,
-              rawAmount: side.amount,
-              rawUnit: (side.unit || '').trim(),
-              category: side.category || 'Pantry',
-              recipeNames: new Set([`${meal.name} (Side)`])
-            });
-          }
+          if (!side || !side.name) return;
+          inputs.push({ name: side.name, amount: side.amount, unit: side.unit, category: side.category, source: `${meal.name} (Side)` });
         });
       }
     });
   });
 
-  // Step 2: Convert accumulated raw amounts into sensible shopping items
-  const planItems: ShoppingListItem[] = [];
-
-  rawAccumulator.forEach((item, key) => {
-    const converted = convertToShoppingQuantity(
-      item.name,
-      item.rawAmount,
-      item.rawUnit,
-      item.category
-    );
-
-    const cleanKey = key.replace(/[^a-z0-9_-]/g, '_');
-    planItems.push({
+  const lines = buildShoppingLines(inputs, catalog ?? getCatalog());
+  return lines.map(line => {
+    const cleanKey = (matchKey(line.name) || line.key).replace(/[^a-z0-9_-]/g, '_');
+    const item: ShoppingListItem = {
       id: `plan-${plan.id}-${cleanKey}`,
-      name: item.name,
-      amount: converted.amount,
-      unit: converted.unit,
-      category: item.category,
+      name: line.name,
+      amount: line.amount,
+      unit: line.unit,
+      category: line.category,
       checked: false,
       isAdhoc: false,
       planId: plan.id,
       weekLabel,
-      recipeNames: Array.from(item.recipeNames)
-    });
+      recipeNames: line.sources,
+    };
+    if (line.productId) item.groceryId = line.productId;
+    if (line.cupboard) item.checkCupboard = true;
+    if (line.needsCheck) item.needsCheck = true;
+    if (line.note) item.quantityNote = line.note;
+    return item;
   });
-
-  return planItems;
 }
 
 export type FoodAisle = 

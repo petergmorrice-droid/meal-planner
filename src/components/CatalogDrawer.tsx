@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Heart, Store, X, Plus, Clock, ArrowDownAZ, LayoutGrid } from 'lucide-react';
-import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
+import { buildCatalog } from '../shopping';
 
 interface CatalogDrawerProps {
   isOpen: boolean;
@@ -35,9 +35,12 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
   const allItems = useMemo(() => {
     const map = new Map<string, { name: string; category: string; isFav: boolean; recentCount: number; source: string }>();
 
-    INITIAL_GROCERY_DATABASE.forEach(item => {
-      map.set(item.name.toLowerCase(), { name: item.name, category: item.category || 'Other', isFav: false, recentCount: 0, source: 'db' });
-    });
+    // Your grocery list (with your own items and edits), one entry per product.
+    buildCatalog(store?.state?.groceryDatabase, store?.state?.groceryOverrides).products
+      .filter(p => !p.sameAs)
+      .forEach(p => {
+        map.set(p.name.toLowerCase(), { name: p.name, category: p.category || 'Other', isFav: false, recentCount: 0, source: 'db' });
+      });
 
     favourites.forEach((fav: any) => {
       const key = fav.name.toLowerCase();
@@ -58,7 +61,7 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
     });
 
     return Array.from(map.values());
-  }, [favourites, shoppingList]);
+  }, [favourites, shoppingList, store?.state?.groceryDatabase, store?.state?.groceryOverrides]);
 
   const filteredAndSortedItems = useMemo(() => {
     let filtered = allItems;

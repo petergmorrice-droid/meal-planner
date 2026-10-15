@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { IngredientTriageModal } from './IngredientTriageModal';
-import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
+import { buildCatalog, matchProduct } from '../shopping';
 import { 
   parseRecipeApi, 
   generateRecipeApi, 
@@ -2028,10 +2028,9 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
         data = await parseRecipeApi(text, selectedAppliance);
       }
       
-      const allItems = [
-        ...INITIAL_GROCERY_DATABASE,
-        ...Object.values(store.state.groceryOverrides || {})
-      ] as any[];
+      // Same product list the shopping list uses (your grocery list, your edits and custom items).
+      const catalog = buildCatalog(store.state.groceryDatabase, store.state.groceryOverrides);
+      const allItems = catalog.products.filter(p => !p.sameAs).map(p => p.item) as any[];
 
       const fuse = new Fuse(allItems, {
         keys: ['name', 'aliases'],
@@ -2042,16 +2041,11 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
       if (data && Array.isArray(data.ingredients)) {
         data.ingredients.forEach((ing: any) => {
           if (!ing || typeof ing.name !== 'string' || !ing.name.trim()) return;
-          
-          const exactMatch = allItems.find(item => {
-            if (!item || typeof item.name !== 'string') return false;
-            const ingNameLower = ing.name.toLowerCase();
-            const itemNameLower = item.name.toLowerCase();
-            return itemNameLower === ingNameLower || 
-              (Array.isArray(item.aliases) && item.aliases.some((a: any) => typeof a === 'string' && a.toLowerCase() === ingNameLower));
-          });
-          
-          if (!exactMatch) {
+
+          const known = matchProduct(catalog, ing.name, { unit: ing.unit, amount: Number(ing.amount) });
+          if (known) {
+            ing.groceryId = known.id;
+          } else {
             const results = fuse.search(ing.name).slice(0, 3).map(r => r.item);
             unmapped.push({ ingredient: ing, suggestions: results });
           }
@@ -2107,7 +2101,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
           if (!ing || !ing.name) return ing;
           const mapping = mappings.find((m: any) => m && m.originalName === ing.name);
           if (mapping && mapping.mappedGroceryName) {
-            return { ...ing, name: mapping.mappedGroceryName };
+            return { ...ing, name: mapping.mappedGroceryName, groceryId: mapping.mappedGroceryId || ing.groceryId };
           }
           return ing;
         });

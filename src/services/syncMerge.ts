@@ -6,7 +6,10 @@
  *    carries `lastModifiedAt`. When both phones have a version, the newer wins.
  *  - Deleting something leaves a "tombstone" (collection:key -> time). An item
  *    is only kept if it was changed *after* it was deleted, so deletions stick.
- *  - Preferences and grocery overrides carry their own timestamps in syncMeta.
+ *  - Settings are combined one setting at a time (each has its own timestamp),
+ *    and grocery overrides one grocery item at a time.
+ *  - Things a brand-new phone starts with (default settings, the built-in
+ *    grocery list, empty weeks) are stamped -1, so they never beat real data.
  *  - mergeAppStates is order-independent and repeatable (merging twice changes
  *    nothing), so both phones always end up with the same data.
  */
@@ -51,10 +54,15 @@ export function getSyncMeta(state: Partial<AppState> | null | undefined): SyncMe
   const meta = state?.syncMeta;
   return {
     tombstones: { ...(meta?.tombstones || {}) },
-    preferencesModifiedAt: meta?.preferencesModifiedAt || 0,
+    preferencesModifiedAt: typeof meta?.preferencesModifiedAt === 'number' ? meta.preferencesModifiedAt : 0,
+    preferencesFieldModifiedAt: { ...(meta?.preferencesFieldModifiedAt || {}) },
     overridesModifiedAt: { ...(meta?.overridesModifiedAt || {}) },
   };
 }
+
+/** Timestamp of one setting: its own if it has been edited since syncing began, otherwise the whole set's. */
+const settingTime = (meta: SyncMeta, key: string): number =>
+  meta.preferencesFieldModifiedAt?.[key] ?? meta.preferencesModifiedAt ?? 0;
 
 const ts = (item: any): number => (typeof item?.lastModifiedAt === 'number' ? item.lastModifiedAt : 0);
 
@@ -121,15 +129,38 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
       });
   }
 
-  // Preferences: newest whole set wins.
-  let preferences = a?.preferences;
-  let preferencesModifiedAt = ma.preferencesModifiedAt || 0;
+  // Settings: newest wins, one setting at a time.
+  let preferences: any = a?.preferences;
+  let preferencesModifiedAt = ma.preferencesModifiedAt ?? 0;
+  const preferencesFieldModifiedAt: Record<string, number> = {};
   if (a?.preferences === undefined) {
     preferences = b?.preferences;
-    preferencesModifiedAt = mb.preferencesModifiedAt || 0;
-  } else if (b?.preferences !== undefined) {
-    preferences = newer(a.preferences, ma.preferencesModifiedAt || 0, b.preferences, mb.preferencesModifiedAt || 0);
-    preferencesModifiedAt = Math.max(ma.preferencesModifiedAt || 0, mb.preferencesModifiedAt || 0);
+    preferencesModifiedAt = mb.preferencesModifiedAt ?? 0;
+    Object.assign(preferencesFieldModifiedAt, mb.preferencesFieldModifiedAt);
+  } else if (b?.preferences === undefined) {
+    Object.assign(preferencesFieldModifiedAt, ma.preferencesFieldModifiedAt);
+  } else {
+    const pa: any = a.preferences;
+    const pb: any = b.preferences;
+    preferences = {};
+    preferencesModifiedAt = Math.max(ma.preferencesModifiedAt ?? 0, mb.preferencesModifiedAt ?? 0);
+    const keys = new Set([
+      ...Object.keys(pa), ...Object.keys(pb),
+      ...Object.keys(ma.preferencesFieldModifiedAt || {}), ...Object.keys(mb.preferencesFieldModifiedAt || {}),
+    ]);
+    for (const k of keys) {
+      const ta = settingTime(ma, k);
+      const tb = settingTime(mb, k);
+      let fromA: boolean;
+      if (ta !== tb) fromA = ta > tb;
+      else if ((pa[k] === undefined) !== (pb[k] === undefined)) fromA = pa[k] !== undefined; // a value beats no value
+      else fromA = stableStringify(pa[k] ?? null) >= stableStringify(pb[k] ?? null);
+      const value = fromA ? pa[k] : pb[k];
+      if (value !== undefined) preferences[k] = value;
+      if (ma.preferencesFieldModifiedAt?.[k] !== undefined || mb.preferencesFieldModifiedAt?.[k] !== undefined) {
+        preferencesFieldModifiedAt[k] = Math.max(ta, tb);
+      }
+    }
   }
 
   // Grocery overrides: newest wins per grocery item.
@@ -163,6 +194,7 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
   merged.syncMeta = {
     tombstones: pruneTombstones(merged, tombstones),
     preferencesModifiedAt,
+    preferencesFieldModifiedAt,
     overridesModifiedAt,
   };
   return merged;
@@ -250,14 +282,15 @@ export function applyLocalChange(current: AppState, base: AppState, next: AppSta
     const bp: any = base?.preferences || {};
     const np: any = next?.preferences || {};
     const prefs: any = { ...(current?.preferences || {}) };
+    const fieldTimes = meta.preferencesFieldModifiedAt!;
     for (const k of new Set([...Object.keys(bp), ...Object.keys(np)])) {
       if (!same(bp[k], np[k])) {
         if (np[k] === undefined) delete prefs[k];
         else prefs[k] = np[k];
+        fieldTimes[k] = Math.max(now, settingTime(meta, k) + 1);
       }
     }
     out.preferences = prefs;
-    meta.preferencesModifiedAt = Math.max(now, (meta.preferencesModifiedAt || 0) + 1);
   }
 
   // Grocery overrides: per item.
@@ -290,6 +323,21 @@ export function applyLocalChange(current: AppState, base: AppState, next: AppSta
   return out as AppState;
 }
 
+/**
+ * Before this phone merges in data downloaded from the Gist: drop grocery items
+ * that are only this phone's built-in defaults (stamped -1) and that the shared
+ * list doesn't have. Otherwise a new phone would bring back items the household
+ * deleted or merged before deletions were tracked. (Kept out of mergeAppStates
+ * so that merging stays order-independent.)
+ */
+export function dropDefaultsMissingFrom(local: AppState, remote: AppState | null | undefined): AppState {
+  const remoteList = remote?.groceryDatabase;
+  if (!Array.isArray(remoteList) || remoteList.length === 0 || !Array.isArray(local.groceryDatabase)) return local;
+  const remoteIds = new Set(remoteList.map((g) => g.id));
+  const kept = local.groceryDatabase.filter((g) => ts(g) >= 0 || remoteIds.has(g.id));
+  return kept.length === local.groceryDatabase.length ? local : { ...local, groceryDatabase: kept };
+}
+
 /** True when two copies hold the same data (ignoring the order of lists). */
 export function statesEqual(a: AppState | null | undefined, b: AppState | null | undefined): boolean {
   return canonicalString(a) === canonicalString(b);
@@ -311,7 +359,8 @@ function canonicalString(state: AppState | null | undefined): string {
   obj.groceryOverrides = state?.groceryOverrides || {};
   obj.meta = {
     t: meta.tombstones,
-    p: meta.preferencesModifiedAt || 0,
+    p: meta.preferencesModifiedAt ?? 0,
+    pf: meta.preferencesFieldModifiedAt || {},
     o: meta.overridesModifiedAt || {},
   };
   return stableStringify(obj);
