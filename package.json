@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:single": "vite build && node scripts/make-single-file.mjs dist dist-single",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "test": "esbuild src/services/syncMerge.ts --bundle --format=esm --platform=node --outfile=.test-build/syncMerge.mjs --log-level=warning && node tests/syncMerge.test.mjs"

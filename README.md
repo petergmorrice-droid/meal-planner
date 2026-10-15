@@ -28,6 +28,23 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 There is no server and no database to pay for. The built app is a set of
 static files that can be hosted for free anywhere.
 
+## Putting it online (single file)
+
+`npm run build:single` produces `dist-single/index.html`: the entire app in
+one file. To host it free on GitHub Pages:
+
+1. On github.com, create a new **public** repository (e.g. `meal-planner`).
+2. **Add file → Upload files**, upload `index.html`, and commit.
+3. **Settings → Pages**: set *Source* to "Deploy from a branch", branch
+   `main`, folder `/ (root)`, and save.
+4. After a minute the app is at `https://<your-username>.github.io/meal-planner/`.
+   Add it to each phone's home screen from the browser's share menu.
+
+To update, upload the new `index.html` over the old one. The code holds no
+passwords or keys (those are entered on each phone), so a public repository
+is fine. Keep the address the same between updates: each phone's saved
+settings belong to the address.
+
 > Earlier versions used a Firebase database created by AI Studio. The current
 > version does not read from it. If any old data only exists there, it would
 > need a one-off import.
@@ -84,6 +101,7 @@ Requires [Node.js](https://nodejs.org) 20 or newer.
 npm install
 npm run dev       # local dev server with live reload
 npm run build     # production build into dist/
+npm run build:single  # the whole app as ONE file: dist-single/index.html
 npm run preview   # serve the production build locally
 npm test          # tests for the sync merge rules
 ```
