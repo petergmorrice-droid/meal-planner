@@ -63,6 +63,7 @@ interface SettingsTabProps {
     syncStatus: 'idle' | 'loading' | 'synced' | 'error';
     lastSynced: Date | null;
     syncError: string | null;
+    syncPollSeconds?: number;
     saveGithubConfig: (pat: string, gistId: string, syncMode: 'pull' | 'push' | 'merge') => Promise<void>;
     createGistFromLocal: (pat: string) => Promise<string>;
     clearGithubConfig: () => void;
@@ -1255,6 +1256,9 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
                   <p className="text-[11px] text-zinc-500 leading-normal">
                     Store and synchronize your recipes, meal plans, shopping lists, and preferences privately inside a GitHub Gist.
+                    {store.githubConfig && (
+                      <> Changes upload automatically, and the other phone's changes appear within about {store.syncPollSeconds || 20} seconds while the app is open.</>
+                    )}
                   </p>
 
                   {store.githubConfig ? (

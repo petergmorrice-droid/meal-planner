@@ -1,21 +1,32 @@
-import { useState, useEffect, useRef } from 'react';
-import { 
-  Recipe, MealPlan, PlannedMeal, BatchItem, 
+import { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  Recipe, MealPlan, PlannedMeal, BatchItem,
   ShoppingListItem, UserPreferences, GroceryItem, AppState, DayPlan,
-  DatabaseCleanAction 
+  DatabaseCleanAction
 } from './types';
-import { 
+import {
   getMonday, formatDateISO, isPastWeek, isWeekBeyondForwardLimit,
-  cleanDays, DAYS_OF_WEEK 
+  cleanDays, DAYS_OF_WEEK
 } from './utils';
 import { INITIAL_GROCERY_DATABASE } from './utils/initialGroceryDb';
 import { ensureRecipeBreakdowns } from './utils/recipeBreakdowns';
 import { createSamplePastWeeks, createEmptyPlan } from './utils';
 import { useDeviceIdentity } from './hooks/useDeviceIdentity';
-import { 
-  getGistConfig, saveGistConfig, clearGistConfig, 
-  fetchFromGist, saveToGist, createPrivateGist, mergeAppStates, GistConfig 
+import {
+  getGistConfig, saveGistConfig, clearGistConfig,
+  fetchGist, saveGist, createPrivateGist, GistConfig
 } from './services/gistStorage';
+import {
+  mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, addTombstones
+} from './services/syncMerge';
+
+/** How often to check GitHub for the other phone's changes while the app is open. */
+export const SYNC_POLL_SECONDS = 20;
+/** Wait this long after an edit before uploading, so quick taps are sent together. */
+const PUSH_DELAY_MS = 800;
+
+const LS_PENDING = 'mealPlannerSyncPending';
+const LS_LEGACY_DISMISSED = 'mealPlannerDismissedShoppingItems';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   showPrepTime: true,
@@ -59,11 +70,58 @@ const getInitialMealPlans = (): MealPlan[] => {
   const currentMonday = getMonday(new Date());
   const nextMonday = new Date(currentMonday);
   nextMonday.setDate(currentMonday.getDate() + 7);
-  
+
   return [
     createEmptyPlan(currentMonday),
     createEmptyPlan(nextMonday)
   ];
+};
+
+/** Make sure every list exists, whatever shape the data arrived in. */
+const normalizeState = (s: Partial<AppState> | null | undefined): AppState => ({
+  ...(s || {}),
+  recipes: s?.recipes || [],
+  mealPlans: s?.mealPlans || [],
+  batches: s?.batches || [],
+  shoppingList: s?.shoppingList || [],
+  preferences: s?.preferences || { ...DEFAULT_PREFERENCES },
+  groceryDatabase: s?.groceryDatabase || INITIAL_GROCERY_DATABASE,
+  groceryOverrides: s?.groceryOverrides || {},
+});
+
+const persistLocal = (s: AppState) => {
+  try {
+    localStorage.setItem('mealPlannerAppStateCache', JSON.stringify(s));
+    localStorage.setItem('mealPlannerMealPlans', JSON.stringify(s.mealPlans));
+    localStorage.setItem('mealPlannerState', JSON.stringify({
+      groceryDatabase: s.groceryDatabase,
+      groceryOverrides: s.groceryOverrides
+    }));
+  } catch (e) {
+    console.error('Failed to write local storage state cache', e);
+  }
+};
+
+/**
+ * Shopping items removed on this phone used to be remembered only on this
+ * phone. Carry that list over into the shared data once, so the other phone
+ * stops adding them back.
+ */
+const migrateLegacyDismissed = (s: AppState): AppState => {
+  try {
+    const raw = localStorage.getItem(LS_LEGACY_DISMISSED);
+    if (!raw) return s;
+    const ids: string[] = JSON.parse(raw);
+    const live = new Set(s.shoppingList.map(i => i.id));
+    const toAdd = Array.isArray(ids) ? ids.filter(id => typeof id === 'string' && !live.has(id)) : [];
+    const migrated = addTombstones(s, 'shoppingList', toAdd, Date.now());
+    persistLocal(migrated);
+    localStorage.removeItem(LS_LEGACY_DISMISSED);
+    if (toAdd.length > 0) localStorage.setItem(LS_PENDING, '1');
+    return migrated;
+  } catch (e) {
+    return s;
+  }
 };
 
 const getInitialState = (): AppState => {
@@ -72,15 +130,10 @@ const getInitialState = (): AppState => {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed && typeof parsed === 'object') {
-        return {
-          recipes: parsed.recipes || [],
+        return migrateLegacyDismissed(normalizeState({
+          ...parsed,
           mealPlans: parsed.mealPlans || getInitialMealPlans(),
-          batches: parsed.batches || [],
-          shoppingList: parsed.shoppingList || [],
-          preferences: parsed.preferences || { ...DEFAULT_PREFERENCES },
-          groceryDatabase: parsed.groceryDatabase || INITIAL_GROCERY_DATABASE,
-          groceryOverrides: parsed.groceryOverrides || {}
-        };
+        }));
       }
     }
   } catch (e) {}
@@ -105,7 +158,7 @@ const getInitialState = (): AppState => {
     }
   } catch (e) {}
 
-  return {
+  return migrateLegacyDismissed({
     recipes: [],
     mealPlans: getInitialMealPlans(),
     batches: [],
@@ -113,132 +166,197 @@ const getInitialState = (): AppState => {
     preferences: legacyPrefs,
     groceryDatabase: legacyDb,
     groceryOverrides: legacyOverrides
-  };
+  });
 };
 
-let syncTimeoutId: any = null;
+const friendlyError = (err: any, fallback: string) => (err && err.message) || fallback;
 
 export function useStore() {
-  const [state, setState] = useState<AppState>(getInitialState);
+  const [state, setStateRaw] = useState<AppState>(getInitialState);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const currentUser = useDeviceIdentity();
 
   // GitHub Sync States
   const [githubConfig, setGithubConfigState] = useState<GistConfig | null>(getGistConfig);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'synced' | 'error'>('idle');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'synced' | 'error'>(
+    () => (getGistConfig() ? 'loading' : 'idle')
+  );
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Guard ref to prevent any automatic background/sync saves during initial fetch-and-merge
-  const isInitialLoadingRef = useRef<boolean>(true);
+  // ---- Sync engine (refs so background work always sees the latest data) ----
+  const stateRef = useRef<AppState>(state);
+  const etagRef = useRef<string | null>(null);
+  const gistFilesRef = useRef<string[]>([]);
+  const editCountRef = useRef(0);
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const rerunRef = useRef(false);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<boolean>((() => {
+    try { return localStorage.getItem(LS_PENDING) === '1'; } catch { return false; }
+  })());
 
-  // Initial fetch/sync from Gist
-  useEffect(() => {
-    const config = getGistConfig();
-    if (config) {
-      setSyncStatus('loading');
-      isInitialLoadingRef.current = true;
-      fetchFromGist(config)
-        .then((remoteState) => {
-          if (remoteState) {
-            // Merge remote state with local state (offline edits safe merge)
-            const merged = mergeAppStates(getInitialState(), remoteState);
-            setState(merged);
-            // Save back to local cache
-            localStorage.setItem('mealPlannerAppStateCache', JSON.stringify(merged));
-            localStorage.setItem('mealPlannerMealPlans', JSON.stringify(merged.mealPlans));
-            localStorage.setItem('mealPlannerState', JSON.stringify({
-              groceryDatabase: merged.groceryDatabase,
-              groceryOverrides: merged.groceryOverrides
-            }));
-            
-            // Sync any merged state back to the Gist in the background
-            saveToGist(config, merged).catch(console.error);
-          }
-          setSyncStatus('synced');
-          setLastSynced(new Date());
-        })
-        .catch((err) => {
-          console.error('Initial Gist fetch failed:', err);
-          setSyncStatus('error');
-          setSyncError(err.message || 'Failed to load Gist. Working in offline mode.');
-        })
-        .finally(() => {
-          isInitialLoadingRef.current = false;
-        });
-    } else {
-      isInitialLoadingRef.current = false;
-    }
-  }, []);
+  const setPending = (value: boolean) => {
+    pendingRef.current = value;
+    try { localStorage.setItem(LS_PENDING, value ? '1' : '0'); } catch {}
+  };
 
-  // Save state to local storage and queue sync to Gist
-  const saveStateAndSync = (newState: AppState) => {
-    // 1. Instantly save to local storage for zero-latency offline safety
-    try {
-      localStorage.setItem('mealPlannerAppStateCache', JSON.stringify(newState));
-      localStorage.setItem('mealPlannerMealPlans', JSON.stringify(newState.mealPlans));
-      localStorage.setItem('mealPlannerState', JSON.stringify({
-        groceryDatabase: newState.groceryDatabase,
-        groceryOverrides: newState.groceryOverrides
-      }));
-    } catch (e) {
-      console.error('Failed to write local storage state cache', e);
-    }
+  /** Replace the data on this phone (screen + local storage). */
+  const replaceState = (next: AppState) => {
+    stateRef.current = next;
+    setStateRaw(next);
+    persistLocal(next);
+  };
 
-    // 2. Debounce/Queue write to Gist if connected and not performing initial load
-    const config = getGistConfig();
-    if (config && !isInitialLoadingRef.current) {
-      if (syncTimeoutId) {
-        clearTimeout(syncTimeoutId);
-      }
-      setSyncStatus('loading');
-      syncTimeoutId = setTimeout(async () => {
-        try {
-          await saveToGist(config, newState);
-          setSyncStatus('synced');
-          setLastSynced(new Date());
-          setSyncError(null);
-        } catch (err: any) {
-          console.error('Debounced Gist save failed:', err);
-          setSyncStatus('error');
-          setSyncError(err.message || 'Failed to save changes to GitHub Gist.');
-        }
-      }, 1000); // 1-second debounce delay
+  const schedulePush = (delay = PUSH_DELAY_MS) => {
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(() => {
+      pushTimerRef.current = null;
+      void runSync('push');
+    }, delay);
+  };
+
+  /**
+   * Save an edit. `base` is the data the screen showed when the edit was made
+   * and `next` is the edited version; only the difference is applied on top of
+   * the latest data, so edits never undo changes downloaded in the meantime.
+   */
+  const commit = (base: AppState, next: AppState) => {
+    const applied = applyLocalChange(stateRef.current, base, next, Date.now());
+    replaceState(applied);
+    editCountRef.current++;
+    if (getGistConfig()) {
+      setPending(true);
+      schedulePush();
     }
   };
+
+  /**
+   * One sync round: download the Gist if it changed, merge it in, and upload
+   * if this phone has anything the Gist doesn't.
+   */
+  const runSync = (reason: 'initial' | 'poll' | 'focus' | 'push' | 'manual'): Promise<void> => {
+    const config = getGistConfig();
+    if (!config) return Promise.resolve();
+    if (inFlightRef.current) {
+      rerunRef.current = true;
+      return inFlightRef.current;
+    }
+    const quiet = reason === 'poll' || reason === 'focus';
+
+    const task = (async () => {
+      if (!quiet) setSyncStatus('loading');
+      try {
+        const result = await fetchGist(config, etagRef.current);
+        let remote: AppState | null = null;
+        let gistIsEmpty = false;
+        if (!result.notModified) {
+          etagRef.current = result.snapshot.etag;
+          gistFilesRef.current = result.snapshot.files;
+          remote = result.snapshot.state;
+          gistIsEmpty = remote === null;
+        }
+
+        let merged = stateRef.current;
+        if (remote) {
+          merged = mergeAppStates(stateRef.current, remote);
+          if (!statesEqual(merged, stateRef.current)) {
+            replaceState(normalizeState(merged));
+            merged = stateRef.current;
+          }
+        }
+
+        const gistIsBehind = remote ? !statesEqual(merged, remote) : false;
+        const willUpload = pendingRef.current || gistIsBehind || gistIsEmpty;
+        if (willUpload) {
+          if (quiet) setSyncStatus('loading');
+          const editsBefore = editCountRef.current;
+          const saved = await saveGist(config, stateRef.current, gistFilesRef.current);
+          etagRef.current = saved.etag;
+          if (saved.files.length) gistFilesRef.current = saved.files;
+          if (editCountRef.current === editsBefore) {
+            setPending(false);
+          } else {
+            rerunRef.current = true; // more edits arrived during upload
+          }
+        }
+
+        setSyncStatus('synced');
+        setSyncError(null);
+        // Quiet checks that found nothing new don't need to refresh the screen.
+        if (!quiet || remote || willUpload) setLastSynced(new Date());
+      } catch (err: any) {
+        console.error(`Gist sync (${reason}) failed:`, err);
+        setSyncStatus('error');
+        setSyncError(friendlyError(err, 'Failed to sync with GitHub Gist.'));
+      }
+    })();
+
+    inFlightRef.current = task;
+    return task.finally(() => {
+      inFlightRef.current = null;
+      if (rerunRef.current) {
+        rerunRef.current = false;
+        schedulePush(200);
+      }
+    });
+  };
+
+  // Background sync: on open, every SYNC_POLL_SECONDS while visible, on return to the app, and when back online.
+  useEffect(() => {
+    if (!githubConfig) return;
+    void runSync('initial');
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') void runSync('poll');
+    }, SYNC_POLL_SECONDS * 1000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void runSync('focus');
+    };
+    const onOnline = () => void runSync('focus');
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [githubConfig?.gistId, githubConfig?.pat]);
+
+  // Shopping items that either of you removed, so they aren't regenerated automatically.
+  const dismissedKey = getDismissedShoppingIds(state).join('|');
+  const dismissedShoppingItemIds = useMemo(
+    () => (dismissedKey ? dismissedKey.split('|') : []),
+    [dismissedKey]
+  );
 
   const addRecipe = async (recipe: Recipe) => {
     const withBreakdowns = ensureRecipeBreakdowns(recipe);
     withBreakdowns.addedBy = currentUser;
     const nextRecipes = [...state.recipes.filter(r => r.id !== withBreakdowns.id), withBreakdowns];
-    const nextState = { ...state, recipes: nextRecipes };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, recipes: nextRecipes });
   };
 
   const updateRecipe = async (recipe: Recipe) => {
     const withBreakdowns = ensureRecipeBreakdowns(recipe);
+    withBreakdowns.lastModifiedBy = currentUser;
     const nextRecipes = state.recipes.map(r => r.id === withBreakdowns.id ? withBreakdowns : r);
-    const nextState = { ...state, recipes: nextRecipes };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, recipes: nextRecipes });
   };
 
   const deleteRecipe = async (recipeId: string) => {
     const nextRecipes = state.recipes.filter(r => r.id !== recipeId);
-    const nextState = { ...state, recipes: nextRecipes };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, recipes: nextRecipes });
   };
 
   const updateMealPlan = async (plan: MealPlan) => {
     const currentMondayStr = formatDateISO(getMonday(new Date()));
     const expectedId = `plan-${plan.startDate}`;
-    let processedPlan = { 
-      ...plan, 
+    let processedPlan = {
+      ...plan,
       id: expectedId,
       isCurrent: plan.startDate === currentMondayStr,
-      days: cleanDays(plan.days) 
+      days: cleanDays(plan.days)
     };
 
     const maxWeeks = state.preferences?.maxForwardWeeks || DEFAULT_PREFERENCES.maxForwardWeeks || 4;
@@ -253,6 +371,7 @@ export function useStore() {
     }
 
     processedPlan.lastModifiedAt = Date.now();
+    processedPlan.lastModifiedBy = currentUser;
 
     const existingIdx = state.mealPlans.findIndex(p => p.id === expectedId || p.startDate === processedPlan.startDate);
     let nextMealPlans: MealPlan[] = [...state.mealPlans];
@@ -272,9 +391,7 @@ export function useStore() {
     });
     const finalPlans = Array.from(plansByDate.values());
 
-    const nextState = { ...state, mealPlans: finalPlans };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, mealPlans: finalPlans });
   };
 
   const repairDatabase = async () => {
@@ -306,9 +423,7 @@ export function useStore() {
       finalPlans.push(updatedPlan);
     }
 
-    const nextState = { ...state, mealPlans: finalPlans };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, mealPlans: finalPlans });
   };
 
   const duplicatePlanToWeek = async (sourcePlanId: string, targetStartDate: string) => {
@@ -347,54 +462,41 @@ export function useStore() {
     const nextMealPlans = state.mealPlans.filter(p => p.startDate !== targetMondayStr);
     nextMealPlans.push(newPlan);
 
-    const nextState = { ...state, mealPlans: nextMealPlans };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, mealPlans: nextMealPlans });
   };
 
   const seedSamplePastWeeks = async () => {
     const sample = createSamplePastWeeks();
     const existingDates = new Set(state.mealPlans.map(p => p.startDate));
     const toAdd = sample.filter(p => !existingDates.has(p.startDate));
-    
+
     if (toAdd.length === 0) return;
 
     toAdd.forEach(plan => {
       plan.lastModifiedAt = Date.now();
     });
 
-    const nextMealPlans = [...state.mealPlans, ...toAdd];
-    const nextState = { ...state, mealPlans: nextMealPlans };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, mealPlans: [...state.mealPlans, ...toAdd] });
   };
 
   const clearPastWeeks = async () => {
     const nextMealPlans = state.mealPlans.filter(p => !isPastWeek(p.startDate));
-    const nextState = { ...state, mealPlans: nextMealPlans };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, mealPlans: nextMealPlans });
   };
 
   const addBatch = async (batch: BatchItem) => {
     const nextBatches = [...state.batches.filter(b => b.id !== batch.id), batch];
-    const nextState = { ...state, batches: nextBatches };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, batches: nextBatches });
   };
 
   const updateBatch = async (batch: BatchItem) => {
     const nextBatches = state.batches.map(b => b.id === batch.id ? batch : b);
-    const nextState = { ...state, batches: nextBatches };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, batches: nextBatches });
   };
-  
+
   const removeBatch = async (batchId: string) => {
     const nextBatches = state.batches.filter(b => b.id !== batchId);
-    const nextState = { ...state, batches: nextBatches };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, batches: nextBatches });
   };
 
   const areItemsEqual = (a: ShoppingListItem, b: ShoppingListItem): boolean => {
@@ -405,13 +507,13 @@ export function useStore() {
       }
       const valA = (a as any)[key];
       const valB = (b as any)[key];
-      
+
       if (valA === valB) continue;
-      
+
       if (typeof valA === 'object' && typeof valB === 'object' && valA !== null && valB !== null) {
         if (JSON.stringify(valA) === JSON.stringify(valB)) continue;
       }
-      
+
       return false;
     }
     return true;
@@ -428,32 +530,31 @@ export function useStore() {
           lastModifiedAt: item.lastModifiedAt || Date.now()
         };
       }
-      
+
       const hasChanged = !areItemsEqual(item, existingItem);
+      if (!hasChanged) {
+        return existingItem;
+      }
       return {
         ...item,
         addedBy: existingItem.addedBy || item.addedBy || currentUser,
-        lastModifiedBy: hasChanged ? currentUser : (existingItem.lastModifiedBy || currentUser),
-        lastModifiedAt: hasChanged ? Date.now() : (existingItem.lastModifiedAt || Date.now())
+        lastModifiedBy: currentUser,
+        lastModifiedAt: Date.now()
       };
     });
 
-    const nextState = { ...state, shoppingList: processedList };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, shoppingList: processedList });
   };
 
   const updateGroceryDatabase = async (dbDb: GroceryItem[]) => {
-    const nextState = { ...state, groceryDatabase: dbDb };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, groceryDatabase: dbDb });
   };
 
   const applyGroceryCleanActions = async (actions: DatabaseCleanAction[]) => {
     if (!Array.isArray(actions) || actions.length === 0) return;
 
-    const baseDb = state.groceryDatabase && state.groceryDatabase.length > 0 
-      ? state.groceryDatabase 
+    const baseDb = state.groceryDatabase && state.groceryDatabase.length > 0
+      ? state.groceryDatabase
       : INITIAL_GROCERY_DATABASE;
     const overrides = state.groceryOverrides || {};
 
@@ -471,7 +572,7 @@ export function useStore() {
       if (action.actionType === 'merge') {
         const primary = itemMap.get(action.primaryItemId);
         const secondary = action.secondaryItemId ? itemMap.get(action.secondaryItemId) : undefined;
-        
+
         if (primary && secondary) {
           const existingAliases = Array.isArray(primary.aliases) ? [...primary.aliases] : [];
           const aliasesSet = new Set(existingAliases.map(a => a.toLowerCase().trim()));
@@ -530,47 +631,39 @@ export function useStore() {
       }
     });
 
-    const nextState = {
+    commit(state, {
       ...state,
       groceryDatabase: updatedItems,
       groceryOverrides: updatedOverrides
-    };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    });
   };
 
   const updateGroceryOverride = async (id: string, updates: Partial<GroceryItem>) => {
     const currentOverrides = state.groceryOverrides || {};
     const newOverrides = { ...currentOverrides, [id]: { ...(currentOverrides[id] || {}), ...updates } };
-    const nextState = { ...state, groceryOverrides: newOverrides };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, groceryOverrides: newOverrides });
   };
 
   const getHydratedGroceryItem = (id: string): GroceryItem | undefined => {
     const baseItem = INITIAL_GROCERY_DATABASE.find(item => item.id === id);
     const override = state.groceryOverrides?.[id] || {};
-    
+
     if (!baseItem && !override.name) return undefined;
-    
+
     if (!baseItem) {
        return override as GroceryItem;
     }
-    
+
     return { ...baseItem, ...override };
   };
 
   const updatePreferences = async (prefs: Partial<AppState['preferences']>) => {
     const newPrefs = { ...(state.preferences || DEFAULT_PREFERENCES), ...prefs };
-    const nextState = { ...state, preferences: newPrefs };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, preferences: newPrefs });
   };
 
   const resetPreferences = async () => {
-    const nextState = { ...state, preferences: DEFAULT_PREFERENCES };
-    setState(nextState);
-    saveStateAndSync(nextState);
+    commit(state, { ...state, preferences: DEFAULT_PREFERENCES });
   };
 
   const exportAllData = (): string => {
@@ -581,8 +674,7 @@ export function useStore() {
     try {
       const parsed = JSON.parse(jsonString);
       if (parsed && typeof parsed === 'object') {
-        setState(parsed);
-        saveStateAndSync(parsed);
+        commit(state, normalizeState(parsed));
         return true;
       }
     } catch (e) {
@@ -597,43 +689,37 @@ export function useStore() {
     setSyncStatus('loading');
     setSyncError(null);
     try {
-      const remoteState = await fetchFromGist(config);
-      saveGistConfig(pat, gistId);
-      setGithubConfigState(config);
+      const result = await fetchGist(config, null);
+      const snapshot = result.notModified ? null : result.snapshot;
+      const remoteState = snapshot?.state || null;
+      etagRef.current = snapshot?.etag || null;
+      gistFilesRef.current = snapshot?.files || [];
+      saveGistConfig(config.pat, config.gistId);
 
-      let finalState = state;
       if (syncMode === 'pull') {
         if (remoteState) {
-          finalState = remoteState;
+          replaceState(normalizeState(remoteState));
         }
       } else if (syncMode === 'push') {
-        await saveToGist(config, state);
+        const saved = await saveGist(config, stateRef.current, gistFilesRef.current);
+        etagRef.current = saved.etag;
+        gistFilesRef.current = saved.files;
       } else if (syncMode === 'merge') {
         if (remoteState) {
-          finalState = mergeAppStates(state, remoteState);
-          await saveToGist(config, finalState);
-        } else {
-          await saveToGist(config, state);
+          replaceState(normalizeState(mergeAppStates(stateRef.current, remoteState)));
         }
+        const saved = await saveGist(config, stateRef.current, gistFilesRef.current);
+        etagRef.current = saved.etag;
+        gistFilesRef.current = saved.files;
       }
-
-      setState(finalState);
-      // Immediately trigger save to local storagecache and Gist
-      try {
-        localStorage.setItem('mealPlannerAppStateCache', JSON.stringify(finalState));
-        localStorage.setItem('mealPlannerMealPlans', JSON.stringify(finalState.mealPlans));
-        localStorage.setItem('mealPlannerState', JSON.stringify({
-          groceryDatabase: finalState.groceryDatabase,
-          groceryOverrides: finalState.groceryOverrides
-        }));
-      } catch (e) {}
-
+      setPending(false);
+      setGithubConfigState(config);
       setSyncStatus('synced');
       setLastSynced(new Date());
     } catch (err: any) {
       console.error('Failed to configure Gist integration:', err);
       setSyncStatus('error');
-      setSyncError(err.message || 'Failed to configure GitHub Gist.');
+      setSyncError(friendlyError(err, 'Failed to configure GitHub Gist.'));
       throw err;
     }
   };
@@ -642,22 +728,29 @@ export function useStore() {
     setSyncStatus('loading');
     setSyncError(null);
     try {
-      const newGistId = await createPrivateGist(pat.trim(), state);
-      saveGistConfig(pat, newGistId);
-      setGithubConfigState({ pat: pat.trim(), gistId: newGistId });
+      const created = await createPrivateGist(pat.trim(), stateRef.current);
+      etagRef.current = created.etag;
+      gistFilesRef.current = created.files;
+      saveGistConfig(pat, created.id);
+      setPending(false);
+      setGithubConfigState({ pat: pat.trim(), gistId: created.id });
       setSyncStatus('synced');
       setLastSynced(new Date());
-      return newGistId;
+      return created.id;
     } catch (err: any) {
       console.error('Failed to create private Gist:', err);
       setSyncStatus('error');
-      setSyncError(err.message || 'Failed to create a private GitHub Gist.');
+      setSyncError(friendlyError(err, 'Failed to create a private GitHub Gist.'));
       throw err;
     }
   };
 
   const clearGithubConfig = () => {
     clearGistConfig();
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    etagRef.current = null;
+    gistFilesRef.current = [];
+    setPending(false);
     setGithubConfigState(null);
     setSyncStatus('idle');
     setLastSynced(null);
@@ -665,49 +758,25 @@ export function useStore() {
   };
 
   const manualSync = async () => {
-    const config = getGistConfig();
-    if (!config) return;
-    setSyncStatus('loading');
-    setSyncError(null);
-    try {
-      const remoteState = await fetchFromGist(config);
-      if (remoteState) {
-        const merged = mergeAppStates(state, remoteState);
-        setState(merged);
-        await saveToGist(config, merged);
-        // Save to cache
-        localStorage.setItem('mealPlannerAppStateCache', JSON.stringify(merged));
-        localStorage.setItem('mealPlannerMealPlans', JSON.stringify(merged.mealPlans));
-        localStorage.setItem('mealPlannerState', JSON.stringify({
-          groceryDatabase: merged.groceryDatabase,
-          groceryOverrides: merged.groceryOverrides
-        }));
-      }
-      setSyncStatus('synced');
-      setLastSynced(new Date());
-    } catch (err: any) {
-      console.error('Manual Gist sync failed:', err);
-      setSyncStatus('error');
-      setSyncError(err.message || 'Failed to sync with Gist.');
-    }
+    await runSync('manual');
   };
 
-  return { 
-    state, 
+  return {
+    state,
     selectedPlanId,
     setSelectedPlanId,
-    addRecipe, 
-    updateRecipe, 
-    deleteRecipe, 
+    addRecipe,
+    updateRecipe,
+    deleteRecipe,
     updateMealPlan,
-    repairDatabase, 
+    repairDatabase,
     duplicatePlanToWeek,
     seedSamplePastWeeks,
     clearPastWeeks,
-    addBatch, 
-    updateBatch, 
-    removeBatch, 
-    updateShoppingList, 
+    addBatch,
+    updateBatch,
+    removeBatch,
+    updateShoppingList,
     updateGroceryDatabase,
     updateGroceryOverride,
     applyGroceryCleanActions,
@@ -716,11 +785,13 @@ export function useStore() {
     resetPreferences,
     exportAllData,
     importAllData,
+    dismissedShoppingItemIds,
     // GitHub Gist exports
     githubConfig,
     syncStatus,
     lastSynced,
     syncError,
+    syncPollSeconds: SYNC_POLL_SECONDS,
     saveGithubConfig,
     createGistFromLocal,
     clearGithubConfig,

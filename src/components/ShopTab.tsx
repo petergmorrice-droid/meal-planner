@@ -369,19 +369,12 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
     return plannedRequirementsByName.get(item.name.toLowerCase().trim()) || null;
   };
 
-  // Set of dismissed item IDs (pantry items the user removed so they don't auto-regenerate)
-  const [dismissedItemIds, setDismissedItemIds] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem('mealPlannerDismissedShoppingItems');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('mealPlannerDismissedShoppingItems', JSON.stringify(dismissedItemIds));
-  }, [dismissedItemIds]);
+  // Generated items (recipe ingredients / staples) that either of you removed, so they don't
+  // auto-regenerate. Shared between phones via sync; removing an item adds it here automatically.
+  const dismissedItemIds: string[] = store.dismissedShoppingItemIds || [];
+  const activeWeekDismissedCount = activePlan
+    ? dismissedItemIds.filter(id => id.includes(activePlan.id)).length
+    : 0;
 
   // Ensure recurring staples are populated and in sync for active week and future weeks
   useEffect(() => {
@@ -447,9 +440,6 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
   };
 
   const executeRemoveItem = (item: ShoppingListItem) => {
-    if (!item.isAdhoc && !item.isBatch) {
-      setDismissedItemIds(prev => [...prev, item.id]);
-    }
     const newList = (store.state.shoppingList || []).filter((i: ShoppingListItem) => i.id !== item.id);
     store.updateShoppingList(newList);
   };
@@ -508,15 +498,23 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
   };
 
   const handleRestoreDismissed = () => {
-    setDismissedItemIds([]);
-    
-    if (!activePlan || activePlan.status !== 'finalized') {
+    if (!activePlan) return;
+
+    // Bring back removed staples for this week (passing no dismissed IDs re-adds them all).
+    let baseList: ShoppingListItem[] = [...(store.state.shoppingList || [])];
+    const recurringPrefs = store.state.preferences?.recurringItems || [];
+    if (recurringPrefs.length > 0) {
+      baseList = syncRecurringStaplesForPlan(activePlan, baseList, recurringPrefs, []);
+    }
+
+    if (activePlan.status !== 'finalized') {
+      store.updateShoppingList(baseList);
       setToastMessage('Restored recipe ingredients');
       return;
     }
 
     const targetItems = generateShoppingListForPlan(activePlan, store.state.recipes);
-    const currentShoppingList = [...(store.state.shoppingList || [])];
+    const currentShoppingList = baseList;
     const existingItemsForPlan = currentShoppingList.filter(i => i.planId === activePlan.id);
     const adhocOrBatchItems = existingItemsForPlan.filter(i => i.isAdhoc || i.isBatch);
     const existingMealItems = existingItemsForPlan.filter(i => !i.isAdhoc && !i.isBatch && !i.isRecurring);
@@ -1714,7 +1712,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
             )}
 
             {/* Restore Dismissed Items Link */}
-            {dismissedItemIds.length > 0 && (
+            {activeWeekDismissedCount > 0 && (
               <div className="pt-1 text-center">
                 <button
                   type="button"

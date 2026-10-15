@@ -32,16 +32,49 @@ static files that can be hosted for free anywhere.
 > version does not read from it. If any old data only exists there, it would
 > need a one-off import.
 
-## Known issues (October 2026)
+## How syncing between phones works
 
-1. **Deleted things come back.** Deleting a recipe or removing a shopping item
-   on one phone is undone the next time the other phone opens the app.
-2. **Changes don't appear live.** The other phone only sees changes when it
-   reopens the app or taps sync. If both apps are open, each phone's saves
-   overwrite the other's in the Gist.
-3. **1 MB ceiling.** GitHub cuts off Gist files over 1 MB when the app reads
-   them. At about 6 KB per recipe, that is roughly 120–150 recipes before
-   loading breaks.
+- **Every edit uploads within about a second.** Before uploading, the app
+  downloads the latest copy and combines it with its own, so neither phone
+  overwrites the other's changes.
+- **The other phone's changes appear within about 20 seconds** while the app
+  is open, and straight away when you switch back to the app or come back
+  online. These checks use GitHub's "has it changed?" request, which is free
+  and doesn't count towards GitHub's limits.
+- **Changes are combined item by item.** If you both change different things,
+  both are kept. If you both change the same item, the later change wins.
+- **Deletions stick.** Removing a recipe, a shopping item or a staple leaves a
+  dated marker, so the other phone's older copy can't bring it back. Removed
+  staples and recipe ingredients stay removed on both phones until you tap
+  "Restore removed recipe ingredients". Markers are kept for 90 days.
+- **Works offline.** Edits are saved on the phone straight away and uploaded
+  when the connection returns, even if the app was closed in between.
+- **No size ceiling in practice.** GitHub only lets the app read Gist files up
+  to 1 MB, so once the data passes 800 KB it is split across several files in
+  the same Gist (`family-meal-planner.part1.txt`, …) automatically.
+
+The logic lives in `src/services/syncMerge.ts` (combining and deletions) and
+`src/services/gistStorage.ts` (talking to GitHub). `npm test` runs the tests
+for the combining rules.
+
+## Moving both phones onto a new version
+
+Each website address keeps its own saved data and settings, so a newly
+hosted copy of the app starts empty on each phone. To move across:
+
+1. In the **old** app on each phone, open *Settings → connections* and tap
+   **Sync Now**, so everything is in the Gist. Note the **Gist ID** shown there.
+2. **Stop using the old app** on both phones. Its older sync can undo
+   deletions made in the new one.
+3. Open the **new** app → *Settings → connections*. Paste your GitHub token
+   and the Gist ID, leave the strategy on **Merge**, and tap
+   **Connect Existing Gist**. Do the same on the second phone.
+4. Re-enter the Gemini API key (same screen), and check *my household* shows
+   the right person for that phone.
+
+If you no longer have the GitHub token, create a new one at
+github.com → Settings → Developer settings → Personal access tokens, with the
+**gist** permission only.
 
 ## Working on the code
 
@@ -52,12 +85,14 @@ npm install
 npm run dev       # local dev server with live reload
 npm run build     # production build into dist/
 npm run preview   # serve the production build locally
+npm test          # tests for the sync merge rules
 ```
 
 Main files:
 
-- `src/store.ts` — all app state and the save/sync logic
-- `src/services/gistStorage.ts` — GitHub Gist read/write and merge
+- `src/store.ts` — all app state, saving, and the background sync loop
+- `src/services/syncMerge.ts` — how two phones' data is combined
+- `src/services/gistStorage.ts` — GitHub Gist read/write (incl. splitting large data)
 - `src/services/geminiService.ts` — Gemini calls and the non-AI fallback parser
 - `src/components/*Tab.tsx` — one file per tab
 - `src/types.ts` — data shapes (Recipe, MealPlan, ShoppingListItem, …)
@@ -69,3 +104,7 @@ Main files:
   the Express dev server and unused packages (`firebase`, `@google/genai`,
   `motion`, `express`, `dotenv`). The app code in `src/` is unchanged.
   Anything removed can be recovered from the first commit.
+- `Reliable two-phone sync` — deletions stick, changes are combined instead
+  of overwritten, background checks every 20 s, offline edits kept, and large
+  data split across Gist files. Removed shopping items are now shared between
+  phones instead of remembered on one phone only.

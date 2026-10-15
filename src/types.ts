@@ -99,6 +99,7 @@ export interface BatchItem {
   recipeId?: string;
   portions: number;
   dateAdded: string;
+  lastModifiedAt?: number;
 }
 
 export interface ShoppingListItem {
@@ -170,6 +171,7 @@ export interface GroceryItem {
   category: string;
   aliases?: string[];
   cost?: number;
+  lastModifiedAt?: number;
 }
 
 export type CleanActionType = 'merge' | 'rename' | 'recategorize';
@@ -187,6 +189,19 @@ export interface CleanDatabaseResponse {
   actions: DatabaseCleanAction[];
 }
 
+/**
+ * Bookkeeping that lets two phones merge their changes safely.
+ * - tombstones: "<collection>:<key>" -> time it was deleted, so deletions
+ *   aren't undone by the other phone's older copy.
+ * - preferencesModifiedAt / overridesModifiedAt: when those were last changed,
+ *   so the newest change wins.
+ */
+export interface SyncMeta {
+  tombstones: Record<string, number>;
+  preferencesModifiedAt?: number;
+  overridesModifiedAt?: Record<string, number>;
+}
+
 export interface AppState {
   recipes: Recipe[];
   mealPlans: MealPlan[];
@@ -195,4 +210,5 @@ export interface AppState {
   preferences?: UserPreferences;
   groceryDatabase?: GroceryItem[];
   groceryOverrides?: Record<string, Partial<GroceryItem>>;
+  syncMeta?: SyncMeta;
 }

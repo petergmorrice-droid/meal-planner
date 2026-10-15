@@ -701,11 +701,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
   const generateShoppingList = (plan: MealPlan) => {
     const targetItems = generateShoppingListForPlan(plan, store.state.recipes);
     
-    let dismissedItemIds: string[] = [];
-    try {
-      const stored = localStorage.getItem('mealPlannerDismissedShoppingItems');
-      if (stored) dismissedItemIds = JSON.parse(stored);
-    } catch {}
+    // Items either of you removed from the list (shared via sync), so they aren't re-added.
+    const dismissedItemIds: string[] = store.dismissedShoppingItemIds || [];
 
     const targetKeyMap = new Map<string, ShoppingListItem>();
     targetItems.forEach(item => {
