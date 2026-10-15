@@ -534,6 +534,9 @@ export default function CookMode({
                     <span className={`text-xs font-semibold leading-relaxed ${isChecked ? 'line-through text-zinc-400' : 'text-zinc-800'}`}>
                       {ing.name}
                     </span>
+                    {ing.note && (
+                      <span className={`text-xs leading-relaxed ${isChecked ? 'text-zinc-400' : 'text-zinc-500'}`}>, {ing.note}</span>
+                    )}
                     {ing.amount > 0 && (
                       <span className="text-[10px] font-mono text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded ml-2 font-bold whitespace-nowrap">
                         {formattedAmount} {ing.unit}

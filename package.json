@@ -9,7 +9,7 @@
     "build:single": "vite build && node scripts/make-single-file.mjs dist dist-single",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "test": "esbuild src/services/syncMerge.ts --bundle --format=esm --platform=node --outfile=.test-build/syncMerge.mjs --log-level=warning && esbuild tests/shopping-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/shopping.mjs --log-level=warning && node tests/syncMerge.test.mjs && node tests/shopping.test.mjs"
+    "test": "esbuild src/services/syncMerge.ts --bundle --format=esm --platform=node --outfile=.test-build/syncMerge.mjs --log-level=warning && esbuild tests/shopping-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/shopping.mjs --log-level=warning && esbuild tests/recipeImport-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/recipeImport.mjs --log-level=warning && node tests/syncMerge.test.mjs && node tests/shopping.test.mjs && node tests/recipeImport.test.mjs"
   },
   "dependencies": {
     "fuse.js": "^7.5.0",

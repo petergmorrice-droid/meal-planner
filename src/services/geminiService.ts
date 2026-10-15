@@ -45,7 +45,8 @@ async function callGeminiRest(
   apiKey: string,
   prompt: string,
   systemInstruction?: string,
-  responseSchema?: any
+  responseSchema?: any,
+  options: { temperature?: number } = {}
 ): Promise<any> {
   let lastError: any = null;
 
@@ -66,6 +67,10 @@ async function callGeminiRest(
           responseMimeType: 'application/json',
           responseSchema: responseSchema,
         };
+      }
+      if (options.temperature !== undefined) {
+        // Low temperature = the same answer every time; right for copying, not for creating.
+        payload.generationConfig = { ...(payload.generationConfig || {}), temperature: options.temperature };
       }
 
       const controller = new AbortController();
@@ -225,7 +230,21 @@ function estimateDynamicTimes(ingredients: any[], instructions: string[], target
   };
 }
 
-function generateFunctionalTags(ingredients: any[], isVegetarian: boolean, isVegan: boolean, method: string): string[] {
+// Words that mean an ingredient contains gluten / dairy, and the exceptions ("coconut milk", "butter beans").
+const GLUTEN_WORDS = /\b(flour|bread|breadcrumbs?|panko|pasta|penne|spaghetti|fusilli|farfalle|linguine|tagliatelle|pappardelle|lasagne|lasagna|macaroni|rigatoni|conchiglie|orzo|gnocchi|noodles?|couscous|bulgur|bulgar|barley|semolina|wheat|spelt|rye|pastry|filo|phyllo|tortillas?|wraps?|pittas?|pitas?|naans?|buns?|rolls?|baguette|ciabatta|focaccia|sourdough|crackers?|biscuits?|cake|crumble|batter|dumplings?|beer|ale|soy sauce|seitan|stuffing|yorkshire|croutons?)\b/;
+const NOT_GLUTEN = /\b(gluten[- ]free|rice noodles?|rice flour|cornflour|corn flour|gram flour|buckwheat|tamari)\b/;
+const DAIRY_WORDS = /\b(milk|cheese|cheddar|parmesan|mozzarella|feta|halloumi|ricotta|mascarpone|paneer|brie|camembert|gruy[eè]re|pecorino|burrata|stilton|butter|ghee|cream|cr[eè]me fra[iî]che|yogh?urt|custard|quark|kefir|whey)\b/;
+const NOT_DAIRY = /\b(coconut|oat|almond|soy|soya|rice|cashew|peanut|vegan|dairy[- ]free|plant[- ]based|butter ?beans?|butternut|cream of tartar)\b/;
+
+/**
+ * Recipe tags. "Gluten-Free" / "Dairy-Free" are only added when no ingredient looks like
+ * gluten or dairy AND (for imported recipes) Gemini agreed - a wrong "free-from" label is
+ * worse than a missing one.
+ */
+function generateFunctionalTags(
+  ingredients: any[], isVegetarian: boolean, isVegan: boolean, method: string,
+  ai?: { glutenFree?: unknown; dairyFree?: unknown }
+): string[] {
   const tags: string[] = [];
   if (isVegan) tags.push('Vegan');
   else if (isVegetarian) tags.push('Vegetarian');
@@ -234,13 +253,15 @@ function generateFunctionalTags(ingredients: any[], isVegetarian: boolean, isVeg
   let hasDairy = false;
 
   ingredients.forEach(ing => {
-    const name = ing.name.toLowerCase();
-    if (/flour|bread|pasta|wheat|wrap|bun/.test(name)) hasGluten = true;
-    if (/milk|cheese|butter|cream|yogurt/.test(name)) hasDairy = true;
+    const name = String(ing?.name ?? '').toLowerCase();
+    if (GLUTEN_WORDS.test(name) && !NOT_GLUTEN.test(name)) hasGluten = true;
+    if (DAIRY_WORDS.test(name) && !NOT_DAIRY.test(name)) hasDairy = true;
   });
+  const aiAgrees = (v: unknown) => (ai ? v === true : true);
 
-  if (!hasGluten) tags.push('Gluten-Free');
-  if (!hasDairy) tags.push('Dairy-Free');
+  if (!hasGluten && aiAgrees(ai?.glutenFree)) tags.push('Gluten-Free');
+  if (!hasDairy && !isVegan && aiAgrees(ai?.dairyFree)) tags.push('Dairy-Free');
+  if (isVegan) tags.push('Dairy-Free');
 
   if (method === 'ninja') tags.push('Ninja Combi');
   else tags.push('Stovetop');
@@ -281,10 +302,10 @@ function validateAndNormalizeRecipe(data: any, selectedMethod: 'ninja' | 'oven_h
   clean.methodPrepTime[selectedMethod] = clean.methodPrepTime[selectedMethod] || clean.prepTime;
   clean.methodCookTime[selectedMethod] = clean.methodCookTime[selectedMethod] || clean.cookTime;
 
-  // Dietary and tags
+  // Dietary and tags: Gemini's own judgement is better than word matching ("eggplant" isn't egg).
   const flags = analyzeDietaryFlags(clean.ingredients);
-  clean.isVegetarian = flags.isVegetarian;
-  clean.isVegan = flags.isVegan;
+  clean.isVegetarian = typeof data?.isVegetarian === 'boolean' ? data.isVegetarian : flags.isVegetarian;
+  clean.isVegan = typeof data?.isVegan === 'boolean' ? data.isVegan && clean.isVegetarian : flags.isVegan;
   clean.tags = generateFunctionalTags(clean.ingredients, clean.isVegetarian, clean.isVegan, selectedMethod);
   clean.cookingMethods = [selectedMethod];
 
@@ -769,50 +790,179 @@ INGREDIENT NAMING AND UNITS (used to build an accurate shopping list):
 - Prefer grams/ml for meat, fish, cheese, pasta, rice, flour and liquids; prefer pieces for fruit and veg bought individually.`;
 }
 
+// ---------------------------------------------------------------------------
+// Reading a pasted recipe: Gemini only COPIES it into fields. It does not scale,
+// convert, rewrite or adapt anything; the app does all the maths itself.
+// ---------------------------------------------------------------------------
+
+const COPY_SYSTEM_INSTRUCTION = `You copy recipes exactly into structured data.
+Rules:
+- Never change, scale, round or convert any quantity. Copy numbers as written (write fractions like ½ as 0.5; for a range like 2-3 use the larger number).
+- Never invent ingredients, quantities or steps. If something isn't in the text, leave it empty (0 or "").
+- Copy the method steps word for word. You may remove step numbers and headings only.
+- Return JSON matching the schema.`;
+
+const COPY_RECIPE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    name: { type: "STRING", description: "Recipe title as written" },
+    description: { type: "STRING", description: "The recipe's own introduction sentence if it has one, otherwise a plain one-sentence summary" },
+    servings: { type: "INTEGER", description: "Number of servings as stated in the recipe; 0 if not stated" },
+    prepTime: { type: "INTEGER", description: "Preparation time in minutes as stated; 0 if not stated" },
+    cookTime: { type: "INTEGER", description: "Cooking time in minutes as stated; 0 if not stated" },
+    ingredients: {
+      type: "ARRAY",
+      description: "Every ingredient line, in order, copied as written",
+      items: {
+        type: "OBJECT",
+        properties: {
+          name: { type: "STRING", description: "The ingredient as written, without the quantity, unit or preparation (e.g. 'skinless chicken breasts')" },
+          amount: { type: "NUMBER", description: "The quantity exactly as written; 0 if none (e.g. 'salt to taste')" },
+          unit: { type: "STRING", description: "The unit exactly as written (e.g. 'g', 'tbsp', 'tins', 'cloves'); empty if none" },
+          note: { type: "STRING", description: "Preparation or extra detail from the line (e.g. 'finely chopped', 'cut into chunks', 'drained'); empty if none" }
+        },
+        required: ["name", "amount", "unit", "note"]
+      }
+    },
+    instructions: { type: "ARRAY", items: { type: "STRING" }, description: "Method steps copied word for word" },
+    isVegetarian: { type: "BOOLEAN", description: "True only if there is no meat, poultry, fish, seafood, animal stock or gelatine (including hidden ones such as anchovies in Worcestershire sauce)" },
+    isVegan: { type: "BOOLEAN", description: "True only if there are no animal products at all" },
+    isGlutenFree: { type: "BOOLEAN", description: "True only if no ingredient contains gluten (wheat, barley, rye, most pasta, bread, soy sauce, stock cubes that contain wheat...)" },
+    isDairyFree: { type: "BOOLEAN", description: "True only if no ingredient contains milk or milk products (butter, cheese, cream, yogurt...)" }
+  },
+  required: ["name", "servings", "ingredients", "instructions", "isVegetarian", "isVegan"]
+};
+
+/**
+ * Turn what Gemini copied into a Recipe without changing it: names, amounts,
+ * units, notes and method steps are kept exactly as read. Only gaps are filled
+ * (missing times are estimated, missing servings default to 2).
+ */
+export function normalizeParsedRecipe(data: any, selectedMethod: 'ninja' | 'oven_hob'): Recipe {
+  const toNumber = (v: any): number => {
+    const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''));
+    return isFinite(n) && n > 0 ? n : 0;
+  };
+  const ingredients: Ingredient[] = (Array.isArray(data?.ingredients) ? data.ingredients : [])
+    .filter((ing: any) => ing && typeof ing.name === 'string' && ing.name.trim())
+    .map((ing: any) => {
+      const name = ing.name.trim();
+      const out: Ingredient = {
+        id: crypto.randomUUID(),
+        name,
+        amount: toNumber(ing.amount),
+        unit: typeof ing.unit === 'string' ? ing.unit.trim() : '',
+        category: categorizeIngredient(name),
+      };
+      out.suggestedAisle = out.category;
+      const note = typeof ing.note === 'string' ? ing.note.trim() : '';
+      if (note) out.note = note;
+      return out;
+    });
+
+  const instructions: string[] = (Array.isArray(data?.instructions) ? data.instructions : [])
+    .map((step: any) => String(step ?? '').trim())
+    .filter(Boolean);
+
+  const stated = { prep: toNumber(data?.prepTime), cook: toNumber(data?.cookTime) };
+  const estimate = estimateDynamicTimes(ingredients, instructions, selectedMethod);
+  const prepTime = Math.round(stated.prep || estimate.prepTime);
+  const cookTime = Math.round(stated.cook || estimate.cookTime);
+
+  const flags = analyzeDietaryFlags(ingredients);
+  const isVegetarian = typeof data?.isVegetarian === 'boolean' ? data.isVegetarian : flags.isVegetarian;
+  const isVegan = typeof data?.isVegan === 'boolean' ? data.isVegan && isVegetarian : flags.isVegan;
+
+  return {
+    id: crypto.randomUUID(),
+    name: (typeof data?.name === 'string' && data.name.trim()) || 'Untitled recipe',
+    description: (typeof data?.description === 'string' && data.description.trim()) || '',
+    servings: Math.round(toNumber(data?.servings)) || 2,
+    ingredients,
+    instructions,
+    methodInstructions: { [selectedMethod]: [...instructions] },
+    prepTime,
+    cookTime,
+    methodPrepTime: { [selectedMethod]: prepTime },
+    methodCookTime: { [selectedMethod]: cookTime },
+    tags: generateFunctionalTags(ingredients, isVegetarian, isVegan, selectedMethod, { glutenFree: data?.isGlutenFree, dairyFree: data?.isDairyFree }),
+    cookingMethods: [selectedMethod],
+    isVegetarian,
+    isVegan,
+  };
+}
+
+/** Step 1: Gemini copies the pasted recipe into fields. */
 export async function parseRecipeApi(text: string, cookingMethod: 'ninja' | 'oven_hob'): Promise<Recipe> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY_MISSING');
   }
-
   const selectedMethod = cookingMethod === 'ninja' ? 'ninja' : 'oven_hob';
-  const methodNameLabel = selectedMethod === 'ninja' ? 'Ninja Combi Multi-cooker / Air Fryer' : 'Stove / Oven (Traditional Hob / Oven)';
+  const prompt = `Copy this recipe into the JSON fields exactly as written.\n\nRecipe text:\n${text}`;
 
-  const prompt = `Parse the following recipe text into a structured JSON recipe format.
-Target Cooking Appliance: ${methodNameLabel} ("${selectedMethod}").
-
-CRITICAL INSTRUCTIONS:
-1. Dynamic Prep & Cook Times:
-- Realistically calculate prepTime and cookTime in minutes as integers by analyzing preparation steps, knife work, and cooking duration.
-- NEVER return static or default 15 or 30 minute values. Estimate realistically if not stated.
-
-2. Dynamic Dietary Flags:
-- Evaluate "isVegetarian" as true ONLY if ingredients contain zero meat, poultry, fish, seafood, animal broths, or gelatins (dairy and eggs permitted).
-- Evaluate "isVegan" as true ONLY if ingredients contain zero animal products whatsoever.
-
-3. Rich Functional Tags:
-- Generate rich tags (e.g. "Gluten-Free", "Dairy-Free", "High-Protein", "Low-Carb", "One-Pan", "Quick", "Freezer-Friendly", "${selectedMethod === 'ninja' ? 'Ninja Combi' : 'Stovetop'}").
-
-4. Vague Quantity Normalization:
-- Convert vague phrases ("a splash", "a handful", "a pinch", "a knob", "a drizzle") to exact numeric decimal amounts and standard units.
-- Clean ingredient names (remove vague phrases from names).
-
-5. Invariant:
-- Scaled for 2 adults (servings: 2).
-- Decimal quantities in instructions matching ingredients.
-- Exclude all macros, health scores, and cost estimates.
-
-Recipe Text:
-${text}`;
-
+  let data: any;
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), RECIPE_RESPONSE_SCHEMA);
+    const rawText = await callGeminiRest(apiKey, prompt, COPY_SYSTEM_INSTRUCTION, COPY_RECIPE_SCHEMA, { temperature: 0 });
     const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const data = JSON.parse(cleanText);
-    return validateAndNormalizeRecipe(data, selectedMethod, text);
+    data = JSON.parse(cleanText);
   } catch (err) {
     console.error('Gemini parseRecipeApi failed:', err);
     throw geminiFailure(err, 'read this recipe');
+  }
+  const recipe = normalizeParsedRecipe(data, selectedMethod);
+  if (recipe.ingredients.length === 0) {
+    throw new Error("Gemini couldn't find any ingredients in that text. Check the whole recipe was pasted, including the ingredients list, and try again.");
+  }
+  return recipe;
+}
+
+/**
+ * Step 2 (only for ingredients the app couldn't match exactly): ask Gemini which
+ * grocery-list product each one is. Returns ingredient name -> product name ('' = none).
+ * Failure is harmless: those ingredients just go to the Map Ingredient step.
+ */
+export async function suggestGroceryProductsApi(ingredientNames: string[], productNames: string[]): Promise<Record<string, string>> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey || ingredientNames.length === 0 || productNames.length === 0) return {};
+  const prompt = `For each recipe ingredient below, give the grocery-list product it is, using the product's name EXACTLY as listed.
+Only choose a product if it is clearly the same thing you would buy (e.g. "polpa" -> "Chopped Tomatoes", "San Marzano tomatoes" -> "Plum Tomatoes"). If none is clearly right, answer "".
+Do not choose a similar but different product (smoked paprika is not paprika; red wine vinegar is not white wine vinegar).
+
+Recipe ingredients:
+${ingredientNames.map((n) => `- ${n}`).join('\n')}
+
+Grocery-list products:
+${productNames.join('; ')}`;
+  const schema = {
+    type: "OBJECT",
+    properties: {
+      matches: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            ingredient: { type: "STRING", description: "The recipe ingredient exactly as given" },
+            product: { type: "STRING", description: "Grocery-list product name exactly as listed, or empty" }
+          },
+          required: ["ingredient", "product"]
+        }
+      }
+    },
+    required: ["matches"]
+  };
+  try {
+    const rawText = await callGeminiRest(apiKey, prompt, 'You match recipe ingredients to a fixed grocery list. Never invent product names.', schema, { temperature: 0 });
+    const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const data = JSON.parse(cleanText);
+    const out: Record<string, string> = {};
+    for (const m of Array.isArray(data?.matches) ? data.matches : []) {
+      if (m && typeof m.ingredient === 'string' && typeof m.product === 'string') out[m.ingredient] = m.product;
+    }
+    return out;
+  } catch (err) {
+    console.warn('Gemini product suggestions failed (ingredients will be mapped by hand):', err);
+    return {};
   }
 }
 
@@ -948,8 +1098,8 @@ Do not include macros or cost estimates.`;
     const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     return JSON.parse(cleanText);
   } catch (err) {
-    console.error('Gemini generateAlternativeInstructionsApi failed, falling back locally:', err);
-    return generateAlternativeInstructionsLocally({ instructions: existingInstructions, ingredients }, targetMethod);
+    console.error('Gemini generateAlternativeInstructionsApi failed:', err);
+    throw geminiFailure(err, `write the ${targetMethod === 'ninja' ? 'Ninja Combi' : 'hob/oven'} version`);
   }
 }
 

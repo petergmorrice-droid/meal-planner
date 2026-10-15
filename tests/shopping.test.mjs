@@ -4,6 +4,7 @@ import {
   canonicalUnit, parseAmount, formatUnit, singularize, matchKey, groupingKey,
   buildCatalog, matchProduct, buildShoppingLines, shoppingQuantityFor, quantityForAddedItem,
   stepForItem, toBase, missingExtraProducts, EXTRA_PRODUCTS, INITIAL_GROCERY_DATABASE,
+  matchProductDetailed, linkIngredients, namesNeedingSuggestion, productByName,
 } from '../.test-build/shopping.mjs';
 
 let failures = 0;
@@ -244,6 +245,51 @@ test('new products are offered to the shared list once, without duplicating exis
 test('every built-in product can turn its own buying unit into a quantity', () => {
   const broken = cat.products.filter((p) => !p.sameAs && p.buySize === null).map((p) => `${p.name} (${p.buyUnit})`);
   assert.deepEqual(broken, []);
+});
+
+test('links: exact name beats a saved link; a saved link beats a partial guess', () => {
+  // Saved link (from Gemini or Map Ingredient) settles the cases name rules get wrong
+  assert.equal(matchProduct(cat, 'San Marzano tomatoes', { groceryId: 'gdb-106' }).name, 'Plum Tomatoes');
+  assert.equal(matchProduct(cat, 'San Marzano tomatoes').name, 'Tomatoes', 'without the link the partial guess is fresh tomatoes');
+  assert.equal(matchProduct(cat, 'Polpa', { groceryId: 'gdb-105' }).name, 'Chopped Tomatoes');
+  // ...but if the ingredient was renamed to an exact product, the name wins over a stale link
+  assert.equal(matchProduct(cat, 'Spaghetti', { groceryId: 'gdb-93' }).name, 'Spaghetti');
+  // A link to a product that no longer exists is ignored
+  assert.equal(matchProduct(cat, 'lean beef mince', { groceryId: 'gdb-deleted' }).name, 'Beef Mince');
+  assert.equal(matchProductDetailed(cat, 'chicken breasts').how, 'exact');
+  assert.equal(matchProductDetailed(cat, 'extra lean British beef mince').how, 'partial');
+  assert.equal(matchProductDetailed(cat, 'polpa', { groceryId: 'gdb-105' }).how, 'linked');
+});
+
+test('import linking: exact, then Gemini suggestion, then partial, then ask; wording never changes', () => {
+  const ings = [
+    { name: 'skinless chicken breasts', amount: 2, unit: '', note: 'cut into chunks' }, // partial (no suggestion)
+    { name: 'chicken breasts', amount: 2, unit: '' },                                    // exact
+    { name: 'San Marzano tomatoes', amount: 400, unit: 'g' },                            // partial would be wrong -> Gemini
+    { name: 'polpa', amount: 1, unit: 'carton' },                                         // unknown -> Gemini
+    { name: 'gochujang', amount: 2, unit: 'tbsp' },                                       // unknown, Gemini unsure -> ask
+    { name: 'lemongrass', amount: 1, unit: 'stalk' },                                     // Gemini invents a product -> ignored -> ask
+  ];
+  const asked = namesNeedingSuggestion(ings, cat);
+  assert.deepEqual(asked, ['skinless chicken breasts', 'San Marzano tomatoes', 'polpa', 'gochujang', 'lemongrass'], 'only non-exact names go to Gemini');
+  const suggestions = { 'San Marzano tomatoes': 'Plum Tomatoes', polpa: 'Chopped Tomatoes', gochujang: '', lemongrass: 'Lemongrass Stalks' };
+  const { ingredients, unmapped } = linkIngredients(ings, cat, suggestions);
+  const by = Object.fromEntries(ingredients.map((i) => [i.name, i]));
+  assert.equal(cat.byId.get(by['skinless chicken breasts'].groceryId).name, 'Chicken Breasts'); assert.equal(by['skinless chicken breasts'].linkSource, 'partial');
+  assert.equal(by['chicken breasts'].linkSource, 'exact');
+  assert.equal(cat.byId.get(by['San Marzano tomatoes'].groceryId).name, 'Plum Tomatoes'); assert.equal(by['San Marzano tomatoes'].linkSource, 'gemini');
+  assert.equal(cat.byId.get(by['polpa'].groceryId).name, 'Chopped Tomatoes');
+  assert.deepEqual(unmapped.map((u) => u.name), ['gochujang', 'lemongrass']);
+  // Wording, amounts, units and notes are untouched
+  ings.forEach((orig, i) => { for (const k of ['name', 'amount', 'unit', 'note']) assert.equal(ingredients[i][k], orig[k], `${orig.name}.${k} changed`); });
+});
+
+test('import linking: when Gemini\'s suggestions fail, partial matches and Map Ingredient still work', () => {
+  const { ingredients, unmapped } = linkIngredients([{ name: 'lean beef mince', amount: 500, unit: 'g' }, { name: 'polpa', amount: 1, unit: '' }], cat, {});
+  assert.equal(cat.byId.get(ingredients[0].groceryId).name, 'Beef Mince');
+  assert.deepEqual(unmapped.map((u) => u.name), ['polpa']);
+  assert.equal(productByName(cat, 'plum tomatoes').name, 'Plum Tomatoes');
+  assert.equal(productByName(cat, 'Not A Product'), null);
 });
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,8 @@ export interface Ingredient {
   suggestedAisle?: string;
   /** The grocery-list product this ingredient was linked to when the recipe was saved. */
   groceryId?: string;
+  /** Preparation from the recipe's ingredient line, e.g. "finely chopped". */
+  note?: string;
 }
 
 export type CookingMethod = 'ninja' | 'oven_hob';

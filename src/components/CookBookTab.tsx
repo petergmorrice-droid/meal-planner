@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { IngredientTriageModal } from './IngredientTriageModal';
-import { buildCatalog, matchProduct } from '../shopping';
+import { buildCatalog, matchProduct, namesNeedingSuggestion, linkIngredients } from '../shopping';
 import { 
   parseRecipeApi, 
+  suggestGroceryProductsApi,
   generateRecipeApi, 
   editRecipeApi, 
   generateAlternativeInstructionsApi 
@@ -1609,6 +1610,9 @@ export function RecipeModal({
                                   }`}>
                                     {ing.name}
                                   </span>
+                                  {ing.note && (
+                                    <span className="text-[11px] text-stone-500 block mt-0.5">{ing.note}</span>
+                                  )}
                                   {ing.category && (
                                     <span className="text-[8px] uppercase tracking-wider text-stone-400 font-extrabold block mt-0.5">
                                       {ing.category}
@@ -2037,20 +2041,20 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
         threshold: 0.4
       });
 
-      const unmapped: any[] = [];
-      if (data && Array.isArray(data.ingredients)) {
-        data.ingredients.forEach((ing: any) => {
-          if (!ing || typeof ing.name !== 'string' || !ing.name.trim()) return;
-
-          const known = matchProduct(catalog, ing.name, { unit: ing.unit, amount: Number(ing.amount) });
-          if (known) {
-            ing.groceryId = known.id;
-          } else {
-            const results = fuse.search(ing.name).slice(0, 3).map(r => r.item);
-            unmapped.push({ ingredient: ing, suggestions: results });
-          }
-        });
-      }
+      // Link each ingredient to a grocery-list product without changing its wording:
+      // the app's exact matches first, then Gemini's suggestions (asked only about the
+      // leftovers), then partial matches. Anything still unknown goes to Map Ingredient.
+      const ingredientsIn: any[] = Array.isArray(data?.ingredients) ? data.ingredients : [];
+      const pendingNames = namesNeedingSuggestion(ingredientsIn, catalog);
+      const suggestions = pendingNames.length > 0
+        ? await suggestGroceryProductsApi(pendingNames, allItems.map((i: any) => i.name))
+        : {};
+      const linked = linkIngredients(ingredientsIn, catalog, suggestions);
+      data = { ...data, ingredients: linked.ingredients };
+      const unmapped: any[] = linked.unmapped.map((ing: any) => ({
+        ingredient: ing,
+        suggestions: fuse.search(ing.name).slice(0, 3).map(r => r.item)
+      }));
 
       if (unmapped.length > 0) {
         setUnmappedItems(unmapped);
@@ -2067,7 +2071,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
         const preparedRecipe: Recipe = {
           ...data,
           id: data.id || crypto.randomUUID(),
-          servings: 2,
+          servings: data.servings || 2,
           ingredients
         };
 
@@ -2099,9 +2103,10 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
       if (Array.isArray(updatedRecipe.ingredients) && mappings && mappings.length > 0) {
         updatedRecipe.ingredients = updatedRecipe.ingredients.map((ing: any) => {
           if (!ing || !ing.name) return ing;
-          const mapping = mappings.find((m: any) => m && m.originalName === ing.name);
-          if (mapping && mapping.mappedGroceryName) {
-            return { ...ing, name: mapping.mappedGroceryName, groceryId: mapping.mappedGroceryId || ing.groceryId };
+          const mapping = mappings.find((m: any) => m && (m.originalName === ing.name || m.mappedGroceryName === ing.name));
+          if (mapping && mapping.mappedGroceryId) {
+            // Keep the recipe's own wording; just link it to the chosen product.
+            return { ...ing, groceryId: mapping.mappedGroceryId };
           }
           return ing;
         });
@@ -2118,7 +2123,7 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
       const preparedRecipe: Recipe = {
         ...updatedRecipe,
         id: updatedRecipe.id || crypto.randomUUID(),
-        servings: 2,
+        servings: updatedRecipe.servings || 2,
         ingredients
       };
 
@@ -2639,13 +2644,14 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                   {/* Ingredients List */}
                   <div className="bg-white p-4 rounded-2xl border border-stone-200/80 shadow-3xs flex-1 flex flex-col min-h-[250px]">
                     <div className="flex justify-between items-center pb-2 border-b border-stone-150 mb-2 shrink-0">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Ingredients (For 2 Adults)</span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Ingredients (serves {reviewRecipe.servings || 2})</span>
                       <span className="text-[10px] text-stone-400 font-bold">({reviewRecipe.ingredients.length} items)</span>
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-1.5 max-h-[300px] lg:max-h-[360px] pr-1.5 scrollbar-thin">
                       {reviewRecipe.ingredients.map((ing, idx) => (
-                        <div key={ing.id || idx} className="flex gap-1 py-1 px-1.5 items-center bg-stone-50/50 hover:bg-stone-50 rounded-xl border border-stone-200/60 transition-colors">
+                        <React.Fragment key={ing.id || idx}>
+                        <div className="flex gap-1 py-1 px-1.5 items-center bg-stone-50/50 hover:bg-stone-50 rounded-xl border border-stone-200/60 transition-colors">
                           <input
                             type="number"
                             step="any"
@@ -2706,6 +2712,10 @@ function AddRecipeModal({ store, onClose, onNavigateTab }: { store: any; onClose
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
+                        {ing.note && (
+                          <p className="text-[11px] text-stone-500 pl-2 -mt-0.5 mb-0.5">{ing.note}</p>
+                        )}
+                        </React.Fragment>
                       ))}
                     </div>
 

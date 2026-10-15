@@ -116,6 +116,12 @@ export function canonicalUnit(raw: string | undefined | null): string {
   // "pots (150ml)" style suffixes
   u = u.replace(/\s*\(.*\)$/, '').trim();
   if (u in ALIASES) return ALIASES[u];
+  // Size words recipes put in front of a unit: "small bunch", "heaped tbsp", "large handful"
+  const sized = u.replace(/^(small|large|big|medium|heaped|level|rounded|generous|good|scant|a|an)\s+/, '').trim();
+  if (sized !== u) return canonicalUnit(sized);
+  // Trailing "of": "bunch of", "handful of"
+  const withoutOf = u.replace(/\s+of$/, '').trim();
+  if (withoutOf !== u) return canonicalUnit(withoutOf);
   return u;
 }
 

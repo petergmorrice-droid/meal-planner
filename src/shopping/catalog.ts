@@ -430,64 +430,84 @@ function findSpan(words: string[], keyWords: string[]): number {
 
 const SMALL_MEASURES = new Set(['pinch', 'dash', 'tsp', 'tbsp', 'grind']);
 
+export type MatchKind = 'exact' | 'linked' | 'partial';
+
 /**
- * Find the product an ingredient refers to.
- *  1. Exact name/alias match ("chicken breasts" = "Chicken Breasts").
- *  2. The longest product name contained in the ingredient, preferring one at
- *     the end ("2 skinless chicken breast fillets" -> Chicken Breasts), unless a
- *     word around it makes it a different product ("garlic powder", "ground ginger").
- *  3. The product the ingredient was linked to when the recipe was saved.
+ * Find the product an ingredient refers to, most reliable first:
+ *  1. exact  - the name (or an alternative name) is a product: "chicken breasts" = Chicken Breasts.
+ *  2. linked - the product the ingredient was linked to when the recipe was saved
+ *              (by Gemini's suggestion or by you in Map Ingredient), if it still exists.
+ *  3. partial - the longest product name contained in the ingredient, preferring one at
+ *              the end ("lean beef mince" -> Beef Mince), unless a word around it makes it a
+ *              different product ("garlic powder", "ground ginger", "tomato soup").
  */
+export function matchProductDetailed(
+  catalog: Catalog,
+  name: string,
+  opts: { groceryId?: string; unit?: string; amount?: number } = {}
+): { product: Product; how: MatchKind } | null {
+  const key = matchKey(name);
+  if (key) {
+    const exact = catalog.byKey.get(key);
+    if (exact) return { product: disambiguate(catalog, resolve(catalog, exact)!, key, key, opts), how: 'exact' };
+  }
+  if (opts.groceryId) {
+    const linked = resolve(catalog, catalog.byId.get(opts.groceryId));
+    if (linked) return { product: linked, how: 'linked' };
+  }
+  if (!key) return null;
+
+  const words = key.split(' ');
+  let best: { score: [number, number, number]; product: Product; key: string } | null = null;
+  for (const entry of catalog.entries) {
+    if (entry.words.length > words.length) continue;
+    const start = findSpan(words, entry.words);
+    if (start < 0) continue;
+    const end = start + entry.words.length;
+    const after = words.slice(end);
+    // "garlic powder" isn't garlic, but "penne pasta" is penne and "basmati rice" is rice.
+    const ownWords = new Set([...entry.product.name.toLowerCase().split(/\s+/).map((w) => w.replace(/s$/, '')), ...entry.product.category.toLowerCase().split(/\W+/).map((w) => w.replace(/s$/, ''))]);
+    if (after.some((w) => IDENTITY_AFTER.has(w) && !ownWords.has(w))) continue;
+    if (start > 0 && IDENTITY_BEFORE.has(words[start - 1])) continue;
+    // A broad word ("oil", "pasta", "steak") only counts if everything before it is just description.
+    const generic = entry.words.length === 1 && GENERIC_HEADS.has(entry.words[0]);
+    if (generic && words.slice(0, start).some((w) => !DESCRIPTORS.has(w))) continue;
+    const score: [number, number, number] = [end === words.length && !generic ? 1 : 0, entry.words.length, entry.key.length];
+    if (!best || score[0] > best.score[0] || (score[0] === best.score[0] && (score[1] > best.score[1] || (score[1] === best.score[1] && score[2] > best.score[2])))) {
+      best = { score, product: entry.product, key: entry.key };
+    }
+  }
+  if (!best) return null;
+  const product = resolve(catalog, best.product);
+  return product ? { product: disambiguate(catalog, product, best.key, key, opts), how: 'partial' } : null;
+}
+
+/** "Pepper": a counted pepper is a bell pepper; a pinch or teaspoon is black pepper. */
+function disambiguate(catalog: Catalog, found: Product, foundKey: string, key: string, opts: { unit?: string; amount?: number }): Product {
+  if (foundKey !== 'pepper') return found;
+  const u = canonicalUnit(opts.unit);
+  const words = key.split(' ');
+  const toTaste = words.includes('taste') || words.includes('season') || words.includes('seasoning');
+  const counted = u === 'each' && !SMALL_MEASURES.has(u) && typeof opts.amount === 'number' && opts.amount >= 1 && !toTaste;
+  const bell = resolve(catalog, catalog.byId.get('gdb-8'));
+  return counted && bell ? bell : found;
+}
+
+/** The product an ingredient refers to (see matchProductDetailed), or null. */
 export function matchProduct(
   catalog: Catalog,
   name: string,
   opts: { groceryId?: string; unit?: string; amount?: number } = {}
 ): Product | null {
-  const key = matchKey(name);
-  let found: Product | null = null;
-  let foundKey = '';
-  if (key) {
-    const exact = catalog.byKey.get(key);
-    if (exact) {
-      found = exact;
-      foundKey = key;
-    } else {
-      const words = key.split(' ');
-      let best: { score: [number, number, number]; product: Product; key: string } | null = null;
-      for (const entry of catalog.entries) {
-        if (entry.words.length > words.length) continue;
-        const start = findSpan(words, entry.words);
-        if (start < 0) continue;
-        const end = start + entry.words.length;
-        const after = words.slice(end);
-        // "garlic powder" isn't garlic, but "penne pasta" is penne and "basmati rice" is rice.
-        const ownWords = new Set([...entry.product.name.toLowerCase().split(/\s+/).map((w) => w.replace(/s$/, '')), ...entry.product.category.toLowerCase().split(/\W+/).map((w) => w.replace(/s$/, ''))]);
-        if (after.some((w) => IDENTITY_AFTER.has(w) && !ownWords.has(w))) continue;
-        if (start > 0 && IDENTITY_BEFORE.has(words[start - 1])) continue;
-        // A broad word ("oil", "pasta", "steak") only counts if everything before it is just description.
-        const generic = entry.words.length === 1 && GENERIC_HEADS.has(entry.words[0]);
-        if (generic && words.slice(0, start).some((w) => !DESCRIPTORS.has(w))) continue;
-        const score: [number, number, number] = [end === words.length && !generic ? 1 : 0, entry.words.length, entry.key.length];
-        if (!best || score[0] > best.score[0] || (score[0] === best.score[0] && (score[1] > best.score[1] || (score[1] === best.score[1] && score[2] > best.score[2])))) {
-          best = { score, product: entry.product, key: entry.key };
-        }
-      }
-      if (best) { found = best.product; foundKey = best.key; }
-    }
-  }
-  if (!found && opts.groceryId) found = catalog.byId.get(opts.groceryId) ?? null;
-  found = resolve(catalog, found);
+  return matchProductDetailed(catalog, name, opts)?.product ?? null;
+}
 
-  // "Pepper": a counted pepper is a bell pepper; a pinch/teaspoon is black pepper.
-  if (found && foundKey === 'pepper') {
-    const u = canonicalUnit(opts.unit);
-    const words = key.split(' ');
-    const toTaste = words.includes('taste') || words.includes('season') || words.includes('seasoning');
-    const counted = u === 'each' && !SMALL_MEASURES.has(u) && typeof opts.amount === 'number' && opts.amount >= 1 && !toTaste;
-    const bell = resolve(catalog, catalog.byId.get('gdb-8'));
-    if (counted && bell) found = bell;
-  }
-  return found;
+/** A product by its exact name on the grocery list (used to check Gemini's suggestions are real). */
+export function productByName(catalog: Catalog, name: string): Product | null {
+  const wanted = String(name ?? '').trim().toLowerCase();
+  if (!wanted) return null;
+  const p = catalog.products.find((x) => x.name.trim().toLowerCase() === wanted) ?? catalog.byKey.get(matchKey(name)) ?? null;
+  return resolve(catalog, p);
 }
 
 /** Products the store should add to the user's grocery list (new in this catalogue version). */

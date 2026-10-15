@@ -8,7 +8,7 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 
 | Tab | What it does |
 | --- | --- |
-| **Cookbook** | Your recipe book. Paste a recipe (or describe one) and Gemini turns it into a structured recipe with ingredients, method, cost and health breakdowns. |
+| **Cookbook** | Your recipe book. Paste a recipe and Gemini copies it in exactly as written (or describe one and Gemini writes it). Each ingredient is linked to a product on your grocery list. |
 | **Planning** | Pick meals for each day of the week, up to 4 weeks ahead. Finalise a week to build its shopping list. |
 | **Shop** | Shopping list grouped by aisle, generated from the week's meals plus staples and extras. |
 | **Cook** | This week's cooking schedule with step-by-step cook mode (oven/hob or Ninja). |
@@ -74,16 +74,37 @@ When a week is finalised the app:
    are marked **check cupboard**, so you can skip them if you have some.
 
 Recipes keep their own wording for cooking; only the shopping list uses the
-standard names. Ingredients the app doesn't know yet are still listed (added
-up only where the units match) and the "Map Ingredient" step lets you link
-them to a product, or add a new one, when you import a recipe.
+standard names.
 
-When Gemini reads a recipe it is given the grocery-list names and the
-standard units, so most ingredients arrive already standardised. If Gemini
-can't be reached, the app now says so and saves nothing, rather than guessing.
+## How a recipe is imported
+
+Pasting a recipe takes two small Gemini requests, and the app does the rest:
+
+1. **Gemini copies the recipe.** Every ingredient line is copied as written
+   (name, amount, unit, and a note such as "finely chopped"), the method word
+   for word, and the servings as stated. Nothing is scaled, converted or
+   renamed. Gemini also says whether the recipe is vegetarian, vegan,
+   gluten-free and dairy-free.
+2. **The app links ingredients it recognises** to grocery-list products
+   ("garlic cloves" → *Garlic*, "chicken breasts" → *Chicken Breasts*).
+3. **Gemini is asked only about the rest**, with the grocery list in front of
+   it ("polpa" → *Chopped Tomatoes*, "San Marzano tomatoes" →
+   *Plum Tomatoes*). It can only pick a name from the list, or nothing.
+4. **Anything still unknown** goes to the "Map Ingredient" step, where you link
+   it to a product, add a new one, or keep it as it is.
+
+If step 3 fails (e.g. the free daily limit), the recipe still imports; a few
+more ingredients just come up in "Map Ingredient". If step 1 fails, the app
+says so and saves nothing, rather than guessing.
+
+A recipe that serves 4 is saved as serving 4. When you plan it for 2, the
+shopping list and the amounts in cook mode are worked out for 2 by the app.
+"Gluten-Free" and "Dairy-Free" labels only appear when both Gemini and the
+ingredient list agree, because a wrong free-from label is worse than none.
 
 The code is in `src/shopping/` (`units.ts`, `names.ts`, `catalog.ts`,
-`quantities.ts`) and is covered by `tests/shopping.test.mjs`.
+`quantities.ts`, `linking.ts`) and is covered by `tests/shopping.test.mjs`
+and `tests/recipeImport.test.mjs`.
 
 ## How syncing between phones works
 
@@ -143,7 +164,7 @@ npm run dev       # local dev server with live reload
 npm run build     # production build into dist/
 npm run build:single  # the whole app as ONE file: dist-single/index.html
 npm run preview   # serve the production build locally
-npm test          # tests for syncing and shopping quantities
+npm test          # tests for syncing, shopping quantities and recipe import
 ```
 
 Main files:
@@ -153,7 +174,7 @@ Main files:
 - `src/services/gistStorage.ts` — GitHub Gist read/write (incl. splitting large data)
 - `src/shopping/` — standard units, product matching and shopping quantities
 - `src/utils/initialGroceryDb.ts` — the built-in grocery list (pack sizes are in `src/shopping/catalog.ts`)
-- `src/services/geminiService.ts` — Gemini calls
+- `src/services/geminiService.ts` — Gemini calls (copying a recipe, suggesting products)
 - `src/components/*Tab.tsx` — one file per tab
 - `src/types.ts` — data shapes (Recipe, MealPlan, ShoppingListItem, …)
 
@@ -176,3 +197,10 @@ Main files:
   amounts flagged instead of added, Gemini given standard names/units, and a
   clear message instead of a silent bad guess when Gemini fails. Sync now
   merges settings one by one and never lets a new phone's defaults win.
+- `Gemini copies recipes; the app does the maths` — importing a recipe no
+  longer lets Gemini rewrite it: names, amounts, units, notes, method and
+  servings are kept exactly as written, at temperature 0. Matching to the
+  grocery list is a separate small request about only the ingredients the app
+  can't link itself. Notes ("finely chopped") are kept and shown, units like
+  "small bunch" or "heaped tbsp" are understood, and free-from labels are no
+  longer put on pasta or cheese dishes.
