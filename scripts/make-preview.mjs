@@ -56,7 +56,7 @@ ${css}
 </style>
 <div id="root"></div>
 <div id="preview-note" role="note" hidden>
-  <div><strong>Preview with sample recipes.</strong> Plan, shop, cook and use the freezer as normal. Syncing between phones and adding recipes with Gemini don't work here, and changes stay in this browser only. To build next week's shopping list, tap <strong>Send to Shopping List</strong> on Planning.</div>
+  <div><strong>Preview with sample recipes.</strong> Planning shows the new week layout: <strong>hold a recipe and drag it onto a day</strong>, or hold a planned meal and drag it to another day for leftovers. To compare with the old layout, tap the eye button on Planning and choose Classic. Syncing and Gemini don't work here, and changes stay in this browser only.</div>
   <div class="row">
     <button type="button" class="secondary" id="preview-reset">Start again with the sample</button>
     <button type="button" id="preview-ok">Got it</button>
@@ -69,6 +69,8 @@ ${sample}
   var store = null;
   try { store = window.localStorage; store.getItem(KEY); } catch (e) { store = null; }
   try { if (store && !store.getItem(KEY)) store.setItem(KEY, JSON.stringify(makeSampleState())); } catch (e) {}
+  // The preview opens Planning in the new week layout (your phones keep their own choice).
+  try { if (store && !store.getItem('planner_layout')) store.setItem('planner_layout', 'week'); } catch (e) {}
   // No offline saving in the preview: there is no service worker file here.
   try { if (window.ServiceWorkerContainer) ServiceWorkerContainer.prototype.register = function () { return new Promise(function () {}); }; } catch (e) {}
   var note = document.getElementById('preview-note');
@@ -82,9 +84,10 @@ ${sample}
   document.getElementById('preview-reset').addEventListener('click', function () {
     try {
       if (store) {
-        ['mealPlannerAppStateCache', 'mealPlannerMealPlans', 'mealPlannerState', 'mealPlannerCustomFavouritesObj', 'shop_drop_completed_to_bottom']
+        ['mealPlannerAppStateCache', 'mealPlannerMealPlans', 'mealPlannerState', 'mealPlannerCustomFavouritesObj', 'shop_drop_completed_to_bottom', 'planner_layout']
           .forEach(function (k) { store.removeItem(k); });
         store.setItem(KEY, JSON.stringify(makeSampleState()));
+        store.setItem('planner_layout', 'week');
       }
     } catch (e) {}
     location.reload();
