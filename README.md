@@ -54,6 +54,15 @@ The first time you open it from the home screen, enter the GitHub and Gemini
 details again (*Settings → connections*, choose **Pull**) and everything
 comes down from the Gist.
 
+## Previewing inside Claude
+
+`npm run build:preview` makes `dist-preview/preview.html`: the app with
+sample recipes and weeks, as a page that can be opened inside Claude to try
+out changes before uploading them. Syncing and Gemini don't work there
+(those pages can't connect to GitHub or Google) and nothing reaches your
+phones. A note at the top says so, with a button to start again from the
+sample.
+
 ## Opening without signal
 
 After the app has been opened once with signal, it opens without any: in

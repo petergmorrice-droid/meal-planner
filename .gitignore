@@ -8,3 +8,4 @@ coverage/
 !.env.example
 .test-build/
 dist-single/
+dist-preview/
