@@ -433,10 +433,10 @@ export function useStore() {
       const dDate = new Date(targetMonday);
       dDate.setDate(targetMonday.getDate() + i);
       const sourceDay = source.days[d];
-      const clonedMeals: PlannedMeal[] = (sourceDay?.meals || []).map(m => ({
-        ...m,
-        id: crypto.randomUUID()
-      }));
+      const clonedMeals: PlannedMeal[] = (sourceDay?.meals || []).map(m => {
+        const { cooked, ...rest } = m; // a copied meal hasn't been cooked yet
+        return { ...rest, id: crypto.randomUUID() };
+      });
       targetDays[d] = {
         date: formatDateISO(dDate),
         meals: clonedMeals

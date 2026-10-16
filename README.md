@@ -9,8 +9,8 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 | Tab | What it does |
 | --- | --- |
 | **Cookbook** | Your recipe book. Paste a recipe and Gemini copies it in exactly as written (or describe one and Gemini writes it). Each ingredient is linked to a product on your grocery list. Text can be selected and copied. |
-| **Planning** | Pick meals for each day of the week, up to 4 weeks ahead. Finalise a week to build its shopping list. |
-| **Shop** | Shopping list grouped by aisle, generated from the week's meals plus staples and extras. |
+| **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → my household*); sides and people can be changed on the meal afterwards. *Copy a week* fills a week with another week's meals. Finalise a week to build its shopping list. |
+| **Shop** | Shopping list generated from the week's meals plus staples and extras. A *cupboard check* takes off the oils, spices, rice and stock you already have. Shopping mode shows one line per item, aisle by aisle in the order you walk your shop (*Arrange aisles…* in the view options; shared by both phones). |
 | **Cook** | This week's cooking schedule with step-by-step cook mode (oven/hob or Ninja). |
 | **Freezer** | Batch-cooked meals in the freezer, which can be dropped into a week's plan. |
 | **Settings** | Past weeks, grocery database, household, connections (GitHub sync + Gemini key), and backup. |
@@ -246,3 +246,12 @@ Main files:
   the smallest text is bigger. The made-up cost and health figures, the
   sample-data button and the developer tools in Settings are gone. "Next
   week" labels no longer slip a day in the week the clocks change.
+- `Quicker planning and shopping` — adding a meal is one tap (no sides and
+  people pop-ups; it uses your household's usual number of people), and
+  *Copy a week* on Planning fills a week from another (copied meals aren't
+  marked cooked). Shop has a cupboard check (*Have it* takes an item off the
+  list, *Need it* keeps it; shared between phones, undoable), compact
+  one-line rows in shopping mode (about half the scrolling), and aisles in
+  your own order. Meal ingredients start expanded. Fixed: in shopping mode's
+  aisle view, ticking an item that appeared twice (e.g. staple milk plus
+  extra milk) only ticked one of them.

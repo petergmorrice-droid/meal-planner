@@ -132,6 +132,8 @@ export interface ShoppingListItem {
   /** Part of the amount couldn't be worked out from the recipe; see quantityNote. */
   needsCheck?: boolean;
   quantityNote?: string;
+  /** Answer from the cupboard check: 'have' = already in the cupboard, not buying; 'need' = buy it. */
+  cupboard?: 'have' | 'need';
 }
 
 export interface RecurringItem {
@@ -174,6 +176,8 @@ export interface UserPreferences {
   targetHealthScore?: number;
   /** Which version of the built-in product list has been added to the grocery list. */
   catalogVersion?: number;
+  /** Aisle ids in the order you walk your supermarket (missing ones follow in the usual order). */
+  aisleOrder?: string[];
 }
 
 export interface GroceryItem {

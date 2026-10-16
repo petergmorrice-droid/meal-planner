@@ -284,6 +284,26 @@ export const GROCERY_AISLES: Record<FoodAisle, AisleInfo> = {
   },
 };
 
+/** The aisles in your own walking order: aisles you've arranged first, any others after in the usual order. */
+export function orderedAisles(order?: readonly string[] | null): FoodAisle[] {
+  const usual = (Object.keys(GROCERY_AISLES) as FoodAisle[]).sort((a, b) => GROCERY_AISLES[a].order - GROCERY_AISLES[b].order);
+  const out: FoodAisle[] = [];
+  for (const id of Array.isArray(order) ? order : []) {
+    if (typeof id === 'string' && Object.prototype.hasOwnProperty.call(GROCERY_AISLES, id) && !out.includes(id as FoodAisle)) {
+      out.push(id as FoodAisle);
+    }
+  }
+  for (const id of usual) if (!out.includes(id)) out.push(id);
+  return out;
+}
+
+/** Position of each aisle (1 = first) in your walking order. */
+export function aislePositions(order?: readonly string[] | null): Record<FoodAisle, number> {
+  const positions = {} as Record<FoodAisle, number>;
+  orderedAisles(order).forEach((id, i) => { positions[id] = i + 1; });
+  return positions;
+}
+
 export function getGroceryAisle(item: { name: string; category?: string }): FoodAisle {
   const cat = (item.category || '').toLowerCase().trim();
   const name = (item.name || '').toLowerCase().trim();

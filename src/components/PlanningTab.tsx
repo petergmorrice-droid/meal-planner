@@ -35,7 +35,8 @@ import {
   Columns2,
   Rows,
   History,
-  Database
+  Database,
+  Copy
 } from 'lucide-react';
 import { Recipe, MealPlan, DayPlan, PlannedMeal, MealType, BatchItem, ShoppingListItem, PlannedMealSide } from '../types';
 import { 
@@ -148,6 +149,16 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
   const nextMondayStr = formatDateISO(nextMondayDateTop);
   // local nextMondayDate removed
   const maxWeeks = store.state.preferences?.maxForwardWeeks || MAX_FORWARD_WEEKS;
+  // New meals are planned for your usual number of people (Settings → my household).
+  const defaultServings = Math.max(1, Math.min(24, Number(store.state.preferences?.defaultServings) || 2));
+  const lastMondayDate = new Date(currentMondayStr + 'T00:00:00');
+  lastMondayDate.setDate(lastMondayDate.getDate() - 7);
+  const lastMondayStr = formatDateISO(lastMondayDate);
+  const weekLabel = (startDate: string) =>
+    startDate === currentMondayStr ? 'This Week'
+      : startDate === nextMondayStr ? 'Next Week'
+      : startDate === lastMondayStr ? 'Last Week'
+      : formatWeekRange(startDate);
 
   // Filter strictly to current and future weeks within forward limit (strictly NO past weeks)
   const allowedPlans: MealPlan[] = useMemo(() => {
@@ -214,6 +225,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
   } | null>(null);
   const [addingNoteToMeal, setAddingNoteToMeal] = useState<{ dayName: string; meal: PlannedMeal } | null>(null);
   const [sidesEditingMeal, setSidesEditingMeal] = useState<{ dayName: string; meal: PlannedMeal } | null>(null);
+  // Copy-a-week picker: 'pick' lists weeks; a plan means "confirm replacing this week's meals with it".
+  const [copyWeekState, setCopyWeekState] = useState<'pick' | MealPlan | null>(null);
   const [draggedRecipe, setDraggedRecipe] = useState<Recipe | null>(null);
   const [recipeSearch, setRecipeSearch] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -435,7 +448,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
     } else if (mealToRemove) {
       description = `Removed ${mealToRemove.name} from ${dayName}`;
     } else if (newMeal) {
-      description = `Added ${newMeal.name} to ${dayName}`;
+      const people = newMeal.servings ? ` for ${newMeal.servings}` : '';
+      description = `Added ${newMeal.name.replace(/^(leftovers?|batch):\s*/i, '')} to ${dayName}${people}`;
     }
 
     // CASE 1: Finalized Plan -> Single combined modal handles confirmation, leftover removal, and shopping list sync
@@ -473,9 +487,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
     if (description) {
       setToastMessage(description);
     }
-    if (newMeal && newMeal.type !== 'no_meal') {
-      setSidesEditingMeal({ dayName, meal: newMeal });
-    }
   };
 
   const handleConfirmLeftover = (isLeftover: boolean) => {
@@ -488,7 +499,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       type: isLeftover ? 'leftover' : 'recipe',
       recipeId: recipe.id,
       name: isLeftover ? `Leftovers: ${recipe.name}` : recipe.name,
-      servings: 2, // Default to 2 people
+      servings: defaultServings,
       note: isLeftover ? (sourceDay ? `Reheat from ${sourceDay}` : 'Reheat leftovers') : undefined
     };
 
@@ -514,7 +525,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       type: 'recipe',
       recipeId: draggedRecipe.id,
       name: draggedRecipe.name,
-      servings: 2 // Default to 2 people
+      servings: defaultServings
     };
 
     const dayPlan = currentPlan.days[dayName];
@@ -538,7 +549,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       type: 'recipe',
       recipeId: recipe.id,
       name: recipe.name,
-      servings: 2
+      servings: defaultServings
     };
 
     const dayPlan = currentPlan.days[dayName];
@@ -571,7 +582,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       type,
       batchId,
       name,
-      servings: type === 'no_meal' ? 0 : (servings || 2),
+      servings: type === 'no_meal' ? 0 : (servings || defaultServings),
       note: note?.trim() || ''
     };
 
@@ -626,7 +637,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       type: 'recipe',
       recipeId: recipe.id,
       name: recipe.name,
-      servings: 2 // Default to 2 people
+      servings: defaultServings
     };
 
     const dayPlan = currentPlan.days[dayName];
@@ -840,10 +851,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
     setPendingPlanChange(null);
     setShowUpdateConfirmModal(false);
     setToastMessage(`Plan, shopping list & cook tab updated.${orphanedMsg}`);
-
-    if (newMeal && newMeal.type !== 'no_meal' && dayName) {
-      setSidesEditingMeal({ dayName, meal: newMeal });
-    }
   };
 
   // User chose to discard changes
@@ -921,9 +928,34 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       generateShoppingList(updatedPlan);
     }
 
-    setToastMessage(`Sides saved. Set portions and notes now.`);
+    setToastMessage(updatedSides.length ? 'Sides saved.' : 'Sides removed.');
     setSidesEditingMeal(null);
-    setEditingServingsMeal({ dayName, meal: updatedMeal });
+  };
+
+  // Copy every day's meals from another week into the week on screen.
+  const copyCandidates: MealPlan[] = useMemo(() => {
+    return (store.state.mealPlans || [])
+      .filter((p: MealPlan) => p.id !== currentPlan?.id && Object.values(p.days || {}).some((d: any) => d?.meals?.length))
+      .sort((a: MealPlan, b: MealPlan) => b.startDate.localeCompare(a.startDate))
+      .slice(0, 12);
+  }, [store.state.mealPlans, currentPlan?.id]);
+
+  const handleCopyWeek = (source: MealPlan) => {
+    if (!currentPlan || currentPlan.status === 'finalized') return;
+    let copied = 0;
+    const nextDays: Record<string, DayPlan> = {};
+    DAYS_OF_WEEK.forEach(d => {
+      const target = currentPlan!.days[d] || { date: '', meals: [] };
+      const meals = (source.days?.[d]?.meals || []).map(m => {
+        const { cooked, ...rest } = m;
+        copied++;
+        return { ...rest, id: crypto.randomUUID() };
+      });
+      nextDays[d] = { ...target, meals };
+    });
+    store.updateMealPlan({ ...currentPlan, days: nextDays });
+    setCopyWeekState(null);
+    setToastMessage(`Copied ${copied} meal${copied === 1 ? '' : 's'} from ${weekLabel(source.startDate)}`);
   };
   
     
@@ -1711,6 +1743,19 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
               </div>
 
               <div className="pt-2 mt-1 border-t border-zinc-100 space-y-1">
+                {currentPlan && currentPlan.status !== 'finalized' && copyCandidates.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowWeekDropdown(false);
+                      setCopyWeekState('pick');
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-medium text-zinc-900 hover:bg-zinc-100 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy meals from another week</span>
+                  </button>
+                )}
                 {canPlanFollowingWeek(currentPlan?.startDate, undefined, maxWeeks) ? (
                   <button
                     onClick={() => {
@@ -1770,6 +1815,18 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                 <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${showWeekDropdown ? 'rotate-180' : ''}`} />
               </button>
             </div>
+
+            {currentPlan && currentPlan.status !== 'finalized' && totalPlannedMeals === 0 && copyCandidates.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setCopyWeekState('pick')}
+                className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 transition-colors cursor-pointer whitespace-nowrap"
+                title="Fill this week with the meals from another week"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy a week</span>
+              </button>
+            )}
 
             {canPlanFollowingWeek(currentPlan?.startDate, undefined, maxWeeks) && (
               <button
@@ -2167,7 +2224,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                         dayName: day,
                         type: 'takeout',
                         note: '',
-                        servings: 2
+                        servings: defaultServings
                       });
                     }}
                     className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 font-medium text-xs text-zinc-800 flex flex-col items-center justify-center gap-1.5 transition-colors text-center cursor-pointer shadow-2xs group"
@@ -2187,7 +2244,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                         dayName: day,
                         type: 'eating_out',
                         note: '',
-                        servings: 2
+                        servings: defaultServings
                       });
                     }}
                     className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 font-medium text-xs text-zinc-800 flex flex-col items-center justify-center gap-1.5 transition-colors text-center cursor-pointer shadow-2xs group"
@@ -3033,6 +3090,82 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       )}
 
       {/* MODAL 6: Remove Leftovers Prompt (Draft Plans) */}
+      {copyWeekState && currentPlan && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+          onClick={() => setCopyWeekState(null)}
+        >
+          <div
+            className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] flex flex-col shadow-xl border border-zinc-200 animate-in slide-in-from-bottom-4 duration-150"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-label="Copy a week"
+          >
+            {copyWeekState === 'pick' ? (
+              <>
+                <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-zinc-100">
+                  <div>
+                    <h3 className="text-lg font-semibold text-zinc-900">Copy a week</h3>
+                    <p className="text-sm text-zinc-500 mt-0.5">Fills {weekLabel(currentPlan.startDate)} with the same meals, day by day. You can change any of them afterwards.</p>
+                  </div>
+                  <button type="button" onClick={() => setCopyWeekState(null)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer" aria-label="Close">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto p-3 space-y-2">
+                  {copyCandidates.map((plan: MealPlan) => {
+                    const meals = DAYS_OF_WEEK.flatMap(d => (plan.days?.[d]?.meals || []).map(m => ({ day: d, name: (m.name || '').replace(/^(leftovers?|batch):\s*/i, '') })));
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => totalPlannedMeals > 0 ? setCopyWeekState(plan) : handleCopyWeek(plan)}
+                        className="w-full text-left p-3 rounded-xl border border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-zinc-900">{weekLabel(plan.startDate)}</span>
+                          <span className="text-xs text-zinc-500 tabular-nums shrink-0">{meals.length} meal{meals.length === 1 ? '' : 's'}</span>
+                        </div>
+                        <ul className="mt-1.5 grid gap-0.5">
+                          {meals.map((m, i) => (
+                            <li key={i} className="text-sm text-zinc-600 truncate">
+                              <span className="inline-block w-10 text-zinc-400">{m.day.slice(0, 3)}</span>{m.name}
+                            </li>
+                          ))}
+                        </ul>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-center text-zinc-900 mb-2">Replace this week's meals?</h3>
+                <p className="text-sm text-zinc-500 text-center mb-6 leading-relaxed">
+                  The {totalPlannedMeals} meal{totalPlannedMeals === 1 ? '' : 's'} planned for {weekLabel(currentPlan.startDate)} will be replaced with the meals from {weekLabel(copyWeekState.startDate)}.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCopyWeekState('pick')}
+                    className="flex-1 py-2.5 text-zinc-700 font-medium bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors text-sm cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyWeek(copyWeekState)}
+                    className="flex-1 py-2.5 text-white font-semibold bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors text-sm cursor-pointer"
+                  >
+                    Replace
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {removeLeftoversPrompt && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150">
