@@ -44,6 +44,10 @@ html = html.replace(/<link\b[^>]*\brel="stylesheet"[^>]*\bhref="([^"]+\.css)"[^>
 // Remove module preload hints for files that are now inlined.
 html = html.replace(/<link\b[^>]*\brel="modulepreload"[^>]*>\s*/g, '');
 
+// Manifest and icon links must be relative ("./icon-192.png", not "/icon-192.png"),
+// or they break when the app lives in a sub-folder such as user.github.io/meal-planner/.
+html = html.replace(/(<link\b[^>]*\bhref=")\/(?!\/)/g, '$1./');
+
 if (scripts === 0) {
   console.error('No local <script src> found in', htmlPath);
   process.exit(1);
