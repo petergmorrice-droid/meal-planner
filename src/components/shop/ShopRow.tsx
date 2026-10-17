@@ -8,17 +8,24 @@ import { AggregatedShoppingListItem, shopQuantityText } from '../../shopList';
  */
 export default function ShopRow({
   row,
+  justTicked = false,
   onTick,
   onOpen,
 }: {
   key?: React.Key;
   row: AggregatedShoppingListItem;
+  /** Ticked a moment ago: stays here, crossed out, with Undo, before moving to Bought. */
+  justTicked?: boolean;
   onTick: (row: AggregatedShoppingListItem) => void;
   onOpen: (row: AggregatedShoppingListItem) => void;
 }) {
   const sub = row.note || row.description || row.quantityNote;
   return (
-    <div className={`flex items-stretch min-h-[56px] ${row.checked ? 'bg-zinc-50/60' : 'bg-white'}`} data-item={row.name}>
+    <div
+      className={`flex items-stretch min-h-[56px] ${justTicked ? 'bg-emerald-50/70' : row.checked ? 'bg-zinc-50/60' : 'bg-white'}`}
+      data-item={row.name}
+      data-just-ticked={justTicked || undefined}
+    >
       <button
         type="button"
         onClick={() => onTick(row)}
@@ -65,10 +72,23 @@ export default function ShopRow({
             </span>
           )}
         </span>
-        <span className={`shrink-0 text-sm font-semibold tabular-nums ${row.checked ? 'text-zinc-400' : 'text-zinc-700'}`} data-item-qty>
-          {shopQuantityText(row)}
-        </span>
+        {!justTicked && (
+          <span className={`shrink-0 text-sm font-semibold tabular-nums ${row.checked ? 'text-zinc-400' : 'text-zinc-700'}`} data-item-qty>
+            {shopQuantityText(row)}
+          </span>
+        )}
       </button>
+      {justTicked && (
+        <button
+          type="button"
+          onClick={() => onTick(row)}
+          className="shrink-0 self-center mr-3 px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-sm font-semibold cursor-pointer active:bg-zinc-700"
+          aria-label={`Undo: ${row.name} not bought`}
+          data-undo-tick
+        >
+          Undo
+        </button>
+      )}
     </div>
   );
 }

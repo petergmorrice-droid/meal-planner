@@ -37,7 +37,7 @@ import {
   StickyNote,
 } from 'lucide-react';
 import { ShoppingListItem, Recipe, MealPlan, DayPlan } from '../types';
-import { useGracefulCheckoff } from '../hooks/useGracefulCheckoff';
+import { useJustTicked } from '../hooks/useJustTicked';
 import { aggregateIngredients } from '../utils/aggregation';
 import { matchProduct, groupingKey, canonicalUnit, formatUnit, largeUnitQuantity, formatAmount as formatShopAmount, unitInfo } from '../shopping';
 import ShopAisleGroup from './ShopAisleGroup';
@@ -950,10 +950,14 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   // ---------- One row per product (the same rows and counts as shopping mode) ----------
   const rows = useMemo(() => aggregateShoppingItems(buyingItems), [buyingItems]);
   const byName = (a: AggregatedShoppingListItem, b: AggregatedShoppingListItem) => a.name.localeCompare(b.name);
-  const toBuyRows = useMemo(() => rows.filter(r => !r.checked).sort(byName), [rows]);
-  const boughtRows = useMemo(() => rows.filter(r => r.checked).sort(byName), [rows]);
+  // Just ticked: counts straight away, but stays in its place (crossed out, with Undo) for a few
+  // seconds before moving down to Bought, so a mis-tap is easy to put right.
+  const { justTicked, hold: holdTicked, release: releaseTicked } = useJustTicked();
+  const stillToBuy = useMemo(() => rows.filter(r => !r.checked).sort(byName), [rows]);
+  const toBuyRows = useMemo(() => rows.filter(r => !r.checked || justTicked[r.key]).sort(byName), [rows, justTicked]);
+  const boughtRows = useMemo(() => rows.filter(r => r.checked && !justTicked[r.key]).sort(byName), [rows, justTicked]);
   const totalCount = rows.length;
-  const checkedCount = boughtRows.length;
+  const checkedCount = rows.length - stillToBuy.length;
   const percentDone = totalCount ? Math.round((checkedCount / totalCount) * 100) : 0;
   const aisleOf = (r: { name: string; category?: string }) => getGroceryAisle(r);
 
@@ -968,22 +972,25 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         { id: 'batch', title: 'Extra recipes', test: i => !!i.isBatch },
       ];
       return sources
-        .map(src => ({ id: src.id, title: src.title, rows: aggregateShoppingItems(buyingItems.filter(src.test)).filter(r => !r.checked).sort(byName) }))
+        .map(src => ({ id: src.id, title: src.title, rows: aggregateShoppingItems(buyingItems.filter(src.test)).filter(r => !r.checked || justTicked[r.key]).sort(byName) }))
         .filter(g => g.rows.length > 0);
     }
     return orderedAisles(aisleOrder)
       .map(a => ({ id: a, title: GROCERY_AISLES[a].name, rows: toBuyRows.filter(r => aisleOf(r) === a) }))
       .filter(g => g.rows.length > 0);
-  }, [viewMode, toBuyRows, buyingItems, aisleOrder]);
+  }, [viewMode, toBuyRows, buyingItems, aisleOrder, justTicked]);
 
   const openRow = openRowId ? rows.find(r => r.underlyingIds.includes(openRowId)) || null : null;
 
-  const tickRow = (row: AggregatedShoppingListItem) => handleToggleItem(row.underlyingIds, !row.checked);
+  const tickRow = (row: AggregatedShoppingListItem) => {
+    handleToggleItem(row.underlyingIds, !row.checked);
+    if (!row.checked) holdTicked(row.key); else releaseTicked(row.key);
+  };
 
   /** How much of a product is waiting on this week's list ("4 pints"), for Add items and the add box. */
   const onTheList = (name: string): string | null => {
     const key = productKey({ name });
-    const row = toBuyRows.find(r => r.key === key || r.name.toLowerCase() === name.toLowerCase());
+    const row = stillToBuy.find(r => r.key === key || r.name.toLowerCase() === name.toLowerCase());
     return row ? shopQuantityText(row) : null;
   };
 
@@ -1140,7 +1147,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   const shareList = async () => {
     const title = `Shopping list · ${weekName(activePlan?.startDate)} (${formatWeekSpan(activePlan?.startDate || '')})`;
     const groups = orderedAisles(aisleOrder)
-      .map(a => ({ name: GROCERY_AISLES[a].name, items: toBuyRows.filter(r => aisleOf(r) === a) }))
+      .map(a => ({ name: GROCERY_AISLES[a].name, items: stillToBuy.filter(r => aisleOf(r) === a) }))
       .filter(g => g.items.length);
     const text = listAsText(title, groups);
     const nav: any = typeof navigator !== 'undefined' ? navigator : null;
@@ -1150,7 +1157,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     }
     try {
       await nav.clipboard.writeText(text);
-      setToastMessage(`List copied (${toBuyRows.length} ${toBuyRows.length === 1 ? 'item' : 'items'}): paste it anywhere`);
+      setToastMessage(`List copied (${stillToBuy.length} ${stillToBuy.length === 1 ? 'item' : 'items'}): paste it anywhere`);
     } catch {
       setToastMessage("Couldn't copy the list on this device");
     }
@@ -1170,7 +1177,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   };
 
   const finishShopping = (choice: DoneChoice) => {
-    const notBought = toBuyRows;
+    const notBought = stillToBuy;
     const ids = notBought.flatMap(r => r.underlyingIds);
     const took = shopTook();
     let extra = '';
@@ -1227,7 +1234,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         <DoneShoppingSheet
           bought={checkedCount}
           total={totalCount}
-          notBought={toBuyRows}
+          notBought={stillToBuy}
           took={shopTook()}
           nextWeekLabel={followingListPhrase}
           onChoose={finishShopping}
@@ -1281,7 +1288,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
             <button
               type="button"
               onClick={shareList}
-              disabled={toBuyRows.length === 0}
+              disabled={stillToBuy.length === 0}
               className="w-9 h-9 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 flex items-center justify-center cursor-pointer disabled:opacity-40 disabled:cursor-default"
               aria-label="Share the list"
               title="Share or copy the list"
@@ -1474,7 +1481,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
             </div>
           ) : (
             <>
-              {toBuyRows.length === 0 && (
+              {stillToBuy.length === 0 && toBuyRows.length === 0 && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-4 text-center" data-all-bought>
                   <p className="text-base font-semibold text-emerald-950">Everything's bought</p>
                   <p className="text-sm text-emerald-900/80">Add anything else above, or look at another week.</p>
@@ -1494,7 +1501,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                   </div>
                   <div className="divide-y divide-zinc-100">
                     {group.rows.map(row => (
-                      <ShopRow key={row.key} row={row} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
+                      <ShopRow key={row.key} row={row} justTicked={!!justTicked[row.key]} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
                     ))}
                   </div>
                 </section>
@@ -1519,7 +1526,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                   {showBought && (
                     <div className="divide-y divide-zinc-100 border-t border-zinc-100">
                       {boughtRows.map(row => (
-                        <ShopRow key={row.key} row={row} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
+                        <ShopRow key={row.key} row={row} justTicked={!!justTicked[row.key]} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
                       ))}
                     </div>
                   )}
@@ -1801,12 +1808,16 @@ function ShoppingModeView({
   const pendingCount = totalCount - checkedCount;
   const completionPercent = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
 
+  // Just ticked: counts straight away, but stays put (crossed out, with Undo) for a few seconds.
+  const { justTicked, hold, release } = useJustTicked();
+  const isDone = (i: AggregatedShoppingListItem) => i.checked && !justTicked[i.key];
+
   // Filter items
   const filteredItems = useMemo(() => {
-    if (filter === 'to_buy') return aggregatedItems.filter(i => !i.checked);
+    if (filter === 'to_buy') return aggregatedItems.filter(i => !isDone(i));
     if (filter === 'bought') return aggregatedItems.filter(i => i.checked);
     return aggregatedItems;
-  }, [aggregatedItems, filter]);
+  }, [aggregatedItems, filter, justTicked]);
 
   // Sections sorting & grouping helpers
   const plannedModeItems = useMemo(() => {
@@ -1853,8 +1864,8 @@ function ShoppingModeView({
     const sorted = [...itemList].sort((a, b) => a.name.localeCompare(b.name));
     if (dropCompletedToBottom) {
       return [
-        ...sorted.filter(i => !i.checked),
-        ...sorted.filter(i => i.checked)
+        ...sorted.filter(i => !isDone(i)),
+        ...sorted.filter(i => isDone(i))
       ];
     }
     return sorted;
@@ -1865,6 +1876,7 @@ function ShoppingModeView({
     if (!aggItem) return;
     const targetState = !aggItem.checked;
     parentOnToggle(aggItem.underlyingIds, targetState);
+    if (targetState) hold(aggItem.key); else release(aggItem.key);
   };
 
   return (
@@ -2178,6 +2190,7 @@ function ShoppingModeView({
                   key={item.id}
                   item={item}
                   onToggle={onToggle}
+                  justTicked={!!justTicked[item.key]}
                   compact={compactRows}
                 />
               )}
@@ -2212,6 +2225,7 @@ function ShoppingModeView({
                           key={item.id}
                           item={item}
                           onToggle={onToggle}
+                          justTicked={!!justTicked[item.key]}
                           compact={compactRows}
                         />
                       ))}
@@ -2264,6 +2278,7 @@ function ShoppingModeView({
                           key={item.id}
                           item={item}
                           onToggle={onToggle}
+                          justTicked={!!justTicked[item.key]}
                           compact={compactRows}
                         />
                       ))}
@@ -2300,6 +2315,7 @@ function ShoppingModeView({
                           key={item.id}
                           item={item}
                           onToggle={onToggle}
+                          justTicked={!!justTicked[item.key]}
                           compact={compactRows}
                         />
                       ))}
@@ -2336,6 +2352,7 @@ function ShoppingModeView({
                           key={item.id}
                           item={item}
                           onToggle={onToggle}
+                          justTicked={!!justTicked[item.key]}
                           compact={compactRows}
                         />
                       ))}
@@ -2363,6 +2380,7 @@ function ShoppingModeView({
                       key={item.id}
                       item={item}
                       onToggle={onToggle}
+                      justTicked={!!justTicked[item.key]}
                       compact={compactRows}
                     />
                   ))}
@@ -2370,17 +2388,18 @@ function ShoppingModeView({
               </div>
             ) : (
               <>
-                {filteredItems.filter(i => !i.checked).length > 0 && (
+                {filteredItems.filter(i => !isDone(i)).length > 0 && (
                   <div className="space-y-2">
                     <span className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
                       To Buy ({filteredItems.filter(i => !i.checked).length})
                     </span>
                     <div className={rowsClass}>
-                      {arrangeListItems(filteredItems.filter(i => !i.checked)).map(item => (
+                      {arrangeListItems(filteredItems.filter(i => !isDone(i))).map(item => (
                         <ShoppingModeItemRow
                           key={item.id}
                           item={item}
                           onToggle={onToggle}
+                          justTicked={!!justTicked[item.key]}
                           compact={compactRows}
                         />
                       ))}
@@ -2388,17 +2407,18 @@ function ShoppingModeView({
                   </div>
                 )}
 
-                {filteredItems.filter(i => i.checked).length > 0 && (
+                {filteredItems.filter(i => isDone(i)).length > 0 && (
                   <div className="space-y-2 pt-2">
                     <span className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
-                      Checked Off ({filteredItems.filter(i => i.checked).length})
+                      Checked Off ({filteredItems.filter(i => isDone(i)).length})
                     </span>
                     <div className={rowsClass}>
-                      {arrangeListItems(filteredItems.filter(i => i.checked)).map(item => (
+                      {arrangeListItems(filteredItems.filter(i => isDone(i))).map(item => (
                         <ShoppingModeItemRow
                           key={item.id}
                           item={item}
                           onToggle={onToggle}
+                          justTicked={!!justTicked[item.key]}
                           compact={compactRows}
                         />
                       ))}
@@ -2438,12 +2458,30 @@ interface ShoppingModeItemRowProps {
   key?: React.Key;
   item: AggregatedShoppingListItem;
   onToggle: (id: string) => void;
+  /** Ticked a moment ago: still in place, crossed out, with Undo. */
+  justTicked?: boolean;
   compact?: boolean;
+}
+
+/** The Undo pill on a row that was just ticked. */
+function UndoTick({ name, onUndo }: { name: string; onUndo: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onUndo(); }}
+      className="shrink-0 px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-sm font-semibold cursor-pointer active:bg-zinc-700"
+      aria-label={`Undo: ${name} not bought`}
+      data-undo-tick
+    >
+      Undo
+    </button>
+  );
 }
 
 function ShoppingModeItemRow({
   item,
   onToggle,
+  justTicked = false,
   compact = false
 }: ShoppingModeItemRowProps) {
   if (compact) {
@@ -2451,8 +2489,9 @@ function ShoppingModeItemRow({
     return (
       <div
         onClick={() => onToggle(item.id)}
-        className={`flex items-center gap-3 px-1.5 min-h-[48px] py-1.5 cursor-pointer select-none transition-colors ${item.checked ? 'opacity-50' : 'active:bg-zinc-50'}`}
+        className={`flex items-center gap-3 px-1.5 min-h-[48px] py-1.5 cursor-pointer select-none transition-colors ${justTicked ? 'bg-emerald-50/70' : item.checked ? 'opacity-50' : 'active:bg-zinc-50'}`}
         data-row="compact"
+        data-just-ticked={justTicked || undefined}
       >
         <button
           type="button"
@@ -2487,9 +2526,13 @@ function ShoppingModeItemRow({
             </span>
           )}
         </div>
-        <span className={`shrink-0 text-base font-bold tabular-nums ${item.checked ? 'text-zinc-400' : 'text-emerald-700'}`}>
-          {shopQuantityText(item)}
-        </span>
+        {justTicked ? (
+          <UndoTick name={item.name} onUndo={() => onToggle(item.id)} />
+        ) : (
+          <span className={`shrink-0 text-base font-bold tabular-nums ${item.checked ? 'text-zinc-400' : 'text-emerald-700'}`}>
+            {shopQuantityText(item)}
+          </span>
+        )}
       </div>
     );
   }
@@ -2498,10 +2541,14 @@ function ShoppingModeItemRow({
     <div
       onClick={() => onToggle(item.id)}
       className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] select-none ${
-        item.checked
+        justTicked
+          ? 'bg-emerald-50/70 border-emerald-200'
+          : item.checked
           ? 'bg-zinc-100/60 border-zinc-200/70 opacity-55'
           : 'bg-white border-zinc-200/90 shadow-2xs hover:border-zinc-300'
       }`}
+      data-row="detailed"
+      data-just-ticked={justTicked || undefined}
     >
       {/* Left: Item name & Quantity with for meal in small print */}
       <div className="flex-1 min-w-0 pr-2">
@@ -2546,6 +2593,7 @@ function ShoppingModeItemRow({
         )}
       </div>
 
+      {justTicked && <UndoTick name={item.name} onUndo={() => onToggle(item.id)} />}
       {/* Right: Large Tick Box */}
       <button
         type="button"
