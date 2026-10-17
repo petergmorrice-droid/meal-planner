@@ -1,8 +1,8 @@
 // Helpers behind the Shop screen and the recipe cards. Run with: npm test
 import assert from 'node:assert/strict';
 import {
-  orderedAisles, aislePositions, GROCERY_AISLES,
-  recipeMethods, totalMinutes, formatMinutes, recipeHistories, formatAgo, formatPlannedDay, freezerPortions,
+  orderedAisles, aislePositions, GROCERY_AISLES, generateShoppingListForPlan,
+  recipeMethods, totalMinutes, formatMinutes, recipeHistories, formatAgo, formatPlannedDay, freezerPortions, freezerBatchesFor,
   sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe,
   recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
@@ -119,6 +119,17 @@ test('freezer: portions linked to the recipe, or batches with exactly its name',
   ];
   assert.equal(freezerPortions(chilli, batches), 5);
   assert.equal(freezerPortions(chilli, undefined), 0);
+});
+
+test('freezer: the batches to use, oldest first, empty ones left out', () => {
+  const chilli = R('r-chilli', 'Chilli con carne');
+  const batches = [
+    { id: 'new', recipeId: 'r-chilli', name: 'Chilli', portions: 2, dateAdded: '2026-10-10' },
+    { id: 'empty', recipeId: 'r-chilli', name: 'Chilli', portions: 0, dateAdded: '2026-09-01' },
+    { id: 'old', name: 'Chilli con carne', portions: 1, dateAdded: '2026-09-20' },
+  ];
+  assert.deepEqual(freezerBatchesFor(chilli, batches).map((b) => b.id), ['old', 'new']);
+  assert.deepEqual(freezerBatchesFor(R('x', 'Lentil soup'), batches), []);
 });
 
 test('sorting: A-Z, newest, and "not had lately" (never had first, planned last)', () => {
@@ -239,6 +250,20 @@ test('a leftover day left before its cook becomes a fresh cook (and says so)', (
   assert.equal(wed.type, 'recipe');
   assert.equal(wed.name, 'bol');
   assert.equal(wed.note, '');
+});
+
+test('leftovers come from a day cooked from scratch, not a day out of the freezer', () => {
+  const frozen = { id: 'f', type: 'batch', batchId: 'b1', recipeId: 'bol', name: 'Batch: bol', servings: 2 };
+  const days = week({ Monday: frozen, Tuesday: lefto('b', 'bol') });
+  assert.equal(leftoverSourceDay(days, 'Tuesday', days.Tuesday.meals[0]), null);
+  assert.deepEqual(relinkLeftovers(days).freshDays, ['Tuesday']);
+});
+
+test('a meal from the freezer adds nothing to the shopping list', () => {
+  const recipes = [R('chilli', 'Chilli', { ingredients: [{ name: 'Beef mince', amount: 500, unit: 'g' }] })];
+  const plan = (meal) => ({ id: 'p', startDate: '2026-10-19', status: 'draft', days: week({ Monday: meal }) });
+  assert.equal(generateShoppingListForPlan(plan(cook('a', 'chilli')), recipes).length, 1);
+  assert.equal(generateShoppingListForPlan(plan({ id: 'f', type: 'batch', batchId: 'b1', recipeId: 'chilli', name: 'Batch: Chilli', servings: 2 }), recipes).length, 0);
 });
 
 test('your own notes on leftovers are kept', () => {

@@ -62,7 +62,7 @@ import { DayListRow, WeekDayCard, WeekGlance, DaySheet, isLeftoverMeal } from '.
 import { changedDaysSinceList, listSnapshot, moveMeal, cooksForText as weekCooksForText, preferredWeekStart, leftoverSourceDay } from '../planning';
 import { sendWeekToShoppingList } from '../planShopping';
 import { RecipeCard, CARD_FIELD_OPTIONS, cardFieldsFromPrefs } from './RecipeCard';
-import { recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, RECIPE_SORTS, todayISO, freezerPortions, recipeMatchesSearch, totalMinutes, recipeMethods, isVegetarianRecipe, isVeganRecipe, readFavouritesFirst, saveFavouritesFirst, matchesQuickFilters, QUICK_FILTERS, QuickFilter } from '../recipeInfo';
+import { recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, RECIPE_SORTS, todayISO, freezerPortions, freezerBatchesFor, recipeMatchesSearch, totalMinutes, recipeMethods, isVegetarianRecipe, isVeganRecipe, readFavouritesFirst, saveFavouritesFirst, matchesQuickFilters, QUICK_FILTERS, QuickFilter } from '../recipeInfo';
 
 interface PlanningTabProps {
   store: any;
@@ -308,7 +308,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   storeRef.current = store;
   // The day whose panel is open (people, sides, notes, change, move, remove).
   const [daySheet, setDaySheet] = useState<string | null>(null);
-  const [leftoverPrompt, setLeftoverPrompt] = useState<{ dayName: string; recipe: Recipe; existingDays: string[] } | null>(null);
+  // "How are you having it?": leftovers from an earlier day, from the freezer, or cooked fresh.
+  const [leftoverPrompt, setLeftoverPrompt] = useState<{ dayName: string; recipe: Recipe; existingDays: string[]; freezer?: { batchId: string; portions: number } } | null>(null);
   const [removeLeftoversPrompt, setRemoveLeftoversPrompt] = useState<{ 
     targetDayName: string; 
     targetMealName: string; 
@@ -471,8 +472,12 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       }
     });
 
-    if (existingDays.length > 0) {
-      setLeftoverPrompt({ dayName, recipe, existingDays });
+    // Portions of it in the freezer (use the oldest batch first)
+    const batches = freezerBatchesFor(recipe, store.state.batches);
+    const portions = batches.reduce((n: number, b: BatchItem) => n + (Number(b.portions) || 0), 0);
+
+    if (existingDays.length > 0 || portions > 0) {
+      setLeftoverPrompt({ dayName, recipe, existingDays, freezer: portions > 0 ? { batchId: batches[0].id, portions } : undefined });
       return true;
     }
     return false;
@@ -522,13 +527,15 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
 
     // Human-readable action description
     let description = '';
+    const plain = (m: PlannedMeal) => (m.name || '').replace(/^(leftovers?|batch):\s*/i, '');
+    const how = (m: PlannedMeal) => (m.type === 'batch' ? ' from the freezer' : m.type === 'leftover' ? ' (leftovers)' : '');
     if (mealToRemove && newMeal) {
-      description = `Replaced ${mealToRemove.name} with ${newMeal.name} on ${dayName}`;
+      description = `Replaced ${plain(mealToRemove)} with ${plain(newMeal)}${how(newMeal)} on ${dayName}`;
     } else if (mealToRemove) {
-      description = `Removed ${mealToRemove.name} from ${dayName}`;
+      description = `Removed ${plain(mealToRemove)} from ${dayName}`;
     } else if (newMeal) {
       const people = newMeal.servings ? ` for ${newMeal.servings}` : '';
-      description = `Added ${newMeal.name.replace(/^(leftovers?|batch):\s*/i, '')} to ${dayName}${people}`;
+      description = `Added ${plain(newMeal)}${how(newMeal)} to ${dayName}${people}`;
     }
 
     // CASE 2: Draft Plan with dependent leftovers -> Prompt to remove leftovers
@@ -549,19 +556,31 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     writeDays(nextDays);
   };
 
-  const handleConfirmLeftover = (isLeftover: boolean) => {
+  const handleConfirmLeftover = (how: boolean | 'leftover' | 'freezer' | 'fresh') => {
     if (!leftoverPrompt || !currentPlan) return;
-    const { dayName, recipe, existingDays } = leftoverPrompt;
+    const choice = how === true ? 'leftover' : how === false ? 'fresh' : how;
+    const { dayName, recipe, existingDays, freezer } = leftoverPrompt;
     const sourceDay = existingDays && existingDays.length > 0 ? existingDays[existingDays.length - 1] : null;
     
-    const newMeal: PlannedMeal = {
-      id: crypto.randomUUID(),
-      type: isLeftover ? 'leftover' : 'recipe',
-      recipeId: recipe.id,
-      name: isLeftover ? `Leftovers: ${recipe.name}` : recipe.name,
-      servings: defaultServings,
-      note: isLeftover ? (sourceDay ? `Reheat from ${sourceDay}` : 'Reheat leftovers') : undefined
-    };
+    const newMeal: PlannedMeal = choice === 'freezer' && freezer
+      ? {
+          // From the freezer: no ingredients to buy; linked to the batch and the recipe
+          id: crypto.randomUUID(),
+          type: 'batch',
+          batchId: freezer.batchId,
+          recipeId: recipe.id,
+          name: `Batch: ${recipe.name}`,
+          servings: defaultServings,
+          note: '',
+        }
+      : {
+          id: crypto.randomUUID(),
+          type: choice === 'leftover' ? 'leftover' : 'recipe',
+          recipeId: recipe.id,
+          name: choice === 'leftover' ? `Leftovers: ${recipe.name}` : recipe.name,
+          servings: defaultServings,
+          note: choice === 'leftover' ? (sourceDay ? `Reheat from ${sourceDay}` : 'Reheat leftovers') : undefined
+        };
 
     const dayPlan = currentPlan.days[dayName];
     const existingMeal = dayPlan && dayPlan.meals.length > 0 ? dayPlan.meals[0] : null;
@@ -637,10 +656,12 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       }
     }
     
+    const batchRecipeId = type === 'batch' && batchId ? store.state.batches.find((b: BatchItem) => b.id === batchId)?.recipeId : undefined;
     const newMeal: PlannedMeal = {
       id: crypto.randomUUID(),
       type,
       batchId,
+      ...(batchRecipeId ? { recipeId: batchRecipeId } : {}),
       name,
       servings: type === 'no_meal' ? 0 : (servings || defaultServings),
       note: note?.trim() || ''
@@ -2549,35 +2570,52 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
             className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150"
             onClick={e => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-center text-zinc-900 mb-2">
-              Eating Leftovers?
-            </h3>
-            
-            <p className="text-xs text-zinc-500 text-center mb-5 leading-relaxed">
-              You already plan to cook this on <span className="font-semibold text-zinc-700">{leftoverPrompt.existingDays.join(' and ')}</span>. Do you intend to eat leftovers on <span className="font-semibold text-zinc-700">{leftoverPrompt.dayName}</span>, or cook it fresh again?
-            </p>
-
-            <div className="space-y-2">
-              <button
-                onClick={() => handleConfirmLeftover(true)}
-                className="w-full py-2.5 text-white font-medium bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-2xs transition-all text-xs flex items-center justify-center gap-2"
-              >
-                <span>Yes, it's leftovers</span>
-              </button>
-
-              <button
-                onClick={() => handleConfirmLeftover(false)}
-                className="w-full py-2.5 text-zinc-700 font-medium bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors text-xs flex items-center justify-center gap-2"
-              >
-                <span>No, cook fresh again</span>
-              </button>
-
-              <button
-                onClick={() => setLeftoverPrompt(null)}
-                className="w-full py-2 text-zinc-400 hover:text-zinc-600 font-normal text-xs transition-colors mt-2"
-              >
-                Cancel
-              </button>
+            <div data-how-question>
+              <h3 className="text-lg font-semibold text-zinc-900 leading-snug">{leftoverPrompt.recipe.name}</h3>
+              <p className="text-sm text-zinc-600 mt-1 mb-4">How are you having it on {leftoverPrompt.dayName}?</p>
+              <div className="space-y-2">
+                {leftoverPrompt.existingDays.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmLeftover('leftover')}
+                    data-how="leftover"
+                    className="w-full text-left px-4 py-3 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 cursor-pointer"
+                  >
+                    <span className="block text-[15px] font-semibold text-amber-950">Leftovers from {leftoverPrompt.existingDays[leftoverPrompt.existingDays.length - 1]}</span>
+                    <span className="block text-xs text-amber-900/80">Cook extra on {leftoverPrompt.existingDays[leftoverPrompt.existingDays.length - 1]} and reheat it</span>
+                  </button>
+                )}
+                {leftoverPrompt.freezer && (
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmLeftover('freezer')}
+                    data-how="freezer"
+                    className="w-full text-left px-4 py-3 rounded-xl border border-cyan-300 bg-cyan-50 hover:bg-cyan-100 cursor-pointer"
+                  >
+                    <span className="block text-[15px] font-semibold text-cyan-950">From the freezer</span>
+                    <span className={`block text-xs ${leftoverPrompt.freezer.portions < defaultServings ? 'text-amber-800 font-semibold' : 'text-cyan-900/80'}`}>
+                      {leftoverPrompt.freezer.portions} {leftoverPrompt.freezer.portions === 1 ? 'portion' : 'portions'} in the freezer
+                      {leftoverPrompt.freezer.portions < defaultServings ? ` (you usually cook for ${defaultServings})` : '; nothing to buy'}
+                    </span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleConfirmLeftover('fresh')}
+                  data-how="fresh"
+                  className="w-full text-left px-4 py-3 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 cursor-pointer"
+                >
+                  <span className="block text-[15px] font-semibold text-zinc-900">Cook it fresh</span>
+                  <span className="block text-xs text-zinc-600">The ingredients go on the shopping list</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLeftoverPrompt(null)}
+                  className="w-full py-2 text-zinc-500 hover:text-zinc-700 text-sm font-medium cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

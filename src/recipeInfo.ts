@@ -108,13 +108,17 @@ export function formatShortDate(date: string, today: string): string {
   return dt.toLocaleDateString('en-GB', sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** Portions of this recipe in the freezer (batches linked to it, or with exactly its name). */
-export function freezerPortions(recipe: Recipe, batches: BatchItem[] | undefined): number {
+/** This recipe's batches in the freezer (linked to it, or with exactly its name), oldest first. */
+export function freezerBatchesFor(recipe: Recipe, batches: BatchItem[] | undefined): BatchItem[] {
   const name = (recipe.name || '').trim().toLowerCase();
-  return (batches || []).reduce((sum, b) => {
-    const mine = b.recipeId ? b.recipeId === recipe.id : (b.name || '').trim().toLowerCase() === name;
-    return mine ? sum + Math.max(0, Number(b.portions) || 0) : sum;
-  }, 0);
+  return (batches || [])
+    .filter((b) => (b.recipeId ? b.recipeId === recipe.id : (b.name || '').trim().toLowerCase() === name) && (Number(b.portions) || 0) > 0)
+    .sort((a, b) => String(a.dateAdded || '').localeCompare(String(b.dateAdded || '')));
+}
+
+/** Portions of this recipe in the freezer. */
+export function freezerPortions(recipe: Recipe, batches: BatchItem[] | undefined): number {
+  return freezerBatchesFor(recipe, batches).reduce((sum, b) => sum + Math.max(0, Number(b.portions) || 0), 0);
 }
 
 export type RecipeSort = 'az' | 'not_lately' | 'newest' | 'added';

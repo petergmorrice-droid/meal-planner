@@ -5,6 +5,8 @@ export const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'
 
 export const isLeftoverMeal = (m: PlannedMeal) => m.type === 'leftover' || /^leftovers?:\s*/i.test(m.name || '');
 export const cleanMealName = (name: string) => (name || '').replace(/^(leftovers?|batch):\s*/i, '').trim();
+/** A day that cooks this recipe from scratch (so later days can have its leftovers). */
+const cooksFresh = (x: PlannedMeal, recipeId: string) => x.recipeId === recipeId && !isLeftoverMeal(x) && x.type !== 'batch';
 
 /** What a day's meal adds to the shopping list (notes don't). */
 export function mealSignature(m?: PlannedMeal | null): string {
@@ -49,7 +51,7 @@ export function relinkLeftovers(days: Record<string, DayPlan>): { days: Record<s
         if (!isLeftoverMeal(m) || !m.recipeId) return m;
         let source: string | null = null;
         for (let j = i - 1; j >= 0 && !source; j--) {
-          if ((days[WEEK_DAYS[j]]?.meals || []).some((x) => x.recipeId === m.recipeId && !isLeftoverMeal(x))) source = WEEK_DAYS[j];
+          if ((days[WEEK_DAYS[j]]?.meals || []).some((x) => cooksFresh(x, m.recipeId!))) source = WEEK_DAYS[j];
         }
         const autoNote = !m.note || /^Reheat (from |leftovers)/i.test(m.note);
         if (source) return autoNote ? { ...m, note: `Reheat from ${source}` } : m;
@@ -82,7 +84,7 @@ export function moveMeal(days: Record<string, DayPlan>, from: string, to: string
 export function leftoverSourceDay(days: Record<string, DayPlan>, day: string, meal: PlannedMeal | null): string | null {
   if (!meal || !isLeftoverMeal(meal) || !meal.recipeId) return null;
   for (let j = WEEK_DAYS.indexOf(day) - 1; j >= 0; j--) {
-    if ((days[WEEK_DAYS[j]]?.meals || []).some((x) => x.recipeId === meal.recipeId && !isLeftoverMeal(x))) return WEEK_DAYS[j];
+    if ((days[WEEK_DAYS[j]]?.meals || []).some((x) => cooksFresh(x, meal.recipeId!))) return WEEK_DAYS[j];
   }
   return null;
 }
