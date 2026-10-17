@@ -38,10 +38,12 @@ export default function App() {
   
   const store = useStore();
 
+  // Shop opens on its own best week, unless you came from "See the list" for a particular week.
+  const [shopPlanRequest, setShopPlanRequest] = useState<string | null>(null);
   const handleNavigateTab = (tab: Tab, planId?: string) => {
     if (planId) {
-      
       store.setSelectedPlanId?.(planId);
+      if (tab === 'shop') setShopPlanRequest(planId);
     }
     setActiveTab(tab);
   };
@@ -68,7 +70,7 @@ export default function App() {
           />
         )}
         {activeTab === 'this_week' && <ThisWeekTab store={store} onNavigateTab={handleNavigateTab} />}
-        {activeTab === 'shop' && <ShopTab store={store} onNavigateTab={handleNavigateTab} />}
+        {activeTab === 'shop' && <ShopTab store={store} onNavigateTab={handleNavigateTab} openPlanId={shopPlanRequest} onOpenPlanHandled={() => setShopPlanRequest(null)} />}
         {activeTab === 'batch' && <BatchTab store={store} />}
         {activeTab === 'settings' && <SettingsTab store={store} onNavigateTab={handleNavigateTab} />}
       </main>

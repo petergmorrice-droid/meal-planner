@@ -31,6 +31,10 @@ import {
   ListOrdered,
   PackageCheck,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Share2,
+  StickyNote,
 } from 'lucide-react';
 import { ShoppingListItem, Recipe, MealPlan, DayPlan } from '../types';
 import { useGracefulCheckoff } from '../hooks/useGracefulCheckoff';
@@ -38,10 +42,20 @@ import { aggregateIngredients } from '../utils/aggregation';
 import { matchProduct, groupingKey, canonicalUnit, formatUnit, largeUnitQuantity, formatAmount as formatShopAmount, unitInfo } from '../shopping';
 import ShopAisleGroup from './ShopAisleGroup';
 import CatalogDrawer from './CatalogDrawer';
-import EditItemDrawer from './EditItemDrawer';
+import ShopRow from './shop/ShopRow';
+import ItemSheet from './shop/ItemSheet';
+import QuickAdd from './shop/QuickAdd';
+import DoneShoppingSheet, { DoneChoice } from './shop/DoneShoppingSheet';
+import {
+  AggregatedShoppingListItem, aggregateShoppingItems, shopQuantityText, partLabel, defaultShopWeek, formatWeekSpan, weekStartShort,
+  parseQuickAdd, quickAddLine, listAsText, carryItemsToWeek, shopDurationText, productKey,
+} from '../shopList';
+import { preferredWeekStart } from '../planning';
+import { buildCatalog, matchProductDetailed } from '../shopping';
 import BatchMealModal from './BatchMealModal';
 import { IngredientTriageModal } from './IngredientTriageModal';
 import { changedDaysSinceList } from '../planning';
+import { weekLabelFor } from '../planShopping';
 import { sendWeekToShoppingList } from '../planShopping';
 import Fuse from 'fuse.js';
 import { 
@@ -74,6 +88,9 @@ import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
 interface ShopTabProps {
   store: any;
   onNavigateTab?: (tab: 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings', planId?: string) => void;
+  /** Open on this week (e.g. "See the list" after sending a week from Planning). */
+  openPlanId?: string | null;
+  onOpenPlanHandled?: () => void;
 }
 
 type ViewMode = 'sections' | 'food_type' | 'all';
@@ -109,7 +126,10 @@ export function formatListWithAnd(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
-export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
+export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHandled }: ShopTabProps) {
+  // The latest store, for buttons pressed later (Undo in a message).
+  const storeRef = useRef(store);
+  storeRef.current = store;
   // Modal states
   const [showCatalogModal, setShowCatalogModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -158,11 +178,26 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
     }
   };
   const [showWeekDropdown, setShowWeekDropdown] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; action?: { label: string; run: () => void } } | null>(null);
+  const setToastMessage = (message: string | null, action?: { label: string; run: () => void }) => setToast(message ? { message, action } : null);
   const [isShoppingMode, setIsShoppingMode] = useState(false);
 
   // Grouping and sorting states
-  const [viewMode, setViewMode] = useState<ViewMode>('sections');
+  // How the list is grouped (this phone): by aisle unless you chose otherwise.
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    try {
+      const v = localStorage.getItem('shop_view');
+      return v === 'sections' || v === 'all' || v === 'food_type' ? v : 'food_type';
+    } catch { return 'food_type'; }
+  });
+  const setViewMode = (v: ViewMode) => {
+    setViewModeState(v);
+    try { localStorage.setItem('shop_view', v); } catch { /* per-phone convenience only */ }
+  };
+  // The item panel follows one of the row's lines, so it stays open while you change its aisle or name.
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const [showBought, setShowBought] = useState(false);
+  const [showDone, setShowDone] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('food_type');
   const [showViewOptions, setShowViewOptions] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'to_buy' | 'bought'>('all');
@@ -230,13 +265,13 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
     }));
   };
 
-  // Auto-hide toast
+  // Auto-hide toast (longer when it has a button, e.g. Undo)
   useEffect(() => {
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 2500);
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), toast.action ? 5000 : 2800);
       return () => clearTimeout(timer);
     }
-  }, [toastMessage]);
+  }, [toast]);
 
   const currentMonday = getMonday(new Date());
   const nextMonday = getNextMonday(new Date());
@@ -252,28 +287,22 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
       );
   }, [store.state.mealPlans]);
 
-  // Active selected week plan ID - defaults to NEXT week's list
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
+  // The week to open on: the one you're most likely shopping for that still has things to buy
+  // (this week Mon–Thu, next week Fri–Sun), else the earliest sent week with things to buy.
+  const defaultWeekId = () => {
     const plans = (store.state.mealPlans || []).filter((p: MealPlan) => isWeekWithinForwardLimit(p.startDate));
-    const nextWeekPlan = plans.find((p: MealPlan) => p.startDate === nextMondayStr);
-    if (nextWeekPlan) return nextWeekPlan.id;
-    const current = plans.find((p: MealPlan) => p.startDate === currentMondayStr);
-    if (current) return current.id;
-    return plans[0]?.id || null;
+    return defaultShopWeek(plans, store.state.shoppingList || [], preferredWeekStart(new Date(), currentMondayStr, nextMondayStr), nextMondayStr);
+  };
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
+    if (openPlanId && (store.state.mealPlans || []).some((p: MealPlan) => p.id === openPlanId)) return openPlanId;
+    return defaultWeekId();
   });
+  useEffect(() => { if (openPlanId) onOpenPlanHandled?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep selectedPlanId valid and default to next week when available
+  // Keep the selected week valid (e.g. a week removed on the other phone)
   useEffect(() => {
     if (allPlans.length > 0) {
-      const exists = allPlans.some(p => p.id === selectedPlanId);
-      if (!exists) {
-        const nextWeekPlan = allPlans.find(p => p.startDate === nextMondayStr);
-        if (nextWeekPlan) {
-          setSelectedPlanId(nextWeekPlan.id);
-        } else {
-          setSelectedPlanId(allPlans[0].id);
-        }
-      }
+      if (!allPlans.some(p => p.id === selectedPlanId)) setSelectedPlanId(defaultWeekId() || allPlans[0].id);
     } else if (selectedPlanId !== null) {
       setSelectedPlanId(null);
     }
@@ -773,7 +802,7 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
     store.updateShoppingList(currentList);
     setOpenSections(prev => ({ ...prev, batch: true }));
     setShowBatchModal(false);
-    setToastMessage(`Added ${addedCount} batch ingredients for "${mealName}"`);
+    setToastMessage(`Added ${addedCount} ${addedCount === 1 ? 'ingredient' : 'ingredients'} for ${mealName}`);
   };
 
   // Aisles in the order you walk your shop (shared between phones).
@@ -918,9 +947,249 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
     return groups;
   }, [currentWeekItems, sortBy, statusFilter, sourceFilter, aisleOrder]);
 
-  const totalCount = buyingItems.length;
-  const pendingCount = buyingItems.filter(i => !i.checked).length;
-  const checkedCount = totalCount - pendingCount;
+  // ---------- One row per product (the same rows and counts as shopping mode) ----------
+  const rows = useMemo(() => aggregateShoppingItems(buyingItems), [buyingItems]);
+  const byName = (a: AggregatedShoppingListItem, b: AggregatedShoppingListItem) => a.name.localeCompare(b.name);
+  const toBuyRows = useMemo(() => rows.filter(r => !r.checked).sort(byName), [rows]);
+  const boughtRows = useMemo(() => rows.filter(r => r.checked).sort(byName), [rows]);
+  const totalCount = rows.length;
+  const checkedCount = boughtRows.length;
+  const percentDone = totalCount ? Math.round((checkedCount / totalCount) * 100) : 0;
+  const aisleOf = (r: { name: string; category?: string }) => getGroceryAisle(r);
+
+  // The groups the list shows, in the chosen layout (things still to buy only; bought go to the end).
+  const listGroups = useMemo(() => {
+    if (viewMode === 'all') return toBuyRows.length ? [{ id: 'all', title: 'A–Z', rows: toBuyRows }] : [];
+    if (viewMode === 'sections') {
+      const sources: { id: string; title: string; test: (i: ShoppingListItem) => boolean }[] = [
+        { id: 'adhoc', title: 'Added by you', test: i => i.isAdhoc && !i.isRecurring },
+        { id: 'recurring', title: 'Weekly staples', test: i => !!i.isRecurring },
+        { id: 'planned', title: 'For your meals', test: i => !i.isAdhoc && !i.isBatch && !i.isRecurring },
+        { id: 'batch', title: 'Extra recipes', test: i => !!i.isBatch },
+      ];
+      return sources
+        .map(src => ({ id: src.id, title: src.title, rows: aggregateShoppingItems(buyingItems.filter(src.test)).filter(r => !r.checked).sort(byName) }))
+        .filter(g => g.rows.length > 0);
+    }
+    return orderedAisles(aisleOrder)
+      .map(a => ({ id: a, title: GROCERY_AISLES[a].name, rows: toBuyRows.filter(r => aisleOf(r) === a) }))
+      .filter(g => g.rows.length > 0);
+  }, [viewMode, toBuyRows, buyingItems, aisleOrder]);
+
+  const openRow = openRowId ? rows.find(r => r.underlyingIds.includes(openRowId)) || null : null;
+
+  const tickRow = (row: AggregatedShoppingListItem) => handleToggleItem(row.underlyingIds, !row.checked);
+
+  /** How much of a product is waiting on this week's list ("4 pints"), for Add items and the add box. */
+  const onTheList = (name: string): string | null => {
+    const key = productKey({ name });
+    const row = toBuyRows.find(r => r.key === key || r.name.toLowerCase() === name.toLowerCase());
+    return row ? shopQuantityText(row) : null;
+  };
+
+  // ---------- Weeks ----------
+  const weekName = (startDate?: string) =>
+    !startDate ? '' : startDate === currentMondayStr ? 'This week' : startDate === nextMondayStr ? 'Next week' : `w/c ${weekStartShort(startDate)}`;
+  const planIndex = activePlan ? allPlans.findIndex(p => p.id === activePlan.id) : -1;
+  const prevPlan = planIndex > 0 ? allPlans[planIndex - 1] : null;
+  const nextPlan = planIndex >= 0 && planIndex < allPlans.length - 1 ? allPlans[planIndex + 1] : null;
+
+  // The week after this one, for things you didn't get (made if needed, within the 4-week limit).
+  const followingStart = (() => {
+    if (!activePlan) return null;
+    const d = new Date(activePlan.startDate + 'T00:00:00');
+    d.setDate(d.getDate() + 7);
+    return formatDateISO(d);
+  })();
+  const followingPlan: MealPlan | null = followingStart ? (store.state.mealPlans || []).find((p: MealPlan) => p.startDate === followingStart) || null : null;
+  const canCarry = !!followingStart && (!!followingPlan || canPlanFollowingWeek(activePlan?.startDate));
+  const followingShort = !canCarry || !followingStart ? null : followingStart === nextMondayStr ? 'next week' : `w/c ${weekStartShort(followingStart)}`;
+  const followingListPhrase = !followingShort ? null : followingStart === nextMondayStr ? "next week's list" : `the ${followingShort} list`;
+
+  /** Move these lines to the following week's list (making that week if it isn't there yet). */
+  const carryToFollowingWeek = (ids: string[]): { moved: string[]; alreadyThere: string[] } | null => {
+    if (!activePlan || !followingStart || !canCarry || ids.length === 0) return null;
+    let list: ShoppingListItem[] = [...(store.state.shoppingList || [])];
+    let target = followingPlan;
+    if (!target) {
+      target = createEmptyPlan(new Date(followingStart + 'T00:00:00'));
+      store.updateMealPlan(target);
+      const recurringPrefs = store.state.preferences?.recurringItems || [];
+      if (recurringPrefs.length > 0) list = syncRecurringStaplesForPlan(target, list, recurringPrefs, dismissedItemIds);
+    }
+    const res = carryItemsToWeek(list, ids, target.id, `Week of ${formatWeekRange(target.startDate)}`);
+    store.updateShoppingList(res.list);
+    return { moved: res.moved, alreadyThere: res.alreadyThere };
+  };
+
+  // ---------- The item panel ----------
+  const updateParts = (ids: string[], patch: (i: ShoppingListItem) => ShoppingListItem) => {
+    const idSet = new Set(ids);
+    store.updateShoppingList((store.state.shoppingList || []).map((i: ShoppingListItem) => (idSet.has(i.id) ? patch(i) : i)));
+  };
+
+  const removeRowParts = (row: AggregatedShoppingListItem) => {
+    const removed = row.parts;
+    const idSet = new Set(row.underlyingIds);
+    store.updateShoppingList((store.state.shoppingList || []).filter((i: ShoppingListItem) => !idSet.has(i.id)));
+    setOpenRowId(null);
+    setToastMessage(`Removed ${row.name}`, {
+      label: 'Undo',
+      run: () => {
+        const st = storeRef.current;
+        const live = new Set((st.state.shoppingList || []).map((i: ShoppingListItem) => i.id));
+        st.updateShoppingList([...(st.state.shoppingList || []), ...removed.filter(i => !live.has(i.id))]);
+      },
+    });
+  };
+
+  const setRowAisle = (row: AggregatedShoppingListItem, aisle: FoodAisle) => {
+    const category = GROCERY_AISLES[aisle].name;
+    // Remember it for the product, so it's in this aisle next time too (both phones).
+    const found = matchProductDetailed(getCatalog(), row.name, { groceryId: row.parts[0]?.groceryId });
+    let groceryId: string | undefined = found?.product.id;
+    if (found && found.how !== 'partial') {
+      store.updateGroceryOverride?.(found.product.id, { category });
+    } else {
+      groceryId = `gdb-custom-${crypto.randomUUID()}`;
+      store.updateGroceryOverride?.(groceryId, {
+        id: groceryId, name: row.name, category, unit: row.parts[0]?.unit || 'item', increment: 1, cost: 0, aliases: [row.name],
+      });
+    }
+    updateParts(row.underlyingIds, i => ({ ...i, category, ...(groceryId ? { groceryId } : {}) }));
+    setToastMessage(`${row.name}: ${category}`);
+  };
+
+  const partDetail = (part: ShoppingListItem): string => {
+    if (part.isAdhoc || part.isBatch || part.isRecurring) return partLabel(part);
+    const req = plannedRequirementsByName.get(part.name.toLowerCase().trim());
+    if (!req || !req.breakdown.length) return partLabel(part);
+    const seen = new Set<string>();
+    const bits: string[] = [];
+    for (const b of req.breakdown) {
+      const t = `${b.recipeName} (${b.night.slice(0, 3)})`;
+      if (!seen.has(t)) { seen.add(t); bits.push(t); }
+    }
+    return `For ${bits.join(', ')}`;
+  };
+
+  // ---------- Adding ----------
+  /** Lines typed or picked: added to something you already added by hand, or as a new line. */
+  const addLines = (lines: { name: string; amount: number; unit: string; category?: string; groceryId?: string }[]): string[] => {
+    if (!activePlan || lines.length === 0) return [];
+    const list: ShoppingListItem[] = [...(store.state.shoppingList || [])];
+    const ids: string[] = [];
+    for (const line of lines) {
+      const key = productKey(line);
+      const idx = list.findIndex(i => i.planId === activePlan.id && i.isAdhoc && !i.isRecurring && !i.checked && productKey(i) === key);
+      if (idx > -1 && canonicalUnit(list[idx].unit) === canonicalUnit(line.unit)) {
+        ids.push(list[idx].id);
+        const amount = Math.round((list[idx].amount + line.amount) * 100) / 100;
+        list[idx] = { ...list[idx], amount, unit: /^items?$/i.test(list[idx].unit || '') ? (amount === 1 ? 'item' : 'items') : formatUnit(canonicalUnit(line.unit), amount) };
+      } else {
+        const id = crypto.randomUUID();
+        ids.push(id);
+        list.push({
+          id,
+          name: line.name,
+          amount: line.amount,
+          unit: line.unit,
+          category: line.category || '',
+          ...(line.groceryId ? { groceryId: line.groceryId } : {}),
+          checked: false,
+          isAdhoc: true,
+          isBatch: false,
+          planId: activePlan.id,
+          weekLabel: `Week of ${formatWeekRange(activePlan.startDate)}`,
+        });
+      }
+    }
+    store.updateShoppingList(list);
+    return ids;
+  };
+
+  const handleQuickAdd = (text: string, asName?: string) => {
+    const parsed = parseQuickAdd(text);
+    if (asName) parsed.name = asName;
+    if (!parsed.name) return;
+    const line = quickAddLine(parsed);
+    const [id] = addLines([line]);
+    const key = productKey(line);
+    const already = rows.some(r => r.key === key && !r.checked);
+    setToastMessage(already ? `${line.name}: added ${shopQuantityText(line)} more` : `Added ${line.name} · ${shopQuantityText(line)}`, id ? { label: 'Edit', run: () => setOpenRowId(id) } : undefined);
+  };
+
+  const quickAddSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { name: string; aisle: string; favourite?: boolean }[] = [];
+    const push = (name: string, category?: string, favourite?: boolean) => {
+      const k = (name || '').toLowerCase().trim();
+      if (!k || seen.has(k)) return;
+      seen.add(k);
+      out.push({ name, aisle: GROCERY_AISLES[getGroceryAisle({ name, category })].name, favourite });
+    };
+    favourites.forEach(f => push(f.name, f.category, true));
+    buildCatalog(store.state.groceryDatabase, store.state.groceryOverrides).products
+      .filter((p: any) => !p.sameAs)
+      .forEach((p: any) => push(p.name, p.category));
+    (store.state.shoppingList || []).forEach((i: ShoppingListItem) => push(i.name, i.category));
+    return out;
+  }, [favourites, store.state.groceryDatabase, store.state.groceryOverrides, store.state.shoppingList]);
+
+  // ---------- Sharing the list ----------
+  const shareList = async () => {
+    const title = `Shopping list · ${weekName(activePlan?.startDate)} (${formatWeekSpan(activePlan?.startDate || '')})`;
+    const groups = orderedAisles(aisleOrder)
+      .map(a => ({ name: GROCERY_AISLES[a].name, items: toBuyRows.filter(r => aisleOf(r) === a) }))
+      .filter(g => g.items.length);
+    const text = listAsText(title, groups);
+    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    if (nav?.share && touch) {
+      try { await nav.share({ title, text }); return; } catch (e: any) { if (e?.name === 'AbortError') return; }
+    }
+    try {
+      await nav.clipboard.writeText(text);
+      setToastMessage(`List copied (${toBuyRows.length} ${toBuyRows.length === 1 ? 'item' : 'items'}): paste it anywhere`);
+    } catch {
+      setToastMessage("Couldn't copy the list on this device");
+    }
+  };
+
+  // ---------- Shopping mode: timing and "Done shopping" ----------
+  const startKey = activePlan ? `shop_started_${activePlan.id}` : '';
+  const startShopping = () => {
+    try { if (startKey && !localStorage.getItem(startKey)) localStorage.setItem(startKey, String(Date.now())); } catch { /* timing is a nicety */ }
+    setIsShoppingMode(true);
+  };
+  const shopTook = (): string | null => {
+    try {
+      const t = Number(localStorage.getItem(startKey));
+      return t ? shopDurationText(Date.now() - t) : null;
+    } catch { return null; }
+  };
+
+  const finishShopping = (choice: DoneChoice) => {
+    const notBought = toBuyRows;
+    const ids = notBought.flatMap(r => r.underlyingIds);
+    const took = shopTook();
+    let extra = '';
+    if (choice === 'move' && ids.length) {
+      const res = carryToFollowingWeek(ids);
+      if (res) extra = ` · ${res.moved.length + res.alreadyThere.length} moved to ${followingShort}`;
+    } else if (choice === 'remove' && ids.length) {
+      const idSet = new Set(ids);
+      store.updateShoppingList((store.state.shoppingList || []).filter((i: ShoppingListItem) => !idSet.has(i.id)));
+      extra = ` · ${notBought.length} taken off`;
+    } else if (choice === 'keep' && ids.length) {
+      extra = ` · ${notBought.length} still to get`;
+    }
+    try { if (startKey) localStorage.removeItem(startKey); } catch { /* ignore */ }
+    setShowDone(false);
+    setIsShoppingMode(false);
+    setShowBought(false);
+    setToastMessage(`Shop done: ${checkedCount} bought${took ? ` in ${took}` : ''}${extra}`);
+  };
 
   if (isShoppingMode) {
     return (
@@ -930,6 +1199,8 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
         activePlan={activePlan}
         onToggle={handleToggleItem}
         onExit={() => setIsShoppingMode(false)}
+        onDone={() => setShowDone(true)}
+        quickAdd={<QuickAdd suggestions={quickAddSuggestions} onTheList={onTheList} onAdd={handleQuickAdd} compact />}
         onUncheckAll={() => {
           const checkedIds = buyingItems.filter(item => item.checked).map(item => item.id);
           if (checkedIds.length > 0) {
@@ -952,280 +1223,123 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
       {showAisleOrder && (
         <AisleOrderSheet order={aisleOrder} onSave={handleSaveAisleOrder} onClose={() => setShowAisleOrder(false)} />
       )}
+      {showDone && (
+        <DoneShoppingSheet
+          bought={checkedCount}
+          total={totalCount}
+          notBought={toBuyRows}
+          took={shopTook()}
+          nextWeekLabel={followingListPhrase}
+          onChoose={finishShopping}
+          onClose={() => setShowDone(false)}
+        />
+      )}
+      {toast && <ShopToast toast={toast} onClose={() => setToast(null)} />}
       </>
     );
   }
 
   return (
     <div className="h-full flex flex-col bg-[#fafafa] relative overflow-hidden">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white text-xs font-medium px-3.5 py-2 rounded-xl shadow-lg animate-in fade-in slide-in-from-top-2 flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      {toast && <ShopToast toast={toast} onClose={() => setToast(null)} />}
 
-      {/* Header matching Planner and Cookbook tab styling */}
-      <header className="bg-white border-b border-zinc-200/80 px-4 sm:px-5 py-2 shrink-0 relative z-40">
-        <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-            <span className="text-sm font-bold text-zinc-900 whitespace-nowrap hidden sm:inline-block">
-              Shopping List
-            </span>
-
-            <div className="flex items-center gap-2 relative z-30">
-              <div className="relative">
-                <button
-                  type="button"
-                  id="btn-week-selector"
-                  onClick={() => {
-                    setShowWeekDropdown(!showWeekDropdown);
-                    setShowViewOptions(false);
-                  }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 transition-colors shadow-2xs cursor-pointer"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-zinc-500" />
-                  <span className="text-xs font-semibold text-zinc-900">
-                    {activePlan?.startDate === nextMondayStr 
-                      ? `Next Week (${formatWeekStart(activePlan?.startDate)})` 
-                      : activePlan?.startDate === currentMondayStr 
-                      ? `This Week (${formatWeekStart(activePlan?.startDate)})` 
-                      : formatWeekStart(activePlan?.startDate)}
-                  </span>
-
-                  {/* Status Indicator */}
-                  {activePlan?.status === 'finalized' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
-                  )}
-                  
-                  <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${showWeekDropdown ? 'rotate-180' : ''}`} />
-                </button>
-
-                {/* Week Selector Dropdown */}
-                {showWeekDropdown && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-30" 
-                      onClick={() => setShowWeekDropdown(false)} 
-                    />
-                    <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-zinc-200 p-2 z-40 animate-in fade-in slide-in-from-top-2">
-                      <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                        Switch Shopping Week
-                      </div>
-                      
-                      <div className="max-h-60 overflow-y-auto space-y-1">
-                        {allPlans.map((plan: MealPlan) => {
-                          const isSelected = plan.id === activePlan?.id;
-                          const isNextWeek = plan.startDate === nextMondayStr;
-                          const isThisWeek = plan.startDate === currentMondayStr;
-                          const itemCount = (store.state.shoppingList || []).filter((i: ShoppingListItem) => i.planId === plan.id).length;
-
-                          return (
-                            <button
-                              key={plan.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedPlanId(plan.id);
-                                setShowWeekDropdown(false);
-                              }}
-                              className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                                isSelected 
-                                  ? 'bg-zinc-100 text-zinc-900 font-semibold' 
-                                  : 'hover:bg-zinc-50 text-zinc-700'
-                              }`}
-                            >
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-medium text-zinc-900">{plan.startDate === currentMondayStr ? 'This Week' : plan.startDate === nextMondayStr ? 'Next Week' : formatWeekRange(plan.startDate)}</span>
-                                  {isNextWeek && (
-                                    <span className="text-[11px] font-semibold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60">
-                                      Next Week
-                                    </span>
-                                  )}
-                                  {isThisWeek && (
-                                    <span className="text-[11px] font-semibold px-1 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200/60">
-                                      This Week
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-[11px] text-zinc-400">
-                                  {itemCount} {itemCount === 1 ? 'item' : 'items'} on list
-                                </span>
-                              </div>
-                              {plan.status === 'finalized' ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                              ) : (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="pt-2 mt-1 border-t border-zinc-100">
-                        {canPlanFollowingWeek(activePlan?.startDate) ? (
-                          <button
-                            type="button"
-                            onClick={() => handlePlanFollowingWeek()}
-                            className="w-full text-left px-3 py-2 rounded-xl text-xs font-medium text-zinc-900 hover:bg-zinc-100 flex items-center gap-1.5 transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Plan Following Week</span>
-                          </button>
-                        ) : (
-                          <div className="px-3 py-2 text-[11px] text-zinc-400 italic text-center">
-                            4-week forward limit reached
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {canPlanFollowingWeek(activePlan?.startDate) && (
-                <button
-                  type="button"
-                  onClick={() => handlePlanFollowingWeek()}
-                  className="flex items-center gap-1 text-[11px] font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 px-2.5 py-1.5 rounded-xl border border-zinc-200 transition-colors cursor-pointer shadow-2xs hidden md:flex"
-                  title="Plan following week"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Next Week</span>
-                </button>
+      {/* Header: ‹ week › like Planning; share, layout and Go shopping on the right */}
+      <header className="bg-white border-b border-zinc-200/80 px-2 sm:px-5 py-1.5 shrink-0 relative z-40">
+        <div className="max-w-[900px] mx-auto w-full flex items-center justify-between gap-2">
+          <div className="flex items-center gap-0.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => prevPlan && setSelectedPlanId(prevPlan.id)}
+              disabled={!prevPlan}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-zinc-600 hover:bg-zinc-100 disabled:opacity-25 cursor-pointer disabled:cursor-default shrink-0"
+              aria-label="Previous week"
+              data-shop-week-prev
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0 px-0.5 text-center" data-shop-week>
+              <div className="text-[15px] font-bold text-zinc-900 whitespace-nowrap leading-tight" data-shop-week-name>{weekName(activePlan?.startDate) || 'Shopping'}</div>
+              {activePlan && (
+                <div className="text-xs text-zinc-500 whitespace-nowrap leading-tight" data-shop-week-status>
+                  {formatWeekSpan(activePlan.startDate)} · {isPlanFinalized ? <span className="text-emerald-700 font-semibold">Sent</span> : 'Not sent yet'}
+                </div>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => nextPlan && setSelectedPlanId(nextPlan.id)}
+              disabled={!nextPlan}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-zinc-600 hover:bg-zinc-100 disabled:opacity-25 cursor-pointer disabled:cursor-default shrink-0"
+              aria-label="Next week"
+              data-shop-week-next
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Header Controls */}
-          <div className="flex items-center gap-2 relative z-50 shrink-0">
-            {/* View Options Dropdown */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={shareList}
+              disabled={toBuyRows.length === 0}
+              className="w-9 h-9 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 flex items-center justify-center cursor-pointer disabled:opacity-40 disabled:cursor-default"
+              aria-label="Share the list"
+              title="Share or copy the list"
+              data-share-list
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+
             <div className="relative">
               <button
                 type="button"
                 id="btn-shop-view-options"
-                onClick={() => {
-                  setShowViewOptions(!showViewOptions);
-                  setShowWeekDropdown(false);
-                }}
-                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-2xs ${
-                  showViewOptions || viewMode !== 'sections'
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600 hover:text-zinc-900'
+                onClick={() => setShowViewOptions(!showViewOptions)}
+                className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer ${
+                  showViewOptions ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600'
                 }`}
-                title="View options"
+                title="List options"
                 aria-label="View options"
               >
-                <Eye className="w-3.5 h-3.5" />
+                <Eye className="w-4 h-4" />
               </button>
-
               {showViewOptions && (
                 <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowViewOptions(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl border border-zinc-200/90 shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
-                    <div className="px-1 mb-1">
-                      <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
-                        View Layout
-                      </span>
-                      <div className="space-y-1">
-                        <button
-                          type="button"
-                          id="view-option-sections"
-                          onClick={() => {
-                            setViewMode('sections');
-                            setShowViewOptions(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                            viewMode === 'sections'
-                              ? 'bg-indigo-600 text-white shadow-2xs font-semibold'
-                              : 'text-zinc-700 hover:bg-zinc-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Layers className="w-3.5 h-3.5" />
-                            <span>Sections</span>
-                          </div>
-                          {viewMode === 'sections' && (
-                            <Check className="w-3.5 h-3.5 text-white" />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          id="view-option-foodtype"
-                          onClick={() => {
-                            setViewMode('food_type');
-                            setShowViewOptions(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                            viewMode === 'food_type'
-                              ? 'bg-indigo-600 text-white shadow-2xs font-semibold'
-                              : 'text-zinc-700 hover:bg-zinc-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Store className="w-3.5 h-3.5" />
-                            <span>Food Type / Aisle</span>
-                          </div>
-                          {viewMode === 'food_type' && (
-                            <Check className="w-3.5 h-3.5 text-white" />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          id="view-option-all"
-                          onClick={() => {
-                            setViewMode('all');
-                            setShowViewOptions(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                            viewMode === 'all'
-                              ? 'bg-indigo-600 text-white shadow-2xs font-semibold'
-                              : 'text-zinc-700 hover:bg-zinc-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <ShoppingBag className="w-3.5 h-3.5" />
-                            <span>All Items</span>
-                          </div>
-                          {viewMode === 'all' && (
-                            <Check className="w-3.5 h-3.5 text-white" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-zinc-100 my-2 pt-2 px-1">
-                      <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5 font-bold">
-                        List Options
-                      </span>
-                      <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer text-xs font-semibold text-zinc-700 select-none">
-                        <input
-                          type="checkbox"
-                          checked={dropCompletedToBottom}
-                          onChange={(e) => handleToggleDropCompleted(e.target.checked)}
-                          className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
-                        />
-                        <span>Drop completed to bottom</span>
-                      </label>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowViewOptions(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl border border-zinc-200 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
+                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-1 pb-1.5">Show the list</span>
+                    {([
+                      ['food_type', 'view-option-foodtype', 'By aisle', Store],
+                      ['sections', 'view-option-sections', "By where it's from", Layers],
+                      ['all', 'view-option-all', 'A–Z', ShoppingBag],
+                    ] as const).map(([mode, id, label, Icon]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        id={id}
+                        onClick={() => { setViewMode(mode); setShowViewOptions(false); }}
+                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-sm cursor-pointer ${viewMode === mode ? 'bg-zinc-100 font-semibold text-zinc-900' : 'text-zinc-700 hover:bg-zinc-50'}`}
+                      >
+                        <span className="flex items-center gap-2"><Icon className="w-4 h-4 text-zinc-500" />{label}</span>
+                        {viewMode === mode && <Check className="w-4 h-4 text-emerald-600" />}
+                      </button>
+                    ))}
+                    <div className="border-t border-zinc-100 mt-1.5 pt-1.5">
                       <button
                         type="button"
                         id="btn-arrange-aisles"
-                        onClick={() => {
-                          setShowViewOptions(false);
-                          setShowAisleOrder(true);
-                        }}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer text-xs font-semibold text-zinc-700"
+                        onClick={() => { setShowViewOptions(false); setShowAisleOrder(true); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                       >
-                        <ListOrdered className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Arrange aisles…</span>
+                        <ListOrdered className="w-4 h-4 text-zinc-500" /> Arrange aisles…
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-weekly-staples"
+                        onClick={() => { setShowViewOptions(false); setShowEditStaplesModal(true); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                      >
+                        <RotateCcw className="w-4 h-4 text-zinc-500" /> Weekly staples…
                       </button>
                     </div>
                   </div>
@@ -1233,666 +1347,261 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
               )}
             </div>
 
-            {/* Add Item Button */}
-            <button
-              type="button"
-              id="btn-header-add-item"
-              onClick={() => setShowCatalogModal(true)}
-              className="flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-850 border border-indigo-200 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-xl transition-colors cursor-pointer shrink-0 shadow-2xs"
-              title="Add Custom Grocery Item"
-              aria-label="Add Custom Grocery Item"
-            >
-              <Plus className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden sm:inline">Add Item</span>
-            </button>
-
-            {/* Add Batch Button */}
-            <button
-              type="button"
-              id="btn-header-add-batch"
-              onClick={() => setShowBatchModal(true)}
-              className="flex items-center justify-center gap-1.5 bg-cyan-50 hover:bg-cyan-100 active:bg-cyan-200 text-cyan-800 border border-cyan-200 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-xl transition-colors cursor-pointer shrink-0 shadow-2xs"
-              title="Add Batch Meal Ingredients"
-              aria-label="Add Batch Meal Ingredients"
-            >
-              <Snowflake className="w-3.5 h-3.5 text-cyan-600" />
-              <span className="hidden sm:inline">Add Batch</span>
-            </button>
-
-            {/* Go Shopping Button - On mobile: trolley icon only; on sm+: icon + text */}
             <button
               type="button"
               id="btn-go-shopping"
-              onClick={() => setIsShoppingMode(true)}
-              className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-xl shadow-xs transition-colors cursor-pointer shrink-0"
-              title="Go Shopping"
+              onClick={startShopping}
+              className="h-9 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+              title="Go shopping: full screen, tick as you go"
               aria-label="Go Shopping"
             >
-              <ShoppingCart className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span className="hidden sm:inline">Go Shopping</span>
+              <ShoppingCart className="w-4 h-4 stroke-[2.5]" />
+              <span className="sm:hidden">Shop</span>
+              <span className="hidden sm:inline">Go shopping</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area - Concise Spacing */}
-      <div className="flex-1 overflow-y-auto p-3.5 md:p-5 pb-36 max-w-[1400px] mx-auto w-full space-y-3">
-        
-        {/* Unfinalized Plan Banner */}
-        {!isPlanFinalized && (
-          <div className="bg-amber-50/90 border border-amber-200/80 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2.5 text-xs text-amber-900 shadow-2xs animate-in fade-in duration-150">
-            <div className="flex items-center gap-2 min-w-0">
-              <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span className="font-medium text-xs">
-                {activePlan && Object.values(activePlan.days).some((day: any) => day.meals && day.meals.length > 0)
-                  ? "This week's meals haven't been sent to the shopping list yet"
-                  : 'No meals planned for this week yet'}
+      <div className="flex-1 overflow-y-auto pb-36" data-shop-scroll>
+        <div className="max-w-[900px] mx-auto w-full p-3 md:p-5 space-y-3">
+          {/* How much is bought (the same count as shopping mode) */}
+          {totalCount > 0 && (
+            <div className="flex items-center gap-3 px-1" data-shop-progress>
+              <div className="flex-1 h-2 rounded-full bg-zinc-200 overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full transition-all duration-300" style={{ width: `${percentDone}%` }} />
+              </div>
+              <span className="text-sm text-zinc-600 tabular-nums whitespace-nowrap">
+                <span className="font-semibold text-zinc-900">{checkedCount}</span> of {totalCount} bought
               </span>
             </div>
-            {onNavigateTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateTab('planning', activePlan?.id)}
-                className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 shrink-0 underline cursor-pointer"
-              >
-                View Plan →
-              </button>
-            )}
-          </div>
-        )}
+          )}
 
+          {activePlan && (
+            <QuickAdd suggestions={quickAddSuggestions} onTheList={onTheList} onAdd={handleQuickAdd} onBrowse={() => setShowCatalogModal(true)} />
+          )}
 
-
-        {/* The week changed on Planning after it was sent: one tap brings the list up to date */}
-        {activePlan && isPlanFinalized && changedDaysSinceList(activePlan).length > 0 && (
-          <div className="bg-amber-50 border border-amber-300 rounded-xl px-3.5 py-3 flex items-center justify-between gap-3 shadow-2xs" data-shop-out-of-date>
-            <div className="flex items-start gap-2.5 min-w-0">
-              <RefreshCw className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-amber-950">The meal plan has changed</p>
-                <p className="text-xs text-amber-900/80">
-                  {changedDaysSinceList(activePlan).join(', ')} changed since this list was made.
-                </p>
+          {/* Meals not sent to the list yet */}
+          {!isPlanFinalized && activePlan && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2.5 text-amber-900" data-shop-unsent>
+              <div className="flex items-center gap-2 min-w-0">
+                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="text-sm">
+                  {Object.values(activePlan.days).some((day: any) => day.meals && day.meals.length > 0)
+                    ? "This week's meals aren't on the list yet"
+                    : 'No meals planned for this week yet'}
+                </span>
               </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => sendWeekToShoppingList(store, activePlan)}
-              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors cursor-pointer"
-              data-shop-update-list
-            >
-              Update list
-            </button>
-          </div>
-        )}
-
-        {/* Cupboard check: before you go, take off what you've already got */}
-        {cupboardToCheck.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-3 flex items-center justify-between gap-3 shadow-2xs">
-            <div className="flex items-start gap-2.5 min-w-0">
-              <PackageCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-amber-950">Check the cupboard</p>
-                <p className="text-xs text-amber-900/80">
-                  {cupboardToCheck.length} {cupboardToCheck.length === 1 ? 'item' : 'items'} you may already have, like {formatListWithAnd(Array.from(new Set<string>(cupboardToCheck.map((i: ShoppingListItem) => i.name))).slice(0, 3))}.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              id="btn-cupboard-check"
-              onClick={() => setShowCupboardCheck(true)}
-              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors cursor-pointer"
-            >
-              Check now
-            </button>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {currentWeekItems.length === 0 ? (
-          <div className="text-center text-zinc-500 mt-6 p-7 bg-white rounded-xl border border-zinc-200/80 shadow-2xs">
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center mx-auto mb-2 text-zinc-500">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <h3 className="font-semibold text-zinc-800 text-xs mb-1">
-              No items for {activePlan ? formatWeekRange(activePlan.startDate) : 'this week'}
-            </h3>
-            <p className="text-[11px] text-zinc-400 leading-relaxed mb-4 max-w-sm mx-auto">
-              Ingredients from meals planned for this week in the Planning tab will appear here automatically.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2">
               {onNavigateTab && (
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('planning', activePlan?.id)}
-                  className="inline-flex items-center gap-1.5 bg-indigo-600 text-white text-xs font-medium px-3 py-1.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-2xs cursor-pointer"
-                >
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>Plan This Week's Meals</span>
+                <button type="button" onClick={() => onNavigateTab('planning', activePlan.id)} className="text-sm font-semibold text-amber-900 underline shrink-0 cursor-pointer">
+                  Planning →
                 </button>
               )}
+            </div>
+          )}
+
+          {/* The week changed on Planning after it was sent: one tap brings the list up to date */}
+          {activePlan && isPlanFinalized && changedDaysSinceList(activePlan).length > 0 && (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl px-3.5 py-3 flex items-center justify-between gap-3" data-shop-out-of-date>
+              <div className="flex items-start gap-2.5 min-w-0">
+                <RefreshCw className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-950">The meal plan has changed</p>
+                  <p className="text-xs text-amber-900/80">{changedDaysSinceList(activePlan).join(', ')} changed since this list was made.</p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowCatalogModal(true)}
-                className="inline-flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-850 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition-colors shadow-2xs cursor-pointer"
+                onClick={() => sendWeekToShoppingList(store, activePlan)}
+                className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-3 py-2 rounded-xl cursor-pointer"
+                data-shop-update-list
               >
-                <Plus className="w-3.5 h-3.5 text-white" />
-                <span>Add Custom Item</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowBatchModal(true)}
-                className="inline-flex items-center gap-1.5 bg-white border border-zinc-200 text-zinc-700 text-xs font-medium px-3 py-1.5 rounded-xl hover:bg-zinc-50 hover:text-zinc-900 transition-colors shadow-2xs cursor-pointer"
-              >
-                <Snowflake className="w-3.5 h-3.5 text-cyan-600" />
-                <span>Add Batch Meal</span>
+                Update list
               </button>
             </div>
-          </div>
-        ) : (
-          <>
-            {/* VIEW MODE 1: SECTIONS WITH COLLAPSIBLE DROPDOWNS */}
-            {viewMode === 'sections' && (
-              <div className="space-y-3">
-                {/* 1. Items Dropdown */}
-                <div className="bg-white rounded-xl border border-zinc-200/80 shadow-2xs overflow-hidden transition-all">
-                  <div 
-                    onClick={() => toggleSection('adhoc')}
-                    className="flex items-center justify-between px-3.5 py-2 cursor-pointer hover:bg-zinc-50/50 transition-colors select-none"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
-                        openSections.adhoc ? 'rotate-180' : ''
-                      }`} />
-                      <h3 className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">Items</h3>
-                      <span className="text-[11px] font-semibold text-zinc-400">
-                        ({adhocItems.filter(i => !i.checked).length})
-                      </span>
-                    </div>
+          )}
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowCatalogModal(true);
-                        }}
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
-                      >
-                        <Plus className="w-2.5 h-2.5" />
-                        <span>Add Item</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {openSections.adhoc && (
-                    <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-zinc-100">
-                      {adhocItems.length === 0 ? (
-                        <div className="text-center py-3 text-xs text-zinc-400">
-                          <span>No items added. </span>
-                          <button
-                            type="button"
-                            onClick={() => setShowCatalogModal(true)}
-                            className="text-zinc-900 underline font-medium cursor-pointer"
-                          >
-                            + Add grocery item
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          {arrangeListItems(adhocItems).map(item => (
-                            <ShoppingItemRow
-                              key={item.id}
-                              item={item}
-                              onToggle={handleToggleItem}
-                              onRemove={handleRemoveItem}
-                              onUpdateQuantity={handleUpdateQuantity}
-                              onUpdateQtyAndUnit={handleUpdateQtyAndUnit}
-                            onEdit={setEditingItem}
-                              isFavourite={favourites.some(f => f.name.toLowerCase() === item.name.toLowerCase())}
-                              onToggleFavourite={toggleFavourite}
-                              requirement={plannedRequirementsMap.get(item.id)}
-                              onResetToRequired={handleKeepRequired}
-                            />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 1b. Recurring Staples Dropdown */}
-                <div className="bg-white rounded-xl border border-zinc-200/80 shadow-2xs overflow-hidden transition-all">
-                  <div 
-                    onClick={() => toggleSection('recurring')}
-                    className="flex items-center justify-between px-3.5 py-2 cursor-pointer hover:bg-zinc-50/50 transition-colors select-none"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
-                        openSections.recurring ? 'rotate-180' : ''
-                      }`} />
-                      <h3 className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
-                        <span className="hidden sm:inline">Recurring Staples</span>
-                        <span className="sm:hidden">Staples</span>
-                      </h3>
-                      <span className="text-[11px] font-semibold text-zinc-400">
-                        ({recurringItems.filter(i => !i.checked).length})
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowEditStaplesModal(true);
-                        }}
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
-                        title="Manage Staples"
-                      >
-                        <Sliders className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
-                        <span>Manage</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {openSections.recurring && (
-                    <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-zinc-100">
-                      {recurringItems.length === 0 ? (
-                        <div className="text-center py-3 text-xs text-zinc-400">
-                          <span>No recurring staples added.</span>
-                        </div>
-                      ) : (
-                        <>
-                          {arrangeListItems(recurringItems).map(item => (
-                            <ShoppingItemRow
-                              key={item.id}
-                              item={item}
-                              onToggle={handleToggleItem}
-                              onRemove={handleRemoveItem}
-                              onUpdateQuantity={handleUpdateQuantity}
-                              onUpdateQtyAndUnit={handleUpdateQtyAndUnit}
-                              onEdit={setEditingItem}
-                              isFavourite={favourites.some(f => f.name.toLowerCase() === item.name.toLowerCase())}
-                              onToggleFavourite={toggleFavourite}
-                              requirement={plannedRequirementsMap.get(item.id)}
-                              onResetToRequired={handleKeepRequired}
-                            />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Meal Ingredients Dropdown */}
-                <div className="bg-white rounded-xl border border-zinc-200/80 shadow-2xs overflow-hidden transition-all">
-                  <div 
-                    onClick={() => toggleSection('planned')}
-                    className="flex items-center justify-between px-3.5 py-2 cursor-pointer hover:bg-zinc-50/50 transition-colors select-none"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
-                        openSections.planned ? 'rotate-180' : ''
-                      }`} />
-                      <h3 className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">Meal Ingredients</h3>
-                      <span className="text-[11px] font-semibold text-zinc-400">
-                        ({plannedItems.filter(i => !i.checked).length})
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {onNavigateTab && (
-                        <button
-                          type="button"
-                          id="btn-view-plan-section-header"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigateTab('planning', activePlan?.id);
-                          }}
-                          className="inline-flex items-center text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
-                          title="View plan in Planner tab"
-                        >
-                          <span>View Plan</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {openSections.planned && (
-                    <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-zinc-100">
-                      {plannedItems.length === 0 ? (
-                        <div className="text-center py-4 px-3 text-xs text-zinc-500 bg-zinc-50/60 rounded-lg border border-dashed border-zinc-200">
-                          {!isPlanFinalized ? (
-                            <>
-                              <p className="font-semibold text-zinc-800 mb-1">
-                                This week's meal ingredients aren't on the list yet.
-                              </p>
-                              <p className="text-[11px] text-zinc-500 mb-2">
-                                Send the week to the shopping list from Planning to add them.
-                              </p>
-                              {onNavigateTab && (
-                                <button
-                                  type="button"
-                                  onClick={() => onNavigateTab('planning', activePlan?.id)}
-                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-900 hover:text-zinc-700 underline cursor-pointer"
-                                >
-                                  <span>View Plan</span>
-                                  <span>→</span>
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <span>No meal plan recipe ingredients yet. </span>
-                              {onNavigateTab && (
-                                <button
-                                  type="button"
-                                  onClick={() => onNavigateTab('planning', activePlan?.id)}
-                                  className="text-zinc-900 underline font-medium cursor-pointer"
-                                >
-                                  Plan meals →
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-                          {arrangeListItems(plannedItems).map(item => (
-                            <ShoppingItemRow
-                              key={item.id}
-                              item={item}
-                              onToggle={handleToggleItem}
-                              onRemove={handleRemoveItem}
-                              onUpdateQuantity={handleUpdateQuantity}
-                              onUpdateQtyAndUnit={handleUpdateQtyAndUnit}
-                            onEdit={setEditingItem}
-                              isFavourite={favourites.some(f => f.name.toLowerCase() === item.name.toLowerCase())}
-                              onToggleFavourite={toggleFavourite}
-                              requirement={plannedRequirementsMap.get(item.id)}
-                              onResetToRequired={handleKeepRequired}
-                            />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Batch Meals Dropdown */}
-                <div className="bg-white rounded-xl border border-zinc-200/80 shadow-2xs overflow-hidden transition-all">
-                  <div 
-                    onClick={() => toggleSection('batch')}
-                    className="flex items-center justify-between px-3.5 py-2 cursor-pointer hover:bg-zinc-50/50 transition-colors select-none"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
-                        openSections.batch ? 'rotate-180' : ''
-                      }`} />
-                      <h3 className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">Batch Meals</h3>
-                      <span className="text-[11px] font-semibold text-zinc-400">
-                        ({batchItems.filter(i => !i.checked).length})
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowBatchModal(true);
-                        }}
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
-                      >
-                        <Plus className="w-2.5 h-2.5" />
-                        <span>Add Batch</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {openSections.batch && (
-                    <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-zinc-100">
-                      {batchItems.length === 0 ? (
-                        <div className="text-center py-3 text-xs text-zinc-400">
-                          <span>No batch cooking ingredients added for this week. </span>
-                          <button
-                            type="button"
-                            onClick={() => setShowBatchModal(true)}
-                            className="text-zinc-900 underline font-medium cursor-pointer"
-                          >
-                            + Add batch meal
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          {arrangeListItems(batchItems).map(item => (
-                            <ShoppingItemRow
-                              key={item.id}
-                              item={item}
-                              onToggle={handleToggleItem}
-                              onRemove={handleRemoveItem}
-                              onUpdateQuantity={handleUpdateQuantity}
-                              onUpdateQtyAndUnit={handleUpdateQtyAndUnit}
-                            onEdit={setEditingItem}
-                              isFavourite={favourites.some(f => f.name.toLowerCase() === item.name.toLowerCase())}
-                              onToggleFavourite={toggleFavourite}
-                              requirement={plannedRequirementsMap.get(item.id)}
-                              onResetToRequired={handleKeepRequired}
-                            />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )}
+          {/* Cupboard check: before you go, take off what you've already got */}
+          {cupboardToCheck.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-3 flex items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <PackageCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-950">Check the cupboard</p>
+                  <p className="text-xs text-amber-900/80">
+                    {cupboardToCheck.length} {cupboardToCheck.length === 1 ? 'item' : 'items'} you may already have, like {formatListWithAnd(Array.from(new Set<string>(cupboardToCheck.map((i: ShoppingListItem) => i.name))).slice(0, 3))}.
+                  </p>
                 </div>
               </div>
-            )}
+              <button
+                type="button"
+                id="btn-cupboard-check"
+                onClick={() => setShowCupboardCheck(true)}
+                className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-3 py-2 rounded-xl cursor-pointer"
+              >
+                Check now
+              </button>
+            </div>
+          )}
 
-            {/* VIEW MODE 2: FOOD TYPE (SHOP AISLES) WITH COLLAPSIBLE DROPDOWNS */}
-            {viewMode === 'food_type' && (
-              <div className="space-y-3">
-                {itemsByAisle.map(group => {
-                  const pendingAisleCount = group.items.filter(i => !i.checked).length;
-                  const isOpen = openAisles[group.aisle] ?? true;
-
-                  return (
-                    <div key={group.aisle} className="bg-white rounded-xl border border-zinc-200/80 shadow-2xs overflow-hidden">
-                      <div 
-                        onClick={() => toggleAisle(group.aisle)}
-                        className="flex items-center justify-between px-3.5 py-2 cursor-pointer hover:bg-zinc-50/50 transition-colors select-none"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${
-                            isOpen ? 'rotate-180' : ''
-                          }`} />
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                              Aisle {aislePos[group.aisle]}
-                            </span>
-                            <span className="text-[11px] text-zinc-300">·</span>
-                            <h3 className="font-bold text-xs text-zinc-900">{group.info.name}</h3>
-                            <span className="text-[11px] text-zinc-400 font-normal hidden sm:inline">— {group.info.description}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-semibold text-zinc-400">
-                            ({pendingAisleCount})
-                          </span>
-                        </div>
-                      </div>
-
-                      {isOpen && (
-                        <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-zinc-100">
-                          {arrangeListItems(group.items).map(item => (
-                            <ShoppingItemRow
-                              key={item.id}
-                              item={item}
-                              onToggle={handleToggleItem}
-                              onRemove={handleRemoveItem}
-                              onUpdateQuantity={handleUpdateQuantity}
-                              onUpdateQtyAndUnit={handleUpdateQtyAndUnit}
-                            onEdit={setEditingItem}
-                              isFavourite={favourites.some(f => f.name.toLowerCase() === item.name.toLowerCase())}
-                              onToggleFavourite={toggleFavourite}
-                              requirement={plannedRequirementsMap.get(item.id)}
-                              onResetToRequired={handleKeepRequired}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+          {currentWeekItems.length === 0 ? (
+            <div className="text-center text-zinc-500 p-7 bg-white rounded-xl border border-zinc-200" data-shop-empty>
+              <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center mx-auto mb-2 text-zinc-500">
+                <ShoppingBag className="w-5 h-5" />
               </div>
-            )}
+              <h3 className="font-semibold text-zinc-800 text-sm mb-1">Nothing on the list for {activePlan ? formatWeekSpan(activePlan.startDate) : 'this week'}</h3>
+              <p className="text-sm text-zinc-500 leading-relaxed mb-4 max-w-sm mx-auto">
+                Send the week's meals from Planning, or add things above.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {onNavigateTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('planning', activePlan?.id)}
+                    className="inline-flex items-center gap-1.5 bg-zinc-900 text-white text-sm font-medium px-3 py-2 rounded-xl hover:bg-zinc-800 cursor-pointer"
+                  >
+                    <Calendar className="w-4 h-4" /> Plan the meals
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowBatchModal(true)}
+                  className="inline-flex items-center gap-1.5 bg-white border border-zinc-200 text-zinc-700 text-sm font-medium px-3 py-2 rounded-xl hover:bg-zinc-50 cursor-pointer"
+                >
+                  <BookOpen className="w-4 h-4" /> Add a recipe's ingredients
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {toBuyRows.length === 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-4 text-center" data-all-bought>
+                  <p className="text-base font-semibold text-emerald-950">Everything's bought</p>
+                  <p className="text-sm text-emerald-900/80">Add anything else above, or look at another week.</p>
+                </div>
+              )}
 
-            {/* VIEW MODE 3: ALL ITEMS (UNIFIED LIST) */}
-            {viewMode === 'all' && (
-              <div className="space-y-3">
-                {!dropCompletedToBottom ? (
-                  <div className="space-y-1.5">
-                    <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
-                      All Items ({allViewItems.length})
+              {listGroups.map(group => (
+                <section key={group.id} className="bg-white rounded-xl border border-zinc-200/80 overflow-hidden" data-group={group.id}>
+                  <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 bg-zinc-50/80 border-b border-zinc-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-600">{group.title}</h3>
+                    <span className="flex items-center gap-2">
+                      {group.id === 'recurring' && (
+                        <button type="button" onClick={() => setShowEditStaplesModal(true)} className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 cursor-pointer">Change</button>
+                      )}
+                      <span className="text-xs text-zinc-500 tabular-nums">{group.rows.length}</span>
                     </span>
-                    {arrangeListItems(allViewItems).map(item => (
-                      <ShoppingItemRow
-                        key={item.id}
-                        item={item}
-                        onToggle={handleToggleItem}
-                        onRemove={handleRemoveItem}
-                        onUpdateQuantity={handleUpdateQuantity}
-                        onUpdateQtyAndUnit={handleUpdateQtyAndUnit}
-                            onEdit={setEditingItem}
-                              isFavourite={favourites.some(f => f.name.toLowerCase() === item.name.toLowerCase())}
-                              onToggleFavourite={toggleFavourite}
-                        requirement={plannedRequirementsMap.get(item.id)}
-                        onResetToRequired={handleKeepRequired}
-                      />
+                  </div>
+                  <div className="divide-y divide-zinc-100">
+                    {group.rows.map(row => (
+                      <ShopRow key={row.key} row={row} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
                     ))}
                   </div>
-                ) : (
-                  <>
-                    {allViewItems.filter(i => !i.checked).length > 0 && (
-                      <div className="space-y-1.5">
-                        <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
-                          To Buy ({allViewItems.filter(i => !i.checked).length})
-                        </span>
-                        {sortItems(allViewItems.filter(i => !i.checked)).map(item => (
-                          <ShoppingItemRow
-                            key={item.id}
-                            item={item}
-                            onToggle={handleToggleItem}
-                            onRemove={handleRemoveItem}
-                            onUpdateQuantity={handleUpdateQuantity}
-                            onUpdateQtyAndUnit={handleUpdateQtyAndUnit}
-                            onEdit={setEditingItem}
-                              isFavourite={favourites.some(f => f.name.toLowerCase() === item.name.toLowerCase())}
-                              onToggleFavourite={toggleFavourite}
-                            requirement={plannedRequirementsMap.get(item.id)}
-                            onResetToRequired={handleKeepRequired}
-                          />
-                        ))}
-                      </div>
-                    )}
+                </section>
+              ))}
 
-                    {allViewItems.filter(i => i.checked).length > 0 && (
-                      <div className="space-y-1.5 pt-2">
-                        <span className="font-semibold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
-                          Checked Off ({allViewItems.filter(i => i.checked).length})
-                        </span>
-                        {sortItems(allViewItems.filter(i => i.checked)).map(item => (
-                          <ShoppingItemRow
-                            key={item.id}
-                            item={item}
-                            onToggle={handleToggleItem}
-                            onRemove={handleRemoveItem}
-                            onUpdateQuantity={handleUpdateQuantity}
-                            onUpdateQtyAndUnit={handleUpdateQtyAndUnit}
-                            onEdit={setEditingItem}
-                              isFavourite={favourites.some(f => f.name.toLowerCase() === item.name.toLowerCase())}
-                              onToggleFavourite={toggleFavourite}
-                            requirement={plannedRequirementsMap.get(item.id)}
-                            onResetToRequired={handleKeepRequired}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
+              {/* Bought: out of the way at the end, one tap to look */}
+              {boughtRows.length > 0 && (
+                <section className="bg-white rounded-xl border border-zinc-200/80 overflow-hidden" data-bought>
+                  <button
+                    type="button"
+                    onClick={() => setShowBought(v => !v)}
+                    className="w-full flex items-center justify-between px-3.5 py-2 cursor-pointer hover:bg-zinc-50 text-left"
+                    aria-expanded={showBought}
+                    data-bought-toggle
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${showBought ? 'rotate-180' : ''}`} />
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-600">Bought</span>
+                    </span>
+                    <span className="text-xs text-zinc-500 tabular-nums">{boughtRows.length}</span>
+                  </button>
+                  {showBought && (
+                    <div className="divide-y divide-zinc-100 border-t border-zinc-100">
+                      {boughtRows.map(row => (
+                        <ShopRow key={row.key} row={row} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
 
-                {allViewItems.length === 0 && currentWeekItems.length > 0 && (
-                  <div className="text-center py-6 px-4 bg-white rounded-xl border border-zinc-200/80 shadow-2xs">
-                    <p className="text-xs font-semibold text-zinc-700 mb-1">No items match your active filters</p>
-                    <p className="text-[11px] text-zinc-400 mb-3">Try clearing your filters to see all items.</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter('all');
-                        setSourceFilter('all');
-                      }}
-                      className="text-xs font-semibold text-zinc-900 bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-                    >
-                      Reset Filters
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Items you said you already have: off the list, one tap to put back */}
+              {inCupboardItems.length > 0 && (
+                <div className="bg-white rounded-xl border border-zinc-200/80 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowInCupboard(v => !v)}
+                    className="w-full flex items-center justify-between px-3.5 py-2 cursor-pointer hover:bg-zinc-50 text-left"
+                    aria-expanded={showInCupboard}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${showInCupboard ? 'rotate-180' : ''}`} />
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-600">Already in the cupboard</span>
+                    </span>
+                    <span className="text-xs text-zinc-500">{inCupboardItems.length} · not on the list</span>
+                  </button>
+                  {showInCupboard && (
+                    <ul className="border-t border-zinc-100 divide-y divide-zinc-100">
+                      {inCupboardItems.map((item: ShoppingListItem) => (
+                        <li key={item.id} className="flex items-center justify-between gap-3 px-3.5 py-2">
+                          <span className="text-sm text-zinc-600 min-w-0 truncate">{item.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCupboardAnswer([item.id], 'need')}
+                            className="shrink-0 text-sm font-semibold text-indigo-700 hover:text-indigo-900 px-2 py-1 rounded-lg hover:bg-indigo-50 cursor-pointer"
+                          >
+                            Need it after all
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
-            {/* Items you said you already have: off the list, one tap to put back */}
-            {inCupboardItems.length > 0 && (
-              <div className="bg-white rounded-xl border border-zinc-200/80 shadow-2xs overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowInCupboard(v => !v)}
-                  className="w-full flex items-center justify-between px-3.5 py-2 cursor-pointer hover:bg-zinc-50/50 transition-colors text-left"
-                  aria-expanded={showInCupboard}
-                >
-                  <span className="flex items-center gap-1.5">
-                    <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${showInCupboard ? 'rotate-180' : ''}`} />
-                    <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">Already in the cupboard</span>
-                    <span className="text-[11px] font-semibold text-zinc-400">({inCupboardItems.length})</span>
-                  </span>
-                  <span className="text-[11px] text-zinc-400">not on the list</span>
-                </button>
-                {showInCupboard && (
-                  <ul className="border-t border-zinc-100 divide-y divide-zinc-100">
-                    {inCupboardItems.map((item: ShoppingListItem) => (
-                      <li key={item.id} className="flex items-center justify-between gap-3 px-3.5 py-2">
-                        <span className="text-sm text-zinc-600 min-w-0 truncate">{item.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleCupboardAnswer([item.id], 'need')}
-                          className="shrink-0 text-xs font-semibold text-indigo-700 hover:text-indigo-900 px-2 py-1 rounded-lg hover:bg-indigo-50 cursor-pointer"
-                        >
-                          Need it after all
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-
-            {/* Restore Dismissed Items Link */}
-            {activeWeekDismissedCount > 0 && (
-              <div className="pt-1 text-center">
-                <button
-                  type="button"
-                  onClick={handleRestoreDismissed}
-                  className="text-[11px] text-zinc-400 hover:text-zinc-600 inline-flex items-center gap-1 py-1 px-2.5 rounded-lg hover:bg-zinc-100 transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Restore removed recipe ingredients</span>
-                </button>
-              </div>
-            )}
-          </>
-        )}
+              {activeWeekDismissedCount > 0 && (
+                <div className="pt-1 text-center">
+                  <button
+                    type="button"
+                    onClick={handleRestoreDismissed}
+                    className="text-xs text-zinc-500 hover:text-zinc-700 inline-flex items-center gap-1 py-1 px-2.5 rounded-lg hover:bg-zinc-100 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Bring back meal ingredients you removed</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
+
+      {openRow && (
+        <ItemSheet
+          key={openRowId || openRow.key}
+          row={openRow}
+          aisle={aisleOf(openRow)}
+          aisles={orderedAisles(aisleOrder)}
+          partDetail={partDetail}
+          isFavourite={favourites.some(f => f.name.toLowerCase() === openRow.name.toLowerCase())}
+          nextWeekLabel={followingShort}
+          onStep={(id, dir) => handleUpdateQuantity(id, dir)}
+          onSetAmount={handleUpdateQtyAndUnit}
+          onSaveNote={note => updateParts(openRow.underlyingIds, i => { const { note: _old, ...rest } = i; return note ? { ...rest, note } : rest; })}
+          onRename={name => updateParts(openRow.underlyingIds, i => { const { groceryId: _g, ...rest } = i; return { ...rest, name }; })}
+          onAisle={a => setRowAisle(openRow, a)}
+          onFavourite={() => toggleFavourite(openRow.name, GROCERY_AISLES[aisleOf(openRow)].name)}
+          onMove={() => {
+            const res = carryToFollowingWeek(openRow.underlyingIds);
+            setOpenRowId(null);
+            if (res) setToastMessage(`${openRow.name}: moved to ${followingShort}`);
+          }}
+          onRemove={() => removeRowParts(openRow)}
+          onManageStaples={() => { setOpenRowId(null); setShowEditStaplesModal(true); }}
+          onClose={() => setOpenRowId(null)}
+        />
+      )}
 
       {/* MODAL: Threshold Warning Modal */}
       {thresholdWarning && (
@@ -1919,6 +1628,8 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
         onAddItems={handleAddItems}
         store={store}
         onToggleFavourite={toggleFavourite}
+        onTheList={onTheList}
+        onAddRecipe={() => { setShowCatalogModal(false); setShowBatchModal(true); }}
       />
 
       {showEditStaplesModal && (
@@ -1946,47 +1657,6 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
         />
       )}
 
-      {editingItem && (
-        <EditItemDrawer
-          isOpen={true}
-          onClose={() => setEditingItem(null)}
-          item={editingItem}
-          hydratedItem={
-            (() => {
-              const matchedMatch = findGroceryDatabaseMatch(editingItem.name, store.state.groceryDatabase || []);
-              if (matchedMatch?.id) {
-                return store.getHydratedGroceryItem?.(matchedMatch.id);
-              }
-              return undefined;
-            })()
-          }
-          onSave={(id, updates) => {
-            let targetId = id;
-            if (!targetId || targetId === editingItem.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')) {
-              const matchedMatch = findGroceryDatabaseMatch(editingItem.name, store.state.groceryDatabase || []);
-              targetId = matchedMatch?.id || editingItem.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-            }
-            store.updateGroceryOverride(targetId, updates);
-            
-            // Directly override the unit and category of the active list item instantly
-            const currentList = store.state.shoppingList || [];
-            const updatedList = currentList.map((i: any) => {
-              if (i.id === editingItem.id) {
-                return {
-                  ...i,
-                  unit: updates.unit !== undefined ? updates.unit : i.unit,
-                  category: updates.category !== undefined ? updates.category : i.category
-                };
-              }
-              return i;
-            });
-            store.updateShoppingList(updatedList);
-
-            setToastMessage(`Overrode unit and saved database defaults for ${editingItem.name}`);
-          }}
-        />
-      )}
-
       {unmappedItems.length > 0 && (
         <IngredientTriageModal
           store={store}
@@ -1998,296 +1668,44 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
   );
 }
 
-function BelowThresholdWarningModal({ data, onClose, onKeepRequired, onConfirmReduce }: { data: any, onClose: () => void, onKeepRequired: () => void, onConfirmReduce: (amount: number) => void }) {
+/** Message at the top of the Shop tab, sometimes with a button (Undo, Edit). */
+function ShopToast({ toast, onClose }: { toast: { message: string; action?: { label: string; run: () => void } }; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-        <h3 className="font-bold text-lg mb-4 text-amber-600">Below Required Amount</h3>
-        <p className="text-zinc-700 text-sm mb-4">You are reducing this item below what is required for your planned meals.</p>
-        <div className="flex flex-col gap-3 mt-6">
-          <button onClick={onKeepRequired} className="w-full px-4 py-3 font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg">Keep Required Amount</button>
-          <button onClick={() => onConfirmReduce(data.targetAmount)} className="w-full px-4 py-3 font-semibold text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg">Confirm Reduction</button>
-          <button onClick={onClose} className="w-full px-4 py-3 font-medium text-zinc-500 rounded-lg">Cancel</button>
-        </div>
-      </div>
+    <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white text-sm font-medium pl-4 pr-2 py-2 rounded-xl shadow-lg flex items-center gap-3 max-w-[92vw] animate-in fade-in slide-in-from-top-2" role="status" data-shop-toast>
+      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+      <span className="min-w-0">{toast.message}</span>
+      {toast.action ? (
+        <button
+          type="button"
+          onClick={() => { const run = toast.action!.run; onClose(); run(); }}
+          className="shrink-0 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 font-semibold cursor-pointer"
+          data-toast-action
+        >
+          {toast.action.label}
+        </button>
+      ) : <span className="w-1" />}
     </div>
   );
 }
 
-function ShoppingItemRow({ 
-  item, 
-  onToggle, 
-  onRemove,
-  onUpdateQuantity,
-  onUpdateQtyAndUnit,
-  onEdit,
-  requirement,
-  onResetToRequired,
-  isFavourite,
-  onToggleFavourite,
-  requiredFor
-}: { 
-  key?: React.Key;
-  item: ShoppingListItem; 
-  onToggle: (id: string) => void; 
-  onRemove: (item: ShoppingListItem) => void; 
-  onUpdateQuantity?: (id: string, delta: number) => void;
-  onUpdateQtyAndUnit?: (id: string, amount: number, unit: string) => void;
-  onEdit?: (item: ShoppingListItem) => void;
-  requirement?: PlannedRequirement | null;
-  onResetToRequired?: (item: ShoppingListItem, requiredAmount: number) => void;
-  isFavourite?: boolean;
-  onToggleFavourite?: (name: string, category: string) => void;
-  requiredFor?: string[];
-}) {
-  const aisle = getGroceryAisle(item);
-  const aisleInfo = GROCERY_AISLES[aisle];
-  const isBelowRequirement = requirement && !item.isAdhoc && !item.isBatch && !item.isRecurring && item.amount < requirement.requiredAmount;
-
-  const { checked, isPending, toggle, undo } = useGracefulCheckoff(item.checked, () => onToggle(item.id), 2500);
-
-  const [localVal, setLocalVal] = React.useState<string>('');
-
-  // What the box shows: "1 kg" rather than "1000 g"; the item itself keeps its own unit.
-  const shownVal = React.useMemo(() => {
-    const big = largeUnitQuantity(item.amount, item.unit);
-    if (big) return `${formatShopAmount(big.amount)} ${big.unit}`;
-    const displayUnit = item.unit && !['whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', ''].includes(item.unit.toLowerCase().trim()) ? ` ${item.unit}` : '';
-    return `${item.amount}${displayUnit}`;
-  }, [item.amount, item.unit]);
-
-  React.useEffect(() => {
-    setLocalVal(shownVal);
-  }, [shownVal]);
-
-  const handleBlurOrSubmit = () => {
-    if (!onUpdateQtyAndUnit) return;
-    if (localVal.trim() === shownVal.trim()) return; // not changed: don't mark it as edited
-    let { amount, unit } = parseQtyAndUnit(localVal, item.unit || 'item');
-    // Typed "1.5 kg" for an item kept in grams: store 1500 g, so + / - still step in grams.
-    const typed = unitInfo(unit);
-    const own = unitInfo(item.unit);
-    if (typed.dimension !== 'count' && typed.dimension === own.dimension && typed.unit !== own.unit) {
-      amount = Math.round((amount * typed.factor) / own.factor * 100) / 100;
-      unit = item.unit;
-    }
-    onUpdateQtyAndUnit(item.id, amount, unit);
-  };
-
+function BelowThresholdWarningModal({ data, onClose, onKeepRequired, onConfirmReduce }: { data: any, onClose: () => void, onKeepRequired: () => void, onConfirmReduce: (amount: number) => void }) {
+  const need = shopQuantityText({ amount: data.requirement?.requiredAmount ?? 0, unit: data.item?.unit });
+  const recipes: string[] = data.requirement?.recipes || [];
   return (
-    <div className={`relative flex flex-row items-center justify-between pl-3.5 pr-8 py-1.5 rounded-xl border transition-all gap-3 ${
-      checked 
-        ? 'bg-zinc-50/70 border-zinc-200/60 opacity-40' 
-        : isBelowRequirement
-          ? 'bg-amber-50/30 border-amber-300/80 shadow-2xs hover:border-amber-400'
-          : 'bg-white border-zinc-200/80 shadow-2xs hover:border-zinc-300'
-    }`}>
-      {/* Absolute Bin/Delete button on the top right */}
-      <div className="absolute top-1 right-1 z-20">
-        <button 
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onRemove(item); }} 
-          className="p-1 text-zinc-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
-          title="Delete item"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* Left section: Item name, unboxed metadata trail - Clickable to open Edit */}
-      <div 
-        onClick={() => onEdit?.(item)}
-        className="flex-1 min-w-0 cursor-pointer hover:bg-zinc-50/40 p-1 rounded-lg transition-all"
-        title="Click to edit item"
-      >
-        <div className="flex flex-col">
-          {/* Title and Favourite */}
-          <div className="flex items-center gap-1.5 justify-between pr-2">
-            <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
-              <p className={`font-semibold text-sm text-zinc-900 leading-tight break-words ${checked ? 'line-through text-zinc-400 font-medium' : ''}`}>
-                {item.name}
-              </p>
-
-              {item.isBatch && (
-                <span className="text-cyan-500 shrink-0" title="Batch">
-                  <Snowflake className="w-3 h-3" />
-                </span>
-              )}
-
-              {item.isRecurring && (
-                <span className="text-emerald-500 shrink-0" title="Recurring">
-                  <RotateCcw className="w-3 h-3" />
-                </span>
-              )}
-
-              {item.isAdhoc && (
-                <span className="text-amber-500 shrink-0" title="Added Item">
-                  <UserPlus className="w-3 h-3" />
-                </span>
-              )}
-
-              {item.checkCupboard && !checked && item.cupboard !== 'need' && (
-                <span
-                  className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5 shrink-0"
-                  title="Store-cupboard item: check you have it before buying"
-                >
-                  check cupboard
-                </span>
-              )}
-
-              {item.needsCheck && !checked && (
-                <span
-                  className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-1.5 py-0.5 shrink-0"
-                  title={item.quantityNote || 'Part of this amount could not be worked out from the recipe'}
-                >
-                  check amount
-                </span>
-              )}
-
-              {isBelowRequirement && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onResetToRequired?.(item, requirement.requiredAmount);
-                  }}
-                  className="inline-flex items-center gap-0.5 text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/60 px-1 py-0.2 rounded hover:bg-amber-100 transition-colors cursor-pointer shrink-0"
-                  title={`${requirement.requiredAmount} required for meal plan. Click to restore.`}
-                >
-                  <Info className="w-2.5 h-2.5 text-amber-600" />
-                  <span>Need {requirement.requiredAmount}</span>
-                </button>
-              )}
-            </div>
-
-            {onToggleFavourite && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleFavourite(item.name, aisleInfo.name);
-                }}
-                className={`p-0.5 rounded-full transition-colors shrink-0 ${
-                  isFavourite 
-                    ? 'text-rose-500 hover:bg-rose-50' 
-                    : 'text-zinc-300 hover:text-rose-400 hover:bg-zinc-100'
-                }`}
-                title={isFavourite ? "Remove from favourites" : "Add to favourites"}
-              >
-                <Heart className={`w-3.5 h-3.5 ${isFavourite ? 'fill-rose-500' : ''}`} />
-              </button>
-            )}
-          </div>
-
-          {/* Subtext info (for recipes, batch cooking details) */}
-          {((requiredFor && requiredFor.length > 0) || (!requiredFor && item.isBatch && item.batchRecipeName) || (!requiredFor && item.recipeNames && item.recipeNames.length > 0) || item.quantityNote) && (
-            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5 flex-wrap">
-              {requiredFor && requiredFor.length > 0 && (
-                <span className="truncate max-w-[200px]">
-                  For: {requiredFor.join(', ')}
-                </span>
-              )}
-
-              {!requiredFor && item.isBatch && item.batchRecipeName && (
-                <span className="truncate max-w-[200px] text-zinc-500">
-                  for Batch: {item.batchRecipeName}
-                </span>
-              )}
-
-              {!requiredFor && item.recipeNames && item.recipeNames.length > 0 && (
-                <span className="truncate max-w-[200px]">
-                  for {item.recipeNames.join(', ')}
-                </span>
-              )}
-
-              {item.quantityNote && (
-                <span className={item.needsCheck ? 'text-rose-600' : 'text-zinc-500'}>
-                  {item.quantityNote}
-                </span>
-              )}
-            </div>
-          )}
+    <div className="fixed inset-0 bg-black/40 z-[70] flex items-center justify-center p-4" data-below-needed>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <h3 className="font-semibold text-lg mb-2 text-zinc-900">Less than your meals need</h3>
+        <p className="text-zinc-700 text-sm">
+          {recipes.length ? `${formatListWithAnd(recipes)} need${recipes.length === 1 ? 's' : ''}` : 'Your meals need'} {need} of {data.item?.name}.
+        </p>
+        <div className="flex flex-col gap-2 mt-5">
+          <button onClick={onKeepRequired} className="w-full px-4 py-3 font-semibold text-white bg-zinc-900 hover:bg-zinc-800 rounded-xl">Keep {need}</button>
+          <button onClick={() => onConfirmReduce(data.targetAmount)} className="w-full px-4 py-3 font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-xl">{data.isRemoval ? 'Remove it anyway' : 'Use less anyway'}</button>
+          <button onClick={onClose} className="w-full px-4 py-2 font-medium text-zinc-500 rounded-xl">Cancel</button>
         </div>
       </div>
-
-      {/* Right/Bottom section: Quantity display, adjuster, edit, delete, complete checkbox */}
-      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {isPending && (
-          <button
-            onClick={undo}
-            className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 active:bg-emerald-100 transition-colors cursor-pointer"
-          >
-            Undo
-          </button>
-        )}
-        
-        {!isPending && onUpdateQuantity && (
-          <div className="flex items-center bg-zinc-50 border border-zinc-200/80 rounded-lg p-0.5">
-            <button
-              type="button"
-              onClick={() => onUpdateQuantity(item.id, -1)}
-              disabled={item.isAdhoc ? item.amount <= 1 : item.amount <= 0}
-              className="w-5 h-5 rounded flex items-center justify-center text-zinc-500 hover:text-zinc-800 hover:bg-white disabled:opacity-25 transition-all cursor-pointer"
-            >
-              <Minus className="w-2.5 h-2.5 stroke-[2.5]" />
-            </button>
-            <input
-              type="text"
-              value={localVal}
-              onChange={(e) => setLocalVal(e.target.value)}
-              onBlur={handleBlurOrSubmit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleBlurOrSubmit();
-                  e.currentTarget.blur();
-                }
-              }}
-              className="text-[11px] font-bold text-zinc-800 w-11 sm:w-14 text-center bg-transparent border-0 p-0 outline-none focus:ring-0 focus:bg-white rounded px-0.5 select-text"
-            />
-            <button
-              type="button"
-              onClick={() => onUpdateQuantity(item.id, 1)}
-              className="w-5 h-5 rounded flex items-center justify-center text-zinc-500 hover:text-zinc-800 hover:bg-white transition-all cursor-pointer"
-            >
-              <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
-            </button>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={toggle}
-          className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
-            checked 
-              ? 'bg-emerald-500 border-emerald-500 shadow-inner' 
-              : 'bg-white border-zinc-200/80 shadow-2xs hover:border-zinc-300'
-          }`}
-          aria-label={checked ? "Uncheck item" : "Check item"}
-        >
-          {checked && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
-        </button>
-      </div>
-    </div>  );
-}
-
-interface AggregatedShoppingListItem {
-  id: string;
-  name: string;
-  amount: number | string;
-  displayQuantity?: string;
-  unit: string;
-  category?: string;
-  checked: boolean;
-  isAdhoc: boolean;
-  isBatch?: boolean;
-  isRecurring?: boolean;
-  batchRecipeName?: string;
-  recipeNames?: string[];
-  underlyingIds: string[];
-  description: string;
-  checkCupboard?: boolean;
-  needsCheck?: boolean;
-  quantityNote?: string;
+    </div>
+  );
 }
 
 interface ShoppingModeViewProps {
@@ -2305,6 +1723,34 @@ interface ShoppingModeViewProps {
   onArrangeAisles: () => void;
   cupboardToCheckCount: number;
   onCupboardCheck: () => void;
+  /** "Done shopping": what to do with anything you didn't get. */
+  onDone: () => void;
+  /** The add box, for something you forgot. */
+  quickAdd?: React.ReactNode;
+}
+
+/** Keep the phone's screen on while shopping (where the browser allows it). */
+function useScreenAwake() {
+  useEffect(() => {
+    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    if (!nav?.wakeLock?.request) return;
+    let lock: any = null;
+    let stopped = false;
+    const grab = async () => {
+      try {
+        if (document.visibilityState !== 'visible' || stopped) return;
+        lock = await nav.wakeLock.request('screen');
+      } catch { /* not allowed here: the screen just sleeps as usual */ }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void grab(); };
+    void grab();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      try { lock?.release?.(); } catch { /* ignore */ }
+    };
+  }, []);
 }
 
 function ShoppingModeView({
@@ -2321,8 +1767,11 @@ function ShoppingModeView({
   aisleOrder,
   onArrangeAisles,
   cupboardToCheckCount,
-  onCupboardCheck
+  onCupboardCheck,
+  onDone,
+  quickAdd,
 }: ShoppingModeViewProps) {
+  useScreenAwake();
   const currentMondayStr = formatDateISO(getMonday(new Date()));
   const nextMondayStr = formatDateISO(getNextMonday(new Date()));
   const [filter, setFilter] = useState<'all' | 'to_buy' | 'bought'>('all');
@@ -2344,119 +1793,8 @@ function ShoppingModeView({
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  // Same product = same row, whatever it's called ("Chicken breasts" / "chicken breast fillets").
-  const getGroupingKey = (name: string, groceryId?: string): string => {
-    const product = matchProduct(getCatalog(), name, { groceryId });
-    return product ? `p:${product.id}` : `n:${groupingKey(name)}`;
-  };
-
-  // Aggregate items with matching normalized names
-  const aggregatedItems = useMemo(() => {
-    const groups: Record<string, ShoppingListItem[]> = {};
-    items.forEach(item => {
-      const key = getGroupingKey(item.name, item.groceryId);
-      if (!groups[key]) {
-        groups[key] = [];
-      }
-      groups[key].push(item);
-    });
-
-    const result: AggregatedShoppingListItem[] = [];
-
-    Object.values(groups).forEach(groupItems => {
-      if (groupItems.length === 0) return;
-
-      const sortedByPreference = [...groupItems].sort((a, b) => {
-        const getScore = (item: ShoppingListItem) => {
-          if (!item.isAdhoc && !item.isBatch && !item.isRecurring) return 4;
-          if (item.isBatch) return 3;
-          if (item.isRecurring) return 2;
-          return 1;
-        };
-        return getScore(b) - getScore(a);
-      });
-
-      const canonical = sortedByPreference[0];
-      const { amount: totalAmount, unit, displayQuantity } = aggregateIngredients(groupItems);
-      const checked = groupItems.every(item => item.checked);
-      const underlyingIds = groupItems.map(item => item.id);
-
-      const recipeNameSet = new Set<string>();
-      const batchRecipeNameSet = new Set<string>();
-      let extraAmount = 0;
-      let isRecurring = false;
-      let hasPlanned = false;
-      let hasBatch = false;
-
-      groupItems.forEach(item => {
-        if (!item.isAdhoc && !item.isBatch && !item.isRecurring) {
-          hasPlanned = true;
-          if (item.recipeNames) {
-            item.recipeNames.forEach(rn => recipeNameSet.add(rn));
-          }
-        } else if (item.isBatch) {
-          hasBatch = true;
-          if (item.batchRecipeName) {
-            batchRecipeNameSet.add(item.batchRecipeName);
-          }
-        } else if (item.isRecurring) {
-          isRecurring = true;
-        } else if (item.isAdhoc) {
-          extraAmount += item.amount || 0;
-        }
-      });
-
-      const descParts: string[] = [];
-
-      if (recipeNameSet.size > 0) {
-        descParts.push(`For ${Array.from(recipeNameSet).join(', ')}`);
-      } else if (hasPlanned) {
-        descParts.push('For Planned meals');
-      }
-
-      if (batchRecipeNameSet.size > 0) {
-        descParts.push(`for Batch: ${Array.from(batchRecipeNameSet).join(', ')}`);
-      } else if (hasBatch) {
-        descParts.push('for Batch cooking');
-      }
-
-      if (extraAmount > 0) {
-        descParts.push(`${extraAmount} extra`);
-      }
-
-      if (isRecurring) {
-        descParts.push('Recurring');
-      }
-
-      const description = descParts.join(' + ');
-
-      const isAdhoc = groupItems.every(i => i.isAdhoc);
-      const isBatch = groupItems.some(i => i.isBatch);
-      const isRecurringFlag = groupItems.some(i => i.isRecurring);
-
-      result.push({
-        id: canonical.id,
-        name: canonical.name,
-        amount: totalAmount,
-        unit: unit,
-        displayQuantity: displayQuantity,
-        category: canonical.category,
-        checked,
-        isAdhoc,
-        isBatch,
-        isRecurring: isRecurringFlag,
-        batchRecipeName: canonical.batchRecipeName,
-        recipeNames: Array.from(recipeNameSet),
-        underlyingIds,
-        description,
-        checkCupboard: groupItems.every(i => i.checkCupboard && i.cupboard !== 'need'),
-        needsCheck: groupItems.some(i => i.needsCheck),
-        quantityNote: groupItems.map(i => i.quantityNote).filter(Boolean).join('; ') || undefined
-      });
-    });
-
-    return result;
-  }, [items]);
+  // One row per product, exactly as on the Shop list (so the counts match).
+  const aggregatedItems = useMemo(() => aggregateShoppingItems(items), [items]);
 
   const totalCount = aggregatedItems.length;
   const checkedCount = aggregatedItems.filter(i => i.checked).length;
@@ -2583,7 +1921,7 @@ function ShoppingModeView({
           <div className="max-w-2xl mx-auto flex flex-row items-center justify-between gap-1.5 sm:gap-4 flex-nowrap w-full overflow-x-auto scrollbar-none">
             {/* Left: Date */}
             <h2 className="text-xs sm:text-sm font-bold text-zinc-900 leading-tight shrink-0 whitespace-nowrap">
-              {activePlan ? (activePlan.startDate === currentMondayStr ? 'This Week' : activePlan.startDate === nextMondayStr ? 'Next Week' : formatWeekRange(activePlan.startDate)) : 'This Week'}
+              {activePlan ? (activePlan.startDate === currentMondayStr ? 'This week' : activePlan.startDate === nextMondayStr ? 'Next week' : formatWeekSpan(activePlan.startDate)) : 'This week'}
             </h2>
 
             {/* Middle: Filters */}
@@ -2756,7 +2094,7 @@ function ShoppingModeView({
       </header>
 
       {/* Main Simplified Shopping List Area */}
-      <div className={`flex-1 overflow-y-auto ${compactRows ? 'p-2.5 sm:p-5' : 'p-4 sm:p-6'} pb-28 max-w-2xl mx-auto w-full ${compactRows ? 'space-y-2.5' : 'space-y-4'}`}>
+      <div className={`flex-1 overflow-y-auto ${compactRows ? 'p-2.5 sm:p-5' : 'p-4 sm:p-6'} pb-6 max-w-2xl mx-auto w-full ${compactRows ? 'space-y-2.5' : 'space-y-4'}`}>
         {cupboardToCheckCount > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between gap-3">
             <span className="text-sm text-amber-950">
@@ -2778,24 +2116,24 @@ function ShoppingModeView({
             <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
               <Check className="w-7 h-7 stroke-[3]" />
             </div>
-            <h3 className="text-lg font-bold text-emerald-950">Shop 100% Complete!</h3>
-            <p className="text-xs text-emerald-800 max-w-xs mx-auto">
-              All {totalCount} items on your list have been checked off.
+            <h3 className="text-lg font-bold text-emerald-950">Shop 100% complete!</h3>
+            <p className="text-sm text-emerald-800 max-w-xs mx-auto">
+              All {totalCount} items on your list have been ticked.
             </p>
             <div className="pt-2 flex justify-center gap-2">
               <button
                 type="button"
-                onClick={onExit}
-                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+                onClick={onDone}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                Exit Shopping Mode
+                Done shopping
               </button>
               <button
                 type="button"
                 onClick={onUncheckAll}
                 className="px-3 py-2 bg-white border border-emerald-300 text-emerald-800 text-xs font-semibold rounded-xl hover:bg-emerald-50 transition-colors cursor-pointer"
               >
-                Uncheck All
+                Untick all
               </button>
             </div>
           </div>
@@ -2860,7 +2198,7 @@ function ShoppingModeView({
                     <div className="flex items-center gap-1.5">
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
                       <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
-                        Items
+                        Added by you
                       </span>
                     </div>
                     <span className="text-[11px] font-semibold text-zinc-400">
@@ -2896,8 +2234,7 @@ function ShoppingModeView({
                     >
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`} />
                       <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400 truncate max-w-[130px] sm:max-w-none">
-                        <span className="hidden sm:inline">Recurring Staples</span>
-                        <span className="sm:hidden">Staples</span>
+                        Weekly staples
                       </span>
                     </button>
                     
@@ -2908,7 +2245,7 @@ function ShoppingModeView({
                           e.stopPropagation();
                           onEditStaples();
                         }}
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-650 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
                         title="Manage Staples"
                       >
                         <Sliders className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
@@ -2949,7 +2286,7 @@ function ShoppingModeView({
                     <div className="flex items-center gap-1.5">
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
                       <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
-                        Meal Ingredients
+                        For your meals
                       </span>
                     </div>
                     <span className="text-[11px] font-semibold text-zinc-400">
@@ -2985,7 +2322,7 @@ function ShoppingModeView({
                     <div className="flex items-center gap-1.5">
                       <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
                       <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
-                        Batch Meals
+                        Extra recipes
                       </span>
                     </div>
                     <span className="text-[11px] font-semibold text-zinc-400">
@@ -3072,7 +2409,27 @@ function ShoppingModeView({
             )}
           </div>
         )}
+        {quickAdd && totalCount > 0 && <div className="pt-1" data-shopping-quick-add>{quickAdd}</div>}
       </div>
+
+      {/* Always in reach: finish the shop */}
+      {totalCount > 0 && (
+        <div className="shrink-0 bg-white border-t border-zinc-200 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            <span className="text-sm text-zinc-600 tabular-nums">{pendingCount} left</span>
+            <button
+              type="button"
+              onClick={onDone}
+              className={`ml-auto px-5 py-2.5 rounded-xl text-[15px] font-semibold cursor-pointer ${
+                pendingCount === 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-zinc-900 hover:bg-zinc-800 text-white'
+              }`}
+              data-done-shopping
+            >
+              Done shopping
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3082,16 +2439,6 @@ interface ShoppingModeItemRowProps {
   item: AggregatedShoppingListItem;
   onToggle: (id: string) => void;
   compact?: boolean;
-}
-
-/** How much to buy, as it reads in the shop: "1 kg", "2 cans", "6". */
-function shopQuantityText(item: AggregatedShoppingListItem): string {
-  if (item.displayQuantity) return item.displayQuantity;
-  const rawUnit = item.unit ? item.unit.toLowerCase().trim() : '';
-  const isCount = !rawUnit || ['whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', 'each'].includes(rawUnit);
-  const big = typeof item.amount === 'number' ? largeUnitQuantity(item.amount, item.unit) : null;
-  if (big) return `${formatShopAmount(big.amount)} ${big.unit}`;
-  return isCount ? `${item.amount}` : `${item.amount}${item.unit ? ' ' + item.unit : ''}`;
 }
 
 function ShoppingModeItemRow({
@@ -3132,6 +2479,11 @@ function ShoppingModeItemRow({
           {item.needsCheck && !item.checked && (
             <span className="shrink-0 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 py-px" title={item.quantityNote}>
               check
+            </span>
+          )}
+          {item.note && (
+            <span className="min-w-0 truncate text-xs text-amber-800 inline-flex items-center gap-0.5" data-row-note>
+              <StickyNote className="w-3 h-3 shrink-0" />{item.note}
             </span>
           )}
         </div>
@@ -3186,6 +2538,9 @@ function ShoppingModeItemRow({
             </span>
           )}
         </div>
+        {item.note && (
+          <p className="text-sm mt-1 text-amber-800 flex items-center gap-1" data-row-note><StickyNote className="w-3.5 h-3.5 shrink-0" />{item.note}</p>
+        )}
         {item.quantityNote && !item.checked && (
           <p className={`text-xs mt-1 ${item.needsCheck ? 'text-rose-600' : 'text-zinc-500'}`}>{item.quantityNote}</p>
         )}
@@ -3553,10 +2908,10 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
     <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-55 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden border border-zinc-200">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-150 flex items-center justify-between bg-zinc-50/50">
+        <div className="px-5 py-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-50/50">
           <div className="flex items-center gap-2">
             <RotateCcw className="w-4 h-4 text-emerald-600" />
-            <h3 className="font-bold text-sm text-zinc-905 lowercase">Manage Recurring Staples</h3>
+            <h3 className="font-bold text-base text-zinc-900">Weekly staples</h3>
           </div>
           <button 
             type="button" 
@@ -3606,7 +2961,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                       onClick={() => handleQuickAddStaple(suggestion.name)}
                       className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 text-left transition-colors border-b border-zinc-50 last:border-0 cursor-pointer"
                     >
-                      <span className="text-xs font-semibold text-zinc-850">{suggestion.name}</span>
+                      <span className="text-xs font-semibold text-zinc-800">{suggestion.name}</span>
                       <span className="text-[11px] font-medium px-1.5 py-0.5 bg-zinc-100 text-zinc-500 rounded">
                         {suggestion.category}
                       </span>
@@ -3652,7 +3007,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                           type="button"
                           onClick={() => handleUpdateStapleQuantity(item.id, -1)}
                           disabled={item.amount <= 0.1}
-                          className="w-5 h-5 rounded flex items-center justify-center text-zinc-650 hover:text-zinc-950 hover:bg-white disabled:opacity-25 disabled:hover:bg-transparent transition-all cursor-pointer"
+                          className="w-5 h-5 rounded flex items-center justify-center text-zinc-600 hover:text-zinc-950 hover:bg-white disabled:opacity-25 disabled:hover:bg-transparent transition-all cursor-pointer"
                         >
                           <Minus className="w-2.5 h-2.5 stroke-[2.5]" />
                         </button>
@@ -3662,7 +3017,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                         <button
                           type="button"
                           onClick={() => handleUpdateStapleQuantity(item.id, 1)}
-                          className="w-5 h-5 rounded flex items-center justify-center text-zinc-650 hover:text-zinc-950 hover:bg-white transition-all cursor-pointer"
+                          className="w-5 h-5 rounded flex items-center justify-center text-zinc-600 hover:text-zinc-950 hover:bg-white transition-all cursor-pointer"
                         >
                           <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
                         </button>
@@ -3702,11 +3057,11 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-zinc-150 flex justify-end bg-zinc-50/50">
+        <div className="px-5 py-4 border-t border-zinc-200 flex justify-end bg-zinc-50/50">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-indigo-650 hover:bg-indigo-750 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
           >
             Done
           </button>

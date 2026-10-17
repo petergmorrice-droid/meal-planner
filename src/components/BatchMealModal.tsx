@@ -16,7 +16,8 @@ import {
   Layers,
   Sparkles,
   ShoppingBag,
-  Info
+  Info,
+  BookOpen
 } from 'lucide-react';
 import { Recipe, Ingredient } from '../types';
 import { convertToShoppingQuantity, FoodAisle, GROCERY_AISLES, getGroceryAisle } from '../utils';
@@ -55,7 +56,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
   // Selected recipe state
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [portions, setPortions] = useState<number>(4);
-  const [alsoAddToFreezer, setAlsoAddToFreezer] = useState<boolean>(true);
+  const [alsoAddToFreezer, setAlsoAddToFreezer] = useState<boolean>(false);
   
   // Scaled ingredients editable list
   const [ingredientList, setIngredientList] = useState<ScaledIngredientItem[]>([]);
@@ -102,8 +103,8 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
   const handleSelectRecipe = (recipe: Recipe) => {
     setSelectedRecipe(recipe);
     const baseServings = recipe.servings && recipe.servings > 0 ? recipe.servings : 2;
-    // Default batch portions: either double base servings or at least 4
-    const defaultPortions = Math.max(4, baseServings * 2);
+    // Starts at the recipe's own number of people; change it for a batch cook or a crowd.
+    const defaultPortions = baseServings;
     setPortions(defaultPortions);
     buildScaledIngredients(recipe, defaultPortions);
   };
@@ -253,13 +254,13 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
         {/* Header */}
         <div className="px-5 py-4 bg-white border-b border-zinc-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-cyan-50 border border-cyan-100 flex items-center justify-center text-cyan-600">
-              <Snowflake className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+              <BookOpen className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-zinc-900 leading-tight">
-                  Add Batch Meal Ingredients
+                  Add a recipe's ingredients
                 </h2>
                 {weekLabel && (
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 hidden sm:inline-block">
@@ -269,8 +270,8 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
               </div>
               <p className="text-xs text-zinc-400">
                 {selectedRecipe 
-                  ? `Configure batch portions and choose ingredients for ${selectedRecipe.name}`
-                  : 'Select a meal to scale and add ingredients to this week\'s shopping list'}
+                  ? `${selectedRecipe.name}: how many portions, and which ingredients to buy`
+                  : 'Any recipe, for any number of people: a batch cook, or something not on the plan'}
               </p>
             </div>
           </div>
@@ -475,7 +476,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     onChange={(e) => setAlsoAddToFreezer(e.target.checked)}
                     className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
                   />
-                  <span>Also track <strong>{portions} portions</strong> in Freezer Batches (Freezer tab)</span>
+                  <span>It's for the freezer: add <strong>{portions} portions</strong> to the Freezer tab</span>
                 </label>
               </div>
 
@@ -501,7 +502,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add {selectedCount} {selectedCount === 1 ? 'Ingredient' : 'Ingredients'} to Shopping List</span>
+                  <span>Add {selectedCount} to the list</span>
                 </button>
               </div>
             </div>
@@ -522,7 +523,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   }`}
                 >
                   <ChefHat className="w-3.5 h-3.5" />
-                  <span>From Cookbook ({recipes.length})</span>
+                  <span>From the cookbook ({recipes.length})</span>
                 </button>
                 <button
                   type="button"
@@ -534,7 +535,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   }`}
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Custom Meal</span>
+                  <span>Your own list</span>
                 </button>
               </div>
             </div>
@@ -628,7 +629,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       </h4>
                       <p className="text-[11px] text-zinc-400 max-w-xs mx-auto mb-3">
                         {recipes.length === 0 
-                          ? 'You can create recipes in the Cookbook tab or add a custom batch meal right here.'
+                          ? 'You can add recipes in the Cookbook tab, or type your own list here.'
                           : 'Try changing your search terms or filters.'}
                       </p>
                       <button
@@ -637,7 +638,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-colors cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Add Custom Meal Instead</span>
+                        <span>Type your own list</span>
                       </button>
                     </div>
                   ) : (
@@ -687,7 +688,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                               </div>
 
                               <span className="font-semibold text-indigo-600 group-hover:underline flex items-center gap-0.5">
-                                <span>Select & Scale</span>
+                                <span>Choose</span>
                                 <span>→</span>
                               </span>
                             </div>
@@ -708,13 +709,13 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   <div className="bg-white p-4 rounded-xl border border-zinc-200/80 shadow-2xs space-y-3">
                     <div>
                       <label className="block text-xs font-bold text-zinc-700 mb-1">
-                        Batch Meal Name
+                        What's it for?
                       </label>
                       <input
                         type="text"
                         value={customMealName}
                         onChange={(e) => setCustomMealName(e.target.value)}
-                        placeholder="e.g. Grandma's Lasagne, Beef Chilli, Lentil Dhal..."
+                        placeholder="e.g. Lasagne for the freezer, birthday cake..."
                         className="w-full bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 py-2 text-xs font-medium transition-all"
                       />
                     </div>
@@ -722,7 +723,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
                       <div>
                         <span className="text-xs font-bold text-zinc-700 block">Portions</span>
-                        <span className="text-[11px] text-zinc-400">Number of servings this batch will make</span>
+                        <span className="text-[11px] text-zinc-500">How many it makes</span>
                       </div>
                       <div className="flex items-center bg-zinc-100 rounded-xl p-0.5 border border-zinc-200">
                         <button
@@ -820,7 +821,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                         onChange={(e) => setAlsoAddToFreezer(e.target.checked)}
                         className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
                       />
-                      <span>Also track in Freezer Batches ({customPortions} portions)</span>
+                      <span>It's for the freezer: add {customPortions} portions to the Freezer tab</span>
                     </label>
                   </div>
 
@@ -839,7 +840,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 rounded-xl shadow-xs transition-colors cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Add Ingredients to Shopping List</span>
+                      <span>Add to the list</span>
                     </button>
                   </div>
                 </div>

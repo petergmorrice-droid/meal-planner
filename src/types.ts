@@ -140,6 +140,8 @@ export interface ShoppingListItem {
   quantityNote?: string;
   /** Answer from the cupboard check: 'have' = already in the cupboard, not buying; 'need' = buy it. */
   cupboard?: 'have' | 'need';
+  /** Your own note for the shop: "semi-skimmed", "big tub", "if on offer". */
+  note?: string;
 }
 
 export interface RecurringItem {

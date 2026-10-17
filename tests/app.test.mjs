@@ -5,6 +5,8 @@ import {
   recipeMethods, totalMinutes, formatMinutes, recipeHistories, formatAgo, formatPlannedDay, freezerPortions, freezerBatchesFor,
   sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe,
   recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
+  aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
+  listAsText, carryItemsToWeek, shopDurationText, partLabel,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
 } from '../.test-build/app.mjs';
 
@@ -264,6 +266,101 @@ test('a meal from the freezer adds nothing to the shopping list', () => {
   const plan = (meal) => ({ id: 'p', startDate: '2026-10-19', status: 'draft', days: week({ Monday: meal }) });
   assert.equal(generateShoppingListForPlan(plan(cook('a', 'chilli')), recipes).length, 1);
   assert.equal(generateShoppingListForPlan(plan({ id: 'f', type: 'batch', batchId: 'b1', recipeId: 'chilli', name: 'Batch: Chilli', servings: 2 }), recipes).length, 0);
+});
+
+// ---------- Shop ----------
+const li = (id, name, amount, unit, extra = {}) => ({ id, name, amount, unit, checked: false, isAdhoc: false, planId: 'p2', ...extra });
+
+test('shop: one row per product, with where it came from and your notes', () => {
+  const rows = aggregateShoppingItems([
+    li('a', 'Milk', 4, 'pints', { isRecurring: true }),
+    li('b', 'Milk', 2, 'pints', { isAdhoc: true, note: 'semi-skimmed' }),
+    li('c', 'Onion', 3, '', { recipeNames: ['Chilli', 'Bolognese'] }),
+    li('d', 'Beef mince', 1000, 'g', { recipeNames: ['Chilli'] }),
+  ]);
+  const milk = rows.find((r) => r.name === 'Milk');
+  assert.equal(shopQuantityText(milk), '6 pints');
+  assert.deepEqual(milk.underlyingIds.sort(), ['a', 'b']);
+  assert.equal(milk.note, 'semi-skimmed');
+  assert.match(milk.description, /weekly staple/);
+  assert.equal(rows.find((r) => r.name === 'Onion').description, 'for Chilli, Bolognese');
+  assert.equal(shopQuantityText(rows.find((r) => r.name === 'Beef mince')), '1 kg');
+  assert.equal(partLabel(li('x', 'Milk', 1, 'pint', { isAdhoc: true })), 'Added by you');
+  assert.equal(partLabel(li('x', 'Rice', 1, 'bag', { isBatch: true, batchRecipeName: 'Lasagne' })), 'For Lasagne (extra)');
+});
+
+test('shop: opens on the week you are likely shopping for, if it has things to buy', () => {
+  const plans = [
+    { id: 'p1', startDate: '2026-10-12', status: 'finalized', days: {} },
+    { id: 'p2', startDate: '2026-10-19', status: 'finalized', days: {} },
+    { id: 'p3', startDate: '2026-10-26', status: 'draft', days: {} },
+  ];
+  const list = [li('a', 'Milk', 1, 'pint', { planId: 'p1' }), li('b', 'Eggs', 6, 'eggs', { planId: 'p2' }), li('c', 'Bread', 1, 'loaf', { planId: 'p3' })];
+  assert.equal(defaultShopWeek(plans, list, '2026-10-19', '2026-10-19'), 'p2', 'Saturday: next week (sent, things to buy)');
+  assert.equal(defaultShopWeek(plans, list, '2026-10-12', '2026-10-19'), 'p1', 'Monday: this week');
+  const bought = list.map((i) => (i.planId === 'p1' ? { ...i, checked: true } : i));
+  assert.equal(defaultShopWeek(plans, bought, '2026-10-12', '2026-10-19'), 'p2', 'this week all bought: the next sent week');
+  const doneNext = list.map((i) => (i.planId === 'p2' ? { ...i, checked: true } : i));
+  assert.equal(defaultShopWeek(plans, doneNext, '2026-10-19', '2026-10-19'), 'p2', "Saturday, next week all bought: still next week (not this week's leftovers)");
+  const nothing = list.map((i) => ({ ...i, checked: true }));
+  assert.equal(defaultShopWeek(plans, nothing, '2026-10-12', '2026-10-19'), 'p1', 'nothing to buy anywhere: the likely week');
+  assert.equal(defaultShopWeek(plans, [li('c', 'Bread', 1, 'loaf', { planId: 'p3' })], '2026-10-26', '2026-10-19'), 'p3', 'unsent weeks only count as the likely week');
+  assert.equal(formatWeekSpan('2026-10-19'), '19–25 Oct');
+  assert.equal(formatWeekSpan('2026-10-26'), '26 Oct – 1 Nov');
+});
+
+test('shop: typing into the add box', () => {
+  assert.deepEqual(parseQuickAdd('2 pints milk'), { name: 'milk', amount: 2, unit: 'pints' });
+  assert.deepEqual(parseQuickAdd('500g beef mince'), { name: 'beef mince', amount: 500, unit: 'g' });
+  assert.deepEqual(parseQuickAdd('2 tins of chopped tomatoes'), { name: 'chopped tomatoes', amount: 2, unit: 'tins' });
+  assert.deepEqual(parseQuickAdd('6 eggs'), { name: 'eggs', amount: 6 });
+  assert.deepEqual(parseQuickAdd('2 garlic'), { name: 'garlic', amount: 2 });
+  assert.deepEqual(parseQuickAdd('milk x2'), { name: 'milk', packs: 2 });
+  assert.deepEqual(parseQuickAdd('2x bread'), { name: 'bread', packs: 2 });
+  assert.deepEqual(parseQuickAdd('  bin   bags '), { name: 'bin bags' });
+  const q = (t) => { const r = quickAddLine(parseQuickAdd(t)); return `${r.name}: ${shopQuantityText(r)}`; };
+  assert.equal(q('milk'), 'Milk: 1 pint');
+  assert.equal(q('2 milk'), 'Milk: 2 pints', 'a number that makes no sense as milk = packs');
+  assert.equal(q('2 pints milk'), 'Milk: 2 pints');
+  assert.equal(q('6 eggs'), 'Eggs: 6 eggs');
+  assert.equal(q('3 lemons'), 'Lemons: 3');
+  assert.equal(q('milk x3'), 'Milk: 3 pints');
+  assert.equal(q('tortilla chips'), 'Tortilla chips: 1');
+});
+
+test('shop: the list as text, what is left to buy, aisle by aisle', () => {
+  const rows = aggregateShoppingItems([li('a', 'Carrots', 200, 'g'), li('b', 'Lemons', 2, '', { checked: true }), li('c', 'Milk', 4, 'pints', { note: 'semi-skimmed' })]);
+  const text = listAsText('Shopping list · Next week (19–25 Oct)', [
+    { name: 'Fresh Produce', items: rows.filter((r) => r.name !== 'Milk') },
+    { name: 'Dairy, Chilled & Eggs', items: rows.filter((r) => r.name === 'Milk') },
+  ]);
+  assert.equal(text, 'Shopping list · Next week (19–25 Oct)\n\nFresh Produce\n• Carrots – 200 g\n\nDairy, Chilled & Eggs\n• Milk – 4 pints (semi-skimmed)');
+  assert.match(listAsText('T', []), /Nothing left to buy/);
+});
+
+test('shop: things you did not get move to next week, once each', () => {
+  let n = 0;
+  const list = [
+    li('a', 'Milk', 4, 'pints', { isRecurring: true }),
+    li('b', 'Milk', 2, 'pints', { isAdhoc: true, note: 'semi' }),
+    li('c', 'Coriander', 1, 'bunch', { recipeNames: ['Curry'] }),
+    li('d', 'Bread', 1, 'loaf'),
+    li('e', 'Bread', 1, 'loaf', { planId: 'p3', isRecurring: true }),
+    li('f', 'Eggs', 6, 'eggs', { checked: true }),
+  ];
+  const r = carryItemsToWeek(list, ['a', 'b', 'c', 'd'], 'p3', 'Week of 26 Oct', () => `new${++n}`);
+  assert.deepEqual(r.moved.sort(), ['Coriander', 'Milk']);
+  assert.deepEqual(r.alreadyThere, ['Bread']);
+  assert.ok(!r.list.some((i) => ['a', 'b', 'c', 'd'].includes(i.id)), 'taken off this week');
+  const milk = r.list.find((i) => i.planId === 'p3' && i.name === 'Milk');
+  assert.equal(milk.amount, 6);
+  assert.equal(milk.note, 'semi');
+  assert.ok(milk.isAdhoc && !milk.isRecurring && !milk.checked);
+  assert.ok(r.list.some((i) => i.id === 'f'), 'bought things stay');
+  assert.equal(shopDurationText(23 * 60_000), '23 min');
+  assert.equal(shopDurationText(65 * 60_000), '1 hr 5 min');
+  assert.equal(shopDurationText(30_000), null);
+  assert.equal(shopDurationText(9 * 3600_000), null);
 });
 
 test('your own notes on leftovers are kept', () => {

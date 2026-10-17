@@ -271,13 +271,13 @@ export function IngredientTriageModal({
               </span>
               <div className="flex items-center gap-1.5">
                 {currentItem.ingredient.suggestedAisle && !isEditingIngredient && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-150">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                     <Sparkles className="w-2.5 h-2.5 text-emerald-500" />
                     <span>Aisle: {currentItem.ingredient.suggestedAisle}</span>
                   </span>
                 )}
                 {isEditingIngredient && (
-                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-150">
+                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
                     Editing Ingredient
                   </span>
                 )}

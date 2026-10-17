@@ -817,14 +817,14 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       }
     }
 
-    setToastMessage('Sent: the ingredients are on the shopping list.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop') } : null);
+    setToastMessage('Sent: the ingredients are on the shopping list.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop', currentPlan.id) } : null);
   };
 
   // "Update list": the week changed after it was sent.
   const handleUpdateShoppingList = () => {
     if (!currentPlan) return;
     sendWeekToShoppingList(store, currentPlan);
-    setToastMessage('Shopping list updated.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop') } : null);
+    setToastMessage('Shopping list updated.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop', currentPlan.id) } : null);
   };
 
   const plannedDaysCount = currentPlan 
@@ -1377,7 +1377,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
               ) : (
                 <button
                   type="button"
-                  onClick={() => setToastMessage('This week is on the shopping list.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop') } : null)}
+                  onClick={() => setToastMessage('This week is on the shopping list.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop', currentPlan?.id) } : null)}
                   className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   title="Sent to the shopping list"
                   data-sent

@@ -745,7 +745,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                   </div>
 
                   {pastPlans.length === 0 ? (
-                    <div className="bg-white rounded-2xl border border-zinc-150 p-6 text-center space-y-3">
+                    <div className="bg-white rounded-2xl border border-zinc-200 p-6 text-center space-y-3">
                       <p className="text-xs text-zinc-500">No finished weeks yet.</p>
                       <p className="text-[11px] text-zinc-400">Once a week is over it appears here, where you can look back at it or copy it to a new week.</p>
                     </div>
@@ -814,7 +814,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                               {/* Collapsible Re-use panel */}
                               {isExpanded && (
                                 <div className="border-t border-zinc-100 bg-zinc-50/30 p-3 space-y-3">
-                                  <div className="bg-zinc-900 text-white rounded-lg p-3 space-y-3.5 border border-zinc-850">
+                                  <div className="bg-zinc-900 text-white rounded-lg p-3 space-y-3.5 border border-zinc-800">
                                     <div className="min-w-0">
                                       <h4 className="text-[11px] font-bold text-white">Duplicate Whole Plan</h4>
                                       <p className="text-[11px] text-zinc-400 mt-0.5 leading-normal">
@@ -859,7 +859,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                                         const day = plan.days[dayName];
                                         const meals = day?.meals || [];
                                         return (
-                                          <div key={dayName} className="p-2 bg-white rounded-lg border border-zinc-150 text-[11px]">
+                                          <div key={dayName} className="p-2 bg-white rounded-lg border border-zinc-200 text-[11px]">
                                             <div className="flex items-center justify-between font-bold border-b border-zinc-100 pb-1 text-[11px] text-zinc-500">
                                               <span>{dayName}</span>
                                               <span>{day?.date}</span>
@@ -909,7 +909,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
             {activeSubSection === 'grocery_db' && (
               <div className="space-y-4 animate-in fade-in duration-150">
                 {/* 🧹 Grocery Database Health Card */}
-                <div className="bg-gradient-to-br from-indigo-50/70 via-white to-sky-50/40 rounded-2xl border border-indigo-150/90 p-4 sm:p-5 shadow-xs space-y-3.5">
+                <div className="bg-gradient-to-br from-indigo-50/70 via-white to-sky-50/40 rounded-2xl border border-indigo-200/90 p-4 sm:p-5 shadow-xs space-y-3.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
                       <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
@@ -940,7 +940,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>Run Database Clean-Up</span>
                     </button>
-                    <span className="text-[11px] text-zinc-450 italic">
+                    <span className="text-[11px] text-zinc-500 italic">
                       Reconciles aliases, merges duplicates, and optimizes smart aggregation.
                     </span>
                   </div>
@@ -1067,7 +1067,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                   {/* Touch/Mobile-friendly List View instead of a heavy overflowing table */}
                   <div className="divide-y divide-zinc-100 border border-zinc-200/80 rounded-2xl overflow-hidden shadow-4xs bg-white max-h-96 overflow-y-auto">
                     {filteredGroceryItems.length === 0 ? (
-                      <div className="p-8 text-center text-zinc-450 italic text-xs">
+                      <div className="p-8 text-center text-zinc-500 italic text-xs">
                         No matching grocery database items.
                       </div>
                     ) : (
@@ -1132,7 +1132,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     
                     {/* Member selection */}
-                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-150 flex flex-col justify-between">
+                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex flex-col justify-between">
                       <div>
                         <label className="text-xs font-semibold text-zinc-900 block">Active Planner</label>
                       </div>
@@ -1170,7 +1170,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                     </div>
 
                     {/* Portion sizes */}
-                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-150 space-y-2">
+                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2">
                       <label className="text-xs font-semibold text-zinc-900 block">Default Portions</label>
                       <div className="flex items-center gap-2.5">
                         <button
@@ -1188,7 +1188,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                         >
                           +
                         </button>
-                        <span className="text-[11px] text-zinc-450">portions</span>
+                        <span className="text-[11px] text-zinc-500">portions</span>
                       </div>
                     </div>
                   </div>
@@ -1262,10 +1262,10 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="font-semibold text-zinc-500">Gist ID:</span>
-                          <span className="font-mono text-zinc-800 break-all bg-white px-1.5 py-0.5 border border-zinc-150 rounded">{store.githubConfig.gistId}</span>
+                          <span className="font-mono text-zinc-800 break-all bg-white px-1.5 py-0.5 border border-zinc-200 rounded">{store.githubConfig.gistId}</span>
                         </div>
                         {store.lastSynced && (
-                          <div className="flex justify-between items-center text-[11px] text-zinc-450">
+                          <div className="flex justify-between items-center text-[11px] text-zinc-500">
                             <span>Last Synced:</span>
                             <span>{store.lastSynced.toLocaleTimeString()}</span>
                           </div>
@@ -1319,7 +1319,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                       }
                     }} className="space-y-4">
                       <div>
-                        <label className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
+                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
                           GitHub Personal Access Token (PAT)
                         </label>
                         <input
@@ -1338,7 +1338,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
+                          <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
                             Gist ID (Leave empty to create new)
                           </label>
                           <input
@@ -1352,7 +1352,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                         </div>
 
                         <div>
-                          <label className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
+                          <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
                             Initial Sync Strategy
                           </label>
                           <select
@@ -1388,7 +1388,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                               showToast(err.message || "Failed to create private Gist.");
                             }
                           }}
-                          className="flex-1 px-4 py-2.5 bg-white hover:bg-zinc-100 text-zinc-750 border border-zinc-200 hover:border-zinc-300 font-bold rounded-xl text-xs cursor-pointer shadow-3xs transition-colors"
+                          className="flex-1 px-4 py-2.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 hover:border-zinc-300 font-bold rounded-xl text-xs cursor-pointer shadow-3xs transition-colors"
                         >
                           Create New Private Gist
                         </button>
@@ -1410,7 +1410,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider block mb-1.5">
+                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
                         Gemini API Key
                       </label>
                       <input
@@ -1471,7 +1471,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                     <h3 className="text-sm font-bold text-zinc-900 lowercase">tidy the grocery list</h3>
                   </div>
 
-                  <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-150 space-y-2">
+                  <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2">
                     <p className="text-[11px] text-zinc-500 leading-normal">
                       Gemini looks for duplicate or oddly named products on your grocery list and suggests merges. You approve each change.
                     </p>
@@ -1506,7 +1506,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                     </button>
 
                     <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-3xs">
-                      <Upload className="w-3.5 h-3.5 text-zinc-450" />
+                      <Upload className="w-3.5 h-3.5 text-zinc-500" />
                       <span>Restore Backup</span>
                       <input
                         type="file"
@@ -1557,7 +1557,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
               setIsAddPopupOpen(false);
             }} className="p-4 space-y-3.5">
               <div>
-                <label className="text-[11px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Item Name</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Item Name</label>
                 <input
                   type="text"
                   required
@@ -1571,7 +1571,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Standard Unit</label>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Standard Unit</label>
                   <input
                     type="text"
                     required
@@ -1582,7 +1582,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Step Increment</label>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Step Increment</label>
                   <input
                     type="number"
                     min="0.01"
@@ -1596,7 +1596,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-zinc-450 uppercase tracking-wider block mb-1">Aisle Category</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Aisle Category</label>
                 <select
                   value={dbNewCategory}
                   onChange={(e) => setDbNewCategory(e.target.value)}
@@ -1619,7 +1619,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                 <button
                   type="button"
                   onClick={() => setIsAddPopupOpen(false)}
-                  className="flex-1 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-650 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                  className="flex-1 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1656,7 +1656,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
             <div className="p-4 space-y-3.5">
               <div>
-                <label className="text-[11px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Item Name</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Item Name</label>
                 <input
                   type="text"
                   required
@@ -1669,7 +1669,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Standard Unit</label>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Standard Unit</label>
                   <input
                     type="text"
                     required
@@ -1679,7 +1679,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Step Increment</label>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Step Increment</label>
                   <input
                     type="number"
                     min="0.01"
@@ -1693,7 +1693,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-zinc-455 uppercase tracking-wider block mb-1">Aisle Category</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Aisle Category</label>
                 <select
                   value={editingItemCategory}
                   onChange={(e) => setEditingItemCategory(e.target.value)}
@@ -1716,7 +1716,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                 <button
                   type="button"
                   onClick={() => setEditingItemId(null)}
-                  className="flex-1 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-650 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                  className="flex-1 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>

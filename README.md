@@ -10,7 +10,7 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 | --- | --- |
 | **Cookbook** | Your recipe book. Add a recipe by pasting it, pasting a link to it (Gemini opens the page), taking a photo of a cookbook page, or asking Gemini to write one; on Android you can also share a recipe page from Chrome to the app. Gemini copies recipes exactly as written, then you check them on the same editor as the recipe page, where each ingredient shows what it's bought as on the shopping list (*Shop as*). It spots recipes you already have (replace or keep both). Search covers names, ingredients and notes; one-tap filters: Favourites, Not had lately, Under 30 min, Veggie, Ninja, In the freezer. Cards show the time, Oven/Hob or Ninja, vegetarian/vegan, when you last had it (or when it's planned) and portions in the freezer. Opening a recipe shows everything on one page, with Favourite, Share, *Start cooking* and *Add to a day…*. |
 | **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → my household*). It opens on this week Monday–Thursday and next week Friday–Sunday; ‹ › switch weeks. Two views, chosen per phone under the eye button: *Classic* (search and one-tap filters for your meals, drag them onto the week strip below) and *List* (the seven days as a list). Today is highlighted, past days greyed, cooked meals ticked, leftovers say where they're from ("Leftovers from Mon") and the cook day says how many to cook for. Adding a recipe that's in the freezer, or that an earlier day already cooks, asks how you're having it: *Leftovers from Wed*, *From the freezer* (nothing to buy) or *Cook it fresh*. Tap a day for one panel: people, sides, notes, change meal, move or swap (leftovers follow), remove (with Undo). An M–S row shows the week at a glance. *Send to shopping list* puts the week's ingredients on the list; change it afterwards and an *Update list* button appears (and a note on Shop). *Copy a week* fills an empty week from another. |
-| **Shop** | Shopping list generated from the week's meals plus staples and extras. A *cupboard check* takes off the oils, spices, rice and stock you already have. Shopping mode shows one line per item, aisle by aisle in the order you walk your shop (*Arrange aisles…* in the view options; shared by both phones). |
+| **Shop** | The week's list: meal ingredients, weekly staples and anything you add, one row per product, aisle by aisle in the order you walk your shop (*Arrange aisles…*; shared by both phones). ‹ › switch weeks; it opens on the week you're most likely shopping for. Type to add ("2 pints milk", "6 eggs", "bin bags"), or *Browse*; *Add a recipe's ingredients…* for a batch cook or anything not on the plan. Tick the circle; tap the rest of a row for its panel: amount, note ("semi-skimmed"), aisle (remembered), which meals it's for, favourite, move to the following week, remove (with Undo). A *cupboard check* takes off the oils, spices, rice and stock you already have. Share copies the list as text. *Go shopping* is full screen with % done; the screen stays on, and *Done shopping* moves, keeps or removes anything you didn't get. |
 | **Cook** | This week's cooking schedule with step-by-step cook mode (oven/hob or Ninja). |
 | **Freezer** | Batch-cooked meals in the freezer, which can be dropped into a week's plan. |
 | **Settings** | Past weeks, grocery database, household, connections (GitHub sync + Gemini key), and backup. |
@@ -304,3 +304,19 @@ Main files:
   oldest batch, add nothing to the shopping list and stay linked to the
   recipe ("This week: Sun" on its card). Leftovers only come from a day
   cooked from scratch.
+- `Shop: one tidy list, Done shopping` — rows are one product each (the same
+  rows and count as shopping mode) with a tick circle; the rest of the row
+  opens one panel (amount per source, note, aisle remembered for next time,
+  meals and days, favourite, move to the following week, remove with Undo)
+  instead of a heart, −/+, tick box and bin on every row and the "Edit Milk"
+  drawer. Aisles by default and remembered per phone; bought items go to a
+  "Bought" group at the end; "12 of 36 bought" at the top. "Add an item…"
+  understands amounts and says what's already on the list. Header is
+  ‹ week › with "Sent"; opens on the likely week with things to buy (this
+  week Mon–Thu, next week Fri–Sun). Shopping mode keeps its % and gets a
+  *Done shopping* bar (move / leave / take off what you didn't get, and how
+  long the shop took), notes, an add box and screen-awake. Share/copy the
+  list as text. "Add batch" is now *Add a recipe's ingredients…* (any
+  recipe, any number of people, freezer optional). Fixed: "1000 added" in
+  Add items (it was adding up grams), and ~40 colour classes that didn't
+  exist (an invisible Done button in Weekly staples, black borders).

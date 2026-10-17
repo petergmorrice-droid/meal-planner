@@ -312,9 +312,9 @@ export function CleanDatabaseModal({
         aria-modal="true"
       >
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-zinc-150 flex items-center justify-between bg-zinc-50/80 shrink-0">
+        <div className="px-5 py-3.5 border-b border-zinc-200 flex items-center justify-between bg-zinc-50/80 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-150 flex items-center justify-center text-indigo-600 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
@@ -335,7 +335,7 @@ export function CleanDatabaseModal({
 
         {/* Top Progress & Stats Bar (when reviewing) */}
         {!isLoading && !error && actions.length > 0 && !isFinishedReviewing && (
-          <div className="px-5 py-2.5 bg-zinc-50/50 border-b border-zinc-150/70 shrink-0 flex items-center justify-between gap-3 text-xs">
+          <div className="px-5 py-2.5 bg-zinc-50/50 border-b border-zinc-200/70 shrink-0 flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-bold text-zinc-800">
                 Suggestion {currentIndex + 1} of {actions.length}
@@ -628,21 +628,21 @@ export function CleanDatabaseModal({
                           <button
                             type="button"
                             onClick={() => updateCurrentAction({ newName: (currentAction.newName || primaryName).toLowerCase() })}
-                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-700 shadow-3xs cursor-pointer"
+                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-200 text-zinc-700 shadow-3xs cursor-pointer"
                           >
                             lowercase
                           </button>
                           <button
                             type="button"
                             onClick={() => updateCurrentAction({ newName: toTitleCase(currentAction.newName || primaryName) })}
-                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-700 shadow-3xs cursor-pointer"
+                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-200 text-zinc-700 shadow-3xs cursor-pointer"
                           >
                             Title Case
                           </button>
                           <button
                             type="button"
                             onClick={() => updateCurrentAction({ newName: primaryName })}
-                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-250 text-zinc-500 shadow-3xs cursor-pointer"
+                            className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-200 text-zinc-500 shadow-3xs cursor-pointer"
                           >
                             Reset
                           </button>
@@ -700,7 +700,7 @@ export function CleanDatabaseModal({
                   )}
 
                   {/* AI Explanation Callout */}
-                  <div className="text-[11px] text-zinc-500 bg-zinc-50/60 p-2.5 rounded-xl border border-zinc-150 flex items-start gap-1.5">
+                  <div className="text-[11px] text-zinc-500 bg-zinc-50/60 p-2.5 rounded-xl border border-zinc-200 flex items-start gap-1.5">
                     <Info className="w-3.5 h-3.5 text-zinc-400 shrink-0 mt-0.5" />
                     <span>{currentAction.reason}</span>
                   </div>
@@ -853,7 +853,7 @@ export function CleanDatabaseModal({
 
         {/* Modal Bottom Footer (when reviewing cards) */}
         {!isLoading && !error && actions.length > 0 && !isFinishedReviewing && (
-          <div className="px-5 py-3 border-t border-zinc-150 bg-zinc-50/70 flex items-center justify-between gap-3 shrink-0">
+          <div className="px-5 py-3 border-t border-zinc-200 bg-zinc-50/70 flex items-center justify-between gap-3 shrink-0">
             <button
               type="button"
               onClick={onClose}

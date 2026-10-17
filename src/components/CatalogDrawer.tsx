@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Heart, Store, X, Plus, Clock, ArrowDownAZ, LayoutGrid } from 'lucide-react';
+import { Search, Heart, Store, X, Plus, Clock, ArrowDownAZ, LayoutGrid, Check, BookOpen } from 'lucide-react';
 import { buildCatalog } from '../shopping';
 
 interface CatalogDrawerProps {
@@ -8,11 +8,15 @@ interface CatalogDrawerProps {
   onAddItems: (items: { name: string; amount: number; unit: string; category?: string; isAdhoc?: boolean }[]) => void;
   store: any;
   onToggleFavourite: (name: string, category: string) => void;
+  /** How much of this is already on the week's list ("1 kg"), or null. */
+  onTheList?: (name: string) => string | null;
+  /** Open "Add a recipe's ingredients". */
+  onAddRecipe?: () => void;
 }
 
 type SortMode = 'favorites' | 'recent' | 'category' | 'az';
 
-export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onToggleFavourite }: CatalogDrawerProps) {
+export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onToggleFavourite, onTheList, onAddRecipe }: CatalogDrawerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('favorites');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -26,11 +30,8 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
   const favourites = store?.state?.preferences?.favouriteItems || [];
   const shoppingList = store?.state?.shoppingList || [];
 
-  const getAddedAmount = (name: string) => {
-    return shoppingList
-      .filter((i: any) => i.name.toLowerCase() === name.toLowerCase())
-      .reduce((sum: number, i: any) => sum + i.amount, 0);
-  };
+  // Already on this week's list? Shown as "On the list: 1 kg" (not a sum of grams across weeks).
+  const onListText = (name: string): string | null => (onTheList ? onTheList(name) : null);
 
   const allItems = useMemo(() => {
     const map = new Map<string, { name: string; category: string; isFav: boolean; recentCount: number; source: string }>();
@@ -146,10 +147,11 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
         {/* Header / Search */}
         <div className="p-4 border-b border-zinc-100 shrink-0">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-zinc-900">Add Items</h2>
+            <h2 className="text-lg font-bold text-zinc-900">Add items</h2>
             <button
               type="button"
               onClick={onClose}
+              aria-label="Close"
               className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200 transition-colors"
             >
               <X className="w-4 h-4" />
@@ -174,6 +176,21 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
             />
           </div>
 
+          {onAddRecipe && (
+            <button
+              type="button"
+              onClick={onAddRecipe}
+              data-add-recipe-ingredients
+              className="w-full mb-3 flex items-center gap-3 p-3 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-left cursor-pointer"
+            >
+              <BookOpen className="w-5 h-5 text-indigo-600 shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-indigo-950">Add a recipe's ingredients…</span>
+                <span className="block text-xs text-indigo-900/70">Any recipe, for any number of people: a batch cook, or something not on the plan</span>
+              </span>
+            </button>
+          )}
+
           {/* Sort Controls */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
             <button 
@@ -181,14 +198,14 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${sortMode === 'favorites' ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
             >
               <Heart className={`w-3.5 h-3.5 ${sortMode === 'favorites' ? 'fill-current' : ''}`} />
-              Favorites First
+              Favourites first
             </button>
             <button 
               onClick={() => setSortMode('recent')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${sortMode === 'recent' ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
             >
               <Clock className="w-3.5 h-3.5" />
-              Frequently Added
+              Often added
             </button>
             <button 
               onClick={() => setSortMode('category')}
@@ -202,7 +219,7 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${sortMode === 'az' ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
             >
               <ArrowDownAZ className="w-3.5 h-3.5" />
-              A-Z
+              A–Z
             </button>
           </div>
         </div>
@@ -213,12 +230,12 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
           {groupedItems.map((group, groupIdx) => (
             <div key={groupIdx} className="mb-6 last:mb-0">
               <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 px-1 sticky top-0 bg-[#fafafa]/90 backdrop-blur py-1 z-10">
-                {group.title}
+                {group.title === 'Favorites' ? 'Favourites' : group.title === 'Frequently Added' ? 'Often added' : group.title}
               </h3>
               
               <div className={group.title === 'Favorites' ? "grid grid-cols-2 sm:grid-cols-3 gap-2" : "flex flex-col gap-1.5"}>
                 {group.items.map(item => {
-                  const amount = getAddedAmount(item.name);
+                  const onList = onListText(item.name);
                   const isGrid = group.title === 'Favorites';
                   
                   if (isGrid) {
@@ -249,9 +266,9 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
                           {item.category}
                         </span>
                         
-                        {amount > 0 && (
-                          <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-sm animate-in zoom-in">
-                            {amount}
+                        {onList && (
+                          <div className="absolute -top-2 -right-2 bg-emerald-500 text-white w-5 h-5 rounded-full flex items-center justify-center shadow-sm animate-in zoom-in" title={`On the list: ${onList}`}>
+                            <Check className="w-3 h-3 stroke-[3]" />
                           </div>
                         )}
                       </div>
@@ -276,9 +293,9 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {amount > 0 && (
-                          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                            {amount} added
+                        {onList && (
+                          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full whitespace-nowrap" data-on-list>
+                            On the list: {onList}
                           </span>
                         )}
                         <button
@@ -323,7 +340,7 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
               >
                 <div className="flex flex-col items-start">
                   <span className="font-bold text-sm">Add "{searchTerm.trim()}"</span>
-                  <span className="text-[11px] opacity-80">Custom Item</span>
+                  <span className="text-[11px] opacity-80">New item</span>
                 </div>
                 <Plus className="w-5 h-5" />
               </button>
