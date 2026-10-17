@@ -5,6 +5,7 @@ import {
   recipeMethods, totalMinutes, formatMinutes, recipeHistories, formatAgo, formatPlannedDay, freezerPortions,
   sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe,
   recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
+  moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
 } from '../.test-build/app.mjs';
 
 let failures = 0, passes = 0;
@@ -203,6 +204,78 @@ test('share text: name, people, ingredients (scaled), method and website', () =>
   });
   const text = recipeShareText(r, { people: 4, formatAmount: (n) => String(n) });
   assert.equal(text, ['Lemon pasta', 'Serves 4 · 15 min', '', 'Ingredients', '- 400 g spaghetti', '- 2 lemon, zested', '', 'Method', '1. Boil the pasta.', '2. Add the lemon.', '', 'Our notes: Extra lemon', '', 'https://example.com/lemon'].join('\n'));
+});
+
+// ---------- Planning: move/swap, leftovers following, list out of date ----------
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const week = (meals) => Object.fromEntries(DAY_NAMES.map((d, i) => [d, { date: `2026-10-${String(19 + i).padStart(2, '0')}`, meals: meals[d] ? [meals[d]] : [] }]));
+const cook = (id, recipeId, servings = 2, extra = {}) => ({ id, type: 'recipe', recipeId, name: recipeId, servings, ...extra });
+const lefto = (id, recipeId, note) => ({ id, type: 'leftover', recipeId, name: `Leftovers: ${recipeId}`, servings: 2, ...(note ? { note } : {}) });
+const names = (days) => DAY_NAMES.map((d) => days[d].meals[0] ? `${d.slice(0, 3)}:${days[d].meals[0].type === 'leftover' ? 'L-' : ''}${days[d].meals[0].recipeId || days[d].meals[0].name}` : null).filter(Boolean);
+
+test('move a meal to a free day; dates stay with the days', () => {
+  const r = moveMeal(week({ Monday: cook('a', 'fajitas') }), 'Monday', 'Thursday');
+  assert.equal(r.swapped, false);
+  assert.deepEqual(names(r.days), ['Thu:fajitas']);
+  assert.equal(r.days.Thursday.date, '2026-10-22');
+});
+
+test('moving onto a day with a meal swaps them', () => {
+  const r = moveMeal(week({ Tuesday: cook('a', 'curry'), Thursday: cook('b', 'bol') }), 'Tuesday', 'Thursday');
+  assert.equal(r.swapped, true);
+  assert.deepEqual(names(r.days), ['Tue:bol', 'Thu:curry']);
+});
+
+test('leftovers follow their cook: "Reheat from" points at the new cook day', () => {
+  const r = moveMeal(week({ Monday: cook('a', 'bol', 2), Wednesday: lefto('b', 'bol', 'Reheat from Monday') }), 'Monday', 'Tuesday');
+  assert.equal(r.days.Wednesday.meals[0].note, 'Reheat from Tuesday');
+  assert.deepEqual(r.freshDays, []);
+});
+
+test('a leftover day left before its cook becomes a fresh cook (and says so)', () => {
+  const r = moveMeal(week({ Monday: cook('a', 'bol'), Wednesday: lefto('b', 'bol', 'Reheat from Monday') }), 'Monday', 'Friday');
+  assert.deepEqual(r.freshDays, ['Wednesday']);
+  const wed = r.days.Wednesday.meals[0];
+  assert.equal(wed.type, 'recipe');
+  assert.equal(wed.name, 'bol');
+  assert.equal(wed.note, '');
+});
+
+test('your own notes on leftovers are kept', () => {
+  const r = relinkLeftovers(week({ Monday: cook('a', 'bol'), Tuesday: lefto('b', 'bol', 'Add extra cheese') }));
+  assert.equal(r.days.Tuesday.meals[0].note, 'Add extra cheese');
+});
+
+test('cook-for and leftover source are worked out from the week', () => {
+  const days = week({ Monday: cook('a', 'bol', 2), Tuesday: lefto('b', 'bol'), Thursday: lefto('c', 'bol') });
+  assert.equal(cooksForText(days, 'Monday', days.Monday.meals[0]), 'Cook for 6: leftovers Tue, Thu');
+  assert.equal(leftoverSourceDay(days, 'Thursday', days.Thursday.meals[0]), 'Monday');
+  assert.equal(leftoverSourceDay(days, 'Monday', days.Monday.meals[0]), null);
+});
+
+test('list out of date: only what changes the shopping (not notes), and only for sent weeks', () => {
+  const days = week({ Monday: cook('a', 'bol', 2), Tuesday: cook('b', 'curry', 2) });
+  const sent = { id: 'p', startDate: '2026-10-19', days, status: 'finalized', isCurrent: false };
+  sent.lastFinalizedSnapshot = listSnapshot(sent);
+  assert.deepEqual(changedDaysSinceList(sent), []);
+  const noteOnly = { ...sent, days: { ...days, Monday: { ...days.Monday, meals: [{ ...days.Monday.meals[0], note: 'prep early' }] } } };
+  assert.deepEqual(changedDaysSinceList(noteOnly), [], 'a note does not change the list');
+  const more = { ...sent, days: { ...days, Monday: { ...days.Monday, meals: [{ ...days.Monday.meals[0], servings: 4 }] } } };
+  assert.deepEqual(changedDaysSinceList(more), ['Monday']);
+  const swapped = { ...sent, days: moveMeal(days, 'Monday', 'Tuesday').days };
+  assert.deepEqual(changedDaysSinceList(swapped), ['Monday', 'Tuesday']);
+  const back = { ...sent, days: moveMeal(swapped.days, 'Monday', 'Tuesday').days };
+  assert.deepEqual(changedDaysSinceList(back), [], 'changing it back means up to date again');
+  assert.deepEqual(changedDaysSinceList({ ...more, status: 'draft' }), [], 'not sent: nothing to update');
+  assert.deepEqual(changedDaysSinceList({ ...more, lastFinalizedSnapshot: undefined }), [], 'sent before records were kept');
+});
+
+test('Planning opens on this week Monday–Thursday, next week Friday–Sunday', () => {
+  const at = (iso) => new Date(iso + 'T12:00:00');
+  assert.equal(preferredWeekStart(at('2026-10-12'), 'this', 'next'), 'this'); // Monday
+  assert.equal(preferredWeekStart(at('2026-10-15'), 'this', 'next'), 'this'); // Thursday
+  assert.equal(preferredWeekStart(at('2026-10-16'), 'this', 'next'), 'next'); // Friday
+  assert.equal(preferredWeekStart(at('2026-10-18'), 'this', 'next'), 'next'); // Sunday
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

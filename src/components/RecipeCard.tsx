@@ -48,6 +48,7 @@ export function RecipeCard({
   history,
   freezer,
   today,
+  inWeek,
   wide = false,
   onOpen,
   dragProps,
@@ -57,6 +58,8 @@ export function RecipeCard({
   history?: RecipeHistory;
   freezer: number;
   today: string;
+  /** On Planning: the days this recipe is on in the week on screen ("This week: Tue"). */
+  inWeek?: string[];
   /** Full-width row ("Rows of 1") rather than a grid tile. */
   wide?: boolean;
   onOpen: () => void;
@@ -69,7 +72,13 @@ export function RecipeCard({
 
   let status: React.ReactNode = null;
   if (fields.lastHad) {
-    if (history?.nextPlanned) {
+    if (inWeek && inWeek.length > 0) {
+      status = (
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-emerald-700 rounded-md px-1.5 py-px" data-in-week>
+          <CalendarCheck className="w-3.5 h-3.5" />This week: {inWeek.join(', ')}
+        </span>
+      );
+    } else if (history?.nextPlanned) {
       status = (
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-1.5 py-px">
           <CalendarCheck className="w-3.5 h-3.5" />Planned {formatPlannedDay(history.nextPlanned, today)}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ChevronRight, 
   ChevronLeft, 
+  RefreshCw,
   ChevronDown, 
   ChevronUp,
   Plus, 
@@ -57,9 +58,11 @@ import {
 } from '../utils';
 
 import { RecipeModal } from './CookBookTab';
-import { DayListRow, isLeftoverMeal } from './planner/DayListRow';
+import { DayListRow, WeekDayCard, WeekGlance, DaySheet, isLeftoverMeal } from './planner/DayListRow';
+import { changedDaysSinceList, listSnapshot, moveMeal, cooksForText as weekCooksForText, preferredWeekStart, leftoverSourceDay } from '../planning';
+import { sendWeekToShoppingList } from '../planShopping';
 import { RecipeCard, CARD_FIELD_OPTIONS, cardFieldsFromPrefs } from './RecipeCard';
-import { recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, RECIPE_SORTS, todayISO, freezerPortions, recipeMatchesSearch, totalMinutes, recipeMethods, isVegetarianRecipe, isVeganRecipe, readFavouritesFirst, saveFavouritesFirst } from '../recipeInfo';
+import { recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, RECIPE_SORTS, todayISO, freezerPortions, recipeMatchesSearch, totalMinutes, recipeMethods, isVegetarianRecipe, isVeganRecipe, readFavouritesFirst, saveFavouritesFirst, matchesQuickFilters, QUICK_FILTERS, QuickFilter } from '../recipeInfo';
 
 interface PlanningTabProps {
   store: any;
@@ -185,9 +188,9 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       if (match) return match.id;
     }
 
-    // Default to next week if available
-    // local nextMondayDate removed
-    
+    // Monday–Thursday: this week (what's for tea tonight); Friday–Sunday: next week (planning time).
+    const preferred = plans.find((p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr));
+    if (preferred) return preferred.id;
     const nextWeekPlan = plans.find((p: MealPlan) => p.startDate === nextMondayStr);
     if (nextWeekPlan) return nextWeekPlan.id;
 
@@ -214,9 +217,10 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     if (allowedPlans.length === 0) {
       if (selectedPlanId !== null) setSelectedPlanId(null);
     } else if (!selectedPlanId || !allowedPlans.some(p => p.id === selectedPlanId)) {
+      const preferred = allowedPlans.find((p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr));
       const nextWeekPlan = allowedPlans.find((p: MealPlan) => p.startDate === nextMondayStr);
       const currentWeekPlan = allowedPlans.find((p: MealPlan) => p.startDate === currentMondayStr);
-      setSelectedPlanId(nextWeekPlan?.id || currentWeekPlan?.id || allowedPlans[0].id);
+      setSelectedPlanId(preferred?.id || nextWeekPlan?.id || currentWeekPlan?.id || allowedPlans[0].id);
     }
   }, [allowedPlans, selectedPlanId, nextMondayStr, currentMondayStr]);
 
@@ -293,7 +297,17 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     newMeal?: PlannedMeal;
     dayName?: string;
   } | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessageState] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; run: () => void } | null>(null);
+  const setToastMessage = (msg: string | null, action: { label: string; run: () => void } | null = null) => {
+    setToastMessageState(msg);
+    setToastAction(action);
+  };
+  // The latest store, for actions that run after a re-render (Undo).
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  // The day whose panel is open (people, sides, notes, change, move, remove).
+  const [daySheet, setDaySheet] = useState<string | null>(null);
   const [leftoverPrompt, setLeftoverPrompt] = useState<{ dayName: string; recipe: Recipe; existingDays: string[] } | null>(null);
   const [removeLeftoversPrompt, setRemoveLeftoversPrompt] = useState<{ 
     targetDayName: string; 
@@ -303,13 +317,13 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     isReplacement: boolean;
   } | null>(null);
 
-  // Auto-hide toast after 3 seconds
+  // Auto-hide toast (longer when it offers Undo)
   useEffect(() => {
     if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000);
+      const timer = setTimeout(() => setToastMessage(null), toastAction ? 6000 : 3000);
       return () => clearTimeout(timer);
     }
-  }, [toastMessage]);
+  }, [toastMessage, toastAction]);
 
   // Find currently active plan from allowed current/future plans
   let currentPlan = allowedPlans.find((p: MealPlan) => p.id === selectedPlanId);
@@ -317,7 +331,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   if (!currentPlan && allowedPlans.length > 0) {
     // local nextMondayDate removed
     
-    currentPlan = allowedPlans.find((p: MealPlan) => p.startDate === nextMondayStr) || 
+    currentPlan = allowedPlans.find((p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr)) ||
+                  allowedPlans.find((p: MealPlan) => p.startDate === nextMondayStr) || 
                   allowedPlans.find((p: MealPlan) => p.startDate === currentMondayStr) || 
                   allowedPlans[0];
   }
@@ -329,23 +344,63 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     }
   }, [currentPlan?.id]);
 
-  // Central helper to apply meal modifications or prompt for confirmation if plan is finalized
-  const applyOrConfirmPlanChange = (nextDays: Record<string, DayPlan>, description?: string) => {
+  // Save the week's days. A week already sent to the shopping list just gets an "Update list"
+  // button afterwards; weeks sent before the app kept a record are taken as matching the list.
+  const writeDays = (nextDays: Record<string, DayPlan>) => {
     if (!currentPlan) return;
-
-    if (currentPlan.status === 'finalized') {
-      // If the plan is finalized, prompt the user to confirm the modification (which updates the shopping list) or discard
-      setPendingPlanChange({ updatedDays: nextDays, description });
-      setShowUpdateConfirmModal(true);
-    } else {
-      // Draft or not_started plan - apply immediately
-      const updatedPlan: MealPlan = {
-        ...currentPlan,
-        days: nextDays
-      };
-      store.updateMealPlan(updatedPlan);
-    }
+    const keepRecord = currentPlan.status === 'finalized' && !currentPlan.lastFinalizedSnapshot
+      ? { lastFinalizedSnapshot: listSnapshot(currentPlan) }
+      : {};
+    store.updateMealPlan({ ...currentPlan, ...keepRecord, days: nextDays });
   };
+
+  // "Removed Chicken fajitas · Undo": put the week back as it was.
+  const offerUndo = (label: string) => {
+    if (!currentPlan) return;
+    const planId = currentPlan.id;
+    const before = currentPlan.days;
+    setToastMessage(label, {
+      label: 'Undo',
+      run: () => {
+        const latest = (storeRef.current.state.mealPlans || []).find((p: MealPlan) => p.id === planId);
+        if (latest) storeRef.current.updateMealPlan({ ...latest, days: before });
+        setToastMessage('Undone');
+      },
+    });
+  };
+
+  const applyOrConfirmPlanChange = (nextDays: Record<string, DayPlan>, description?: string) => {
+    writeDays(nextDays);
+    if (description) setToastMessage(description);
+  };
+
+  // ‹ › between weeks
+  const planIndex = currentPlan ? allowedPlans.findIndex((p: MealPlan) => p.id === currentPlan!.id) : -1;
+  const prevPlan = planIndex > 0 ? allowedPlans[planIndex - 1] : null;
+  const nextPlan = planIndex >= 0 && planIndex < allowedPlans.length - 1 ? allowedPlans[planIndex + 1] : null;
+  const switchToPlan = (id: string) => { setSelectedPlanId(id); store.setSelectedPlanId?.(id); setShowWeekDropdown(false); };
+  // Days changed since this week was sent to the shopping list
+  const changedDays = changedDaysSinceList(currentPlan);
+
+  // Jump to a day (week-at-a-glance), and open each week on today when it's in view
+  const stripRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const jumpToDay = (day: string, smooth = true) => {
+    const strip = stripRef.current;
+    const card = strip?.querySelector(`[data-week-day="${day}"]`) as HTMLElement | null;
+    if (strip && card) strip.scrollTo({ left: Math.max(0, card.offsetLeft - 8), behavior: smooth ? 'smooth' : 'auto' });
+    const row = listRef.current?.querySelector(`[data-list-day="${day}"]`) as HTMLElement | null;
+    if (row) row.scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' });
+  };
+  useEffect(() => {
+    if (!currentPlan) return;
+    const todayDay = DAYS_OF_WEEK.find((d) => currentPlan!.days[d]?.date === todayISO());
+    const t = setTimeout(() => {
+      if (todayDay) jumpToDay(todayDay, false);
+      else if (stripRef.current) stripRef.current.scrollLeft = 0;
+    }, 30);
+    return () => clearTimeout(t);
+  }, [currentPlan?.id, planningView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Total meals currently planned across the week
   const totalPlannedMeals = useMemo(() => {
@@ -476,20 +531,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       description = `Added ${newMeal.name.replace(/^(leftovers?|batch):\s*/i, '')} to ${dayName}${people}`;
     }
 
-    // CASE 1: Finalized Plan -> Single combined modal handles confirmation, leftover removal, and shopping list sync
-    if (currentPlan.status === 'finalized') {
-      setPendingPlanChange({
-        updatedDays: nextDays,
-        description,
-        orphanedDays: orphanedDays.length > 0 ? orphanedDays : undefined,
-        removedMealName: mealToRemove?.name,
-        newMeal: newMeal || undefined,
-        dayName
-      });
-      setShowUpdateConfirmModal(true);
-      return;
-    }
-
     // CASE 2: Draft Plan with dependent leftovers -> Prompt to remove leftovers
     if (orphanedDays.length > 0 && mealToRemove) {
       setRemoveLeftoversPrompt({
@@ -502,15 +543,10 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       return;
     }
 
-    // CASE 3: Draft Plan without leftovers -> Apply immediately
-    const updatedPlan: MealPlan = {
-      ...currentPlan,
-      days: nextDays
-    };
-    store.updateMealPlan(updatedPlan);
-    if (description) {
-      setToastMessage(description);
-    }
+    // CASE 3: No leftovers depend on it -> apply now (with Undo when a meal was taken away)
+    if (mealToRemove) offerUndo(description);
+    else if (description) setToastMessage(description);
+    writeDays(nextDays);
   };
 
   const handleConfirmLeftover = (isLeftover: boolean) => {
@@ -588,9 +624,9 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     if (!currentPlan) return;
     
     let name = '';
-    if (type === 'takeout') name = 'Takeout';
-    if (type === 'eating_out') name = 'Eating Out';
-    if (type === 'no_meal') name = 'No Meal Needed';
+    if (type === 'takeout') name = 'Takeaway';
+    if (type === 'eating_out') name = 'Eating out';
+    if (type === 'no_meal') name = 'No meal';
     if (type === 'batch' && batchId) {
       const batch = store.state.batches.find((b: BatchItem) => b.id === batchId);
       const recipe = batch?.recipeId ? store.state.recipes.find((r: Recipe) => r.id === batch.recipeId) : null;
@@ -632,20 +668,29 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     };
 
     const updatedMeals = day.meals.map(m => m.id === mealId ? updatedMeal : m);
-    const nextDays = {
-      ...currentPlan.days,
-      [dayName]: {
-        ...day,
-        meals: updatedMeals
-      }
-    };
+    writeDays({ ...currentPlan.days, [dayName]: { ...day, meals: updatedMeals } });
+    setToastMessage('Saved');
+  };
 
-    const updatedPlan: MealPlan = {
-      ...currentPlan,
-      days: nextDays
-    };
-    store.updateMealPlan(updatedPlan);
-    setToastMessage('Meal details updated.');
+  // People and notes from the day panel.
+  const handleSaveDayDetails = (dayName: string, mealId: string, patch: { servings: number; note: string }) => {
+    if (!currentPlan) return;
+    const day = currentPlan.days[dayName];
+    if (!day) return;
+    const meals = day.meals.map(m => m.id === mealId
+      ? { ...m, servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)), note: patch.note }
+      : m);
+    writeDays({ ...currentPlan.days, [dayName]: { ...day, meals } });
+    setToastMessage('Saved');
+  };
+
+  // Move a meal to another day (or swap two days). Leftovers follow their cook.
+  const handleMoveMeal = (from: string, to: string) => {
+    if (!currentPlan || from === to) return;
+    const r = moveMeal(currentPlan.days, from, to);
+    const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
+    offerUndo((r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh);
+    writeDays(r.days);
   };
 
   // Enforce ONE meal per day when choosing recipe from modal
@@ -718,103 +763,10 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   // User confirmed removal with dependent leftovers on a draft plan
   const handleConfirmRemoveWithLeftovers = () => {
     if (!currentPlan || !removeLeftoversPrompt) return;
-    const updatedPlan: MealPlan = {
-      ...currentPlan,
-      days: removeLeftoversPrompt.nextDays
-    };
-    store.updateMealPlan(updatedPlan);
     const daysStr = removeLeftoversPrompt.leftoverDays.join(' and ');
+    offerUndo(`Removed, with the leftovers on ${daysStr}.`);
+    writeDays(removeLeftoversPrompt.nextDays);
     setRemoveLeftoversPrompt(null);
-    setToastMessage(`Meal and dependent leftovers on ${daysStr} removed.`);
-  };
-
-  // Compile recipe ingredients for THIS week into the shopping list, preserving other weeks and manual items
-  const generateShoppingList = (plan: MealPlan) => {
-    const targetItems = generateShoppingListForPlan(plan, store.state.recipes);
-    
-    // Items either of you removed from the list (shared via sync), so they aren't re-added.
-    const dismissedItemIds: string[] = store.dismissedShoppingItemIds || [];
-
-    const targetKeyMap = new Map<string, ShoppingListItem>();
-    targetItems.forEach(item => {
-      const key = item.name.toLowerCase().trim();
-      targetKeyMap.set(key, item);
-    });
-
-    const currentShoppingList = [...(store.state.shoppingList || [])];
-    const existingItemsForPlan = currentShoppingList.filter(i => i.planId === plan.id);
-    
-    const adhocOrBatchItems = existingItemsForPlan.filter(i => i.isAdhoc || i.isBatch);
-    const existingMealItems = existingItemsForPlan.filter(i => !i.isAdhoc && !i.isBatch && !i.isRecurring);
-
-    // 1. Sync recurring items
-    const prefsRecurring = store.state.preferences?.recurringItems || [];
-    const recurringItemsToKeep: ShoppingListItem[] = [];
-    const existingRecurring = existingItemsForPlan.filter(i => i.isRecurring);
-    
-    prefsRecurring.forEach((rec: any) => {
-      const itemId = `recurring-${plan.id}-${rec.id}`;
-      if (dismissedItemIds.includes(itemId)) return;
-      
-      const existing = existingRecurring.find(i => i.id === itemId);
-      if (!existing) {
-        recurringItemsToKeep.push({
-          id: itemId,
-          name: rec.name,
-          amount: rec.amount,
-          unit: rec.unit,
-          category: rec.category,
-          checked: false,
-          isAdhoc: false,
-          isRecurring: true,
-          planId: plan.id,
-          weekLabel: `Week of ${plan.startDate === currentMondayStr ? 'This Week' : plan.startDate === nextMondayStr ? 'Next Week' : formatWeekRange(plan.startDate)}`
-        });
-      } else {
-        if (!existing.userAdjusted) {
-          recurringItemsToKeep.push({
-            ...existing,
-            name: rec.name,
-            amount: rec.amount,
-            unit: rec.unit,
-            category: rec.category
-          });
-        } else {
-          recurringItemsToKeep.push(existing);
-        }
-      }
-    });
-
-    // 2. Sync meal items
-    const syncedMealItems: ShoppingListItem[] = [];
-
-    targetItems.forEach(target => {
-      const key = target.name.toLowerCase().trim();
-      const existing = existingMealItems.find(
-        e => e.name.toLowerCase().trim() === key
-      );
-
-      if (existing) {
-        const keepUserAmount = existing.userAdjusted;
-        const nextAmount = keepUserAmount ? existing.amount : target.amount;
-        const nextUnit = keepUserAmount ? existing.unit : target.unit;
-        
-        syncedMealItems.push({
-          ...existing,
-          amount: nextAmount,
-          unit: nextUnit,
-          recipeNames: target.recipeNames
-        });
-      } else {
-        if (!dismissedItemIds.includes(target.id)) {
-          syncedMealItems.push(target);
-        }
-      }
-    });
-
-    // Keep all other items (other weeks entirely)
-    const otherWeeksItems = currentShoppingList.filter(i => i.planId !== plan.id);
-    store.updateShoppingList([...otherWeeksItems, ...adhocOrBatchItems, ...recurringItemsToKeep, ...syncedMealItems]);
   };
 
   // Finalize for the first time (Draft -> Finalized)
@@ -824,10 +776,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       ...currentPlan, 
       status: 'finalized'
     };
-    store.updateMealPlan(updatedPlan);
-    
-    // Generate shopping list for this week
-    generateShoppingList(updatedPlan);
+    // Status, a record of what was sent, and the week's ingredients on the shopping list
+    sendWeekToShoppingList(store, updatedPlan);
 
     // Pre-create following week so it is ready to be planned (if within 4-week limit)
     if (canPlanFollowingWeek(updatedPlan.startDate)) {
@@ -846,42 +796,14 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       }
     }
 
-    setShowFinalizedSuccessModal(true);
+    setToastMessage('Sent: the ingredients are on the shopping list.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop') } : null);
   };
 
-  // User confirmed change on finalized plan (updates plan, removes leftovers if any, and updates shopping list)
-  const handleConfirmUpdateWithShoppingList = () => {
-    if (!currentPlan || !pendingPlanChange) {
-      setShowUpdateConfirmModal(false);
-      return;
-    }
-    const nextDays = pendingPlanChange.updatedDays;
-    
-    const updatedPlan: MealPlan = { 
-      ...currentPlan, 
-      status: 'finalized',
-      days: nextDays
-    };
-    store.updateMealPlan(updatedPlan);
-    generateShoppingList(updatedPlan);
-
-    const orphanedMsg = pendingPlanChange.orphanedDays && pendingPlanChange.orphanedDays.length > 0
-      ? ` Leftovers on ${pendingPlanChange.orphanedDays.join(' and ')} were removed.`
-      : '';
-
-    const newMeal = pendingPlanChange.newMeal;
-    const dayName = pendingPlanChange.dayName;
-
-    setPendingPlanChange(null);
-    setShowUpdateConfirmModal(false);
-    setToastMessage(`Plan, shopping list & cook tab updated.${orphanedMsg}`);
-  };
-
-  // User chose to discard changes
-  const handleDiscardUpdate = () => {
-    setPendingPlanChange(null);
-    setShowUpdateConfirmModal(false);
-    setToastMessage('Change discarded.');
+  // "Update list": the week changed after it was sent.
+  const handleUpdateShoppingList = () => {
+    if (!currentPlan) return;
+    sendWeekToShoppingList(store, currentPlan);
+    setToastMessage('Shopping list updated.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop') } : null);
   };
 
   const plannedDaysCount = currentPlan 
@@ -896,32 +818,32 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     return Array.from(tagsSet);
   }, [store.state.recipes]);
 
-  const filteredRecipes = useMemo(() => {
-    return store.state.recipes.filter((r: Recipe) => {
-      const matchesSearch = recipeMatchesSearch(r, recipeSearch);
-      const matchesTag = selectedTag === 'all' || r.tags?.includes(selectedTag);
-      // Recipes with no time written down don't count as quick.
-      const totalTime = totalMinutes(r);
-      const limit = timeFilter === 'under20' ? 20 : timeFilter === 'under30' ? 30 : timeFilter === 'under45' ? 45 : null;
-      const matchesTime = limit === null || (totalTime !== null && totalTime <= limit);
-      // Same as the cards: only appliances the recipe has steps for.
-      const matchesCooking = cookingFilter === 'all' || recipeMethods(r).includes(cookingFilter as CookingMethod);
-      const matchesDietary = dietaryFilter === 'all' ? true :
-        dietaryFilter === 'vegetarian' ? isVegetarianRecipe(r) :
-        dietaryFilter === 'vegan' ? isVeganRecipe(r) : true;
-
-      return matchesSearch && matchesTag && matchesTime && matchesCooking && matchesDietary;
-    });
-  }, [store.state.recipes, recipeSearch, selectedTag, timeFilter, cookingFilter, dietaryFilter]);
-
   // Cards: when each recipe was last had / is next planned, in the order chosen on this phone.
   const today = todayISO();
   const recipeHistory = useMemo(() => recipeHistories(store.state.mealPlans, today), [store.state.mealPlans, today]);
+  const [quickFilters, setQuickFilters] = useState<QuickFilter[]>([]);
+  const toggleQuickFilter = (f: QuickFilter) => setQuickFilters((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
+  const filteredRecipes = useMemo(() => {
+    return store.state.recipes.filter((r: Recipe) =>
+      recipeMatchesSearch(r, recipeSearch) &&
+      matchesQuickFilters(r, quickFilters, { history: recipeHistory.get(r.id), freezer: freezerPortions(r, store.state.batches), today }),
+    );
+  }, [store.state.recipes, recipeSearch, quickFilters, recipeHistory, store.state.batches, today]);
   const [recipeSort, setRecipeSortState] = useState<RecipeSort>(readRecipeSort);
   const setRecipeSort = (sort: RecipeSort) => { setRecipeSortState(sort); saveRecipeSort(sort); };
   const [favFirst, setFavFirstState] = useState<boolean>(readFavouritesFirst);
   const setFavFirst = (on: boolean) => { setFavFirstState(on); saveFavouritesFirst(on); };
   const sortedRecipes = useMemo(() => sortRecipes(filteredRecipes, recipeSort, recipeHistory, favFirst), [filteredRecipes, recipeSort, recipeHistory, favFirst]);
+  // "This week: Tue" on cards for the week on screen.
+  const daysInWeek = useMemo(() => {
+    const m = new Map<string, string[]>();
+    if (!currentPlan) return m;
+    DAYS_OF_WEEK.forEach((d) => (currentPlan!.days[d]?.meals || []).forEach((meal) => {
+      if (!meal.recipeId) return;
+      m.set(meal.recipeId, [...(m.get(meal.recipeId) || []), d.slice(0, 3)]);
+    }));
+    return m;
+  }, [currentPlan]);
   const cardFields = cardFieldsFromPrefs(prefs);
 
   // Navigate through current & future plans only (strictly NO past weeks)
@@ -936,22 +858,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
 
     const updatedMeal = { ...meal, sides: updatedSides };
     const updatedMeals = day.meals.map(m => m.id === mealId ? updatedMeal : m);
-    const nextDays = {
-      ...currentPlan.days,
-      [dayName]: {
-        ...day,
-        meals: updatedMeals
-      }
-    };
-    const updatedPlan: MealPlan = {
-      ...currentPlan,
-      days: nextDays
-    };
-    store.updateMealPlan(updatedPlan);
-    
-    if (updatedPlan.status === 'finalized') {
-      generateShoppingList(updatedPlan);
-    }
+    writeDays({ ...currentPlan.days, [dayName]: { ...day, meals: updatedMeals } });
 
     setToastMessage(updatedSides.length ? 'Sides saved.' : 'Sides removed.');
     setSidesEditingMeal(null);
@@ -1034,138 +941,88 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     <div className="h-full flex flex-col bg-zinc-50/60 relative overflow-hidden">
       {/* Toast notification */}
       {toastMessage && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg animate-in fade-in slide-in-from-top-2 flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-          <span>{toastMessage}</span>
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] w-[min(520px,calc(100%-24px))] bg-zinc-900 text-white text-sm font-medium pl-4 pr-2 py-2 rounded-2xl shadow-lg animate-in fade-in slide-in-from-top-2 flex items-center gap-2" role="status" data-toast>
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="flex-1 min-w-0">{toastMessage}</span>
+          {toastAction && (
+            <button
+              type="button"
+              onClick={() => { const run = toastAction.run; setToastMessage(null); run(); }}
+              className="h-9 px-3 rounded-xl bg-white/15 hover:bg-white/25 text-white font-semibold shrink-0 cursor-pointer"
+              data-toast-action
+            >
+              {toastAction.label}
+            </button>
+          )}
         </div>
       )}
 
       {/* TOP SECTION: ALL MEALS (VISUALLY PRIORITIZED) */}
       <div className={`${planningView === 'list' ? 'shrink-0' : 'flex-1 min-h-0'} flex flex-col relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
-        {/* Sleek Top Bar: No 'All Meals' title, concise expandable search, and filter button with options dropdown */}
-        <div className={`bg-white border-b border-zinc-200/80 px-4 sm:px-5 py-2 shrink-0 relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
-          <div className="flex items-center justify-between gap-3">
-            {/* Left side: Results Count & Active Filter Badges */}
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
-              <span className="text-sm font-bold text-zinc-900 whitespace-nowrap">
-                Planner
-              </span>
-
-              {/* Active Tag Filter Pill */}
-              {selectedTag !== 'all' && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-indigo-600 text-white pl-2 pr-1 py-0.5 rounded-full shrink-0 animate-in fade-in">
-                  <span>{selectedTag}</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTag('all')}
-                    className="hover:text-zinc-300 p-0.5 rounded-full cursor-pointer"
-                    title="Clear category filter"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              )}
-
-              {/* Active Time Filter Pill */}
-              {timeFilter !== 'all' && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-zinc-100 text-zinc-800 border border-zinc-200 pl-2 pr-1 py-0.5 rounded-full shrink-0 animate-in fade-in">
-                  <span>{timeFilter === 'under20' ? '≤20m' : timeFilter === 'under30' ? '≤30m' : '≤45m'}</span>
-                  <button
-                    type="button"
-                    onClick={() => setTimeFilter('all')}
-                    className="hover:text-zinc-500 p-0.5 rounded-full cursor-pointer"
-                    title="Clear time filter"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              )}
-
-              {/* Active Cooking Method Filter Pill */}
-              {cookingFilter !== 'all' && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-indigo-600 text-white pl-2 pr-1 py-0.5 rounded-full shrink-0 animate-in fade-in">
-                  {cookingFilter === 'ninja' && <Zap className="w-2.5 h-2.5 text-amber-400" />}
-                  {cookingFilter === 'oven_hob' && <Flame className="w-2.5 h-2.5 text-rose-400" />}
-                  <span>{cookingFilter === 'ninja' ? 'Ninja' : 'Oven/Hob'}</span>
-                  <button
-                    type="button"
-                    onClick={() => setCookingFilter('all')}
-                    className="hover:text-zinc-300 p-0.5 rounded-full cursor-pointer"
-                    title="Clear cooking method filter"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              )}
-
-              {/* Active Search Term Pill */}
-              {recipeSearch && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-zinc-100 text-zinc-800 border border-zinc-200 pl-2 pr-1 py-0.5 rounded-full shrink-0 animate-in fade-in max-w-[140px]">
-                  <span className="truncate">&quot;{recipeSearch}&quot;</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRecipeSearch('');
-                      setIsSearchExpanded(false);
-                    }}
-                    className="hover:text-zinc-500 p-0.5 rounded-full cursor-pointer"
-                    title="Clear search"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              )}
-            </div>
-
-            {/* Right side: Concise Expandable Search + Filter Button */}
-            <div className="flex items-center gap-2 shrink-0">
-              {planningView === 'classic' && (<>
-              {/* Expandable Search: starts as icon, expands when clicked */}
-              <div className="relative flex items-center">
-                {isSearchExpanded ? (
-                  <div className="flex items-center bg-zinc-50 border border-zinc-300 rounded-xl px-2.5 py-1 w-48 sm:w-60 shadow-2xs transition-all animate-in fade-in slide-in-from-right-2">
-                    <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0 mr-1.5" />
+        {/* Title row: search and one-tap filters (Classic), or just the title (List); view options on the right */}
+        <div className={`bg-white border-b border-zinc-200/80 px-3 sm:px-5 py-2 shrink-0 relative ${showViewOptions ? 'z-35' : 'z-10'}`}>
+          <div className="flex items-center gap-2">
+            {planningView === 'classic' ? (
+              isSearchExpanded ? (
+                <div className="flex-1 flex items-center gap-2 min-w-0">
+                  <div className="relative flex-1 min-w-0">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       ref={searchInputRef}
                       type="text"
+                      inputMode="search"
+                      enterKeyHint="search"
                       value={recipeSearch}
                       onChange={(e) => setRecipeSearch(e.target.value)}
-                      placeholder="Type to search..."
-                      className="w-full text-xs bg-transparent focus:outline-none text-zinc-900 placeholder:text-zinc-400"
+                      placeholder="Search meals, ingredients or notes"
+                      aria-label="Search meals"
+                      className="w-full h-9 pl-9 pr-8 rounded-xl border border-zinc-300 bg-zinc-50 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRecipeSearch('');
-                        setIsSearchExpanded(false);
-                      }}
-                      className="p-0.5 text-zinc-400 hover:text-zinc-700 rounded transition-colors ml-1 cursor-pointer"
-                      title="Close search"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                    {recipeSearch && (
+                      <button type="button" onClick={() => setRecipeSearch('')} className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg text-zinc-500 flex items-center justify-center cursor-pointer" aria-label="Clear search">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
-                ) : (
+                  <button type="button" onClick={() => { setRecipeSearch(''); setIsSearchExpanded(false); }} className="h-9 px-1.5 text-sm font-semibold text-zinc-700 cursor-pointer" aria-label="Close search">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsSearchExpanded(true);
-                      setTimeout(() => searchInputRef.current?.focus(), 50);
-                    }}
-                    className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-2xs ${
-                      recipeSearch
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600 hover:text-zinc-900'
-                    }`}
+                    onClick={() => { setIsSearchExpanded(true); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+                    className="w-9 h-9 rounded-xl border border-zinc-200 bg-white text-zinc-700 flex items-center justify-center shrink-0 cursor-pointer"
                     title="Search meals"
                     aria-label="Search meals"
                   >
-                    <Search className="w-3.5 h-3.5" />
+                    <Search className="w-4 h-4" />
                   </button>
-                )}
-              </div>
-
-              </>)}
+                  <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="Filters" data-quick-filters>
+                    {QUICK_FILTERS.map(({ id, label }) => {
+                      const on = quickFilters.includes(id);
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => toggleQuickFilter(id)}
+                          aria-pressed={on}
+                          data-filter={id}
+                          className={`shrink-0 h-9 px-3 rounded-full border text-sm font-semibold cursor-pointer transition-colors ${
+                            on ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-zinc-700 border-zinc-300'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )
+            ) : (
+              <h1 className="flex-1 text-lg font-bold text-zinc-900">Planning</h1>
+            )}
 
               {/* View Options Dropdown */}
               <div className="relative">
@@ -1290,255 +1147,24 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                 )}
               </div>
 
-              {planningView === 'classic' && (<>
-              {/* Filter Button with Options Dropdown */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer shadow-2xs ${
-                    selectedTag !== 'all' || timeFilter !== 'all' || cookingFilter !== 'all' || showFilterDropdown
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-700 hover:text-zinc-900'
-                  }`}
-                  title="Filter options"
-                  aria-label="Filter meals by options"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span>Filter</span>
-                  {(selectedTag !== 'all' || timeFilter !== 'all' || cookingFilter !== 'all' || dietaryFilter !== 'all') && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ml-0.5" />
-                  )}
-                </button>
-
-                {/* Filter Popover Dropdown */}
-                {showFilterDropdown && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setShowFilterDropdown(false)}
-                    />
-                    <div className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-130px)] flex flex-col bg-white rounded-2xl border border-zinc-200/90 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2">
-                      <div className="flex items-center justify-between p-3 pb-2.5 border-b border-zinc-100 shrink-0">
-                        <span className="text-xs font-semibold text-zinc-900">Filter Meals</span>
-                        {(selectedTag !== 'all' || timeFilter !== 'all' || cookingFilter !== 'all' || dietaryFilter !== 'all') && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedTag('all');
-                              setTimeFilter('all');
-                              setCookingFilter('all');
-                              setDietaryFilter('all');
-                            }}
-                            className="text-[11px] text-zinc-400 hover:text-zinc-900 font-medium cursor-pointer"
-                          >
-                            Reset all
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="overflow-y-auto p-3 space-y-3 flex-1 scrollbar-thin">
-                        {/* Dietary Section */}
-                        <div>
-                          <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
-                            Dietary
-                          </span>
-                          <div className="grid grid-cols-3 gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setDietaryFilter('all')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium text-center transition-colors cursor-pointer ${
-                                dietaryFilter === 'all'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              All
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDietaryFilter('vegetarian')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium text-center transition-colors cursor-pointer ${
-                                dietaryFilter === 'vegetarian'
-                                  ? 'bg-emerald-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              Vegetarian
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDietaryFilter('vegan')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium text-center transition-colors cursor-pointer ${
-                                dietaryFilter === 'vegan'
-                                  ? 'bg-emerald-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              Vegan
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Cooking Method Section */}
-                        <div>
-                          <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
-                            Cooking Method / Appliance
-                          </span>
-                          <div className="grid grid-cols-2 gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setCookingFilter('all')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium text-center transition-colors cursor-pointer ${
-                                cookingFilter === 'all'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              All Methods
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setCookingFilter('ninja')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer ${
-                                cookingFilter === 'ninja'
-                                  ? 'bg-amber-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              <Zap className="w-3 h-3 text-amber-300" />
-                              <span>Ninja Combi</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setCookingFilter('oven_hob')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer ${
-                                cookingFilter === 'oven_hob'
-                                  ? 'bg-rose-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              <Flame className="w-3 h-3 text-rose-300" />
-                              <span>Oven/Hob</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Cook Time Section */}
-                        <div>
-                          <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
-                            Time Needed
-                          </span>
-                          <div className="grid grid-cols-2 gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setTimeFilter('all')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium text-center transition-colors cursor-pointer ${
-                                timeFilter === 'all'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              Any Time
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTimeFilter('under20')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium text-center transition-colors cursor-pointer ${
-                                timeFilter === 'under20'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              ≤ 20 mins
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTimeFilter('under30')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium text-center transition-colors cursor-pointer ${
-                                timeFilter === 'under30'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              ≤ 30 mins
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTimeFilter('under45')}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-medium text-center transition-colors cursor-pointer ${
-                                timeFilter === 'under45'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                              }`}
-                            >
-                              ≤ 45 mins
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Tag / Category Section */}
-                        <div>
-                          <span className="text-[11px] uppercase font-bold text-zinc-400 tracking-wider block px-1 mb-1.5">
-                            Category / Tag
-                          </span>
-                          <div className="max-h-44 overflow-y-auto space-y-0.5 pr-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedTag('all');
-                                setShowFilterDropdown(false);
-                              }}
-                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
-                                selectedTag === 'all'
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'hover:bg-zinc-100 text-zinc-700'
-                              }`}
-                            >
-                              <span>All Categories</span>
-                              <span className="text-[11px] opacity-70">{store.state.recipes.length}</span>
-                            </button>
-                            {allTags.map(tag => {
-                              const count = store.state.recipes.filter((r: Recipe) => r.tags?.includes(tag)).length;
-                              return (
-                                <button
-                                  key={tag}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedTag(tag);
-                                    setShowFilterDropdown(false);
-                                  }}
-                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
-                                    selectedTag === tag
-                                      ? 'bg-indigo-600 text-white'
-                                      : 'hover:bg-zinc-100 text-zinc-700'
-                                  }`}
-                                >
-                                  <span>{tag}</span>
-                                  <span className="text-[11px] opacity-70">{count}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-              </>)}
-            </div>
           </div>
         </div>
 
         {planningView === 'classic' && (
         /* Recipes Gallery Grid: strictly 2 rows of 3 on desktop */
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col justify-between min-h-0">
+          {(recipeSearch.trim() || quickFilters.length > 0) && (
+            <div className="mb-2 flex items-center gap-2 text-sm text-zinc-600" data-filter-status>
+              <span>{filteredRecipes.length} of {store.state.recipes.length} meals</span>
+              <span aria-hidden="true">·</span>
+              <button type="button" onClick={() => { setQuickFilters([]); setRecipeSearch(''); setIsSearchExpanded(false); }} className="font-semibold text-emerald-800 underline underline-offset-2 cursor-pointer">Clear</button>
+            </div>
+          )}
           {filteredRecipes.length === 0 ? (
             <div className="my-auto py-12 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-zinc-200 rounded-2xl bg-white/50">
               <ChefHat className="w-8 h-8 text-zinc-300 mb-2" />
-              <p className="text-xs font-medium text-zinc-700">No meals found</p>
-              <p className="text-[11px] text-zinc-400 mt-0.5">Try a different search query or filter</p>
+              <p className="text-sm font-semibold text-zinc-700">No meals match</p>
+              <p className="text-sm text-zinc-500 mt-0.5">{quickFilters.includes('favourites') && !store.state.recipes.some((r: Recipe) => r.favourite) ? 'No favourites yet: star recipes in the Cookbook.' : 'Try fewer filters or another word.'}</p>
             </div>
           ) : (
             <>
@@ -1552,6 +1178,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                     history={recipeHistory.get(recipe.id)}
                     freezer={freezerPortions(recipe, store.state.batches)}
                     today={today}
+                    inWeek={daysInWeek.get(recipe.id)}
                     wide={mealRowsLayout === 1}
                     onOpen={() => setViewingRecipe(recipe)}
                     dragProps={{
@@ -1583,7 +1210,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
             />
             <div className="absolute left-2 sm:left-4 bottom-full mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-zinc-200 p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
               <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                Switch Week
+                Weeks
               </div>
               
               <div className="max-h-60 overflow-y-auto space-y-1">
@@ -1644,7 +1271,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-medium text-zinc-900 hover:bg-zinc-100 flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Plan Following Week</span>
+                    <span>Plan the week after</span>
                   </button>
                 ) : (
                   <div className="px-3 py-1.5 text-[11px] text-zinc-400 italic text-center">
@@ -1663,9 +1290,9 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                   >
                     <span className="flex items-center gap-1.5">
                       <History className="w-3.5 h-3.5 text-zinc-500" />
-                      <span>Past Weeks Archive</span>
+                      <span>Past weeks</span>
                     </span>
-                    <span className="text-[11px] text-zinc-400 font-medium">Settings →</span>
+                    <span className="text-[11px] text-zinc-500 font-medium">in Settings →</span>
                   </button>
                 )}
               </div>
@@ -1673,97 +1300,118 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
           </>
         )}
 
-        {/* Dock Control Bar */}
-        <div className="px-2 sm:px-4 py-2 border-b border-zinc-100 flex flex-nowrap items-center justify-between gap-4 bg-white shrink-0 overflow-x-auto scrollbar-none">
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
-            {/* Week Dropdown Selector - Without redundant 'Week of' text */}
-            <div className="relative shrink-0">
-              <button
-                onClick={() => setShowWeekDropdown(!showWeekDropdown)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 transition-colors shadow-2xs cursor-pointer"
-              >
-                <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />
-                <span className="text-xs font-semibold text-zinc-900">
-                  {currentPlan?.startDate === currentMondayStr ? 'This Week' : currentPlan?.startDate === nextMondayStr ? 'Next Week' : formatWeekStart(currentPlan?.startDate)}
-                </span>
-                {currentPlan?.status === 'finalized' ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                ) : (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
-                )}
-                <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${showWeekDropdown ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
+        {/* Dock bar: ‹ week › and sending to the shopping list */}
+        <div className="px-2 sm:px-4 py-1.5 border-b border-zinc-100 flex items-center justify-between gap-2 bg-white shrink-0">
+          <div className="flex items-center gap-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => prevPlan && switchToPlan(prevPlan.id)}
+              disabled={!prevPlan}
+              className="w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-700 flex items-center justify-center disabled:opacity-30 cursor-pointer shrink-0"
+              aria-label="Previous week"
+              data-week-prev
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowWeekDropdown(!showWeekDropdown)}
+              className="h-9 flex items-center gap-1 px-2 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 transition-colors cursor-pointer shrink-0"
+              aria-label="Choose a week"
+              data-week-name
+            >
+              <span className="text-sm font-semibold text-zinc-900 whitespace-nowrap">
+                {currentPlan ? weekLabel(currentPlan.startDate) : ''}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 shrink-0 transition-transform ${showWeekDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (nextPlan) switchToPlan(nextPlan.id);
+                else if (currentPlan && canPlanFollowingWeek(currentPlan.startDate, undefined, maxWeeks)) handlePlanFollowingWeek();
+              }}
+              disabled={!nextPlan && !(currentPlan && canPlanFollowingWeek(currentPlan.startDate, undefined, maxWeeks))}
+              className="w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-700 flex items-center justify-center disabled:opacity-30 cursor-pointer shrink-0"
+              aria-label="Next week"
+              data-week-next
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
 
-            {currentPlan && currentPlan.status !== 'finalized' && totalPlannedMeals === 0 && copyCandidates.length > 0 && (
+          <div className="shrink-0">
+            {currentPlan?.status === 'finalized' ? (
+              changedDays.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleUpdateShoppingList}
+                  className="h-9 px-3 bg-amber-500 hover:bg-amber-600 text-amber-950 rounded-lg text-sm font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  title={`Changed since the list was made: ${changedDays.join(', ')}`}
+                  data-update-list
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Update list</span>
+                  <span className="text-xs font-semibold bg-amber-950/10 rounded px-1">{changedDays.length}<span className="hidden sm:inline"> {changedDays.length === 1 ? 'change' : 'changes'}</span></span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setToastMessage('This week is on the shopping list.', onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop') } : null)}
+                  className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  title="Sent to the shopping list"
+                  data-sent
+                >
+                  <Check className="w-4 h-4 stroke-[2.5]" />
+                  <span>Sent</span>
+                </button>
+              )
+            ) : totalPlannedMeals === 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowNoMealsToFinalizeModal(true)}
+                className="h-9 px-3 bg-zinc-100 text-zinc-500 border border-zinc-200 rounded-lg text-sm font-medium flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="Plan at least one meal first"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>Send to list</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowFinalizeConfirmModal(true)}
+                className="h-9 px-3 bg-white hover:bg-emerald-50 text-zinc-900 border border-emerald-400 rounded-lg text-sm font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
+                title="Check the week and send it to the shopping list"
+                data-send-to-list
+              >
+                <ShoppingCart className="w-4 h-4 text-emerald-700" />
+                <span className="sm:hidden">Send to list</span>
+                <span className="hidden sm:inline">Send to shopping list</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {currentPlan && (
+          <WeekGlance
+            days={currentPlan.days}
+            today={today}
+            onJump={jumpToDay}
+            action={currentPlan.status !== 'finalized' && totalPlannedMeals === 0 && copyCandidates.length > 0 ? (
               <button
                 type="button"
                 onClick={() => setCopyWeekState('pick')}
-                className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 transition-colors cursor-pointer whitespace-nowrap"
+                className="h-8 flex items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 rounded-lg border border-indigo-200 cursor-pointer whitespace-nowrap"
                 title="Fill this week with the meals from another week"
               >
                 <Copy className="w-3.5 h-3.5" />
                 <span>Copy a week</span>
               </button>
-            )}
-
-            {canPlanFollowingWeek(currentPlan?.startDate, undefined, maxWeeks) && (
-              <button
-                onClick={() => handlePlanFollowingWeek()}
-                className="hidden lg:flex items-center gap-1 text-[11px] font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 px-2 py-1 rounded-lg border border-zinc-200 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Next Week</span>
-              </button>
-            )}
-          </div>
-
-          {/* Action Controls & Totals */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {/* Plan Actions: Finalize */}
-            <div className="flex items-center gap-1.5">
-              {currentPlan?.status === 'finalized' ? (
-                /* Once finalized, turns green */
-                <button
-                  type="button"
-                  onClick={() => setShowFinalizedSuccessModal(true)}
-                  className="p-1.5 sm:px-3 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 shadow-2xs cursor-pointer whitespace-nowrap"
-                  title="Plan is finalized. Click to view details."
-                >
-                  <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                  <span className="hidden sm:inline">Finalized & Sent to Shopping List</span>
-                  <span className="sm:hidden">Sent to Shopping List</span>
-                </button>
-              ) : totalPlannedMeals === 0 ? (
-                /* Grey button when no meals are added to any day of the week. Clicking triggers pop-up */
-                <button
-                  type="button"
-                  onClick={() => setShowNoMealsToFinalizeModal(true)}
-                  className="p-1.5 sm:px-3 sm:py-1.5 bg-zinc-100 hover:bg-zinc-200/80 text-zinc-400 hover:text-zinc-600 border border-zinc-200 rounded-lg text-xs font-medium transition-all flex items-center gap-2 shadow-2xs cursor-pointer whitespace-nowrap"
-                  title="Plan at least one meal to finalize"
-                >
-                  <ShoppingCart className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Finalize Plan</span>
-                </button>
-              ) : (
-                /* Meal added to any day: ready to finalize, NOT black */
-                <button
-                  type="button"
-                  onClick={() => setShowFinalizeConfirmModal(true)}
-                  className="p-1.5 sm:px-4 sm:py-2 bg-white hover:bg-emerald-50 text-zinc-900 hover:text-emerald-900 border border-emerald-300 hover:border-emerald-400 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-sm cursor-pointer whitespace-nowrap"
-                  title="Review and finalize weekly plan"
-                >
-                  <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="hidden sm:inline">Finalize & Send to Shopping List</span>
-                  <span className="sm:hidden">Send to Shopping List</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+            ) : undefined}
+          />
+        )}
 
         {planningView === 'list' && currentPlan ? (
-          <div className="flex-1 min-h-0 overflow-y-auto bg-zinc-50/60" data-day-list>
+          <div className="flex-1 min-h-0 overflow-y-auto bg-zinc-50/60" data-day-list ref={listRef}>
             <div className="max-w-2xl mx-auto w-full p-3 space-y-2 pb-6">
               {DAYS_OF_WEEK.map(day => {
                 const dayPlan = currentPlan!.days[day];
@@ -1774,239 +1422,68 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                     day={day}
                     dayPlan={dayPlan}
                     meal={meal}
-                    cooksFor={cooksForText(day, meal)}
-                    onOpen={() => setSelectedDay(day)}
-                    onPeople={() => {
-                      if (!meal) return;
-                      if (meal.type === 'takeout' || meal.type === 'eating_out' || meal.type === 'no_meal') {
-                        setCustomMealModal({ dayName: day, type: meal.type, mealId: meal.id, note: meal.note || '', servings: meal.servings || 2 });
-                      } else {
-                        setEditingServingsMeal({ dayName: day, meal });
-                      }
-                    }}
-                    onRemove={() => meal && handleRemoveMeal(day, meal.id)}
+                    today={today}
+                    cooksFor={weekCooksForText(currentPlan!.days, day, meal)}
+                    fromDay={leftoverSourceDay(currentPlan!.days, day, meal)}
+                    onOpen={() => (meal ? setDaySheet(day) : setSelectedDay(day))}
                   />
                 );
               })}
             </div>
           </div>
         ) : (
-        /* 7 Days Row - Utilizes full dock height and fit for meal info and notes */
-        <div className="flex-1 p-2 md:p-3 overflow-x-auto overflow-y-hidden min-h-0 flex flex-col scrollbar-thin">
-          <div className="grid grid-cols-7 gap-2.5 sm:gap-3.5 min-w-[1150px] lg:min-w-[1300px] flex-1 h-full">
+        /* The week strip: drop recipes onto a day, tap a day for its panel */
+        <div className="flex-1 p-2 md:p-3 overflow-x-auto overflow-y-hidden min-h-0 flex flex-col scrollbar-thin" ref={stripRef} data-week-strip>
+          <div className="grid grid-cols-7 gap-2 sm:gap-3 min-w-[1050px] md:min-w-0 flex-1 h-full">
             {currentPlan && DAYS_OF_WEEK.map(day => {
-              const dayPlan = currentPlan.days[day];
-              const hasMeal = dayPlan && dayPlan.meals && dayPlan.meals.length > 0;
-              const meal = hasMeal ? dayPlan.meals[0] : null;
-
-              if (meal) {
-                const isLeftover = meal.type === 'leftover' || /^leftovers?:\s*/i.test(meal.name || '');
-                const isBatch = meal.type === 'batch' || /^batch:\s*/i.test(meal.name || '');
-                const cleanMealName = meal.name.replace(/^(leftovers?|batch):\s*/i, '').trim();
-
-                // Define elegant vertical border accents based on meal type
-                let accentBorderClass = 'border-l-indigo-500';
-                if (isLeftover) accentBorderClass = 'border-l-amber-500';
-                else if (isBatch) accentBorderClass = 'border-l-cyan-500';
-                else if (meal.type === 'takeout') accentBorderClass = 'border-l-orange-500';
-                else if (meal.type === 'eating_out') accentBorderClass = 'border-l-blue-500';
-                else if (meal.type === 'no_meal') accentBorderClass = 'border-l-zinc-350';
-
-                return (
-                  <div
-                    key={day}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => handleDrop(day)}
-                    onClick={() => {
-                      if (meal.type === 'takeout' || meal.type === 'eating_out' || meal.type === 'no_meal') {
-                        setCustomMealModal({
-                          dayName: day,
-                          type: meal.type,
-                          mealId: meal.id,
-                          note: meal.note || '',
-                          servings: meal.servings || 2
-                        });
-                      } else {
-                        setEditingServingsMeal({ dayName: day, meal });
-                      }
-                    }}
-                    className={`group bg-white rounded-xl border border-zinc-200 hover:border-zinc-300 shadow-2xs hover:shadow-xs transition-all flex flex-col h-full min-h-0 p-2 sm:p-2.5 relative select-none border-l-4 cursor-pointer ${accentBorderClass} ${
-                      draggedRecipe ? 'ring-2 ring-indigo-500 ring-offset-1 border-indigo-400 bg-indigo-50/10' : ''
-                    }`}
-                  >
-                    {/* Day Header */}
-                    <div className="flex justify-between items-center shrink-0 mb-1 sm:mb-2 border-b border-zinc-100 pb-1">
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-bold text-zinc-900 tracking-wide">{day}</span>
-                        <span className="text-[11px] font-medium text-zinc-400">
-                          {dayPlan?.date ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveMeal(day, meal.id);
-                        }}
-                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all p-1.5 rounded-lg cursor-pointer shrink-0 flex items-center justify-center min-w-[32px] min-h-[32px]"
-                        title="Remove meal"
-                        aria-label="Remove meal"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    {/* Meal details */}
-                    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-0.5">
-                      <h4 
-                        className={`font-semibold text-zinc-900 break-words line-clamp-2 hover:text-indigo-600 cursor-pointer transition-colors ${
-                          cleanMealName.length > 25 
-                            ? 'text-[11px] leading-[1.3]' 
-                            : 'text-xs leading-snug'
-                        }`}
-                        title={meal.name}
-                      >
-                        {cleanMealName}
-                      </h4>
-
-                      {/* Note display if present */}
-                      {meal.note && (
-                        <div 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAddingNoteToMeal({ dayName: day, meal });
-                          }}
-                          className="mt-1 flex items-start gap-1 text-[11px] text-zinc-500 bg-zinc-50 hover:bg-zinc-100 px-1.5 py-1 rounded-md transition-colors cursor-pointer group/note"
-                          title={meal.note}
-                        >
-                          <FileText className="w-3 h-3 text-zinc-400 shrink-0 mt-0.5" />
-                          <span className="line-clamp-1 italic text-zinc-600 flex-1">{meal.note}</span>
-                        </div>
-                      )}
-
-                      {/* Sides display if present */}
-                      {meal.sides && meal.sides.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {meal.sides.map((side) => (
-                            <span 
-                              key={side.id} 
-                              className="inline-flex items-center gap-0.5 text-[11px] font-medium text-zinc-600 bg-zinc-50 border border-zinc-200/60 rounded-md px-1.5 py-0.5 max-w-full truncate"
-                              title={`${side.name}: ${side.amount} ${side.unit}`}
-                            >
-                              <span>🍚</span>
-                              <span className="truncate">{side.name}</span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bottom Footer: Quick Adjustment Buttons */}
-                    <div className="mt-1.5 sm:mt-2.5 pt-1.5 border-t border-zinc-100 flex items-center justify-between shrink-0">
-                      {meal.type !== 'no_meal' ? (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (meal.type === 'takeout' || meal.type === 'eating_out') {
-                                setCustomMealModal({
-                                  dayName: day,
-                                  type: meal.type,
-                                  mealId: meal.id,
-                                  note: meal.note || '',
-                                  servings: meal.servings || 2
-                                });
-                              } else {
-                                setEditingServingsMeal({ dayName: day, meal });
-                              }
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-700 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/60 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
-                            title={`Cooking for ${meal.servings || 2} ${(meal.servings || 2) === 1 ? 'person' : 'people'}. Click to adjust.`}
-                          >
-                            <span className="text-zinc-400 select-none">👤</span>
-                            <span className="tabular-nums font-bold">{meal.servings || 2}</span>
-                          </button>
-
-                          {meal.sides && meal.sides.length > 0 ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSidesEditingMeal({ dayName: day, meal });
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100/75 border border-indigo-200/80 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
-                              title="Manage sides for this meal"
-                            >
-                              <span>🍚</span>
-                              <span className="font-bold tabular-nums">{meal.sides.length}</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSidesEditingMeal({ dayName: day, meal });
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-700 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/50 bg-zinc-50 border border-zinc-200/60 px-2 py-0.5 rounded-lg transition-colors cursor-pointer shadow-2xs shrink-0"
-                              title="Add sides to this meal"
-                            >
-                              <span className="text-zinc-400">🍚</span>
-                              <span>+ Side</span>
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-zinc-400 italic">No cooking</span>
-                      )}
-
-                      {/* Note button removed */}
-                    </div>
-                  </div>
-                );
-              }
-
-              // Empty day card (No meal assigned)
+              const dayPlan = currentPlan!.days[day];
+              const meal = dayPlan?.meals?.[0] || null;
               return (
-                <div
+                <WeekDayCard
                   key={day}
-                  onDragOver={(e) => e.preventDefault()}
+                  day={day}
+                  dayPlan={dayPlan}
+                  meal={meal}
+                  today={today}
+                  cooksFor={weekCooksForText(currentPlan!.days, day, meal)}
+                  fromDay={leftoverSourceDay(currentPlan!.days, day, meal)}
+                  dragActive={!!draggedRecipe}
                   onDrop={() => handleDrop(day)}
-                  onClick={() => setSelectedDay(day)}
-                  className={`bg-zinc-50/40 hover:bg-zinc-100/60 border border-dashed border-zinc-200 hover:border-zinc-350 rounded-xl transition-all flex flex-col h-full min-h-0 p-2.5 relative justify-between cursor-pointer ${
-                    draggedRecipe
-                      ? 'border-indigo-400 bg-indigo-50/10 ring-2 ring-indigo-400/50'
-                      : ''
-                  }`}
-                >
-                  <div className="flex flex-col shrink-0">
-                    <span className="text-xs font-bold text-zinc-900 tracking-wide">{day}</span>
-                    <span className="text-[11px] font-medium text-zinc-400">
-                      {dayPlan?.date ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}
-                    </span>
-                  </div>
-
-                  <div 
-                    className="flex-1 flex flex-col items-center justify-center text-center group rounded-lg bg-white hover:bg-zinc-50 border border-dashed border-zinc-200 hover:border-zinc-300 transition-colors mt-2 p-1.5 shadow-2xs"
-                    title={`Add meal to ${day}`}
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-zinc-100 group-hover:bg-indigo-50 text-zinc-400 group-hover:text-indigo-600 flex items-center justify-center mb-1 transition-colors">
-                      <Plus className="w-4 h-4" />
-                    </div>
-                    <span className="text-[11px] font-medium text-zinc-500 group-hover:text-indigo-600 block transition-colors leading-tight">
-                      Add Meal
-                    </span>
-                    <span className="text-[11px] text-zinc-400 hidden sm:block">
-                      Drop or tap
-                    </span>
-                  </div>
-                </div>
+                  onOpen={() => setDaySheet(day)}
+                  onAdd={() => setSelectedDay(day)}
+                />
               );
             })}
           </div>
         </div>
         )}
       </div>
+
+      {/* The day's panel: people, sides, notes, change, move or swap, remove */}
+      {daySheet && currentPlan && currentPlan.days[daySheet]?.meals?.[0] && (() => {
+        const day = daySheet;
+        const meal = currentPlan.days[day].meals[0];
+        const recipe = meal.recipeId ? store.state.recipes.find((r: Recipe) => r.id === meal.recipeId) : null;
+        return (
+          <DaySheet
+            key={`${day}-${meal.id}`}
+            day={day}
+            dayPlan={currentPlan.days[day]}
+            meal={meal}
+            cooksFor={weekCooksForText(currentPlan.days, day, meal)}
+            fromDay={leftoverSourceDay(currentPlan.days, day, meal)}
+            plannedDays={DAYS_OF_WEEK.map((d) => ({ day: d, date: currentPlan!.days[d]?.date, meal: currentPlan!.days[d]?.meals?.[0] || null }))}
+            hasRecipe={!!recipe}
+            onSave={(patch) => handleSaveDayDetails(day, meal.id, patch)}
+            onSides={() => { setDaySheet(null); setSidesEditingMeal({ dayName: day, meal }); }}
+            onChangeMeal={() => { setDaySheet(null); setSelectedDay(day); }}
+            onMove={(to) => { setDaySheet(null); handleMoveMeal(day, to); }}
+            onRemove={() => { setDaySheet(null); handleRemoveMeal(day, meal.id); }}
+            onOpenRecipe={recipe ? () => { setDaySheet(null); setViewingRecipe(recipe); } : undefined}
+            onClose={() => setDaySheet(null)}
+          />
+        );
+      })()}
 
       {/* MODAL: Add a recipe to a day (from the recipe pop-up) */}
       {assigningRecipe && (
@@ -2098,7 +1575,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
         </div>
       )}
 
-      {/* MODAL 1: Day Options Modal (Includes Cook Book recipes, Takeout, Eating Out, Batches) */}
+      {/* MODAL 1: Day Options Modal (Cookbook recipes, Takeaway, Eating out, Freezer) */}
       {selectedDay && (
         <div 
           className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-start justify-center px-4 pt-[max(1rem,6vh)] pb-4 animate-in fade-in duration-150"
@@ -2202,7 +1679,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                     <div className="w-8 h-8 rounded-lg bg-orange-100/80 text-orange-600 flex items-center justify-center transition-transform group-hover:scale-110">
                       <ShoppingBag className="w-4 h-4" />
                     </div>
-                    <span className="font-semibold text-xs text-zinc-900 leading-tight">Takeout</span>
+                    <span className="font-semibold text-xs text-zinc-900 leading-tight">Takeaway</span>
                     <span className="text-[11px] text-zinc-400">Add note</span>
                   </button>
                   <button
@@ -2222,7 +1699,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                     <div className="w-8 h-8 rounded-lg bg-blue-100/80 text-blue-600 flex items-center justify-center transition-transform group-hover:scale-110">
                       <Utensils className="w-4 h-4" />
                     </div>
-                    <span className="font-semibold text-xs text-zinc-900 leading-tight">Eat Out</span>
+                    <span className="font-semibold text-xs text-zinc-900 leading-tight">Eating out</span>
                     <span className="text-[11px] text-zinc-400">Add note</span>
                   </button>
                   <button
@@ -2496,7 +1973,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
         </div>
       )}
 
-      {/* MODAL: Custom Meal Modal (Takeout, Eating Out, No Meal Needed) with Note and Portions */}
+      {/* MODAL: Takeaway, Eating out or No meal, with a note and people */}
       {customMealModal && (
         <div 
           className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
@@ -2519,11 +1996,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm text-zinc-900">
-                    {customMealModal.mealId ? 'Edit' : 'Add'} {
-                      customMealModal.type === 'takeout' ? 'Takeout' :
-                      customMealModal.type === 'eating_out' ? 'Eating Out' :
-                      'No Meal Needed'
-                    }
+                    {customMealModal.type === 'takeout' ? 'Takeaway' : customMealModal.type === 'eating_out' ? 'Eating out' : 'No meal'}
                   </h3>
                   <p className="text-[11px] text-zinc-400">
                     {customMealModal.dayName}
@@ -2568,8 +2041,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
               {customMealModal.type !== 'no_meal' && (
                 <div className="pt-3 border-t border-zinc-100 flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-semibold text-zinc-900 block">Number of People</span>
-                    <span className="text-[11px] text-zinc-400">Portions to account for</span>
+                    <span className="text-xs font-semibold text-zinc-900 block">People</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -2648,7 +2120,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                 }}
                 className="flex-1 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors text-center shadow-2xs cursor-pointer"
               >
-                {customMealModal.mealId ? 'Save Changes' : 'Add to Plan'}
+                {customMealModal.mealId ? 'Save' : 'Add to the week'}
               </button>
             </div>
           </div>
@@ -2748,7 +2220,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-base font-semibold text-zinc-900 leading-tight">
-                    Finalize Weekly Plan
+                    Send this week to the shopping list
                   </h3>
                   <p className="text-xs text-zinc-400 truncate">
                     Week of {formatWeekRange(currentPlan.startDate)}
@@ -2780,7 +2252,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                       {unallocatedDays.join(', ')}
                     </p>
                     <p className="text-[11px] text-amber-800/90 pt-0.5 leading-relaxed">
-                      You can still finalize this week now with these days left open, or click “Keep Editing” (or any day below) to add meals.
+                      You can still send it now and add these later, or tap a day below to add a meal first.
                     </p>
                   </div>
                 </div>
@@ -2789,7 +2261,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <div>
                     <p className="font-semibold text-emerald-900">All 7 days planned</p>
-                    <p className="text-[11px] text-emerald-700">Every day of this week has a planned meal allocated.</p>
+                    <p className="text-[11px] text-emerald-700">Every day of this week has a meal.</p>
                   </div>
                 </div>
               )}
@@ -2870,7 +2342,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                             </div>
                           ) : (
                             <div className="flex items-center gap-1.5 text-xs text-zinc-400 italic">
-                              <span>No meal allocated</span>
+                              <span>Nothing planned</span>
                             </div>
                           )}
                         </div>
@@ -2897,10 +2369,10 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
               <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-200/80 text-[11px] text-zinc-600 space-y-1">
                 <div className="flex items-center gap-1.5 font-medium text-zinc-800">
                   <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <span>What happens when you finalize?</span>
+                  <span>What happens when you send it?</span>
                 </div>
                 <p className="text-zinc-500 leading-relaxed">
-                  Finalizing creates your ingredients on the <strong>Shopping List</strong> and readies your cooking steps in the <strong>Cook</strong> tab. You can still make adjustments afterwards.
+                  The week's ingredients go on the <strong>shopping list</strong> and the meals appear in the <strong>Cook</strong> tab. You can still change the week afterwards: an <strong>Update list</strong> button appears.
                 </p>
               </div>
             </div>
@@ -2923,7 +2395,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                 className="px-4 py-2 text-white font-medium bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-2xs transition-colors text-xs cursor-pointer flex items-center gap-1.5"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>Confirm & Finalize</span>
+                <span>Send to shopping list</span>
               </button>
             </div>
           </div>
@@ -2945,11 +2417,11 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
             </div>
 
             <h3 className="text-base font-bold text-zinc-900 mb-1.5">
-              Add Meals Before Finalizing
+              Add a meal first
             </h3>
             
             <p className="text-xs text-zinc-500 mb-5 leading-relaxed">
-              Please add a meal to at least one day of the week before finalizing your meal plan.
+              Add a meal to at least one day first, then send the week to the shopping list.
             </p>
 
             <button
@@ -2959,107 +2431,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
             >
               Okay
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: "Plan Finalized" Pop-up */}
-      {showFinalizedSuccessModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-
-            <h3 className="text-lg font-semibold text-center text-zinc-900 mb-1">
-              Plan Finalized
-            </h3>
-            
-            <p className="text-xs text-zinc-500 text-center mb-4 leading-relaxed">
-              Your meal plan for <span className="font-semibold text-zinc-800">{formatWeekRange(currentPlan?.startDate)}</span> has been finalized.
-            </p>
-
-            <div className="bg-zinc-50 rounded-xl p-3.5 mb-5 border border-zinc-200/80 space-y-2.5">
-              <div className="flex items-start gap-2.5 text-xs text-zinc-700">
-                <ShoppingCart className="w-4 h-4 text-zinc-600 shrink-0 mt-0.5" />
-                <span>Ingredients for this week have been added to your <strong>Shopping List</strong>.</span>
-              </div>
-              <div className="flex items-start gap-2.5 text-xs text-zinc-700">
-                <ChefHat className="w-4 h-4 text-zinc-600 shrink-0 mt-0.5" />
-                <span>Planned meals and portions are ready in the <strong>Cook</strong> tab.</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowFinalizedSuccessModal(false)}
-              className="w-full py-2.5 text-white font-medium bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-2xs transition-colors text-xs text-center cursor-pointer"
-            >
-              Okay
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 4: Update Shopping List Prompt (When modifying a finalized plan) */}
-      {showUpdateConfirmModal && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={handleDiscardUpdate}
-        >
-          <div 
-            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-700 flex items-center justify-center mx-auto mb-3">
-              <RotateCcw className="w-5 h-5" />
-            </div>
-
-            <h3 className="text-lg font-semibold text-center text-zinc-900 mb-1">
-              Confirm Plan Change
-            </h3>
-            
-            <p className="text-xs text-zinc-500 text-center mb-4 leading-relaxed">
-              {pendingPlanChange?.description 
-                ? `You are modifying a finalized meal plan (${pendingPlanChange.description}).`
-                : 'You are modifying a finalized meal plan.'}
-            </p>
-
-            {pendingPlanChange?.orphanedDays && pendingPlanChange.orphanedDays.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3.5 mb-4 text-left">
-                <div className="flex items-start gap-2.5">
-                  <span className="text-base shrink-0">🍱</span>
-                  <div className="text-xs text-amber-900 leading-relaxed">
-                    <p className="font-semibold text-amber-950">
-                      Dependent Leftovers Will Be Removed
-                    </p>
-                    <p className="mt-0.5 text-amber-800 text-[11px]">
-                      Planned leftovers on <span className="font-semibold text-amber-950">{pendingPlanChange.orphanedDays.join(' and ')}</span> will also be deleted because their source meal was modified.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <p className="text-[11px] text-zinc-400 text-center mb-5">
-              Confirming this change will update your weekly plan, recalculate your shopping list, and update the cook tab.
-            </p>
-
-            <div className="space-y-2">
-              <button
-                onClick={handleConfirmUpdateWithShoppingList}
-                className="w-full py-2.5 text-white font-medium bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-2xs transition-all text-xs flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span>Confirm Change</span>
-              </button>
-
-              <button
-                onClick={handleDiscardUpdate}
-                className="w-full py-2.5 text-zinc-700 font-medium bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors text-xs flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>Discard Change</span>
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -3383,7 +2754,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
           <div>
             <h3 className="font-bold text-sm text-zinc-900 flex items-center gap-1.5">
               <span>🥗</span>
-              <span>Manage Sides for {meal.name}</span>
+              <span>Sides for {meal.name.replace(/^(leftovers?|batch):\s*/i, '')}</span>
             </h3>
             <p className="text-[11px] text-zinc-500 font-medium mt-0.5">{dayName} Meal Plan</p>
           </div>
@@ -3485,7 +2856,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
 
           {/* Search Bar */}
           <div>
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Search Grocery Database</h4>
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Search your grocery list</h4>
             <div className="relative">
               <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -3536,7 +2907,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                     <Database className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Triage Custom Side</span>
                   </h5>
-                  <p className="text-[11px] text-indigo-800/80 mt-0.5">Map "{triageSideName}" to grocery database so it aggregates perfectly.</p>
+                  <p className="text-[11px] text-indigo-800/80 mt-0.5">Pick what you buy for "{triageSideName}" so it lands in the right aisle.</p>
                 </div>
                 <button
                   type="button"

@@ -29,7 +29,8 @@ import {
   ArrowUp,
   ArrowDown,
   ListOrdered,
-  PackageCheck
+  PackageCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { ShoppingListItem, Recipe, MealPlan, DayPlan } from '../types';
 import { useGracefulCheckoff } from '../hooks/useGracefulCheckoff';
@@ -40,6 +41,8 @@ import CatalogDrawer from './CatalogDrawer';
 import EditItemDrawer from './EditItemDrawer';
 import BatchMealModal from './BatchMealModal';
 import { IngredientTriageModal } from './IngredientTriageModal';
+import { changedDaysSinceList } from '../planning';
+import { sendWeekToShoppingList } from '../planShopping';
 import Fuse from 'fuse.js';
 import { 
   formatWeekRange, 
@@ -1282,8 +1285,8 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
               <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span className="font-medium text-xs">
                 {activePlan && Object.values(activePlan.days).some((day: any) => day.meals && day.meals.length > 0)
-                  ? 'Your meal plan has not been finalized yet'
-                  : 'Meals have not been planned for this week'}
+                  ? "This week's meals haven't been sent to the shopping list yet"
+                  : 'No meals planned for this week yet'}
               </span>
             </div>
             {onNavigateTab && (
@@ -1299,6 +1302,29 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
         )}
 
 
+
+        {/* The week changed on Planning after it was sent: one tap brings the list up to date */}
+        {activePlan && isPlanFinalized && changedDaysSinceList(activePlan).length > 0 && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl px-3.5 py-3 flex items-center justify-between gap-3 shadow-2xs" data-shop-out-of-date>
+            <div className="flex items-start gap-2.5 min-w-0">
+              <RefreshCw className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-950">The meal plan has changed</p>
+                <p className="text-xs text-amber-900/80">
+                  {changedDaysSinceList(activePlan).join(', ')} changed since this list was made.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => sendWeekToShoppingList(store, activePlan)}
+              className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors cursor-pointer"
+              data-shop-update-list
+            >
+              Update list
+            </button>
+          </div>
+        )}
 
         {/* Cupboard check: before you go, take off what you've already got */}
         {cupboardToCheck.length > 0 && (
@@ -1541,10 +1567,10 @@ export default function ShopTab({ store, onNavigateTab }: ShopTabProps) {
                           {!isPlanFinalized ? (
                             <>
                               <p className="font-semibold text-zinc-800 mb-1">
-                                Meal Ingredients have not been added as the planned meals have not been finalized.
+                                This week's meal ingredients aren't on the list yet.
                               </p>
                               <p className="text-[11px] text-zinc-500 mb-2">
-                                Finalize your meal plan in the Planner tab to add ingredients to your shopping list.
+                                Send the week to the shopping list from Planning to add them.
                               </p>
                               {onNavigateTab && (
                                 <button
