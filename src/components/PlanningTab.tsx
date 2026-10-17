@@ -57,8 +57,6 @@ import {
 } from '../utils';
 
 import { RecipeModal } from './CookBookTab';
-import { useHoldDrag } from './planner/useHoldDrag';
-import { RecipeStrip, WeekDayRow, DragGhost, DropChoiceSheet, DropChoice, PlannerDragPayload, cleanMealName, isLeftoverMeal } from './planner/WeekLayout';
 
 interface PlanningTabProps {
   store: any;
@@ -229,16 +227,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
   const [sidesEditingMeal, setSidesEditingMeal] = useState<{ dayName: string; meal: PlannedMeal } | null>(null);
   // Copy-a-week picker: 'pick' lists weeks; a plan means "confirm replacing this week's meals with it".
   const [copyWeekState, setCopyWeekState] = useState<'pick' | MealPlan | null>(null);
-  // Planner layout on this phone: 'week' = recipe strip + week list (press-and-hold drag), 'classic' = recipe grid + day columns.
-  const [plannerLayout, setPlannerLayoutState] = useState<'week' | 'classic'>(() => {
-    try { return localStorage.getItem('planner_layout') === 'week' ? 'week' : 'classic'; } catch { return 'classic'; }
-  });
-  const setPlannerLayout = (layout: 'week' | 'classic') => {
-    setPlannerLayoutState(layout);
-    try { localStorage.setItem('planner_layout', layout); } catch { /* per-phone convenience only */ }
-  };
-  const [dropChoice, setDropChoice] = useState<DropChoice | null>(null);
-  const weekListRef = useRef<HTMLDivElement>(null);
   const [draggedRecipe, setDraggedRecipe] = useState<Recipe | null>(null);
   const [recipeSearch, setRecipeSearch] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -944,95 +932,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
     setSidesEditingMeal(null);
   };
 
-  // ---- Week layout: press-and-hold drag of recipes and planned meals onto days ----
-  const handlePlannerDrop = (payload: PlannerDragPayload, day: string) => {
-    if (!currentPlan) return;
-    if (payload.kind === 'recipe') {
-      handleAssignRecipeToDay(day, payload.recipe);
-      return;
-    }
-    const { fromDay, meal } = payload;
-    if (fromDay === day) return;
-    const target = currentPlan.days[day]?.meals?.[0] || null;
-    const isRecipe = !!meal.recipeId && (meal.type === 'recipe' || meal.type === 'leftover');
-    const canLeftover = isRecipe && DAYS_OF_WEEK.indexOf(day) > DAYS_OF_WEEK.indexOf(fromDay);
-    setDropChoice({ fromDay, toDay: day, meal, replacing: target && target.id !== meal.id ? cleanMealName(target.name) : null, canLeftover, isRecipe });
-  };
-  const { drag: plannerDrag, bind: plannerBind, ghostRef: plannerGhostRef, ghostStart: plannerGhostStart } = useHoldDrag<PlannerDragPayload>({
-    onDrop: handlePlannerDrop,
-    getScrollContainer: () => weekListRef.current,
-  });
-
-  const dropChoiceTarget = () => (dropChoice && currentPlan ? currentPlan.days[dropChoice.toDay]?.meals?.[0] || null : null);
-  const handleDropLeftovers = () => {
-    if (!dropChoice) return;
-    const { meal, fromDay, toDay } = dropChoice;
-    const sourceDay = isLeftoverMeal(meal) ? ((meal.note || '').match(/from (\w+)/i)?.[1] || fromDay) : fromDay;
-    const name = cleanMealName(meal.name);
-    const newMeal: PlannedMeal = {
-      id: crypto.randomUUID(),
-      type: 'leftover',
-      recipeId: meal.recipeId,
-      name: `Leftovers: ${name}`,
-      servings: meal.servings || defaultServings,
-      note: `Reheat from ${sourceDay}`
-    };
-    const target = dropChoiceTarget();
-    setDropChoice(null);
-    executeMealChange(toDay, target, newMeal);
-  };
-  const handleDropCookAgain = () => {
-    if (!dropChoice) return;
-    const { meal, toDay } = dropChoice;
-    const newMeal: PlannedMeal = {
-      id: crypto.randomUUID(),
-      type: 'recipe',
-      recipeId: meal.recipeId,
-      name: cleanMealName(meal.name),
-      servings: meal.servings || defaultServings,
-      ...(meal.sides && meal.sides.length ? { sides: meal.sides.map(sd => ({ ...sd })) } : {})
-    };
-    const target = dropChoiceTarget();
-    setDropChoice(null);
-    executeMealChange(toDay, target, newMeal);
-  };
-  const handleDropCopy = () => {
-    if (!dropChoice) return;
-    const { cooked, ...rest } = dropChoice.meal;
-    const target = dropChoiceTarget();
-    const toDay = dropChoice.toDay;
-    setDropChoice(null);
-    executeMealChange(toDay, target, { ...rest, id: crypto.randomUUID() });
-  };
-  const handleDropMove = () => {
-    if (!dropChoice || !currentPlan) return;
-    const { meal, fromDay, toDay } = dropChoice;
-    const nextDays: Record<string, DayPlan> = {};
-    DAYS_OF_WEEK.forEach(d => {
-      const dp = currentPlan!.days[d] || { date: '', meals: [] };
-      if (d === fromDay) nextDays[d] = { ...dp, meals: dp.meals.filter(m => m.id !== meal.id) };
-      else if (d === toDay) nextDays[d] = { ...dp, meals: [{ ...meal }] };
-      else nextDays[d] = dp;
-    });
-    setDropChoice(null);
-    applyOrConfirmPlanChange(nextDays, `Moved ${cleanMealName(meal.name)} to ${toDay}`);
-    if (currentPlan.status !== 'finalized') setToastMessage(`Moved ${cleanMealName(meal.name)} to ${toDay}`);
-  };
-
-  // "Cooks for 2 + leftovers Tue, Wed": a fresh cook that later leftover days depend on.
-  const cooksForText = (day: string, meal: PlannedMeal | null): string | null => {
-    if (!currentPlan || !meal || meal.type !== 'recipe' || !meal.recipeId) return null;
-    const later: string[] = [];
-    let extra = 0;
-    for (let i = DAYS_OF_WEEK.indexOf(day) + 1; i < DAYS_OF_WEEK.length; i++) {
-      const m = currentPlan.days[DAYS_OF_WEEK[i]]?.meals?.[0];
-      if (!m || m.recipeId !== meal.recipeId) continue;
-      if (isLeftoverMeal(m)) { later.push(DAYS_OF_WEEK[i].slice(0, 3)); extra += m.servings || 2; }
-      else break;
-    }
-    return later.length ? `Cook for ${(meal.servings || 2) + extra}: leftovers ${later.join(', ')}` : null;
-  };
-
   // Copy every day's meals from another week into the week on screen.
   const copyCandidates: MealPlan[] = useMemo(() => {
     return (store.state.mealPlans || [])
@@ -1072,7 +971,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       )}
 
       {/* TOP SECTION: ALL MEALS (VISUALLY PRIORITIZED) */}
-      <div className={`${plannerLayout === 'week' ? 'shrink-0' : 'flex-1 min-h-0'} flex flex-col relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
+      <div className={`flex-1 min-h-0 flex flex-col relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
         {/* Sleek Top Bar: No 'All Meals' title, concise expandable search, and filter button with options dropdown */}
         <div className={`bg-white border-b border-zinc-200/80 px-4 sm:px-5 py-2 shrink-0 relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
           <div className="flex items-center justify-between gap-3">
@@ -1214,25 +1113,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowViewOptions(false)} />
                     <div className="absolute right-0 top-full mt-2 w-56 max-h-[calc(100vh-140px)] overflow-y-auto bg-white rounded-2xl border border-zinc-200/90 shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
-                      {/* Layout: week list (drag with a finger) or the classic grid */}
-                      <div className="mb-2">
-                          <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5 px-1">Layout</span>
-                          <div className="grid grid-cols-2 gap-1">
-                            {(['week', 'classic'] as const).map(l => (
-                              <button
-                                key={l}
-                                type="button"
-                                id={`planner-layout-${l}`}
-                                onClick={() => { setPlannerLayout(l); setShowViewOptions(false); }}
-                                className={`px-2 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                                  plannerLayout === l ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
-                                }`}
-                              >
-                                {l === 'week' ? 'Week list' : 'Classic'}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
                       {/* Meal Rows Switcher */}
                       <div className="px-1 mb-2">
                         <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
@@ -1536,15 +1416,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
           </div>
         </div>
 
-        {plannerLayout === 'week' ? (
-          <RecipeStrip
-            recipes={filteredRecipes}
-            bind={plannerBind}
-            onOpen={(r) => setViewingRecipe(r)}
-            draggingId={plannerDrag?.payload.kind === 'recipe' ? plannerDrag.payload.recipe.id : null}
-          />
-        ) : (
-        /* Recipes Gallery Grid: strictly 2 rows of 3 on desktop */
+        {/* Recipes Gallery Grid: strictly 2 rows of 3 on desktop */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col justify-between min-h-0">
           {filteredRecipes.length === 0 ? (
             <div className="my-auto py-12 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-zinc-200 rounded-2xl bg-white/50">
@@ -1819,15 +1691,10 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
             </>
           )}
         </div>
-        )}
       </div>
 
-      {/* BOTTOM SECTION: WEEKLY PLANNER DOCK (the whole page in the week layout) */}
-      <div className={`bg-white border-t border-zinc-200/90 ${showWeekDropdown ? 'z-40' : 'z-20'} flex flex-col transition-all duration-200 relative ${
-        plannerLayout === 'week'
-          ? 'flex-1 min-h-0'
-          : 'shadow-xl shrink-0 h-[32%] md:h-[40%] min-h-[225px] md:min-h-[260px] max-h-[290px] md:max-h-[370px]'
-      }`}>
+      {/* BOTTOM SECTION: WEEKLY PLANNER DOCK */}
+      <div className={`bg-white border-t border-zinc-200/90 shadow-xl shrink-0 ${showWeekDropdown ? 'z-40' : 'z-20'} flex flex-col transition-all duration-200 h-[32%] md:h-[40%] min-h-[225px] md:min-h-[260px] max-h-[290px] md:max-h-[370px] relative`}>
         {/* Week Selector Menu (Moved outside of scrollable container to prevent clipping) */}
         {showWeekDropdown && (
           <>
@@ -2016,40 +1883,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
           </div>
         </div>
 
-        {plannerLayout === 'week' && currentPlan ? (
-          <div ref={weekListRef} className="flex-1 min-h-0 overflow-y-auto bg-zinc-50/60" data-week-list>
-            <div className="max-w-2xl mx-auto w-full p-3 space-y-2 pb-6">
-              {DAYS_OF_WEEK.map(day => {
-                const dayPlan = currentPlan!.days[day];
-                const meal = dayPlan?.meals?.[0] || null;
-                return (
-                  <WeekDayRow
-                    key={day}
-                    day={day}
-                    dayPlan={dayPlan}
-                    meal={meal}
-                    isOver={plannerDrag?.over === day}
-                    dragActive={!!plannerDrag}
-                    bind={plannerBind}
-                    cooksFor={cooksForText(day, meal)}
-                    onAdd={() => setSelectedDay(day)}
-                    onChange={() => setSelectedDay(day)}
-                    onPeople={() => {
-                      if (!meal) return;
-                      if (meal.type === 'takeout' || meal.type === 'eating_out' || meal.type === 'no_meal') {
-                        setCustomMealModal({ dayName: day, type: meal.type, mealId: meal.id, note: meal.note || '', servings: meal.servings || 2 });
-                      } else {
-                        setEditingServingsMeal({ dayName: day, meal });
-                      }
-                    }}
-                    onRemove={() => meal && handleRemoveMeal(day, meal.id)}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-        /* 7 Days Row - Utilizes full dock height and fit for meal info and notes */
+        {/* 7 Days Row - Utilizes full dock height and fit for meal info and notes */}
         <div className="flex-1 p-2 md:p-3 overflow-x-auto overflow-y-hidden min-h-0 flex flex-col scrollbar-thin">
           <div className="grid grid-cols-7 gap-2.5 sm:gap-3.5 min-w-[1150px] lg:min-w-[1300px] flex-1 h-full">
             {currentPlan && DAYS_OF_WEEK.map(day => {
@@ -2263,23 +2097,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
             })}
           </div>
         </div>
-        )}
       </div>
-
-      {/* Week layout: the card under your finger, and what to do when a meal lands on another day */}
-      {plannerDrag && (
-        <DragGhost label={plannerDrag.label} over={plannerDrag.over} ghostRef={plannerGhostRef} start={plannerGhostStart()} />
-      )}
-      {dropChoice && (
-        <DropChoiceSheet
-          choice={dropChoice}
-          onLeftovers={handleDropLeftovers}
-          onCookAgain={handleDropCookAgain}
-          onMove={handleDropMove}
-          onCopy={handleDropCopy}
-          onCancel={() => setDropChoice(null)}
-        />
-      )}
 
       {/* MODAL: Assign Recipe to Day (1-click assign from recipe cards) */}
       {assigningRecipe && (
@@ -2645,30 +2463,6 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                   );
                 })}
               </div>
-
-              {/* Sides */}
-              {editingServingsMeal.meal.type !== 'no_meal' && (
-                <div className="w-full border-t border-zinc-100 pt-4 mt-4 text-left flex items-center justify-between gap-3">
-                  <span className="text-xs text-zinc-700 min-w-0 truncate">
-                    <span className="font-semibold text-zinc-900">Sides:</span>{' '}
-                    {editingServingsMeal.meal.sides && editingServingsMeal.meal.sides.length
-                      ? editingServingsMeal.meal.sides.map(sd => sd.name).join(', ')
-                      : 'none'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const { dayName, meal } = editingServingsMeal;
-                      handleUpdateRecipeMealDetails(dayName, meal.id, meal.servings || 2, meal.note || '');
-                      setEditingServingsMeal(null);
-                      setSidesEditingMeal({ dayName, meal });
-                    }}
-                    className="shrink-0 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-2 rounded-lg cursor-pointer"
-                  >
-                    {editingServingsMeal.meal.sides && editingServingsMeal.meal.sides.length ? 'Change sides' : 'Add sides'}
-                  </button>
-                </div>
-              )}
 
               {/* Meal Note Field */}
               <div className="w-full border-t border-zinc-100 pt-4 mt-4 text-left">
