@@ -49,6 +49,10 @@ export interface Recipe {
   methodCookTime?: Partial<Record<CookingMethod, number>>;
   servings: number;
   imageUrl?: string;
+  /** The web page it was copied from, if any. */
+  sourceUrl?: string;
+  /** Your own notes on it ("we use half the chilli"), separate from the recipe's intro. */
+  notes?: string;
   tags: string[];
   cookingMethods?: CookingMethod[];
   isVegetarian?: boolean;
@@ -154,6 +158,10 @@ export interface UserPreferences {
   showVegetarian: boolean;
   showVegan: boolean;
   showEmojis?: boolean;
+  /** Recipe cards: "Last had 3 weeks ago" / "Planned Thu". */
+  showLastHad?: boolean;
+  /** Recipe cards: portions in the freezer. */
+  showFreezer?: boolean;
   mealRowsLayout?: 1 | 2;
   // Additional configurable variables for the app:
   defaultServings?: number; // default number of people cooking for (e.g. 2)

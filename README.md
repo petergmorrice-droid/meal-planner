@@ -8,7 +8,7 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 
 | Tab | What it does |
 | --- | --- |
-| **Cookbook** | Your recipe book. Paste a recipe and Gemini copies it in exactly as written (or describe one and Gemini writes it). Each ingredient is linked to a product on your grocery list. Text can be selected and copied. |
+| **Cookbook** | Your recipe book. Paste a recipe and Gemini copies it in exactly as written (or describe one and Gemini writes it). Each ingredient is linked to a product on your grocery list. Text can be selected and copied. Cards show the time, Oven/Hob or Ninja, vegetarian/vegan, when you last had it (or when it's planned) and portions in the freezer; sort A–Z, *Not had lately*, newest or oldest. Opening a recipe shows everything on one page: people, ingredients (tick them off), method (Oven/Hob or Ninja), your notes and the website it came from, with *Start cooking* and *Add to a day…*. The pencil edits it in place; Gemini can change it or write the other appliance's steps. |
 | **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → my household*); sides and people can be changed on the meal afterwards. *Copy a week* fills a week with another week's meals. Finalise a week to build its shopping list. Two views, chosen per phone under the eye button: *Classic* (search and filter your meals, then drag them onto the week strip below) and *List* (the seven days as a list; tap a day to choose its meal, with a search box and anything cooked in the last 3 days at the top for leftovers). |
 | **Shop** | Shopping list generated from the week's meals plus staples and extras. A *cupboard check* takes off the oils, spices, rice and stock you already have. Shopping mode shows one line per item, aisle by aisle in the order you walk your shop (*Arrange aisles…* in the view options; shared by both phones). |
 | **Cook** | This week's cooking schedule with step-by-step cook mode (oven/hob or Ninja). |
@@ -261,3 +261,13 @@ Main files:
   tags or ingredients), lists the book A–Z, and puts anything cooked in the
   3 days before at the top, so leftovers are one tap. A day that cooks for
   later leftovers says so ("Cook for 4: leftovers Sun").
+- `Recipe cards and one-page recipes` — one card for Cookbook and Planning,
+  about half the height (Planning shows 4 whole recipes instead of 2): one
+  time instead of Prep/Cook/Total, only the appliances a recipe really has
+  steps for, no made-up times, "Last had 3 weeks ago" / "Planned Thu",
+  freezer portions, and a sort including *Not had lately*. The bin is off
+  the cards (delete is in the recipe's edit mode). The recipe pop-up is one
+  page instead of Info/Instructions tabs, without the aisle labels on
+  ingredients, with bigger text, *Add to a day…* (with the usual leftovers
+  question), *Our notes* (separate from the recipe's intro) and the website
+  it came from, which is kept when the pasted recipe includes its link.

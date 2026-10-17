@@ -18,6 +18,8 @@ type Tab = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('planning');
+  // "Add to a day…" from a recipe in the Cookbook: Planning opens its day chooser for it.
+  const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
   
   const store = useStore();
 
@@ -32,12 +34,20 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-[#fafafa] text-zinc-900 overflow-hidden">
       <main className="flex-1 overflow-hidden relative flex flex-col">
-        {activeTab === 'cookbook' && <CookBookTab store={store} onNavigateTab={handleNavigateTab} />}
+        {activeTab === 'cookbook' && (
+          <CookBookTab
+            store={store}
+            onNavigateTab={handleNavigateTab}
+            onAddToDay={(recipe) => { setPendingAddRecipeId(recipe.id); setActiveTab('planning'); }}
+          />
+        )}
         {activeTab === 'planning' && (
           <PlanningTab 
             store={store} 
             onNavigateTab={handleNavigateTab} 
             targetPlanId={store.selectedPlanId} 
+            pendingAddRecipeId={pendingAddRecipeId}
+            onPendingAddDone={() => setPendingAddRecipeId(null)}
           />
         )}
         {activeTab === 'this_week' && <ThisWeekTab store={store} onNavigateTab={handleNavigateTab} />}

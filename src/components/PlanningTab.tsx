@@ -58,11 +58,16 @@ import {
 
 import { RecipeModal } from './CookBookTab';
 import { DayListRow, isLeftoverMeal } from './planner/DayListRow';
+import { RecipeCard, CARD_FIELD_OPTIONS, cardFieldsFromPrefs } from './RecipeCard';
+import { recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, RECIPE_SORTS, todayISO, freezerPortions } from '../recipeInfo';
 
 interface PlanningTabProps {
   store: any;
   onNavigateTab?: (tab: 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings', planId?: string) => void;
   targetPlanId?: string | null;
+  /** A recipe to plan, sent from the Cookbook's "Add to a day…". */
+  pendingAddRecipeId?: string | null;
+  onPendingAddDone?: () => void;
 }
 
 // Helper to determine if a candidate meal is a leftover derived from a main meal
@@ -142,7 +147,7 @@ function getOrphanedLeftoversForMeal(
   return leftoverDays;
 }
 
-export default function PlanningTab({ store, onNavigateTab, targetPlanId }: PlanningTabProps) {
+export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendingAddRecipeId, onPendingAddDone }: PlanningTabProps) {
   const currentMonday = getMonday(new Date());
   const currentMondayStr = formatDateISO(currentMonday);
   const nextMondayDateTop = new Date(currentMondayStr + 'T00:00:00');
@@ -250,6 +255,13 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showViewOptions, setShowViewOptions] = useState(false);
   const [assigningRecipe, setAssigningRecipe] = useState<Recipe | null>(null);
+  // "Add to a day…" from the Cookbook: open the day chooser for that recipe.
+  useEffect(() => {
+    if (!pendingAddRecipeId) return;
+    const recipe = (store.state.recipes || []).find((r: Recipe) => r.id === pendingAddRecipeId);
+    if (recipe) setAssigningRecipe(recipe);
+    onPendingAddDone?.();
+  }, [pendingAddRecipeId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
   const [showWeekDropdown, setShowWeekDropdown] = useState(false);
   
@@ -911,6 +923,14 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
     });
   }, [store.state.recipes, recipeSearch, selectedTag, timeFilter, cookingFilter, dietaryFilter]);
 
+  // Cards: when each recipe was last had / is next planned, in the order chosen on this phone.
+  const today = todayISO();
+  const recipeHistory = useMemo(() => recipeHistories(store.state.mealPlans, today), [store.state.mealPlans, today]);
+  const [recipeSort, setRecipeSortState] = useState<RecipeSort>(readRecipeSort);
+  const setRecipeSort = (sort: RecipeSort) => { setRecipeSortState(sort); saveRecipeSort(sort); };
+  const sortedRecipes = useMemo(() => sortRecipes(filteredRecipes, recipeSort, recipeHistory), [filteredRecipes, recipeSort, recipeHistory]);
+  const cardFields = cardFieldsFromPrefs(prefs);
+
   // Navigate through current & future plans only (strictly NO past weeks)
   const allSortedPlans = allowedPlans;
 
@@ -1232,24 +1252,35 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                         </div>
                       </div>
 
-                      <div className="px-1 py-1 mb-1 border-t border-zinc-100">
-                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block">Fields</span>
+                      <div className="px-1 mb-2 pt-2 border-t border-zinc-100">
+                        <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">Sort</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          {RECIPE_SORTS.map(o => (
+                            <button
+                              key={o.id}
+                              type="button"
+                              data-sort={o.id}
+                              onClick={() => setRecipeSort(o.id)}
+                              className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                                recipeSort === o.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                              }`}
+                            >
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="space-y-0.5 max-h-56 overflow-y-auto">
-                        {Object.entries({
-                          showPrepTime: 'Prep Time',
-                          showCookTime: 'Cook Time',
-                          showTotalTime: 'Total Time',
-                          showMethod: 'Cooking Method',
-                          showVegetarian: 'Vegetarian',
-                          showVegan: 'Vegan',
-                          showEmojis: 'Emojis'
-                        }).map(([key, label]) => (
-                          <label key={key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer">
+
+                      <div className="px-1 py-1 mb-1 border-t border-zinc-100">
+                        <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block">Show on cards</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {CARD_FIELD_OPTIONS.map(({ pref, label }) => (
+                          <label key={pref} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={prefs[key as keyof typeof prefs] ?? true}
-                              onChange={() => togglePref(key as keyof typeof prefs)}
+                              checked={(prefs as any)[pref] !== false}
+                              onChange={() => store.updatePreferences({ [pref]: (prefs as any)[pref] === false })}
                               className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
                             />
                             <span className="text-xs font-medium text-zinc-700">{label}</span>
@@ -1515,266 +1546,24 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
           ) : (
             <>
               {/* Grid layout: Rows of 2 vs Rows of 1 */}
-              <div className={`grid ${mealRowsLayout === 1 ? 'grid-cols-1 gap-2 sm:gap-2.5' : 'grid-cols-2 gap-2 sm:gap-3'}`}>
-                {filteredRecipes.map((recipe: Recipe) => {
-                  const methods = recipe.cookingMethods && recipe.cookingMethods.length > 0 
-                    ? recipe.cookingMethods 
-                    : ['ninja', 'oven_hob'];
-                  const hasNinja = methods.includes('ninja');
-                  const hasOvenHob = methods.includes('oven_hob');
-
-                  if (mealRowsLayout === 1) {
-                    return (
-                      <div
-                        key={recipe.id}
-                        draggable
-                        onDragStart={() => setDraggedRecipe(recipe)}
-                        onDragEnd={() => setDraggedRecipe(null)}
-                        onClick={() => setViewingRecipe(recipe)}
-                        className="group relative bg-white rounded-xl border border-zinc-200/90 hover:border-zinc-400 shadow-2xs hover:shadow-xs p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 transition-all flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5"
-                      >
-                        {/* Left / Main info */}
-                        <div className="flex-1 min-w-0 pr-8 sm:pr-0">
-                          <h3 className="font-semibold text-xs sm:text-sm text-zinc-900 leading-snug line-clamp-1 mb-1" title={recipe.name}>
-                            {recipe.name}
-                          </h3>
-
-                          {prefs.showEmojis !== false && (
-                            <div className="flex flex-wrap gap-1 mb-1.5 text-base" onClick={(e) => e.stopPropagation()}>
-                              {getRecipeEmojis(recipe).map((emoji) => (
-                                <span 
-                                  key={emoji} 
-                                  title={getEmojiLabel(emoji)} 
-                                  className="hover:scale-115 transition-transform cursor-help inline-block select-none"
-                                >
-                                  {emoji}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Inline Badges: Prep/Cook/Total times and Health/Cost/Vegi */}
-                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-zinc-600">
-                            {prefs.showPrepTime && (
-                              recipe.methodPrepTime && recipe.methodPrepTime.ninja && recipe.methodPrepTime.oven_hob && recipe.methodPrepTime.ninja !== recipe.methodPrepTime.oven_hob ? (
-                                <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700" title="Preparation time">
-
-                                  <span>Prep: <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500/20 inline" /> {recipe.methodPrepTime.ninja}m / <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500/20 inline" /> {recipe.methodPrepTime.oven_hob}m</span>
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700" title="Preparation time">
-
-                                  <span>Prep: {recipe.prepTime || 10}m</span>
-                                </span>
-                              )
-                            )}
-
-                            {prefs.showCookTime && (
-                              recipe.methodCookTime && recipe.methodCookTime.ninja && recipe.methodCookTime.oven_hob && recipe.methodCookTime.ninja !== recipe.methodCookTime.oven_hob ? (
-                                <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700" title="Cooking time">
-
-                                  <span>Cook: <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500/20 inline" /> {recipe.methodCookTime.ninja}m / <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500/20 inline" /> {recipe.methodCookTime.oven_hob}m</span>
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700" title="Cooking time">
-
-                                  <span>Cook: {recipe.cookTime || 20}m</span>
-                                </span>
-                              )
-                            )}
-
-                            {prefs.showTotalTime && (
-                              <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700">
-
-                                <span>Total: {(recipe.prepTime || 10) + (recipe.cookTime || 20)}m</span>
-                              </span>
-                            )}
-
-                            {prefs.showVegetarian && (recipe.isVegetarian || recipe.tags?.some(t => ['vegetarian', 'vegi', 'veggie'].includes(t.toLowerCase()))) && (
-                              <span 
-                                className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
-                                title="Vegetarian"
-                              >
-                                <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
-                                Vegi
-                              </span>
-                            )}
-
-                            {prefs.showVegan && (recipe.isVegan || recipe.tags?.some(t => ['vegan'].includes(t.toLowerCase()))) && (
-                              <span 
-                                className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
-                                title="Vegan"
-                              >
-                                <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
-                                Vegan
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Right / Side actions: Cooking Methods & Drag Grip */}
-                        <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-zinc-100">
-                          {prefs.showMethod && (
-                            <div className="flex items-center gap-1">
-                              <span
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                                  hasNinja
-                                    ? 'bg-amber-50 text-amber-900 border border-amber-300 font-semibold'
-                                    : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
-                                }`}
-                                title={hasNinja ? "Ninja Combi / Multi-cooker option available" : "Not suitable for Ninja Combi"}
-                              >
-                                <Zap className={`w-3 h-3 ${hasNinja ? 'text-amber-600 fill-amber-500/20' : 'text-zinc-300'}`} />
-                                <span>Ninja</span>
-                              </span>
-
-                              <span
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                                  hasOvenHob
-                                    ? 'bg-rose-50 text-rose-900 border border-rose-300 font-semibold'
-                                    : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
-                                }`}
-                                title={hasOvenHob ? "Oven or Hob option available" : "Not suitable for Oven or Hob"}
-                              >
-                                <Flame className={`w-3 h-3 ${hasOvenHob ? 'text-rose-600 fill-rose-500/20' : 'text-zinc-300'}`} />
-                                <span>Oven/Hob</span>
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={recipe.id}
-                      draggable
-                      onDragStart={() => setDraggedRecipe(recipe)}
-                      onDragEnd={() => setDraggedRecipe(null)}
-                      onClick={() => setViewingRecipe(recipe)}
-                      className="group relative bg-white rounded-xl border border-zinc-200/90 hover:border-zinc-400 shadow-2xs hover:shadow-xs p-3 flex flex-col justify-between cursor-grab active:cursor-grabbing hover:-translate-y-0.5 transition-all"
-                    >
-                      <div>
-                        {/* Recipe Name */}
-                        <h3 className="font-semibold text-xs text-zinc-900 leading-snug line-clamp-2 mb-1.5" title={recipe.name}>
-                          {recipe.name}
-                        </h3>
-
-                        {prefs.showEmojis !== false && (
-                          <div className="flex flex-wrap gap-1 mb-1.5 text-base" onClick={(e) => e.stopPropagation()}>
-                            {getRecipeEmojis(recipe).map((emoji) => (
-                              <span 
-                                key={emoji} 
-                                title={getEmojiLabel(emoji)} 
-                                className="hover:scale-115 transition-transform cursor-help inline-block select-none"
-                              >
-                                {emoji}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Prep Time and Cook Time */}
-                        {(prefs.showPrepTime || prefs.showCookTime || prefs.showTotalTime) && (
-                          <div className="flex flex-col gap-1 mb-1.5 text-[11px] font-medium text-zinc-600">
-                            {prefs.showPrepTime && (
-                              recipe.methodPrepTime && recipe.methodPrepTime.ninja && recipe.methodPrepTime.oven_hob && recipe.methodPrepTime.ninja !== recipe.methodPrepTime.oven_hob ? (
-                                <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700 w-fit" title="Preparation time">
-
-                                  <span>Prep: <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500/20 inline" /> {recipe.methodPrepTime.ninja}m / <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500/20 inline" /> {recipe.methodPrepTime.oven_hob}m</span>
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700 w-fit" title="Preparation time">
-
-                                  <span>Prep: {recipe.prepTime || 10}m</span>
-                                </span>
-                              )
-                            )}
-                            
-                            {prefs.showCookTime && (
-                              recipe.methodCookTime && recipe.methodCookTime.ninja && recipe.methodCookTime.oven_hob && recipe.methodCookTime.ninja !== recipe.methodCookTime.oven_hob ? (
-                                <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700 w-fit" title="Cooking time">
-
-                                  <span>Cook: <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500/20 inline" /> {recipe.methodCookTime.ninja}m / <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500/20 inline" /> {recipe.methodCookTime.oven_hob}m</span>
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700 w-fit" title="Cooking time">
-
-                                  <span>Cook: {recipe.cookTime || 20}m</span>
-                                </span>
-                              )
-                            )}
-
-                            {prefs.showTotalTime && (
-                              <span className="flex items-center gap-1 bg-zinc-50 border border-zinc-200/70 px-1.5 py-0.5 rounded text-zinc-700 w-fit">
-
-                                <span>Total: {(recipe.prepTime || 10) + (recipe.cookTime || 20)}m</span>
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Diet labels */}
-                        {(prefs.showVegetarian || prefs.showVegan) && (
-                          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                            {prefs.showVegetarian && (recipe.isVegetarian || recipe.tags?.some(t => ['vegetarian', 'vegi', 'veggie'].includes(t.toLowerCase()))) && (
-                              <span 
-                                className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
-                                title="Vegetarian"
-                              >
-                                <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
-                                Vegi
-                              </span>
-                            )}
-                            {prefs.showVegan && (recipe.isVegan || recipe.tags?.some(t => ['vegan'].includes(t.toLowerCase()))) && (
-                              <span 
-                                className="flex items-center gap-1 font-medium text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded"
-                                title="Vegan"
-                              >
-                                <Leaf className="w-2.5 h-2.5 fill-emerald-500/20" />
-                                Vegan
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Cooking Options (Ninja / Hob / Oven) */}
-                      {prefs.showMethod && (
-                        <div className="pt-2 border-t border-zinc-100 flex items-start justify-between gap-1">
-                          <div className="flex flex-wrap items-center gap-1">
-                            {/* Ninja Combi */}
-                            <span
-                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                                hasNinja
-                                  ? 'bg-amber-50 text-amber-900 border border-amber-300 font-semibold'
-                                  : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
-                              }`}
-                              title={hasNinja ? "Ninja Combi / Multi-cooker option available" : "Not suitable for Ninja Combi"}
-                            >
-                              <Zap className={`w-3 h-3 ${hasNinja ? 'text-amber-600 fill-amber-500/20' : 'text-zinc-300'}`} />
-                              <span>Ninja</span>
-                            </span>
-
-                            {/* Oven / Hob */}
-                            <span
-                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                                hasOvenHob
-                                  ? 'bg-rose-50 text-rose-900 border border-rose-300 font-semibold'
-                                  : 'bg-zinc-50 text-zinc-300 border border-zinc-100 opacity-40'
-                              }`}
-                              title={hasOvenHob ? "Oven or Hob option available" : "Not suitable for Oven or Hob"}
-                            >
-                              <Flame className={`w-3 h-3 ${hasOvenHob ? 'text-rose-600 fill-rose-500/20' : 'text-zinc-300'}`} />
-                              <span>Oven/Hob</span>
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className={`grid ${mealRowsLayout === 1 ? 'grid-cols-1 gap-2' : 'grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3'}`}>
+                {sortedRecipes.map((recipe: Recipe) => (
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe}
+                    fields={cardFields}
+                    history={recipeHistory.get(recipe.id)}
+                    freezer={freezerPortions(recipe, store.state.batches)}
+                    today={today}
+                    wide={mealRowsLayout === 1}
+                    onOpen={() => setViewingRecipe(recipe)}
+                    dragProps={{
+                      draggable: true,
+                      onDragStart: () => setDraggedRecipe(recipe),
+                      onDragEnd: () => setDraggedRecipe(null),
+                    }}
+                  />
+                ))}
               </div>
             </>
           )}
@@ -2222,86 +2011,88 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
         )}
       </div>
 
-      {/* MODAL: Assign Recipe to Day (1-click assign from recipe cards) */}
+      {/* MODAL: Add a recipe to a day (from the recipe pop-up) */}
       {assigningRecipe && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-start justify-center px-4 pt-[max(1rem,6vh)] pb-4 animate-in fade-in duration-150"
           onClick={() => setAssigningRecipe(null)}
         >
-          <div 
-            className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150"
+          <div
+            role="dialog"
+            aria-label={`Add ${assigningRecipe.name} to a day`}
+            data-add-to-day
+            className="bg-white rounded-2xl p-4 max-w-md w-full shadow-xl border border-zinc-200 max-h-[86vh] flex flex-col animate-in zoom-in-95 duration-150"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-              <div>
-                <h3 className="font-semibold text-sm text-zinc-900">Assign to Day</h3>
-                <p className="text-xs text-zinc-500 truncate max-w-[240px] mt-0.5 font-medium">{assigningRecipe.name}</p>
+            <div className="flex items-start justify-between gap-2 pb-3 border-b border-zinc-100 shrink-0">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-zinc-900">Add to a day</h3>
+                <p className="text-sm text-zinc-600 break-words">{assigningRecipe.name}</p>
               </div>
-              <button 
-                onClick={() => setAssigningRecipe(null)} 
-                className="p-1 text-zinc-400 hover:text-zinc-900 rounded-lg hover:bg-zinc-100 transition-colors cursor-pointer"
+              <button
+                type="button"
+                onClick={() => setAssigningRecipe(null)}
+                className="p-2 text-zinc-500 hover:text-zinc-900 rounded-lg hover:bg-zinc-100 transition-colors cursor-pointer"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Quick Metadata Strip */}
-            <div className="py-2 px-1 flex items-center justify-between gap-1.5 border-b border-zinc-100/80 text-[11px]">
-              <div className="flex flex-wrap items-center gap-1.5 font-medium text-zinc-600">
-                {assigningRecipe.methodPrepTime && assigningRecipe.methodPrepTime.ninja && assigningRecipe.methodPrepTime.oven_hob && assigningRecipe.methodPrepTime.ninja !== assigningRecipe.methodPrepTime.oven_hob ? (
-                  <span>Prep: <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500/20 inline" /> {assigningRecipe.methodPrepTime.ninja}m / <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500/20 inline" /> {assigningRecipe.methodPrepTime.oven_hob}m</span>
-                ) : (
-                  <span>Prep: {assigningRecipe.prepTime || 10}m</span>
-                )}
-                <span className="hidden sm:inline">•</span>
-                {assigningRecipe.methodCookTime && assigningRecipe.methodCookTime.ninja && assigningRecipe.methodCookTime.oven_hob && assigningRecipe.methodCookTime.ninja !== assigningRecipe.methodCookTime.oven_hob ? (
-                  <span>Cook: <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500/20 inline" /> {assigningRecipe.methodCookTime.ninja}m / <Flame className="w-2.5 h-2.5 text-rose-500 fill-rose-500/20 inline" /> {assigningRecipe.methodCookTime.oven_hob}m</span>
-                ) : (
-                  <span>Cook: {assigningRecipe.cookTime || 20}m</span>
-                )}
+            {allowedPlans.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto py-3 shrink-0 -mx-1 px-1" role="tablist" aria-label="Week">
+                {allowedPlans.map((p: MealPlan) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={currentPlan?.id === p.id}
+                    data-week-chip={weekLabel(p.startDate)}
+                    onClick={() => setSelectedPlanId(p.id)}
+                    className={`shrink-0 h-9 px-3 rounded-full text-sm font-semibold border cursor-pointer ${
+                      currentPlan?.id === p.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'
+                    }`}
+                  >
+                    {weekLabel(p.startDate)}
+                  </button>
+                ))}
               </div>
-              <div className="flex items-center gap-1">
-                {(assigningRecipe.cookingMethods || ['ninja', 'oven_hob']).includes('ninja') && (
-                  <span className="p-1 rounded bg-amber-50 text-amber-700" title="Ninja Combi suitable">
-                    <Zap className="w-3 h-3" />
-                  </span>
-                )}
-                {(assigningRecipe.cookingMethods || ['ninja', 'oven_hob']).includes('oven_hob') && (
-                  <span className="p-1 rounded bg-rose-50 text-rose-700" title="Oven or Hob suitable">
-                    <Flame className="w-3 h-3" />
-                  </span>
-                )}
-              </div>
-            </div>
-            
-            <div className="py-3 space-y-1.5 max-h-72 overflow-y-auto">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1">
-                Select which day to plan this meal:
-              </span>
-              {DAYS_OF_WEEK.map(day => {
-                const dayPlan = currentPlan?.days[day];
-                const hasMeal = dayPlan && dayPlan.meals && dayPlan.meals.length > 0;
-                const currentMealName = hasMeal ? dayPlan.meals[0].name : null;
+            )}
+            {currentPlan?.status === 'finalized' && (
+              <p className="text-xs text-zinc-600 pb-2 shrink-0">This week's shopping list is made; you'll be asked whether to update it.</p>
+            )}
 
+            <div className="overflow-y-auto space-y-1.5 pt-1 pb-1">
+              {currentPlan && DAYS_OF_WEEK.map(day => {
+                const dayPlan = currentPlan!.days[day];
+                const meal = dayPlan?.meals?.[0];
+                const date = dayPlan?.date ? new Date(dayPlan.date + 'T00:00:00') : null;
+                const past = !!dayPlan?.date && dayPlan.date < today;
                 return (
                   <button
                     key={day}
                     type="button"
+                    data-add-day={day}
                     onClick={() => handleAssignRecipeToDay(day, assigningRecipe)}
-                    className="w-full text-left p-2.5 rounded-xl border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 flex items-center justify-between transition-colors group cursor-pointer"
+                    className={`w-full text-left rounded-xl border flex items-stretch transition-colors cursor-pointer ${past ? 'border-zinc-100 bg-zinc-50/70' : 'border-zinc-200 hover:bg-zinc-50'}`}
                   >
-                    <div>
-                      <span className="font-semibold text-xs text-zinc-900 block">{day}</span>
-                      <span className="text-[11px] text-zinc-400">
-                        {hasMeal ? `Replaces: ${currentMealName}` : 'Empty day'}
+                    <span className={`w-14 shrink-0 flex flex-col items-center justify-center border-r border-zinc-100 py-2 ${past ? 'text-zinc-400' : 'text-zinc-800'}`}>
+                      <span className="text-xs font-bold uppercase">{day.slice(0, 3)}</span>
+                      <span className="text-base font-bold tabular-nums leading-tight">{date ? date.getDate() : ''}</span>
+                    </span>
+                    <span className="flex-1 min-w-0 px-3 py-2 flex items-center justify-between gap-2">
+                      <span className="min-w-0">
+                        {meal ? (
+                          <>
+                            <span className="block text-sm font-medium text-zinc-900 truncate">{meal.name.replace(/^(leftovers?|batch):\s*/i, '')}</span>
+                            <span className="block text-xs text-zinc-500">Tap to replace</span>
+                          </>
+                        ) : (
+                          <span className="block text-sm text-zinc-500">Free</span>
+                        )}
                       </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] font-medium text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Assign
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 transition-colors" />
-                    </div>
+                      <Plus className="w-4 h-4 text-zinc-400 shrink-0" />
+                    </span>
                   </button>
                 );
               })}
@@ -3453,7 +3244,13 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       
       {/* MODAL: View Recipe */}
       {viewingRecipe && (
-        <RecipeModal store={store} recipe={viewingRecipe} onClose={() => setViewingRecipe(null)} />
+        <RecipeModal
+          store={store}
+          recipe={viewingRecipe}
+          onClose={() => setViewingRecipe(null)}
+          onAddToDay={(recipe) => { setViewingRecipe(null); setAssigningRecipe(recipe); }}
+          onNavigateTab={onNavigateTab}
+        />
       )}
 
       {/* MODAL: Manage Sides */}
