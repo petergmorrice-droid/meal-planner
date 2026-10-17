@@ -9,7 +9,7 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 | Tab | What it does |
 | --- | --- |
 | **Cookbook** | Your recipe book. Paste a recipe and Gemini copies it in exactly as written (or describe one and Gemini writes it). Each ingredient is linked to a product on your grocery list. Text can be selected and copied. |
-| **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → my household*); sides and people can be changed on the meal afterwards. *Copy a week* fills a week with another week's meals. Finalise a week to build its shopping list. |
+| **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → my household*); sides and people can be changed on the meal afterwards. *Copy a week* fills a week with another week's meals. Finalise a week to build its shopping list. Two views, chosen per phone under the eye button: *Classic* (search and filter your meals, then drag them onto the week strip below) and *List* (the seven days as a list; tap a day to choose its meal, with a search box and anything cooked in the last 3 days at the top for leftovers). |
 | **Shop** | Shopping list generated from the week's meals plus staples and extras. A *cupboard check* takes off the oils, spices, rice and stock you already have. Shopping mode shows one line per item, aisle by aisle in the order you walk your shop (*Arrange aisles…* in the view options; shared by both phones). |
 | **Cook** | This week's cooking schedule with step-by-step cook mode (oven/hob or Ninja). |
 | **Freezer** | Batch-cooked meals in the freezer, which can be dropped into a week's plan. |
@@ -255,3 +255,9 @@ Main files:
   your own order. Meal ingredients start expanded. Fixed: in shopping mode's
   aisle view, ticking an item that appeared twice (e.g. staple milk plus
   extra milk) only ticked one of them.
+- `Planning: Classic and List views` — Planning keeps its drag-and-drop
+  screen (*Classic*, the default) and gains *List*: the week as seven rows,
+  tap a day to pick its meal. The meal chooser now has a search box (names,
+  tags or ingredients), lists the book A–Z, and puts anything cooked in the
+  3 days before at the top, so leftovers are one tap. A day that cooks for
+  later leftovers says so ("Cook for 4: leftovers Sun").

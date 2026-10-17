@@ -57,6 +57,7 @@ import {
 } from '../utils';
 
 import { RecipeModal } from './CookBookTab';
+import { DayListRow, isLeftoverMeal } from './planner/DayListRow';
 
 interface PlanningTabProps {
   store: any;
@@ -227,6 +228,17 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
   const [sidesEditingMeal, setSidesEditingMeal] = useState<{ dayName: string; meal: PlannedMeal } | null>(null);
   // Copy-a-week picker: 'pick' lists weeks; a plan means "confirm replacing this week's meals with it".
   const [copyWeekState, setCopyWeekState] = useState<'pick' | MealPlan | null>(null);
+  // Planning view on this phone: 'classic' = meals to search, filter and drag onto the week below; 'list' = the seven days, tap one to add a meal.
+  const [planningView, setPlanningViewState] = useState<'classic' | 'list'>(() => {
+    try { return localStorage.getItem('planning_view') === 'list' ? 'list' : 'classic'; } catch { return 'classic'; }
+  });
+  const setPlanningView = (view: 'classic' | 'list') => {
+    setPlanningViewState(view);
+    try { localStorage.setItem('planning_view', view); } catch { /* per-phone convenience only */ }
+  };
+  // Search inside "Select meal for <day>".
+  const [pickerSearch, setPickerSearch] = useState('');
+  useEffect(() => { setPickerSearch(''); }, [selectedDay]);
   const [draggedRecipe, setDraggedRecipe] = useState<Recipe | null>(null);
   const [recipeSearch, setRecipeSearch] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -932,6 +944,51 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
     setSidesEditingMeal(null);
   };
 
+  // Recipes in "Select meal for <day>": anything cooked in the 3 days before (likely leftovers), nearest
+  // first, then the rest of the book A-Z.
+  const pickerRecipes = useMemo(() => {
+    const q = pickerSearch.trim().toLowerCase();
+    const matches = (r: Recipe) => !q ||
+      r.name.toLowerCase().includes(q) ||
+      r.tags?.some(t => t.toLowerCase().includes(q)) ||
+      r.ingredients?.some(i => (i?.name || '').toLowerCase().includes(q));
+    let all = store.state.recipes.filter(matches).sort((a: Recipe, b: Recipe) => a.name.localeCompare(b.name));
+    const earlier: { recipe: Recipe; day: string }[] = [];
+    if (currentPlan && selectedDay) {
+      const at = DAYS_OF_WEEK.indexOf(selectedDay);
+      for (let i = at - 1; i >= Math.max(0, at - 3); i--) {
+        const m = currentPlan.days[DAYS_OF_WEEK[i]]?.meals?.[0];
+        if (!m || m.type !== 'recipe' || !m.recipeId || earlier.some(e => e.recipe.id === m.recipeId)) continue;
+        const r = all.find((x: Recipe) => x.id === m.recipeId);
+        if (r) earlier.push({ recipe: r, day: DAYS_OF_WEEK[i] });
+      }
+      all = all.filter((r: Recipe) => !earlier.some(e => e.recipe.id === r.id));
+    }
+    return { all, earlier };
+  }, [store.state.recipes, pickerSearch, currentPlan, selectedDay]);
+  const pickerBatches = useMemo(() => {
+    const q = pickerSearch.trim().toLowerCase();
+    if (!q) return store.state.batches;
+    return store.state.batches.filter((b: BatchItem) => {
+      const r = b.recipeId ? store.state.recipes.find((x: Recipe) => x.id === b.recipeId) : null;
+      return (b.name || r?.name || '').toLowerCase().includes(q);
+    });
+  }, [store.state.batches, store.state.recipes, pickerSearch]);
+
+  // "Cook for 6: leftovers Tue, Thu": a fresh cook that later leftover days depend on.
+  const cooksForText = (day: string, meal: PlannedMeal | null): string | null => {
+    if (!currentPlan || !meal || meal.type !== 'recipe' || !meal.recipeId) return null;
+    const later: string[] = [];
+    let extra = 0;
+    for (let i = DAYS_OF_WEEK.indexOf(day) + 1; i < DAYS_OF_WEEK.length; i++) {
+      const m = currentPlan.days[DAYS_OF_WEEK[i]]?.meals?.[0];
+      if (!m || m.recipeId !== meal.recipeId) continue;
+      if (isLeftoverMeal(m)) { later.push(DAYS_OF_WEEK[i].slice(0, 3)); extra += m.servings || 2; }
+      else break;
+    }
+    return later.length ? `Cook for ${(meal.servings || 2) + extra}: leftovers ${later.join(', ')}` : null;
+  };
+
   // Copy every day's meals from another week into the week on screen.
   const copyCandidates: MealPlan[] = useMemo(() => {
     return (store.state.mealPlans || [])
@@ -971,7 +1028,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       )}
 
       {/* TOP SECTION: ALL MEALS (VISUALLY PRIORITIZED) */}
-      <div className={`flex-1 min-h-0 flex flex-col relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
+      <div className={`${planningView === 'list' ? 'shrink-0' : 'flex-1 min-h-0'} flex flex-col relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
         {/* Sleek Top Bar: No 'All Meals' title, concise expandable search, and filter button with options dropdown */}
         <div className={`bg-white border-b border-zinc-200/80 px-4 sm:px-5 py-2 shrink-0 relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
           <div className="flex items-center justify-between gap-3">
@@ -1049,6 +1106,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
             {/* Right side: Concise Expandable Search + Filter Button */}
             <div className="flex items-center gap-2 shrink-0">
+              {planningView === 'classic' && (<>
               {/* Expandable Search: starts as icon, expands when clicked */}
               <div className="relative flex items-center">
                 {isSearchExpanded ? (
@@ -1094,6 +1152,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                 )}
               </div>
 
+              </>)}
+
               {/* View Options Dropdown */}
               <div className="relative">
                 <button
@@ -1113,6 +1173,30 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowViewOptions(false)} />
                     <div className="absolute right-0 top-full mt-2 w-56 max-h-[calc(100vh-140px)] overflow-y-auto bg-white rounded-2xl border border-zinc-200/90 shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
+                      {/* View: Classic (drag and drop) or List (tap a day) */}
+                      <div className="px-1 mb-3">
+                        <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">View</span>
+                        <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-xl">
+                          {(['classic', 'list'] as const).map(v => (
+                            <button
+                              key={v}
+                              type="button"
+                              id={`planning-view-${v}`}
+                              onClick={() => { setPlanningView(v); setShowViewOptions(false); }}
+                              className={`py-2 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                planningView === v ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600 hover:text-zinc-900'
+                              }`}
+                            >
+                              {v === 'classic' ? 'Classic' : 'List'}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-zinc-500 mt-1.5 leading-snug">
+                          {planningView === 'classic' ? 'Drag meals onto the week below.' : 'Tap a day to choose its meal.'}
+                        </p>
+                      </div>
+
+                      {planningView === 'classic' && (<>
                       {/* Meal Rows Switcher */}
                       <div className="px-1 mb-2">
                         <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
@@ -1172,11 +1256,13 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                           </label>
                         ))}
                       </div>
+                      </>)}
                     </div>
                   </>
                 )}
               </div>
 
+              {planningView === 'classic' && (<>
               {/* Filter Button with Options Dropdown */}
               <div className="relative">
                 <button
@@ -1412,11 +1498,13 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                   </>
                 )}
               </div>
+              </>)}
             </div>
           </div>
         </div>
 
-        {/* Recipes Gallery Grid: strictly 2 rows of 3 on desktop */}
+        {planningView === 'classic' && (
+        /* Recipes Gallery Grid: strictly 2 rows of 3 on desktop */
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 flex flex-col justify-between min-h-0">
           {filteredRecipes.length === 0 ? (
             <div className="my-auto py-12 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-zinc-200 rounded-2xl bg-white/50">
@@ -1691,10 +1779,15 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
             </>
           )}
         </div>
+        )}
       </div>
 
-      {/* BOTTOM SECTION: WEEKLY PLANNER DOCK */}
-      <div className={`bg-white border-t border-zinc-200/90 shadow-xl shrink-0 ${showWeekDropdown ? 'z-40' : 'z-20'} flex flex-col transition-all duration-200 h-[32%] md:h-[40%] min-h-[225px] md:min-h-[260px] max-h-[290px] md:max-h-[370px] relative`}>
+      {/* BOTTOM SECTION: WEEKLY PLANNER DOCK (the whole page in the List view) */}
+      <div className={`bg-white border-t border-zinc-200/90 ${showWeekDropdown ? 'z-40' : 'z-20'} flex flex-col transition-all duration-200 relative ${
+        planningView === 'list'
+          ? 'flex-1 min-h-0'
+          : 'shadow-xl shrink-0 h-[32%] md:h-[40%] min-h-[225px] md:min-h-[260px] max-h-[290px] md:max-h-[370px]'
+      }`}>
         {/* Week Selector Menu (Moved outside of scrollable container to prevent clipping) */}
         {showWeekDropdown && (
           <>
@@ -1883,7 +1976,36 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
           </div>
         </div>
 
-        {/* 7 Days Row - Utilizes full dock height and fit for meal info and notes */}
+        {planningView === 'list' && currentPlan ? (
+          <div className="flex-1 min-h-0 overflow-y-auto bg-zinc-50/60" data-day-list>
+            <div className="max-w-2xl mx-auto w-full p-3 space-y-2 pb-6">
+              {DAYS_OF_WEEK.map(day => {
+                const dayPlan = currentPlan!.days[day];
+                const meal = dayPlan?.meals?.[0] || null;
+                return (
+                  <DayListRow
+                    key={day}
+                    day={day}
+                    dayPlan={dayPlan}
+                    meal={meal}
+                    cooksFor={cooksForText(day, meal)}
+                    onOpen={() => setSelectedDay(day)}
+                    onPeople={() => {
+                      if (!meal) return;
+                      if (meal.type === 'takeout' || meal.type === 'eating_out' || meal.type === 'no_meal') {
+                        setCustomMealModal({ dayName: day, type: meal.type, mealId: meal.id, note: meal.note || '', servings: meal.servings || 2 });
+                      } else {
+                        setEditingServingsMeal({ dayName: day, meal });
+                      }
+                    }}
+                    onRemove={() => meal && handleRemoveMeal(day, meal.id)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+        /* 7 Days Row - Utilizes full dock height and fit for meal info and notes */
         <div className="flex-1 p-2 md:p-3 overflow-x-auto overflow-y-hidden min-h-0 flex flex-col scrollbar-thin">
           <div className="grid grid-cols-7 gap-2.5 sm:gap-3.5 min-w-[1150px] lg:min-w-[1300px] flex-1 h-full">
             {currentPlan && DAYS_OF_WEEK.map(day => {
@@ -2097,6 +2219,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
             })}
           </div>
         </div>
+        )}
       </div>
 
       {/* MODAL: Assign Recipe to Day (1-click assign from recipe cards) */}
@@ -2190,28 +2313,87 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
       {/* MODAL 1: Day Options Modal (Includes Cook Book recipes, Takeout, Eating Out, Batches) */}
       {selectedDay && (
         <div 
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-start justify-center px-4 pt-[max(1rem,6vh)] pb-4 animate-in fade-in duration-150"
           onClick={() => setSelectedDay(null)}
         >
           <div 
-            className="bg-white rounded-2xl p-5 max-w-md w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col"
+            className="bg-white rounded-2xl p-5 max-w-md w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150 max-h-[86vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-zinc-100 shrink-0">
               <div>
                 <h3 className="text-base font-semibold text-zinc-900">Select Meal for {selectedDay}</h3>
-                <p className="text-[11px] text-zinc-400">Replaces current meal for this day</p>
+                <p className="text-xs text-zinc-500">
+                  {currentPlan?.days[selectedDay]?.meals?.length ? 'Replaces the meal already on this day' : 'Pick a recipe or a quick option'}
+                </p>
               </div>
               <button 
                 onClick={() => setSelectedDay(null)} 
-                className="p-1.5 text-zinc-400 hover:text-zinc-900 rounded-lg hover:bg-zinc-100 transition-colors"
+                className="p-2 text-zinc-500 hover:text-zinc-900 rounded-lg hover:bg-zinc-100 transition-colors"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             
             <div className="overflow-y-auto py-3 space-y-4 flex-1 pr-1">
+                {store.state.recipes.length > 6 && (
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      inputMode="search"
+                      autoComplete="off"
+                      value={pickerSearch}
+                      onChange={e => setPickerSearch(e.target.value)}
+                      placeholder="Search recipes or ingredients"
+                      aria-label="Search recipes"
+                      enterKeyHint="search"
+                      className="w-full h-11 pl-9 pr-9 rounded-xl border border-zinc-200 bg-zinc-50 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white"
+                    />
+                    {pickerSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setPickerSearch('')}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg text-zinc-500 hover:bg-zinc-200/70 flex items-center justify-center cursor-pointer"
+                        aria-label="Clear search"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+
+              {pickerRecipes.earlier.length > 0 && (
+                <div data-picker-earlier>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800 block mb-1.5">Cooked earlier this week</span>
+                  <div className="space-y-1.5">
+                    {pickerRecipes.earlier.map(({ recipe: r, day }) => (
+                      <button
+                        key={`earlier-${r.id}`}
+                        type="button"
+                        onClick={() => handleAddRecipeMeal(selectedDay, r)}
+                        className="w-full text-left p-2.5 rounded-xl border border-amber-200 bg-amber-50/60 hover:bg-amber-50 flex items-center justify-between gap-2 transition-colors text-sm cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                            <RotateCcw className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-medium text-zinc-900 block truncate">{r.name}</span>
+                            <span className="text-xs text-zinc-600">{day}: leftovers or cook again</span>
+                          </div>
+                        </div>
+                        <Plus className="w-4 h-4 text-zinc-500 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Quick choices */}
+              {!pickerSearch.trim() && (
               <div>
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Quick Options</span>
                 <div className="grid grid-cols-3 gap-2">
@@ -2277,13 +2459,14 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
                   </button>
                 </div>
               </div>
+              )}
 
               {/* Batches if any */}
-              {store.state.batches.length > 0 && (
+              {pickerBatches.length > 0 && (
                 <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Freezer Batches</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1.5">Freezer Batches</span>
                   <div className="border border-zinc-200 rounded-xl overflow-hidden divide-y divide-zinc-100 bg-white">
-                    {store.state.batches.map((batch: BatchItem) => {
+                    {pickerBatches.map((batch: BatchItem) => {
                       const recipe = batch.recipeId ? store.state.recipes.find((r: Recipe) => r.id === batch.recipeId) : null;
                       const displayName = batch.name || recipe?.name || 'Freezer Batch';
                       return (
@@ -2314,28 +2497,32 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId }: Plan
 
               {/* Cook Book Recipes */}
               <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Cook Book Recipes</span>
-                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
-                  {store.state.recipes.map((r: Recipe) => (
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1.5">Cook Book Recipes</span>
+                <div className="space-y-1.5" data-picker-recipes>
+                  {pickerRecipes.all.map((r: Recipe) => (
                     <button
                       key={r.id}
+                      type="button"
                       onClick={() => handleAddRecipeMeal(selectedDay, r)}
-                      className="w-full text-left p-2.5 rounded-xl border border-zinc-200/80 hover:border-zinc-300 hover:bg-zinc-50 flex items-center justify-between transition-colors text-xs"
+                      className="w-full text-left p-2.5 rounded-xl border border-zinc-200/80 hover:border-zinc-300 hover:bg-zinc-50 flex items-center justify-between gap-2 transition-colors text-sm cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-100/80 text-emerald-700 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100/80 text-emerald-700 flex items-center justify-center shrink-0">
                           <ChefHat className="w-4 h-4" />
                         </div>
-                        <div className="truncate">
+                        <div className="min-w-0">
                           <span className="font-medium text-zinc-900 block truncate">{r.name}</span>
-                          <span className="text-[11px] text-zinc-400">{r.prepTime + r.cookTime}m</span>
+                          <span className="text-xs text-zinc-500">{(r.prepTime || 0) + (r.cookTime || 0)} min</span>
                         </div>
                       </div>
-                      <Plus className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                      <Plus className="w-4 h-4 text-zinc-500 shrink-0" />
                     </button>
                   ))}
                   {store.state.recipes.length === 0 && (
-                    <p className="text-xs text-zinc-400 italic py-2">No recipes in cook book yet.</p>
+                    <p className="text-sm text-zinc-500 italic py-2">No recipes in the cook book yet.</p>
+                  )}
+                  {store.state.recipes.length > 0 && pickerRecipes.all.length === 0 && pickerRecipes.earlier.length === 0 && pickerBatches.length === 0 && (
+                    <p className="text-sm text-zinc-500 py-2">No recipes match "{pickerSearch.trim()}".</p>
                   )}
                 </div>
               </div>
