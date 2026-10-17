@@ -56,7 +56,7 @@ ${css}
 </style>
 <div id="root"></div>
 <div id="preview-note" role="note" hidden>
-  <div><strong>Preview with sample recipes.</strong> Plan, shop, cook and use the freezer as normal. Syncing between phones and adding recipes with Gemini don't work here, and changes stay in this browser only. To build next week's shopping list, tap <strong>Send to Shopping List</strong> on Planning.</div>
+  <div><strong>Preview with sample recipes.</strong> Plan, shop, cook and use the freezer as normal. Syncing between phones and adding recipes with Gemini don't work here, and changes stay in this browser only. On Planning, the eye button switches between <strong>Classic</strong> (drag meals onto the week) and <strong>List</strong> (tap a day to choose its meal).</div>
   <div class="row">
     <button type="button" class="secondary" id="preview-reset">Start again with the sample</button>
     <button type="button" id="preview-ok">Got it</button>
