@@ -35,8 +35,12 @@ import {
   ChevronRight,
   Share2,
   StickyNote,
+  Trophy,
+  WifiOff,
+  Undo2,
+  PartyPopper,
 } from 'lucide-react';
-import { ShoppingListItem, Recipe, MealPlan, DayPlan } from '../types';
+import { ShoppingListItem, Recipe, MealPlan, DayPlan, ShopRoute, ShopRecord } from '../types';
 import { useJustTicked } from '../hooks/useJustTicked';
 import { aggregateIngredients } from '../utils/aggregation';
 import { matchProduct, groupingKey, canonicalUnit, formatUnit, largeUnitQuantity, formatAmount as formatShopAmount, unitInfo } from '../shopping';
@@ -49,7 +53,9 @@ import DoneShoppingSheet, { DoneChoice } from './shop/DoneShoppingSheet';
 import {
   AggregatedShoppingListItem, aggregateShoppingItems, shopQuantityText, partLabel, defaultShopWeek, formatWeekSpan, weekStartShort,
   parseQuickAdd, quickAddLine, listAsText, carryItemsToWeek, shopDurationText, productKey,
+  learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, BIG_SHOP,
 } from '../shopList';
+import ShopHistorySheet from './shop/ShopHistorySheet';
 import { preferredWeekStart } from '../planning';
 import { buildCatalog, matchProductDetailed } from '../shopping';
 import BatchMealModal from './BatchMealModal';
@@ -119,6 +125,23 @@ export interface ThresholdWarningState {
   requirement: PlannedRequirement;
 }
 
+// Shopping mode survives the phone locking or the app closing mid-shop (for a few hours).
+const OPEN_SHOP_KEY = 'shop_mode_open';
+const OPEN_SHOP_MS = 6 * 3600_000;
+export function readOpenShop(): { planId: string; at: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(OPEN_SHOP_KEY) || 'null');
+    if (v && typeof v.planId === 'string' && typeof v.at === 'number' && Date.now() - v.at < OPEN_SHOP_MS) return v;
+  } catch { /* nothing saved */ }
+  return null;
+}
+const saveOpenShop = (planId: string | null) => {
+  try {
+    if (planId) localStorage.setItem(OPEN_SHOP_KEY, JSON.stringify({ planId, at: Date.now() }));
+    else localStorage.removeItem(OPEN_SHOP_KEY);
+  } catch { /* per-phone convenience only */ }
+};
+
 export function formatListWithAnd(items: string[]): string {
   if (items.length === 0) return '';
   if (items.length === 1) return items[0];
@@ -180,7 +203,11 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   const [showWeekDropdown, setShowWeekDropdown] = useState(false);
   const [toast, setToast] = useState<{ message: string; action?: { label: string; run: () => void } } | null>(null);
   const setToastMessage = (message: string | null, action?: { label: string; run: () => void }) => setToast(message ? { message, action } : null);
-  const [isShoppingMode, setIsShoppingMode] = useState(false);
+  const [isShoppingMode, setIsShoppingModeState] = useState<boolean>(() => {
+    const open = readOpenShop();
+    return !!open && (!openPlanId || openPlanId === open.planId) && (store.state.mealPlans || []).some((p: MealPlan) => p.id === open.planId);
+  });
+  const [showHistory, setShowHistory] = useState(false);
 
   // Grouping and sorting states
   // How the list is grouped (this phone): by aisle unless you chose otherwise.
@@ -294,7 +321,10 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     return defaultShopWeek(plans, store.state.shoppingList || [], preferredWeekStart(new Date(), currentMondayStr, nextMondayStr), nextMondayStr);
   };
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
-    if (openPlanId && (store.state.mealPlans || []).some((p: MealPlan) => p.id === openPlanId)) return openPlanId;
+    const plans: MealPlan[] = store.state.mealPlans || [];
+    if (openPlanId && plans.some(p => p.id === openPlanId)) return openPlanId;
+    const open = readOpenShop();
+    if (open && plans.some(p => p.id === open.planId)) return open.planId;
     return defaultWeekId();
   });
   useEffect(() => { if (openPlanId) onOpenPlanHandled?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -489,13 +519,27 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
 
   const handleToggleItem = (idOrIds: string | string[], forceState?: boolean) => {
     const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+    const me = store.currentUser || 'P';
     const newList = (store.state.shoppingList || []).map((item: ShoppingListItem) => {
       if (ids.includes(item.id)) {
-        return { ...item, checked: forceState !== undefined ? forceState : !item.checked };
+        const checked = forceState !== undefined ? forceState : !item.checked;
+        const { checkedBy: _by, outOfStock: _out, ...rest } = item;
+        // Who ticked it shows on the other phone; ticking something "out of stock" means it was there after all.
+        return checked ? { ...rest, checked, checkedBy: me } : { ...rest, checked };
       }
       return item;
     });
     store.updateShoppingList(newList);
+  };
+
+  /** Out of stock at the shop: not ticked, and not counted against the % done. */
+  const handleOutOfStock = (ids: string[], value: boolean) => {
+    const idSet = new Set(ids);
+    store.updateShoppingList((store.state.shoppingList || []).map((item: ShoppingListItem) => {
+      if (!idSet.has(item.id)) return item;
+      const { outOfStock: _out, checkedBy: _by, ...rest } = item;
+      return value ? { ...rest, checked: false, outOfStock: true } : { ...rest };
+    }));
   };
 
   const executeRemoveItem = (item: ShoppingListItem) => {
@@ -805,8 +849,13 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     setToastMessage(`Added ${addedCount} ${addedCount === 1 ? 'ingredient' : 'ingredients'} for ${mealName}`);
   };
 
-  // Aisles in the order you walk your shop (shared between phones).
-  const aisleOrder: string[] | undefined = store.state.preferences?.aisleOrder;
+  // Aisles in the order you walk your shop (shared between phones): the order you arranged, or
+  // else the order learned from your shops.
+  const shopRoute: ShopRoute | undefined = store.state.preferences?.shopRoute;
+  const arrangedOrder: string[] | undefined = store.state.preferences?.aisleOrder;
+  const aisleOrder: string[] | undefined = arrangedOrder?.length
+    ? arrangedOrder
+    : routeAisleOrder(shopRoute, orderedAisles(null)) || undefined;
   const aislePos = useMemo(() => aislePositions(aisleOrder), [aisleOrder]);
   const handleSaveAisleOrder = (order: string[] | null) => {
     store.updatePreferences?.({ aisleOrder: order || undefined });
@@ -953,11 +1002,13 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   // Just ticked: counts straight away, but stays in its place (crossed out, with Undo) for a few
   // seconds before moving down to Bought, so a mis-tap is easy to put right.
   const { justTicked, hold: holdTicked, release: releaseTicked } = useJustTicked();
-  const stillToBuy = useMemo(() => rows.filter(r => !r.checked).sort(byName), [rows]);
-  const toBuyRows = useMemo(() => rows.filter(r => !r.checked || justTicked[r.key]).sort(byName), [rows, justTicked]);
+  const stillToBuy = useMemo(() => rows.filter(r => !r.checked && !r.outOfStock).sort(byName), [rows]);
+  const outRows = useMemo(() => rows.filter(r => r.outOfStock).sort(byName), [rows]);
+  const toBuyRows = useMemo(() => rows.filter(r => (!r.checked && !r.outOfStock) || justTicked[r.key]).sort(byName), [rows, justTicked]);
   const boughtRows = useMemo(() => rows.filter(r => r.checked && !justTicked[r.key]).sort(byName), [rows, justTicked]);
-  const totalCount = rows.length;
-  const checkedCount = rows.length - stillToBuy.length;
+  // Out of stock doesn't count against you (same as shopping mode).
+  const totalCount = rows.length - outRows.length;
+  const checkedCount = rows.filter(r => r.checked).length;
   const percentDone = totalCount ? Math.round((checkedCount / totalCount) * 100) : 0;
   const aisleOf = (r: { name: string; category?: string }) => getGroceryAisle(r);
 
@@ -972,7 +1023,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         { id: 'batch', title: 'Extra recipes', test: i => !!i.isBatch },
       ];
       return sources
-        .map(src => ({ id: src.id, title: src.title, rows: aggregateShoppingItems(buyingItems.filter(src.test)).filter(r => !r.checked || justTicked[r.key]).sort(byName) }))
+        .map(src => ({ id: src.id, title: src.title, rows: aggregateShoppingItems(buyingItems.filter(src.test)).filter(r => (!r.checked && !r.outOfStock) || justTicked[r.key]).sort(byName) }))
         .filter(g => g.rows.length > 0);
     }
     return orderedAisles(aisleOrder)
@@ -1014,9 +1065,10 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   const followingListPhrase = !followingShort ? null : followingStart === nextMondayStr ? "next week's list" : `the ${followingShort} list`;
 
   /** Move these lines to the following week's list (making that week if it isn't there yet). */
-  const carryToFollowingWeek = (ids: string[]): { moved: string[]; alreadyThere: string[] } | null => {
+  const carryToFollowingWeek = (ids: string[], removeFirst: string[] = []): { moved: string[]; alreadyThere: string[] } | null => {
     if (!activePlan || !followingStart || !canCarry || ids.length === 0) return null;
-    let list: ShoppingListItem[] = [...(store.state.shoppingList || [])];
+    const gone = new Set(removeFirst);
+    let list: ShoppingListItem[] = (store.state.shoppingList || []).filter((i: ShoppingListItem) => !gone.has(i.id));
     let target = followingPlan;
     if (!target) {
       target = createEmptyPlan(new Date(followingStart + 'T00:00:00'));
@@ -1165,10 +1217,43 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
 
   // ---------- Shopping mode: timing and "Done shopping" ----------
   const startKey = activePlan ? `shop_started_${activePlan.id}` : '';
+  const setIsShoppingMode = (open: boolean) => {
+    saveOpenShop(open && activePlan ? activePlan.id : null);
+    setIsShoppingModeState(open);
+  };
   const startShopping = () => {
     try { if (startKey && !localStorage.getItem(startKey)) localStorage.setItem(startKey, String(Date.now())); } catch { /* timing is a nicety */ }
     setIsShoppingMode(true);
   };
+  // While shopping, check for the other phone's ticks every few seconds.
+  useEffect(() => {
+    if (!isShoppingMode) return;
+    store.setFastSync?.(true);
+    return () => store.setFastSync?.(false);
+  }, [isShoppingMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The order things are ticked in this shop (this phone), to learn your route.
+  const routeKey = activePlan ? `shop_route_${activePlan.id}` : '';
+  const recordTick = (key: string, aisle: string, ticked: boolean) => {
+    if (!routeKey) return;
+    try {
+      const seq: { key: string; aisle: string }[] = JSON.parse(localStorage.getItem(routeKey) || '[]');
+      const next = ticked ? (seq.some(t => t.key === key) ? seq : [...seq, { key, aisle }]) : seq.filter(t => t.key !== key);
+      localStorage.setItem(routeKey, JSON.stringify(next));
+    } catch { /* learning the route is a nicety */ }
+  };
+  const readTicks = (): { key: string; aisle: string }[] => {
+    try { return JSON.parse(localStorage.getItem(routeKey) || '[]'); } catch { return []; }
+  };
+  const tookMinutes = (): number | null => {
+    try {
+      const t = Number(localStorage.getItem(startKey));
+      const ms = t ? Date.now() - t : NaN;
+      return shopDurationText(ms) ? Math.max(1, Math.round(ms / 60_000)) : null;
+    } catch { return null; }
+  };
+  const history: ShopRecord[] = store.state.preferences?.shopHistory || [];
+  const stats = shopStats(history);
   const shopTook = (): string | null => {
     try {
       const t = Number(localStorage.getItem(startKey));
@@ -1176,26 +1261,49 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     } catch { return null; }
   };
 
-  const finishShopping = (choice: DoneChoice) => {
+  /**
+   * Finish the shop. Things not ticked: moved to the following week's list, left, or taken off.
+   * Out-of-stock things stay on this list unless you ask for them next week too (you might not
+   * need them by then).
+   */
+  const finishShopping = (choice: DoneChoice, outToNextWeek = false) => {
     const notBought = stillToBuy;
     const ids = notBought.flatMap(r => r.underlyingIds);
+    const outIds = outRows.flatMap(r => r.underlyingIds);
     const took = shopTook();
+    const minutes = tookMinutes();
     let extra = '';
-    if (choice === 'move' && ids.length) {
-      const res = carryToFollowingWeek(ids);
+    const toCarry = [...(choice === 'move' ? ids : []), ...(outToNextWeek ? outIds : [])];
+    const toRemove = choice === 'remove' ? ids : [];
+    if (toCarry.length) {
+      const res = carryToFollowingWeek(toCarry, toRemove);
       if (res) extra = ` · ${res.moved.length + res.alreadyThere.length} moved to ${followingShort}`;
-    } else if (choice === 'remove' && ids.length) {
-      const idSet = new Set(ids);
+    } else if (toRemove.length) {
+      const idSet = new Set(toRemove);
       store.updateShoppingList((store.state.shoppingList || []).filter((i: ShoppingListItem) => !idSet.has(i.id)));
-      extra = ` · ${notBought.length} taken off`;
-    } else if (choice === 'keep' && ids.length) {
-      extra = ` · ${notBought.length} still to get`;
     }
-    try { if (startKey) localStorage.removeItem(startKey); } catch { /* ignore */ }
+    if (choice === 'remove' && ids.length) extra += ` · ${notBought.length} taken off`;
+    if (choice === 'keep' && ids.length) extra += ` · ${notBought.length} still to get`;
+
+    // Remember the shop (shared): history, best time, and the route you took.
+    const isBest = minutes !== null && checkedCount >= BIG_SHOP && (stats.best === null || minutes < stats.best);
+    const record: ShopRecord = {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      weekStart: activePlan?.startDate || '',
+      bought: checkedCount,
+      total: totalCount,
+      minutes,
+      by: store.currentUser || 'P',
+    };
+    const learned = learnRoute(shopRoute, readTicks());
+    store.updatePreferences?.({ shopHistory: addShopRecord(history, record), ...(learned && learned !== shopRoute ? { shopRoute: learned } : {}) });
+
+    try { if (startKey) localStorage.removeItem(startKey); if (routeKey) localStorage.removeItem(routeKey); } catch { /* ignore */ }
     setShowDone(false);
     setIsShoppingMode(false);
     setShowBought(false);
-    setToastMessage(`Shop done: ${checkedCount} bought${took ? ` in ${took}` : ''}${extra}`);
+    setToastMessage(`Shop done: ${checkedCount} bought${took ? ` in ${took}` : ''}${isBest && stats.timed ? ' · a new best!' : ''}${extra}`, { label: 'Past shops', run: () => setShowHistory(true) });
   };
 
   if (isShoppingMode) {
@@ -1207,6 +1315,11 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         onToggle={handleToggleItem}
         onExit={() => setIsShoppingMode(false)}
         onDone={() => setShowDone(true)}
+        onOutOfStock={handleOutOfStock}
+        onTickRecorded={recordTick}
+        route={shopRoute}
+        currentUser={store.currentUser || 'P'}
+        onShowHistory={() => setShowHistory(true)}
         quickAdd={<QuickAdd suggestions={quickAddSuggestions} onTheList={onTheList} onAdd={handleQuickAdd} compact />}
         onUncheckAll={() => {
           const checkedIds = buyingItems.filter(item => item.checked).map(item => item.id);
@@ -1228,19 +1341,24 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         <CupboardCheckSheet items={cupboardToCheck} allItems={currentWeekItems} onAnswer={handleCupboardAnswer} onClose={() => setShowCupboardCheck(false)} />
       )}
       {showAisleOrder && (
-        <AisleOrderSheet order={aisleOrder} onSave={handleSaveAisleOrder} onClose={() => setShowAisleOrder(false)} />
+        <AisleOrderSheet order={aisleOrder} learnedFrom={!arrangedOrder?.length ? shopRoute?.shops || 0 : 0} onSave={handleSaveAisleOrder} onClose={() => setShowAisleOrder(false)} />
       )}
       {showDone && (
         <DoneShoppingSheet
           bought={checkedCount}
           total={totalCount}
           notBought={stillToBuy}
+          outOfStock={outRows}
           took={shopTook()}
+          minutes={tookMinutes()}
+          best={stats.best}
+          bigShop={checkedCount >= BIG_SHOP}
           nextWeekLabel={followingListPhrase}
           onChoose={finishShopping}
           onClose={() => setShowDone(false)}
         />
       )}
+      {showHistory && <ShopHistorySheet history={history} onClose={() => setShowHistory(false)} />}
       {toast && <ShopToast toast={toast} onClose={() => setToast(null)} />}
       </>
     );
@@ -1347,6 +1465,14 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                         className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                       >
                         <RotateCcw className="w-4 h-4 text-zinc-500" /> Weekly staples…
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-shop-history"
+                        onClick={() => { setShowViewOptions(false); setShowHistory(true); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                      >
+                        <Trophy className="w-4 h-4 text-zinc-500" /> Past shops…
                       </button>
                     </div>
                   </div>
@@ -1507,6 +1633,21 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                 </section>
               ))}
 
+              {/* Out of stock at the shop: not counted, tap the circle if you get it after all */}
+              {outRows.length > 0 && (
+                <section className="bg-white rounded-xl border border-amber-200 overflow-hidden" data-group="out-of-stock">
+                  <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 bg-amber-50 border-b border-amber-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900">Out of stock</h3>
+                    <span className="text-xs text-amber-800 tabular-nums">{outRows.length}</span>
+                  </div>
+                  <div className="divide-y divide-zinc-100">
+                    {outRows.map(row => (
+                      <ShopRow key={row.key} row={row} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {/* Bought: out of the way at the end, one tap to look */}
               {boughtRows.length > 0 && (
                 <section className="bg-white rounded-xl border border-zinc-200/80 overflow-hidden" data-bought>
@@ -1606,6 +1747,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
           }}
           onRemove={() => removeRowParts(openRow)}
           onManageStaples={() => { setOpenRowId(null); setShowEditStaplesModal(true); }}
+          onBackInStock={() => handleOutOfStock(openRow.underlyingIds, false)}
           onClose={() => setOpenRowId(null)}
         />
       )}
@@ -1651,7 +1793,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       )}
 
       {showAisleOrder && (
-        <AisleOrderSheet order={aisleOrder} onSave={handleSaveAisleOrder} onClose={() => setShowAisleOrder(false)} />
+        <AisleOrderSheet order={aisleOrder} learnedFrom={!arrangedOrder?.length ? shopRoute?.shops || 0 : 0} onSave={handleSaveAisleOrder} onClose={() => setShowAisleOrder(false)} />
       )}
 
       {/* MODAL: Batch Cooking Meal Selector */}
@@ -1663,6 +1805,8 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
           weekLabel={activePlan ? formatWeekRange(activePlan.startDate) : ''}
         />
       )}
+
+      {showHistory && <ShopHistorySheet history={history} onClose={() => setShowHistory(false)} />}
 
       {unmappedItems.length > 0 && (
         <IngredientTriageModal
@@ -1734,7 +1878,36 @@ interface ShoppingModeViewProps {
   onDone: () => void;
   /** The add box, for something you forgot. */
   quickAdd?: React.ReactNode;
+  /** Mark (or clear) "out of stock" on these lines. */
+  onOutOfStock: (ids: string[], value: boolean) => void;
+  /** Remember the order things are ticked in (to learn your route round the shop). */
+  onTickRecorded: (key: string, aisle: string, ticked: boolean) => void;
+  /** The order you usually pick things up, learned from past shops. */
+  route?: ShopRoute;
+  /** Who is using this phone ('P' or 'R'). */
+  currentUser: string;
+  onShowHistory: () => void;
 }
+
+const personName = (id?: string) => (id === 'R' ? 'Rachel' : id === 'P' ? 'Peter' : '');
+
+/** Is the phone online? (Ticks are kept on the phone either way.) */
+function useOnline() {
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false));
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', down);
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
+  }, []);
+  return online;
+}
+
+/** A little buzz on phones that can (Android); nothing elsewhere. */
+const buzz = (pattern: number | number[]) => {
+  try { (navigator as any).vibrate?.(pattern); } catch { /* not supported */ }
+};
 
 /** Keep the phone's screen on while shopping (where the browser allows it). */
 function useScreenAwake() {
@@ -1777,8 +1950,14 @@ function ShoppingModeView({
   onCupboardCheck,
   onDone,
   quickAdd,
+  onOutOfStock,
+  onTickRecorded,
+  route,
+  currentUser,
+  onShowHistory,
 }: ShoppingModeViewProps) {
   useScreenAwake();
+  const online = useOnline();
   const currentMondayStr = formatDateISO(getMonday(new Date()));
   const nextMondayStr = formatDateISO(getNextMonday(new Date()));
   const [filter, setFilter] = useState<'all' | 'to_buy' | 'bought'>('all');
@@ -1802,15 +1981,41 @@ function ShoppingModeView({
 
   // One row per product, exactly as on the Shop list (so the counts match).
   const aggregatedItems = useMemo(() => aggregateShoppingItems(items), [items]);
+  const weekTitle = activePlan ? (activePlan.startDate === currentMondayStr ? 'This week' : activePlan.startDate === nextMondayStr ? 'Next week' : formatWeekSpan(activePlan.startDate)) : 'This week';
 
-  const totalCount = aggregatedItems.length;
-  const checkedCount = aggregatedItems.filter(i => i.checked).length;
+  // Out of stock doesn't count against you: the % is of what the shop actually had.
+  const countable = aggregatedItems.filter(i => !i.outOfStock);
+  const totalCount = countable.length;
+  const checkedCount = countable.filter(i => i.checked).length;
   const pendingCount = totalCount - checkedCount;
   const completionPercent = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
 
   // Just ticked: counts straight away, but stays put (crossed out, with Undo) for a few seconds.
   const { justTicked, hold, release } = useJustTicked();
-  const isDone = (i: AggregatedShoppingListItem) => i.checked && !justTicked[i.key];
+  const isDone = (i: AggregatedShoppingListItem) => (i.checked && !justTicked[i.key]) || !!i.outOfStock;
+
+  // The last thing you did, with Undo in the bottom bar until you do something else.
+  const [lastAction, setLastAction] = useState<{ kind: 'tick' | 'out'; key: string; name: string; ids: string[] } | null>(null);
+
+  // 25 / 50 / 75%: a moment in the header (and a buzz on Android); 100% gets the big one.
+  const [milestone, setMilestone] = useState<string | null>(null);
+  const lastPercent = useRef(completionPercent);
+  useEffect(() => {
+    const before = lastPercent.current;
+    lastPercent.current = completionPercent;
+    const msg = milestoneCrossed(before, completionPercent);
+    if (msg) {
+      setMilestone(msg);
+      buzz(40);
+    }
+    if (before < 100 && completionPercent === 100 && totalCount > 0) buzz([60, 40, 60, 40, 120]);
+  }, [completionPercent]);
+  // The moment lasts a couple of seconds, however fast you keep ticking.
+  useEffect(() => {
+    if (!milestone) return;
+    const t = setTimeout(() => setMilestone(null), 2500);
+    return () => clearTimeout(t);
+  }, [milestone]);
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -1861,7 +2066,8 @@ function ShoppingModeView({
 
   // Dynamic sorting based on dropCompletedToBottom
   const arrangeListItems = (itemList: AggregatedShoppingListItem[]): AggregatedShoppingListItem[] => {
-    const sorted = [...itemList].sort((a, b) => a.name.localeCompare(b.name));
+    // In the order you usually pick things up (learned), else A–Z.
+    const sorted = sortByRoute(itemList, route);
     if (dropCompletedToBottom) {
       return [
         ...sorted.filter(i => !isDone(i)),
@@ -1874,235 +2080,155 @@ function ShoppingModeView({
   const onToggle = (itemId: string) => {
     const aggItem = aggregatedItems.find(i => i.id === itemId);
     if (!aggItem) return;
-    const targetState = !aggItem.checked;
+    // Out of stock but there after all: tapping it ticks it.
+    const targetState = aggItem.outOfStock ? true : !aggItem.checked;
     parentOnToggle(aggItem.underlyingIds, targetState);
-    if (targetState) hold(aggItem.key); else release(aggItem.key);
+    onTickRecorded(aggItem.key, getGroceryAisle(aggItem as any), targetState);
+    if (targetState) {
+      hold(aggItem.key);
+      setLastAction({ kind: 'tick', key: aggItem.key, name: aggItem.name, ids: aggItem.underlyingIds });
+    } else {
+      release(aggItem.key);
+      setLastAction(a => (a?.key === aggItem.key ? null : a));
+    }
+  };
+
+  /** Press and hold: out of stock (or back in stock). */
+  const onHoldRow = (itemId: string) => {
+    const aggItem = aggregatedItems.find(i => i.id === itemId);
+    if (!aggItem) return;
+    const value = !aggItem.outOfStock;
+    onOutOfStock(aggItem.underlyingIds, value);
+    release(aggItem.key);
+    if (aggItem.checked) onTickRecorded(aggItem.key, getGroceryAisle(aggItem as any), false);
+    buzz(30);
+    setLastAction(value ? { kind: 'out', key: aggItem.key, name: aggItem.name, ids: aggItem.underlyingIds } : null);
+  };
+
+  const undoLast = () => {
+    if (!lastAction) return;
+    if (lastAction.kind === 'tick') {
+      parentOnToggle(lastAction.ids, false);
+      release(lastAction.key);
+      onTickRecorded(lastAction.key, '', false);
+    } else {
+      onOutOfStock(lastAction.ids, false);
+    }
+    setLastAction(null);
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col overflow-hidden animate-in fade-in duration-150">
-      {/* Header in Shopping Mode */}
-      <header className="bg-white border-b border-zinc-200 shrink-0 sticky top-0 z-30 shadow-2xs">
-        {/* At the top of the header in shopping mode, % of shop complete which is calculated by number of items ticked */}
-        <div className="bg-emerald-600 text-white px-4 py-3 sm:px-6 relative">
-          <div className="max-w-2xl mx-auto flex items-center justify-between pr-32 sm:pr-40">
-            <div>
+      {/* Header: what's left and the % done (the game), with the list options and close */}
+      <header className="shrink-0 sticky top-0 z-30 shadow-2xs">
+        <div className="bg-emerald-600 text-white px-4 pt-3 pb-3 sm:px-6">
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4 text-emerald-100 shrink-0 stroke-[2.5]" />
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-100">
-                  Shopping Mode
-                </span>
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-100">Shopping mode</span>
               </div>
-              <p className="text-xs text-emerald-100 mt-0.5 font-medium">
-                {checkedCount} of {totalCount} {totalCount === 1 ? 'item' : 'items'} ticked
-              </p>
+              {milestone ? (
+                <p className="text-sm text-white mt-0.5 font-bold animate-in fade-in zoom-in-95" data-milestone>{milestone}</p>
+              ) : (
+                <p className="text-xs text-emerald-100 mt-0.5 font-medium truncate" data-shop-mode-sub>
+                  {weekTitle} · {checkedCount} of {totalCount} ticked
+                </p>
+              )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-emerald-100 font-semibold hidden sm:inline">
-                Shop Complete:
-              </span>
-              <span className="text-base sm:text-lg font-black tracking-tight tabular-nums bg-white/20 px-2.5 py-0.5 rounded-xl text-white">
-                {completionPercent}%
-              </span>
-            </div>
-          </div>
-
-          {/* Very top-right exit button */}
-          <button
-            type="button"
-            id="btn-exit-shopping-mode"
-            onClick={onExit}
-            className="absolute top-2.5 right-2.5 sm:top-3 sm:right-4 flex items-center gap-1.5 px-3 py-1.5 sm:py-2 sm:px-4 rounded-xl bg-black/20 hover:bg-black/30 active:bg-black/40 text-white text-xs font-bold shadow-xs transition-all cursor-pointer z-40 border border-white/10"
-            title="Exit Shop Mode"
-          >
-            <X className="w-4 h-4 stroke-[2.5]" />
-            <span className="hidden sm:inline">Exit Shop Mode</span>
-          </button>
-
-          {/* Visual animated progress bar */}
-          <div className="max-w-2xl mx-auto mt-2.5 w-full h-2 bg-black/20 rounded-full overflow-hidden p-0.5">
-            <div 
-              className="h-full bg-white rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${completionPercent}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Sub-Header / Filter / View Options Bar */}
-        <div className="px-3 py-2.5 sm:px-6 bg-white border-b border-zinc-200 relative">
-          <div className="max-w-2xl mx-auto flex flex-row items-center justify-between gap-1.5 sm:gap-4 flex-nowrap w-full overflow-x-auto scrollbar-none">
-            {/* Left: Date */}
-            <h2 className="text-xs sm:text-sm font-bold text-zinc-900 leading-tight shrink-0 whitespace-nowrap">
-              {activePlan ? (activePlan.startDate === currentMondayStr ? 'This week' : activePlan.startDate === nextMondayStr ? 'Next week' : formatWeekSpan(activePlan.startDate)) : 'This week'}
-            </h2>
-
-            {/* Middle: Filters */}
-            <div className="flex items-center gap-0.5 bg-zinc-100 p-0.5 rounded-lg shrink-0">
-              <button
-                type="button"
-                onClick={() => setFilter('all')}
-                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
-                  filter === 'all' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-500 hover:text-zinc-900'
-                }`}
-              >
-                All ({totalCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter('to_buy')}
-                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
-                  filter === 'to_buy' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600 hover:text-zinc-900'
-                }`}
-              >
-                To Buy ({pendingCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter('bought')}
-                className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs font-bold rounded-md transition-all cursor-pointer whitespace-nowrap ${
-                  filter === 'bought' ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600 hover:text-zinc-900'
-                }`}
-              >
-                Bought ({checkedCount})
-              </button>
-            </div>
-
-            {/* Right: View Options */}
+            <span className="shrink-0 text-lg font-black tracking-tight tabular-nums bg-white/20 px-2.5 py-0.5 rounded-xl text-white" data-percent>
+              {completionPercent}%
+            </span>
             <div className="relative shrink-0">
               <button
                 type="button"
                 id="btn-shopping-mode-view-options"
                 onClick={() => setShowViewOptions(!showViewOptions)}
-                className={`h-7 px-2 sm:h-8 sm:px-2.5 rounded-lg sm:rounded-xl border flex items-center gap-1 transition-all cursor-pointer shadow-2xs text-[11px] sm:text-xs font-bold ${
-                  showViewOptions
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600 hover:text-zinc-900'
-                }`}
-                title="View options"
+                className={`w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer ${showViewOptions ? 'bg-white text-emerald-700' : 'bg-black/20 hover:bg-black/30 text-white'}`}
+                title="List options"
                 aria-label="View options"
               >
-                <Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span className="hidden sm:inline">View Options</span>
+                <Eye className="w-4 h-4" />
               </button>
-
               {showViewOptions && (
                 <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowViewOptions(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl border border-zinc-200/90 shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
-                    <div className="px-1 mb-1">
-                      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
-                        View Layout
-                      </span>
-                      <div className="space-y-1">
+                  <div className="fixed inset-0 z-40" onClick={() => setShowViewOptions(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white text-zinc-800 rounded-2xl border border-zinc-200 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
+                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-1 pb-1.5">Show</span>
+                    <div className="flex gap-1 px-1 pb-1">
+                      {([['all', `All ${totalCount}`], ['to_buy', `To buy ${pendingCount}`], ['bought', `Bought ${checkedCount}`]] as const).map(([f, label]) => (
                         <button
+                          key={f}
                           type="button"
-                          onClick={() => {
-                            setViewMode('sections');
-                            setShowViewOptions(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            viewMode === 'sections'
-                              ? 'bg-indigo-600 text-white shadow-2xs font-bold'
-                              : 'text-zinc-700 hover:bg-zinc-100'
-                          }`}
+                          onClick={() => { setFilter(f); setShowViewOptions(false); }}
+                          className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${filter === f ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'}`}
+                          data-filter={f}
                         >
-                          <div className="flex items-center gap-2">
-                            <Layers className="w-3.5 h-3.5" />
-                            <span>Sections</span>
-                          </div>
-                          {viewMode === 'sections' && (
-                            <Check className="w-3.5 h-3.5 text-white" />
-                          )}
+                          {label}
                         </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setViewMode('food_type');
-                            setShowViewOptions(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            viewMode === 'food_type'
-                              ? 'bg-indigo-600 text-white shadow-2xs font-bold'
-                              : 'text-zinc-700 hover:bg-zinc-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Store className="w-3.5 h-3.5" />
-                            <span>Grouped by Aisle</span>
-                          </div>
-                          {viewMode === 'food_type' && (
-                            <Check className="w-3.5 h-3.5 text-white" />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setViewMode('all');
-                            setShowViewOptions(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                            viewMode === 'all'
-                              ? 'bg-indigo-600 text-white shadow-2xs font-bold'
-                              : 'text-zinc-700 hover:bg-zinc-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <ShoppingBag className="w-3.5 h-3.5" />
-                            <span>Flat List</span>
-                          </div>
-                          {viewMode === 'all' && (
-                            <Check className="w-3.5 h-3.5 text-white" />
-                          )}
-                        </button>
-                      </div>
+                      ))}
                     </div>
-
-                    <div className="border-t border-zinc-100 my-2 pt-2 px-1">
-                      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5 font-bold">
-                        List Options
-                      </span>
-                      <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer text-xs font-semibold text-zinc-700 select-none">
-                        <input
-                          type="checkbox"
-                          checked={dropCompletedToBottom}
-                          onChange={(e) => onToggleDropCompleted(e.target.checked)}
-                          className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
-                        />
-                        <span>Drop completed to bottom</span>
+                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-2 pb-1.5 border-t border-zinc-100 mt-1">Layout</span>
+                    {([['food_type', 'By aisle', Store], ['sections', "By where it's from", Layers], ['all', 'A–Z', ShoppingBag]] as const).map(([mode, label, Icon]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => { setViewMode(mode); setShowViewOptions(false); }}
+                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-sm cursor-pointer ${viewMode === mode ? 'bg-zinc-100 font-semibold text-zinc-900' : 'text-zinc-700 hover:bg-zinc-50'}`}
+                      >
+                        <span className="flex items-center gap-2"><Icon className="w-4 h-4 text-zinc-500" />{label}</span>
+                        {viewMode === mode && <Check className="w-4 h-4 text-emerald-600" />}
+                      </button>
+                    ))}
+                    <div className="border-t border-zinc-100 mt-1.5 pt-1.5 space-y-0.5">
+                      <label className="flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700 select-none">
+                        <input type="checkbox" checked={dropCompletedToBottom} onChange={(e) => onToggleDropCompleted(e.target.checked)} className="rounded border-zinc-300 text-emerald-600 w-4 h-4 cursor-pointer" />
+                        <span>Ticked items go to the bottom</span>
                       </label>
-                      <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer text-xs font-semibold text-zinc-700 select-none">
-                        <input
-                          type="checkbox"
-                          id="toggle-compact-rows"
-                          checked={compactRows}
-                          onChange={(e) => onCompactRows(e.target.checked)}
-                          className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
-                        />
+                      <label className="flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700 select-none">
+                        <input type="checkbox" id="toggle-compact-rows" checked={compactRows} onChange={(e) => onCompactRows(e.target.checked)} className="rounded border-zinc-300 text-emerald-600 w-4 h-4 cursor-pointer" />
                         <span>Compact rows</span>
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowViewOptions(false);
-                          onArrangeAisles();
-                        }}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer text-xs font-semibold text-zinc-700"
-                      >
-                        <ListOrdered className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Arrange aisles…</span>
+                      <button type="button" onClick={() => { setShowViewOptions(false); onArrangeAisles(); }} className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700">
+                        <ListOrdered className="w-4 h-4 text-zinc-500" /> Arrange aisles…
                       </button>
+                      <button type="button" onClick={() => { setShowViewOptions(false); onShowHistory(); }} className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700" data-open-history>
+                        <Trophy className="w-4 h-4 text-zinc-500" /> Past shops…
+                      </button>
+                      <p className="px-2.5 pt-1 pb-1 text-xs text-zinc-500">Press and hold an item if it's out of stock.</p>
                     </div>
                   </div>
                 </>
               )}
             </div>
+            <button
+              type="button"
+              id="btn-exit-shopping-mode"
+              onClick={onExit}
+              className="shrink-0 w-9 h-9 rounded-xl bg-black/20 hover:bg-black/30 active:bg-black/40 text-white flex items-center justify-center cursor-pointer"
+              title="Leave shopping mode"
+              aria-label="Leave shopping mode"
+            >
+              <X className="w-4 h-4 stroke-[2.5]" />
+            </button>
+          </div>
+          {/* Progress bar */}
+          <div className="max-w-2xl mx-auto mt-2.5 w-full h-2 bg-black/20 rounded-full overflow-hidden p-0.5">
+            <div className="h-full bg-white rounded-full transition-all duration-300 ease-out" style={{ width: `${completionPercent}%` }} />
           </div>
         </div>
+        {filter !== 'all' && (
+          <div className="bg-white border-b border-zinc-200 px-4 py-1.5 text-sm text-zinc-600 flex items-center justify-between" data-filter-note>
+            <span>Showing {filter === 'to_buy' ? 'what’s left to buy' : 'what you’ve bought'}</span>
+            <button type="button" onClick={() => setFilter('all')} className="font-semibold text-emerald-700 cursor-pointer">Show all</button>
+          </div>
+        )}
+        {!online && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-sm text-amber-900 flex items-center gap-2" data-offline>
+            <WifiOff className="w-4 h-4 shrink-0" />
+            <span>No signal: your ticks are saved on this phone and will sync when you're back online.</span>
+          </div>
+        )}
       </header>
 
       {/* Main Simplified Shopping List Area */}
@@ -2125,10 +2251,10 @@ function ShoppingModeView({
         {/* 100% Completion Celebration Card */}
         {totalCount > 0 && checkedCount === totalCount && (
           <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-5 text-center space-y-2 animate-in fade-in shadow-2xs">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-              <Check className="w-7 h-7 stroke-[3]" />
+            <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto animate-bounce">
+              <PartyPopper className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-emerald-950">Shop 100% complete!</h3>
+            <h3 className="text-lg font-bold text-emerald-950" data-shop-complete>Shop 100% complete!</h3>
             <p className="text-sm text-emerald-800 max-w-xs mx-auto">
               All {totalCount} items on your list have been ticked.
             </p>
@@ -2185,12 +2311,15 @@ function ShoppingModeView({
               info={group.info}
               items={arrangeListItems(group.items)}
               compact={compactRows}
+              allDone={group.items.length > 0 && group.items.every(isDone)}
               renderItem={(item) => (
                 <ShoppingModeItemRow
                   key={item.id}
                   item={item}
                   onToggle={onToggle}
                   justTicked={!!justTicked[item.key]}
+                  onHold={onHoldRow}
+                  tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                   compact={compactRows}
                 />
               )}
@@ -2226,6 +2355,8 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
+                          onHold={onHoldRow}
+                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
                       ))}
@@ -2279,6 +2410,8 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
+                          onHold={onHoldRow}
+                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
                       ))}
@@ -2316,6 +2449,8 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
+                          onHold={onHoldRow}
+                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
                       ))}
@@ -2353,6 +2488,8 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
+                          onHold={onHoldRow}
+                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
                       ))}
@@ -2381,6 +2518,8 @@ function ShoppingModeView({
                       item={item}
                       onToggle={onToggle}
                       justTicked={!!justTicked[item.key]}
+                      onHold={onHoldRow}
+                      tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                       compact={compactRows}
                     />
                   ))}
@@ -2400,6 +2539,8 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
+                          onHold={onHoldRow}
+                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
                       ))}
@@ -2419,6 +2560,8 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
+                          onHold={onHoldRow}
+                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
                       ))}
@@ -2430,17 +2573,32 @@ function ShoppingModeView({
           </div>
         )}
         {quickAdd && totalCount > 0 && <div className="pt-1" data-shopping-quick-add>{quickAdd}</div>}
+        {totalCount > 0 && (
+          <p className="text-xs text-zinc-500 text-center pt-1">Tip: press and hold an item if it's out of stock.</p>
+        )}
       </div>
 
       {/* Always in reach: finish the shop */}
       {totalCount > 0 && (
         <div className="shrink-0 bg-white border-t border-zinc-200 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           <div className="max-w-2xl mx-auto flex items-center gap-3">
-            <span className="text-sm text-zinc-600 tabular-nums">{pendingCount} left</span>
+            {lastAction ? (
+              <button
+                type="button"
+                onClick={undoLast}
+                className="min-w-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-300 bg-white text-sm font-semibold text-zinc-800 cursor-pointer active:bg-zinc-100"
+                data-undo-last
+              >
+                <Undo2 className="w-4 h-4 shrink-0" />
+                <span className="truncate">Undo {lastAction.kind === 'out' ? 'out of stock: ' : ''}{lastAction.name}</span>
+              </button>
+            ) : (
+              <span className="text-sm text-zinc-600 tabular-nums">{pendingCount} left</span>
+            )}
             <button
               type="button"
               onClick={onDone}
-              className={`ml-auto px-5 py-2.5 rounded-xl text-[15px] font-semibold cursor-pointer ${
+              className={`ml-auto shrink-0 px-5 py-2.5 rounded-xl text-[15px] font-semibold cursor-pointer ${
                 pendingCount === 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-zinc-900 hover:bg-zinc-800 text-white'
               }`}
               data-done-shopping
@@ -2460,8 +2618,47 @@ interface ShoppingModeItemRowProps {
   onToggle: (id: string) => void;
   /** Ticked a moment ago: still in place, crossed out, with Undo. */
   justTicked?: boolean;
+  /** Press and hold: out of stock. */
+  onHold?: (id: string) => void;
+  /** Ticked on the other phone (their name). */
+  tickedBy?: string;
   compact?: boolean;
 }
+
+/** Press and hold (about half a second) without moving: a long-press that works on any phone. */
+function usePressHold(onHold: () => void, ms = 550) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
+  useEffect(() => clear, []);
+  return {
+    handlers: {
+      onPointerDown: (e: React.PointerEvent) => {
+        held.current = false;
+        start.current = { x: e.clientX, y: e.clientY };
+        clear();
+        timer.current = setTimeout(() => { held.current = true; onHold(); }, ms);
+      },
+      onPointerMove: (e: React.PointerEvent) => {
+        if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) clear();
+      },
+      onPointerUp: clear,
+      onPointerLeave: clear,
+      onPointerCancel: clear,
+      onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+    },
+    /** True (once) if the press that just ended was a hold, so the tap that follows is ignored. */
+    wasHeld: () => { const h = held.current; held.current = false; return h; },
+  };
+}
+
+/** "Out of stock" label on a row. */
+const OutOfStockPill = () => (
+  <span className="shrink-0 text-xs font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1" data-out-of-stock>
+    Out of stock
+  </span>
+);
 
 /** The Undo pill on a row that was just ticked. */
 function UndoTick({ name, onUndo }: { name: string; onUndo: () => void }) {
@@ -2482,16 +2679,25 @@ function ShoppingModeItemRow({
   item,
   onToggle,
   justTicked = false,
+  onHold,
+  tickedBy,
   compact = false
 }: ShoppingModeItemRowProps) {
+  const press = usePressHold(() => onHold?.(item.id));
+  const tap = () => { if (!press.wasHeld()) onToggle(item.id); };
+  const out = !!item.outOfStock;
+  const noCallout = { WebkitTouchCallout: 'none' } as React.CSSProperties;
   if (compact) {
     // One line: tick, name, amount. Big enough to tap with a basket in the other hand.
     return (
       <div
-        onClick={() => onToggle(item.id)}
-        className={`flex items-center gap-3 px-1.5 min-h-[48px] py-1.5 cursor-pointer select-none transition-colors ${justTicked ? 'bg-emerald-50/70' : item.checked ? 'opacity-50' : 'active:bg-zinc-50'}`}
+        onClick={tap}
+        {...press.handlers}
+        style={noCallout}
+        className={`flex items-center gap-3 px-1.5 min-h-[48px] py-1.5 cursor-pointer select-none transition-colors ${justTicked ? 'bg-emerald-50/70' : out ? 'bg-amber-50/60' : item.checked ? 'opacity-50' : 'active:bg-zinc-50'}`}
         data-row="compact"
         data-just-ticked={justTicked || undefined}
+        data-row-out={out || undefined}
       >
         <button
           type="button"
@@ -2507,7 +2713,7 @@ function ShoppingModeItemRow({
           {item.checked && <Check className="w-4 h-4 stroke-[3]" />}
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <span className={`text-base font-semibold truncate ${item.checked ? 'line-through text-zinc-400 font-medium' : 'text-zinc-900'}`}>
+          <span className={`text-base font-semibold truncate ${item.checked ? 'line-through text-zinc-400 font-medium' : out ? 'text-zinc-500' : 'text-zinc-900'}`}>
             {item.name}
           </span>
           {item.checkCupboard && !item.checked && (
@@ -2525,9 +2731,14 @@ function ShoppingModeItemRow({
               <StickyNote className="w-3 h-3 shrink-0" />{item.note}
             </span>
           )}
+          {tickedBy && !justTicked && (
+            <span className="shrink-0 text-xs font-semibold text-emerald-700" data-ticked-by>✓ {tickedBy}</span>
+          )}
         </div>
         {justTicked ? (
           <UndoTick name={item.name} onUndo={() => onToggle(item.id)} />
+        ) : out ? (
+          <OutOfStockPill />
         ) : (
           <span className={`shrink-0 text-base font-bold tabular-nums ${item.checked ? 'text-zinc-400' : 'text-emerald-700'}`}>
             {shopQuantityText(item)}
@@ -2539,10 +2750,14 @@ function ShoppingModeItemRow({
 
   return (
     <div
-      onClick={() => onToggle(item.id)}
+      onClick={tap}
+      {...press.handlers}
+      style={noCallout}
       className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] select-none ${
         justTicked
           ? 'bg-emerald-50/70 border-emerald-200'
+          : out
+          ? 'bg-amber-50/60 border-amber-200'
           : item.checked
           ? 'bg-zinc-100/60 border-zinc-200/70 opacity-55'
           : 'bg-white border-zinc-200/90 shadow-2xs hover:border-zinc-300'
@@ -2593,6 +2808,8 @@ function ShoppingModeItemRow({
         )}
       </div>
 
+      {tickedBy && !justTicked && <span className="shrink-0 text-xs font-semibold text-emerald-700" data-ticked-by>✓ {tickedBy}</span>}
+      {out && !justTicked && <OutOfStockPill />}
       {justTicked && <UndoTick name={item.name} onUndo={() => onToggle(item.id)} />}
       {/* Right: Large Tick Box */}
       <button
@@ -2722,10 +2939,13 @@ function CupboardCheckSheet({
 /** Put the aisles in the order you walk your supermarket. Shared with the other phone. */
 function AisleOrderSheet({
   order,
+  learnedFrom = 0,
   onSave,
   onClose
 }: {
   order?: string[];
+  /** The order shown was learned from this many shops (0 = you arranged it, or the usual). */
+  learnedFrom?: number;
   onSave: (order: string[] | null) => void;
   onClose: () => void;
 }) {
@@ -2752,6 +2972,11 @@ function AisleOrderSheet({
           <div>
             <h3 className="text-lg font-semibold text-zinc-900">Arrange aisles</h3>
             <p className="text-sm text-zinc-500 mt-0.5">Put them in the order you walk round your usual shop. The list and shopping mode follow this order on both phones.</p>
+            {learnedFrom > 0 && (
+              <p className="text-sm text-emerald-800 bg-emerald-50 rounded-lg px-2.5 py-1.5 mt-2" data-learned-note>
+                This is the order you usually shop in, learned from {learnedFrom} {learnedFrom === 1 ? 'shop' : 'shops'}. Saving an order here uses yours instead.
+              </p>
+            )}
           </div>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer" aria-label="Close">
             <X className="w-5 h-5" />

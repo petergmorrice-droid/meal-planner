@@ -59,6 +59,11 @@ export default function ShopRow({
                 check cupboard
               </span>
             )}
+            {row.outOfStock && (
+              <span className="shrink-0 text-[11px] font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded px-1 py-px" data-out-of-stock>
+                out of stock
+              </span>
+            )}
             {row.needsCheck && !row.checked && (
               <span className="shrink-0 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 py-px" title={row.quantityNote}>
                 check amount

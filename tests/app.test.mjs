@@ -7,6 +7,7 @@ import {
   recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
+  learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
 } from '../.test-build/app.mjs';
 
@@ -361,6 +362,42 @@ test('shop: things you did not get move to next week, once each', () => {
   assert.equal(shopDurationText(65 * 60_000), '1 hr 5 min');
   assert.equal(shopDurationText(30_000), null);
   assert.equal(shopDurationText(9 * 3600_000), null);
+});
+
+test('shop: learns the order you pick things up', () => {
+  const tick = (key, aisle) => ({ key, aisle });
+  const shop1 = [tick('bread', 'bakery'), tick('milk', 'dairy_eggs'), tick('eggs', 'dairy_eggs'), tick('apples', 'produce'), tick('mince', 'meat_seafood'), tick('milk', 'dairy_eggs')];
+  const r1 = learnRoute(undefined, shop1);
+  assert.equal(r1.shops, 1);
+  assert.deepEqual(r1.items, { bread: 0, milk: 0.25, eggs: 0.5, apples: 0.75, mince: 1 });
+  assert.deepEqual(r1.aisles, { bakery: 0, dairy_eggs: 0.25, produce: 0.75, meat_seafood: 1 });
+  assert.equal(learnRoute(r1, shop1.slice(0, 3)), r1, 'a short shop teaches nothing');
+  const r2 = learnRoute(r1, [tick('apples', 'produce'), tick('bread', 'bakery'), tick('milk', 'dairy_eggs'), tick('eggs', 'dairy_eggs'), tick('mince', 'meat_seafood')]);
+  assert.equal(r2.items.apples, 0.375, 'averaged with what was learned before');
+  assert.equal(r2.shops, 2);
+  const usual = ['produce', 'bakery', 'meat_seafood', 'dairy_eggs', 'frozen'];
+  assert.deepEqual(routeAisleOrder(r1, usual), ['bakery', 'dairy_eggs', 'produce', 'meat_seafood', 'frozen']);
+  assert.equal(routeAisleOrder(undefined, usual), null);
+  const rows = [{ key: 'eggs', name: 'Eggs' }, { key: 'new', name: 'Butter' }, { key: 'milk', name: 'Milk' }, { key: 'new2', name: 'Apple juice' }];
+  assert.deepEqual(sortByRoute(rows, r1).map((r) => r.name), ['Milk', 'Eggs', 'Apple juice', 'Butter']);
+  assert.deepEqual(sortByRoute(rows, undefined).map((r) => r.name), ['Apple juice', 'Butter', 'Eggs', 'Milk']);
+});
+
+test('shop: history, best and average time, milestones', () => {
+  const rec = (id, minutes, bought) => ({ id, date: '2026-10-17T10:00:00Z', weekStart: '2026-10-19', bought, total: bought, minutes });
+  let h = addShopRecord(undefined, rec('a', 30, 30));
+  h = addShopRecord(h, rec('b', 4, 3));
+  h = addShopRecord(h, rec('c', 22, 25));
+  assert.deepEqual(h.map((r) => r.id), ['c', 'b', 'a'], 'newest first');
+  assert.deepEqual(shopStats(h), { best: 22, average: 26, timed: 2 }, 'a 3-item top-up does not count');
+  assert.deepEqual(shopStats([]), { best: null, average: null, timed: 0 });
+  assert.equal(addShopRecord(Array.from({ length: 25 }, (_, i) => rec(String(i), 20, 20)), rec('x', 1, 20)).length, 20);
+  assert.equal(milestoneCrossed(20, 26), 'A quarter done!');
+  assert.equal(milestoneCrossed(48, 51), 'Halfway there!');
+  assert.equal(milestoneCrossed(70, 80), 'Three quarters done!');
+  assert.equal(milestoneCrossed(51, 60), null);
+  assert.equal(milestoneCrossed(90, 100), null, '100% has its own celebration');
+  assert.equal(isToBuy({ checked: false, outOfStock: true }), false, 'out of stock is not "to buy"');
 });
 
 test('your own notes on leftovers are kept', () => {

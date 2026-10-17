@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { ShoppingListItem } from '../types';
 
 interface ShopAisleGroupProps {
@@ -10,28 +10,38 @@ interface ShopAisleGroupProps {
   renderItem: (item: any) => React.ReactNode;
   /** One-line rows separated by dividers instead of spaced cards. */
   compact?: boolean;
+  /** Everything here is ticked (or out of stock): fold the aisle away. */
+  allDone?: boolean;
 }
 
-export default function ShopAisleGroup({ aisle, info, items, renderItem, compact = false }: ShopAisleGroupProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const itemsLeft = items.filter(i => !i.checked).length;
+export default function ShopAisleGroup({ aisle, info, items, renderItem, compact = false, allDone = false }: ShopAisleGroupProps) {
+  // Folded when finished, unless you open it again; your own choice wins until it's finished.
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  useEffect(() => { if (allDone) setUserOpen(null); }, [allDone]);
+  const isCollapsed = userOpen === null ? allDone : !userOpen;
+  const setIsCollapsed = (collapsed: boolean) => setUserOpen(!collapsed);
+  const itemsLeft = items.filter(i => !i.checked && !i.outOfStock).length;
 
   if (compact) {
     // Slim one-line header that stays in view while you scroll its aisle.
     return (
-      <section className="bg-white rounded-xl border border-zinc-200/70 overflow-clip">
+      <section className={`rounded-xl border overflow-clip ${allDone ? 'bg-emerald-50/60 border-emerald-200/70' : 'bg-white border-zinc-200/70'}`} data-aisle={aisle} data-aisle-done={allDone || undefined}>
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="sticky top-0 z-10 w-full flex items-center justify-between gap-2 px-3 py-2 bg-zinc-50/95 backdrop-blur-sm border-b border-zinc-200/70 text-left cursor-pointer"
+          className={`sticky top-0 z-10 w-full flex items-center justify-between gap-2 px-3 py-2 backdrop-blur-sm text-left cursor-pointer ${allDone ? 'bg-emerald-50/95' : 'bg-zinc-50/95'} ${isCollapsed ? '' : 'border-b border-zinc-200/70'}`}
           aria-expanded={!isCollapsed}
           data-aisle-header={info.name}
         >
           <span className="flex items-center gap-1.5 min-w-0">
             <ChevronDown className={`w-4 h-4 text-zinc-500 shrink-0 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-700 truncate">{info.name}</span>
+            <span className={`text-xs font-bold uppercase tracking-wider truncate ${allDone ? 'text-emerald-800' : 'text-zinc-700'}`}>{info.name}</span>
           </span>
-          <span className="text-xs font-semibold text-zinc-500 tabular-nums shrink-0">{itemsLeft} left</span>
+          {allDone ? (
+            <span className="text-xs font-semibold text-emerald-700 shrink-0 inline-flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> done · {items.length}</span>
+          ) : (
+            <span className="text-xs font-semibold text-zinc-500 tabular-nums shrink-0">{itemsLeft} left</span>
+          )}
         </button>
         {!isCollapsed && (
           <div className="divide-y divide-zinc-100 px-2">

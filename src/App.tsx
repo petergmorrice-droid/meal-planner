@@ -10,7 +10,7 @@ import { useStore } from './store';
 import { firstUrl } from './recipeInfo';
 import CookBookTab from './components/CookBookTab';
 import PlanningTab from './components/PlanningTab';
-import ShopTab from './components/ShopTab';
+import ShopTab, { readOpenShop } from './components/ShopTab';
 import BatchTab from './components/BatchTab';
 import ThisWeekTab from './components/ThisWeekTab';
 import SettingsTab from './components/SettingsTab';
@@ -32,7 +32,8 @@ export default function App() {
       return null;
     }
   });
-  const [activeTab, setActiveTab] = useState<Tab>(sharedRecipe ? 'cookbook' : 'planning');
+  // Mid-shop (phone locked, app closed)? Open straight back into shopping mode.
+  const [activeTab, setActiveTab] = useState<Tab>(sharedRecipe ? 'cookbook' : readOpenShop() ? 'shop' : 'planning');
   // "Add to a day…" from a recipe in the Cookbook: Planning opens its day chooser for it.
   const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
   

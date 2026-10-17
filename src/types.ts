@@ -142,6 +142,10 @@ export interface ShoppingListItem {
   cupboard?: 'have' | 'need';
   /** Your own note for the shop: "semi-skimmed", "big tub", "if on offer". */
   note?: string;
+  /** Not in the shop this time (doesn't count against the % done). */
+  outOfStock?: boolean;
+  /** Who ticked it ('P' or 'R'), so the other phone can see. */
+  checkedBy?: string;
 }
 
 export interface RecurringItem {
@@ -190,6 +194,33 @@ export interface UserPreferences {
   catalogVersion?: number;
   /** Aisle ids in the order you walk your supermarket (missing ones follow in the usual order). */
   aisleOrder?: string[];
+  /** The order you usually pick things up, learned from your shops (0 = first, 1 = last). */
+  shopRoute?: ShopRoute;
+  /** Your last shops: how many items, how long. Newest first. */
+  shopHistory?: ShopRecord[];
+}
+
+export interface ShopRoute {
+  /** Product key -> usual position in the shop (0..1). */
+  items: Record<string, number>;
+  /** Aisle id -> usual position of its first pick-up (0..1). */
+  aisles: Record<string, number>;
+  /** How many shops it was learned from. */
+  shops: number;
+}
+
+export interface ShopRecord {
+  id: string;
+  /** When the shop finished (ISO date-time). */
+  date: string;
+  /** The week it was for (its Monday). */
+  weekStart: string;
+  bought: number;
+  total: number;
+  /** How long it took, if timed. */
+  minutes: number | null;
+  /** Who shopped ('P' or 'R'). */
+  by?: string;
 }
 
 export interface GroceryItem {

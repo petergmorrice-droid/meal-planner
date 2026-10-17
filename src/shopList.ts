@@ -1,6 +1,6 @@
 // The Shop tab's list helpers: one row per product, how much to buy, the week to open on,
 // "2 pints milk" typed into the add box, the list as text, and carrying items to another week.
-import { MealPlan, ShoppingListItem } from './types';
+import { MealPlan, ShoppingListItem, ShopRoute, ShopRecord } from './types';
 import { aggregateIngredients } from './utils/aggregation';
 import { matchProduct, matchProductDetailed, groupingKey, largeUnitQuantity, formatAmount, canonicalUnit, formatUnit } from './shopping';
 import { getCatalog, convertToShoppingQuantity, quantityForAddedItem } from './utils/shoppingConversion';
@@ -29,6 +29,10 @@ export interface AggregatedShoppingListItem {
   checkCupboard?: boolean;
   needsCheck?: boolean;
   quantityNote?: string;
+  /** Marked "out of stock" at the shop (and not ticked). */
+  outOfStock?: boolean;
+  /** Who ticked it. */
+  checkedBy?: string;
 }
 
 /** Same product = same key, whatever it's called ("Chicken breasts" / "chicken breast fillets"). */
@@ -91,6 +95,8 @@ export function aggregateShoppingItems(items: ShoppingListItem[]): AggregatedSho
       parts: groupItems,
       description: desc.join(' · '),
       note: notes.join('; ') || undefined,
+      outOfStock: groupItems.every((i) => i.outOfStock && !i.checked) || undefined,
+      checkedBy: groupItems.find((i) => i.checked && i.checkedBy)?.checkedBy,
       checkCupboard: groupItems.every((i) => i.checkCupboard && i.cupboard !== 'need'),
       needsCheck: groupItems.some((i) => i.needsCheck),
       quantityNote: groupItems.map((i) => i.quantityNote).filter(Boolean).join('; ') || undefined,
@@ -118,8 +124,8 @@ export function partLabel(part: ShoppingListItem): string {
   return part.recipeNames?.length ? `For ${part.recipeNames.join(', ')}` : 'For your meals';
 }
 
-/** Something on this week's list still to buy (not ticked, not "already in the cupboard"). */
-export const isToBuy = (i: ShoppingListItem) => !i.checked && i.cupboard !== 'have';
+/** Something on this week's list still to buy (not ticked, not out of stock, not "already in the cupboard"). */
+export const isToBuy = (i: ShoppingListItem) => !i.checked && !i.outOfStock && i.cupboard !== 'have';
 
 /**
  * The week the Shop tab opens on: the week you're most likely shopping for (this week Mon–Thu,
@@ -281,4 +287,71 @@ export function shopDurationText(ms: number): string | null {
   if (!isFinite(ms) || ms < 60_000 || ms > 4 * 3600_000) return null;
   const mins = Math.round(ms / 60_000);
   return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} hr${mins % 60 ? ` ${mins % 60} min` : ''}`;
+}
+
+// ---------- Learning your route round the shop ----------
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * Learn from one shop: the order things were ticked. Each product and aisle gets a position
+ * (0 = first, 1 = last), averaged with what was learned before. Short shops teach nothing.
+ */
+export function learnRoute(prev: ShopRoute | undefined, ticks: { key: string; aisle: string }[]): ShopRoute | undefined {
+  const seen = new Set<string>();
+  const seq = ticks.filter((t) => (seen.has(t.key) ? false : (seen.add(t.key), true)));
+  if (seq.length < 5) return prev;
+  const pos = (i: number) => (seq.length > 1 ? i / (seq.length - 1) : 0);
+  const blend = (old: number | undefined, now: number) => round3(old === undefined ? now : old * 0.5 + now * 0.5);
+  const items = { ...(prev?.items || {}) };
+  const aisles = { ...(prev?.aisles || {}) };
+  const firstInAisle = new Map<string, number>();
+  seq.forEach((t, i) => {
+    items[t.key] = blend(prev?.items[t.key], pos(i));
+    if (!firstInAisle.has(t.aisle)) firstInAisle.set(t.aisle, i);
+  });
+  for (const [aisle, i] of firstInAisle) aisles[aisle] = blend(prev?.aisles[aisle], pos(i));
+  return { items, aisles, shops: (prev?.shops || 0) + 1 };
+}
+
+/** Aisles in the order you usually reach them (ones never learned keep their usual place after). */
+export function routeAisleOrder<A extends string>(route: ShopRoute | undefined, usual: A[]): A[] | null {
+  if (!route || !route.shops || !Object.keys(route.aisles).length) return null;
+  const learned = usual.filter((a) => route.aisles[a] !== undefined).sort((a, b) => route.aisles[a] - route.aisles[b]);
+  return [...learned, ...usual.filter((a) => route.aisles[a] === undefined)];
+}
+
+/** Items in the order you usually pick them up; new ones after, A–Z. */
+export function sortByRoute<T extends { key: string; name: string }>(items: T[], route: ShopRoute | undefined): T[] {
+  const rank = (t: T) => (route?.items[t.key] ?? Infinity);
+  return [...items].sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+// ---------- Shop history ----------
+
+/** Add a finished shop to the history (newest first, last 20 kept). */
+export function addShopRecord(history: ShopRecord[] | undefined, rec: ShopRecord, keep = 20): ShopRecord[] {
+  return [rec, ...(history || []).filter((r) => r.id !== rec.id)].slice(0, keep);
+}
+
+/** Only shops of this many items count for your best and average time (a quick top-up isn't a fair race). */
+export const BIG_SHOP = 10;
+
+export function shopStats(history: ShopRecord[] | undefined): { best: number | null; average: number | null; timed: number } {
+  const timed = (history || []).filter((r) => r.minutes !== null && r.minutes > 0 && r.bought >= BIG_SHOP);
+  if (!timed.length) return { best: null, average: null, timed: 0 };
+  const mins = timed.map((r) => r.minutes as number);
+  return { best: Math.min(...mins), average: Math.round(mins.reduce((a, b) => a + b, 0) / mins.length), timed: timed.length };
+}
+
+/** "Halfway there!" when the % done passes 25, 50 or 75 (null otherwise). */
+export function milestoneCrossed(before: number, after: number): string | null {
+  if (before < 75 && after >= 75 && after < 100) return 'Three quarters done!';
+  if (before < 50 && after >= 50 && after < 75) return 'Halfway there!';
+  if (before < 25 && after >= 25 && after < 50) return 'A quarter done!';
+  return null;
 }

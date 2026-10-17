@@ -22,6 +22,8 @@ import { CATALOG_VERSION, missingExtraProducts, outdatedDefaults } from './shopp
 
 /** How often to check GitHub for the other phone's changes while the app is open. */
 export const SYNC_POLL_SECONDS = 20;
+/** While shopping mode is open: the other phone's ticks show up within a few seconds. */
+export const FAST_SYNC_SECONDS = 6;
 /** Wait this long after an edit before uploading, so quick taps are sent together. */
 const PUSH_DELAY_MS = 800;
 
@@ -192,6 +194,8 @@ export function useStore() {
     () => (getGistConfig() ? 'loading' : 'idle')
   );
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  // Shopping mode asks for quicker checks, so two people shopping see each other's ticks.
+  const [fastSync, setFastSync] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   // ---- Sync engine (refs so background work always sees the latest data) ----
@@ -318,7 +322,7 @@ export function useStore() {
     void runSync('initial');
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') void runSync('poll');
-    }, SYNC_POLL_SECONDS * 1000);
+    }, (fastSync ? FAST_SYNC_SECONDS : SYNC_POLL_SECONDS) * 1000);
     const onVisible = () => {
       if (document.visibilityState === 'visible') void runSync('focus');
     };
@@ -331,7 +335,7 @@ export function useStore() {
       window.removeEventListener('online', onOnline);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [githubConfig?.gistId, githubConfig?.pat]);
+  }, [githubConfig?.gistId, githubConfig?.pat, fastSync]);
 
   // One-off: add products from newer versions of the built-in product list (spices, herbs...)
   // and update built-in defaults that changed (milk in pints) to the shared grocery list. Runs once per data set; the other phone gets them via sync.
@@ -769,7 +773,10 @@ export function useStore() {
     syncStatus,
     lastSynced,
     syncError,
-    syncPollSeconds: SYNC_POLL_SECONDS,
+    syncPollSeconds: fastSync ? FAST_SYNC_SECONDS : SYNC_POLL_SECONDS,
+    setFastSync,
+    /** Who is using this phone ('P' or 'R'). */
+    currentUser,
     saveGithubConfig,
     createGistFromLocal,
     clearGithubConfig,

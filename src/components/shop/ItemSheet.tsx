@@ -96,6 +96,7 @@ export default function ItemSheet({
   onMove,
   onRemove,
   onManageStaples,
+  onBackInStock,
   onClose,
 }: {
   row: AggregatedShoppingListItem;
@@ -114,6 +115,8 @@ export default function ItemSheet({
   onMove: () => void;
   onRemove: () => void;
   onManageStaples: () => void;
+  /** Clear "out of stock". */
+  onBackInStock?: () => void;
   onClose: () => void;
 }) {
   const [note, setNote] = useState(row.note || '');
@@ -158,6 +161,16 @@ export default function ItemSheet({
         </div>
 
         <div className="overflow-y-auto px-5 py-4 space-y-5">
+          {row.outOfStock && (
+            <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5" data-item-out>
+              <span className="flex-1 text-sm text-amber-950">Out of stock at the shop</span>
+              {onBackInStock && (
+                <button type="button" onClick={onBackInStock} className="shrink-0 text-sm font-semibold text-amber-900 underline cursor-pointer" data-back-in-stock>
+                  Back on the list
+                </button>
+              )}
+            </div>
+          )}
           <section className="space-y-3">
             {row.parts.map((part) => (
               <PartAmount key={part.id} part={part} label={partDetail(part)} onStep={onStep} onSet={onSetAmount} />
