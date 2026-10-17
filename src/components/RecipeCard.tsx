@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Flame, Zap, Leaf, Snowflake, CalendarCheck } from 'lucide-react';
+import { Clock, Flame, Zap, Leaf, Snowflake, CalendarCheck, Star } from 'lucide-react';
 import { Recipe } from '../types';
 import { getRecipeEmojis, getEmojiLabel } from '../utils';
 import {
@@ -114,6 +114,7 @@ export function RecipeCard({
       }`}
     >
       <h3 className="text-[15px] font-semibold text-zinc-900 leading-snug line-clamp-2 break-words">
+        {recipe.favourite && <Star className="inline w-4 h-4 mr-1 -mt-0.5 fill-amber-400 text-amber-500" aria-label="Favourite" />}
         {recipe.name}
         {emojis.length > 0 && (
           <span className="ml-1.5 text-[14px] font-normal whitespace-nowrap select-none" aria-hidden="true">

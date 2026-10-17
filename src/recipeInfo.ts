@@ -139,7 +139,13 @@ export function saveRecipeSort(sort: RecipeSort) {
  * Recipes in the chosen order. "Not had lately": never had first, then the longest since you
  * last had it; anything already planned from today on goes to the end.
  */
-export function sortRecipes(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>): Recipe[] {
+export function sortRecipes(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>, favouritesFirst = false): Recipe[] {
+  const sorted = sortRecipesBy(recipes, sort, histories);
+  if (!favouritesFirst) return sorted;
+  return [...sorted.filter((r) => r.favourite), ...sorted.filter((r) => !r.favourite)];
+}
+
+function sortRecipesBy(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>): Recipe[] {
   const byName = (a: Recipe, b: Recipe) => (a.name || '').localeCompare(b.name || '', 'en-GB', { sensitivity: 'base' });
   const list = [...recipes];
   if (sort === 'added') return list;
@@ -158,6 +164,116 @@ export function sortRecipes(recipes: Recipe[], sort: RecipeSort, histories: Map<
     if (ka !== kb) return ka < kb ? -1 : 1;
     return byName(a, b);
   });
+}
+
+export const FAVOURITES_FIRST_KEY = 'recipe_fav_first';
+export function readFavouritesFirst(): boolean {
+  try { return localStorage.getItem(FAVOURITES_FIRST_KEY) === '1'; } catch { return false; }
+}
+export function saveFavouritesFirst(on: boolean) {
+  try { localStorage.setItem(FAVOURITES_FIRST_KEY, on ? '1' : '0'); } catch { /* per-phone convenience only */ }
+}
+
+/** Search a recipe's name, ingredients, tags, intro and your notes. */
+export function recipeMatchesSearch(recipe: Recipe, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const has = (v?: string) => typeof v === 'string' && v.toLowerCase().includes(q);
+  return has(recipe.name)
+    || (recipe.ingredients || []).some((i) => has(i?.name) || has(i?.note))
+    || (recipe.tags || []).some((t) => has(t))
+    || has(recipe.description)
+    || has(recipe.notes);
+}
+
+export type QuickFilter = 'favourites' | 'not_lately' | 'quick' | 'veggie' | 'ninja' | 'freezer';
+export const QUICK_FILTERS: { id: QuickFilter; label: string }[] = [
+  { id: 'favourites', label: 'Favourites' },
+  { id: 'not_lately', label: 'Not had lately' },
+  { id: 'quick', label: 'Under 30 min' },
+  { id: 'veggie', label: 'Veggie' },
+  { id: 'ninja', label: 'Ninja' },
+  { id: 'freezer', label: 'In the freezer' },
+];
+/** "Not had lately": not in the last 4 weeks and not already planned. */
+export const NOT_LATELY_DAYS = 28;
+
+/** Does a recipe pass every filter button that's switched on? */
+export function matchesQuickFilters(
+  recipe: Recipe,
+  filters: QuickFilter[],
+  ctx: { history?: RecipeHistory; freezer: number; today: string },
+): boolean {
+  return filters.every((f) => {
+    switch (f) {
+      case 'favourites': return !!recipe.favourite;
+      case 'not_lately': {
+        if (ctx.history?.nextPlanned) return false;
+        return !ctx.history?.lastHad || daysBetween(ctx.history.lastHad, ctx.today) >= NOT_LATELY_DAYS;
+      }
+      case 'quick': { const t = totalMinutes(recipe); return t !== null && t <= 30; }
+      case 'veggie': return isVegetarianRecipe(recipe);
+      case 'ninja': return recipeMethods(recipe).includes('ninja');
+      case 'freezer': return ctx.freezer > 0;
+      default: return true;
+    }
+  });
+}
+
+/** Comparable form of a recipe name: case, punctuation and "&"/"and" don't matter. */
+export function normaliseRecipeName(name: string): string {
+  return (name || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\b(the|a|an)\b/g, ' ').replace(/\s+/g, ' ').trim();
+}
+const normaliseUrl = (u?: string) => {
+  if (!u) return '';
+  try { const x = new URL(u.trim()); return (x.hostname.replace(/^www\./, '') + x.pathname.replace(/\/+$/, '')).toLowerCase(); } catch { return ''; }
+};
+/** A recipe already in the book with the same name or from the same web page. */
+export function findDuplicate(recipes: Recipe[], candidate: Recipe): Recipe | undefined {
+  const name = normaliseRecipeName(candidate.name);
+  const url = normaliseUrl(candidate.sourceUrl);
+  return recipes.find((r) => r.id !== candidate.id && (
+    (name && normaliseRecipeName(r.name) === name) || (url && normaliseUrl(r.sourceUrl) === url)
+  ));
+}
+
+/** True when the text is just a web address (so it's a link to import, not a recipe). */
+export function isJustAUrl(text: string): boolean {
+  const t = (text || '').trim();
+  return /^https?:\/\/\S+$/i.test(t);
+}
+
+/** The recipe as plain text for sharing (WhatsApp, a text, an email). */
+export function recipeShareText(
+  recipe: Recipe,
+  opts: { people?: number; method?: CookingMethod; formatAmount: (amount: number, unit?: string) => string; scaleStep?: (step: string, scale: number) => string },
+): string {
+  const base = recipe.servings || 2;
+  const people = opts.people || base;
+  const scale = people / base;
+  const lines: string[] = [recipe.name];
+  const facts: string[] = [`Serves ${people}`];
+  const mins = totalMinutes(recipe);
+  if (mins) facts.push(formatMinutes(mins));
+  lines.push(facts.join(' · '));
+  const intro = recipeIntro(recipe);
+  if (intro) lines.push('', intro);
+  lines.push('', 'Ingredients');
+  for (const ing of recipe.ingredients || []) {
+    const amt = opts.formatAmount((Number(ing.amount) || 0) * scale, ing.unit);
+    const qty = amt ? `${amt}${ing.unit ? ' ' + ing.unit : ''} ` : '';
+    lines.push(`- ${qty}${ing.name}${ing.note ? ', ' + ing.note : ''}`);
+  }
+  const methods = recipeMethods(recipe);
+  const method = opts.method && methods.includes(opts.method) ? opts.method : methods[0];
+  const steps = (method && recipe.methodInstructions?.[method]) || recipe.instructions || [];
+  if (steps.length) {
+    lines.push('', method && methods.length > 1 ? `Method (${METHOD_LABEL[method]})` : 'Method');
+    steps.forEach((s, i) => lines.push(`${i + 1}. ${opts.scaleStep ? opts.scaleStep(s, scale) : s}`));
+  }
+  if ((recipe.notes || '').trim()) lines.push('', `Our notes: ${recipe.notes!.trim()}`);
+  if (recipe.sourceUrl) lines.push('', recipe.sourceUrl);
+  return lines.join('\n');
 }
 
 /** First web address in some pasted text, for "Website" on an imported recipe. */

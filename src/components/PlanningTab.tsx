@@ -38,7 +38,7 @@ import {
   Database,
   Copy
 } from 'lucide-react';
-import { Recipe, MealPlan, DayPlan, PlannedMeal, MealType, BatchItem, ShoppingListItem, PlannedMealSide } from '../types';
+import { Recipe, MealPlan, DayPlan, PlannedMeal, MealType, BatchItem, ShoppingListItem, PlannedMealSide, CookingMethod } from '../types';
 import { 
   DAYS_OF_WEEK, 
   getMonday, 
@@ -59,7 +59,7 @@ import {
 import { RecipeModal } from './CookBookTab';
 import { DayListRow, isLeftoverMeal } from './planner/DayListRow';
 import { RecipeCard, CARD_FIELD_OPTIONS, cardFieldsFromPrefs } from './RecipeCard';
-import { recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, RECIPE_SORTS, todayISO, freezerPortions } from '../recipeInfo';
+import { recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, RECIPE_SORTS, todayISO, freezerPortions, recipeMatchesSearch, totalMinutes, recipeMethods, isVegetarianRecipe, isVeganRecipe, readFavouritesFirst, saveFavouritesFirst } from '../recipeInfo';
 
 interface PlanningTabProps {
   store: any;
@@ -898,26 +898,17 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
 
   const filteredRecipes = useMemo(() => {
     return store.state.recipes.filter((r: Recipe) => {
-      const q = recipeSearch.trim().toLowerCase();
-      const matchesSearch = !q || 
-        r.name.toLowerCase().includes(q) ||
-        (r.description && r.description.toLowerCase().includes(q)) ||
-        r.tags?.some(t => t.toLowerCase().includes(q));
+      const matchesSearch = recipeMatchesSearch(r, recipeSearch);
       const matchesTag = selectedTag === 'all' || r.tags?.includes(selectedTag);
-      const totalTime = (r.prepTime || 0) + (r.cookTime || 0);
-      const matchesTime = 
-        timeFilter === 'all' ? true :
-        timeFilter === 'under20' ? totalTime <= 20 :
-        timeFilter === 'under30' ? totalTime <= 30 :
-        timeFilter === 'under45' ? totalTime <= 45 : true;
-      const methods = r.cookingMethods && r.cookingMethods.length > 0 ? r.cookingMethods : ['ninja', 'oven_hob'];
-      const matchesCooking = cookingFilter === 'all' || methods.includes(cookingFilter);
-      
-      const isVeg = r.isVegetarian || r.tags?.some(t => ['vegetarian', 'vegi', 'veggie'].includes(t.toLowerCase()));
-      const isVegan = r.isVegan || r.tags?.some(t => ['vegan'].includes(t.toLowerCase()));
+      // Recipes with no time written down don't count as quick.
+      const totalTime = totalMinutes(r);
+      const limit = timeFilter === 'under20' ? 20 : timeFilter === 'under30' ? 30 : timeFilter === 'under45' ? 45 : null;
+      const matchesTime = limit === null || (totalTime !== null && totalTime <= limit);
+      // Same as the cards: only appliances the recipe has steps for.
+      const matchesCooking = cookingFilter === 'all' || recipeMethods(r).includes(cookingFilter as CookingMethod);
       const matchesDietary = dietaryFilter === 'all' ? true :
-        dietaryFilter === 'vegetarian' ? isVeg || isVegan :
-        dietaryFilter === 'vegan' ? isVegan : true;
+        dietaryFilter === 'vegetarian' ? isVegetarianRecipe(r) :
+        dietaryFilter === 'vegan' ? isVeganRecipe(r) : true;
 
       return matchesSearch && matchesTag && matchesTime && matchesCooking && matchesDietary;
     });
@@ -928,7 +919,9 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   const recipeHistory = useMemo(() => recipeHistories(store.state.mealPlans, today), [store.state.mealPlans, today]);
   const [recipeSort, setRecipeSortState] = useState<RecipeSort>(readRecipeSort);
   const setRecipeSort = (sort: RecipeSort) => { setRecipeSortState(sort); saveRecipeSort(sort); };
-  const sortedRecipes = useMemo(() => sortRecipes(filteredRecipes, recipeSort, recipeHistory), [filteredRecipes, recipeSort, recipeHistory]);
+  const [favFirst, setFavFirstState] = useState<boolean>(readFavouritesFirst);
+  const setFavFirst = (on: boolean) => { setFavFirstState(on); saveFavouritesFirst(on); };
+  const sortedRecipes = useMemo(() => sortRecipes(filteredRecipes, recipeSort, recipeHistory, favFirst), [filteredRecipes, recipeSort, recipeHistory, favFirst]);
   const cardFields = cardFieldsFromPrefs(prefs);
 
   // Navigate through current & future plans only (strictly NO past weeks)
@@ -1269,6 +1262,10 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                             </button>
                           ))}
                         </div>
+                        <label className="flex items-center gap-2 mt-1.5 px-1 py-1 text-xs font-medium text-zinc-700 cursor-pointer">
+                          <input type="checkbox" checked={favFirst} onChange={(e) => setFavFirst(e.target.checked)} className="rounded border-zinc-300" />
+                          Favourites first
+                        </label>
                       </div>
 
                       <div className="px-1 py-1 mb-1 border-t border-zinc-100">

@@ -109,6 +109,114 @@ async function callGeminiRest(
 }
 
 /**
+ * A request with any parts (text, a photo) and optional tools (e.g. reading a web page).
+ * Returns the answer's text and the whole response (for tool details such as which pages were read).
+ */
+async function callGeminiParts(
+  apiKey: string,
+  parts: any[],
+  options: { systemInstruction?: string; tools?: any[]; temperature?: number; timeoutMs?: number } = {}
+): Promise<{ text: string; response: any }> {
+  let lastError: any = null;
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const payload: any = { contents: [{ parts }] };
+      if (options.systemInstruction) payload.systemInstruction = { parts: [{ text: options.systemInstruction }] };
+      if (options.tools) payload.tools = options.tools;
+      if (options.temperature !== undefined) payload.generationConfig = { temperature: options.temperature };
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), options.timeoutMs || 60000);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(id);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error?.message || `API error (${response.status})`);
+      }
+      const data = await response.json();
+      const text = (data?.candidates?.[0]?.content?.parts || [])
+        .map((p: any) => (typeof p?.text === 'string' ? p.text : ''))
+        .join('')
+        .trim();
+      if (text) return { text, response: data };
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[Gemini REST ${model}] failed:`, err?.message || err);
+    }
+  }
+  throw lastError || new Error('All candidate models failed');
+}
+
+/** Thrown when Gemini can't open a recipe page or read a photo, so the screen can say what to do instead. */
+export class RecipeSourceError extends Error {
+  constructor(public kind: 'page' | 'photo', message: string) { super(message); }
+}
+
+const NO_RECIPE = 'NO_RECIPE';
+const COPY_OUT_RULES = `Copy the recipe out exactly as written, as plain text:
+- the recipe title on the first line
+- servings and prep/cook times if given
+- every ingredient line, one per line, with its quantity exactly as written
+- every method step, in order
+Do not add, change, scale, convert or invent anything. Leave out adverts, stories, comments, nutrition panels and other recipes.
+If there is no recipe, or you cannot read it, reply with exactly ${NO_RECIPE}`;
+
+/** Did the page-reading tool actually open the page? (Gemini may otherwise guess from the address.) */
+function pageWasRead(response: any): boolean {
+  const meta = response?.candidates?.[0]?.urlContextMetadata || response?.candidates?.[0]?.url_context_metadata;
+  const entries: any[] = meta?.urlMetadata || meta?.url_metadata || [];
+  return entries.some((e) => /SUCCESS/i.test(String(e?.urlRetrievalStatus || e?.url_retrieval_status || '')));
+}
+
+/**
+ * Link import, step 1: Gemini opens the recipe page (its URL context tool) and copies the recipe
+ * out as text. Step 2 is the usual exact-copy into fields (parseRecipeApi).
+ */
+export async function readRecipePageApi(url: string): Promise<string> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('GEMINI_API_KEY_MISSING');
+  let result: { text: string; response: any };
+  try {
+    result = await callGeminiParts(apiKey, [{ text: `Open this web page and find the recipe on it.\n${COPY_OUT_RULES}\n\nPage: ${url}` }], {
+      tools: [{ url_context: {} }],
+      temperature: 0,
+    });
+  } catch (err) {
+    console.error('Gemini readRecipePageApi failed:', err);
+    throw geminiFailure(err, 'open that page');
+  }
+  if (!pageWasRead(result.response) || result.text.includes(NO_RECIPE) || result.text.length < 40) {
+    throw new RecipeSourceError('page', "Gemini couldn't read a recipe from that page (some sites block it, or the recipe is behind a login). Open the page, copy the recipe and paste it here instead.");
+  }
+  return result.text;
+}
+
+/** Photo import, step 1: Gemini copies the recipe text from a photo of a cookbook page or a screen. */
+export async function readRecipePhotoApi(base64: string, mimeType: string): Promise<string> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('GEMINI_API_KEY_MISSING');
+  let result: { text: string; response: any };
+  try {
+    result = await callGeminiParts(apiKey, [
+      { inlineData: { mimeType, data: base64 } },
+      { text: `This is a photo of a recipe (a cookbook page, a card or a screen).\n${COPY_OUT_RULES}` },
+    ], { temperature: 0 });
+  } catch (err) {
+    console.error('Gemini readRecipePhotoApi failed:', err);
+    throw geminiFailure(err, 'read the photo');
+  }
+  if (result.text.includes(NO_RECIPE) || result.text.length < 40) {
+    throw new RecipeSourceError('photo', "Gemini couldn't find a recipe in that photo. Try a sharper photo with the whole recipe in view, flat and in good light.");
+  }
+  return result.text;
+}
+
+/**
  * ---------------------------------------------------------
  * HELPER UTILITIES PORTED FROM SERVER FOR CLIENT-SIDE SYNC
  * ---------------------------------------------------------

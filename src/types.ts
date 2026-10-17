@@ -53,6 +53,8 @@ export interface Recipe {
   sourceUrl?: string;
   /** Your own notes on it ("we use half the chilli"), separate from the recipe's intro. */
   notes?: string;
+  /** Starred in the Cookbook. */
+  favourite?: boolean;
   tags: string[];
   cookingMethods?: CookingMethod[];
   isVegetarian?: boolean;

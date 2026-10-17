@@ -4,6 +4,7 @@ import {
   orderedAisles, aislePositions, GROCERY_AISLES,
   recipeMethods, totalMinutes, formatMinutes, recipeHistories, formatAgo, formatPlannedDay, freezerPortions,
   sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe,
+  recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
 } from '../.test-build/app.mjs';
 
 let failures = 0, passes = 0;
@@ -143,6 +144,65 @@ test('website: first link in pasted text, shown as the site name', () => {
 test('intro: the app\'s old filler text is not shown as an intro', () => {
   assert.equal(recipeIntro(R('a', 'A', { description: 'Custom home-cooked meal.' })), '');
   assert.equal(recipeIntro(R('a', 'A', { description: 'A rich, creamy curry.' })), 'A rich, creamy curry.');
+});
+
+// ---------- Cookbook: search, filters, favourites, duplicates, share ----------
+test('search looks in names, ingredients, notes and tags', () => {
+  const r = R('t', 'Chicken tikka masala', { ingredients: [{ id: 'i', name: 'basmati rice', amount: 300, unit: 'g' }, { id: 'j', name: 'ginger', amount: 1, unit: '', note: 'grated' }], notes: 'Kids love it', tags: ['Stovetop'] });
+  for (const q of ['tikka', 'RICE', 'grated', 'kids', 'stovetop', '']) assert.equal(recipeMatchesSearch(r, q), true, q);
+  assert.equal(recipeMatchesSearch(r, 'salmon'), false);
+});
+
+test('filter buttons: quick, veggie, ninja, freezer, favourites, not had lately (and all together)', () => {
+  const today = '2026-10-17';
+  const quick = R('q', 'Omelette', { prepTime: 5, cookTime: 5, isVegetarian: true, favourite: true });
+  const notimes = R('n', 'Salmon');
+  const ninja = R('j', 'Fajitas', { cookingMethods: ['oven_hob', 'ninja'], methodInstructions: { oven_hob: ['Fry.'], ninja: ['Air fry.'] } });
+  const markedOnly = R('m', 'Chilli', { cookingMethods: ['oven_hob', 'ninja'], methodInstructions: { oven_hob: ['Simmer.'] } });
+  const ctx = (h = undefined, freezer = 0) => ({ history: h, freezer, today });
+  assert.equal(matchesQuickFilters(quick, ['quick'], ctx()), true);
+  assert.equal(matchesQuickFilters(notimes, ['quick'], ctx()), false, 'no time written down is not "quick"');
+  assert.equal(matchesQuickFilters(quick, ['veggie', 'quick', 'favourites'], ctx()), true);
+  assert.equal(matchesQuickFilters(ninja, ['ninja'], ctx()), true);
+  assert.equal(matchesQuickFilters(markedOnly, ['ninja'], ctx()), false, 'marked Ninja but no Ninja steps');
+  assert.equal(matchesQuickFilters(markedOnly, ['freezer'], ctx(undefined, 3)), true);
+  assert.equal(matchesQuickFilters(markedOnly, ['freezer'], ctx()), false);
+  assert.equal(matchesQuickFilters(quick, ['not_lately'], ctx()), true, 'never had');
+  assert.equal(matchesQuickFilters(quick, ['not_lately'], ctx({ lastHad: '2026-09-01' })), true, '6 weeks ago');
+  assert.equal(matchesQuickFilters(quick, ['not_lately'], ctx({ lastHad: '2026-10-10' })), false, 'last week');
+  assert.equal(matchesQuickFilters(quick, ['not_lately'], ctx({ lastHad: '2026-08-01', nextPlanned: '2026-10-20' })), false, 'already planned');
+  assert.equal(matchesQuickFilters(notimes, [], ctx()), true, 'no filters: everything');
+});
+
+test('favourites first keeps the chosen order within each group', () => {
+  const list = [R('a', 'Apple pie'), R('b', 'Bolognese', { favourite: true }), R('c', 'Curry'), R('d', 'Dal', { favourite: true })];
+  assert.deepEqual(sortRecipes(list, 'az', new Map(), true).map((r) => r.id), ['b', 'd', 'a', 'c']);
+  assert.deepEqual(sortRecipes(list, 'az', new Map(), false).map((r) => r.id), ['a', 'b', 'c', 'd']);
+});
+
+test('duplicates: same name (ignoring case, punctuation, "&"/"and", "the") or the same web page', () => {
+  assert.equal(normaliseRecipeName('The Chicken & Chorizo Bake!'), normaliseRecipeName('chicken and chorizo bake'));
+  const book = [R('1', 'Chicken tikka masala'), R('2', 'Lemon pasta', { sourceUrl: 'https://www.bbcgoodfood.com/recipes/lemon-pasta/' })];
+  assert.equal(findDuplicate(book, R('x', 'chicken TIKKA masala'))?.id, '1');
+  assert.equal(findDuplicate(book, R('x', 'Zesty spaghetti', { sourceUrl: 'https://bbcgoodfood.com/recipes/lemon-pasta?utm=x' }))?.id, '2');
+  assert.equal(findDuplicate(book, R('x', 'Chicken korma')), undefined);
+  assert.equal(findDuplicate(book, R('1', 'Chicken tikka masala')), undefined, 'not a duplicate of itself');
+});
+
+test('a link on its own is a link import; a recipe with a link in it is not', () => {
+  assert.equal(isJustAUrl('  https://www.bbcgoodfood.com/recipes/x  '), true);
+  assert.equal(isJustAUrl('Lemon pasta https://example.com/x'), false);
+  assert.equal(isJustAUrl('not a link'), false);
+});
+
+test('share text: name, people, ingredients (scaled), method and website', () => {
+  const r = R('s', 'Lemon pasta', {
+    servings: 2, prepTime: 5, cookTime: 10, notes: 'Extra lemon', sourceUrl: 'https://example.com/lemon',
+    ingredients: [{ id: 'a', name: 'spaghetti', amount: 200, unit: 'g' }, { id: 'b', name: 'lemon', amount: 1, unit: '', note: 'zested' }],
+    methodInstructions: { oven_hob: ['Boil the pasta.', 'Add the lemon.'] }, cookingMethods: ['oven_hob'],
+  });
+  const text = recipeShareText(r, { people: 4, formatAmount: (n) => String(n) });
+  assert.equal(text, ['Lemon pasta', 'Serves 4 · 15 min', '', 'Ingredients', '- 400 g spaghetti', '- 2 lemon, zested', '', 'Method', '1. Boil the pasta.', '2. Add the lemon.', '', 'Our notes: Extra lemon', '', 'https://example.com/lemon'].join('\n'));
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

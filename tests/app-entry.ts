@@ -3,4 +3,5 @@ export { orderedAisles, aislePositions, GROCERY_AISLES } from '../src/utils';
 export {
   recipeMethods, totalMinutes, formatMinutes, recipeHistories, formatAgo, formatPlannedDay, freezerPortions,
   sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe,
+  recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
 } from '../src/recipeInfo';

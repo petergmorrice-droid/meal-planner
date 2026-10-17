@@ -7,6 +7,7 @@ import React from "react";
 import { useState } from 'react';
 import { BookOpen, Calendar, ShoppingCart, Snowflake, ChefHat, Sliders } from 'lucide-react';
 import { useStore } from './store';
+import { firstUrl } from './recipeInfo';
 import CookBookTab from './components/CookBookTab';
 import PlanningTab from './components/PlanningTab';
 import ShopTab from './components/ShopTab';
@@ -17,7 +18,21 @@ import SettingsTab from './components/SettingsTab';
 type Tab = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('planning');
+  // A recipe page shared to the app (Android: Share → Meals) arrives as ?share_url / ?share_text.
+  const [sharedRecipe, setSharedRecipe] = useState<string | null>(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const url = q.get('share_url') || '';
+      const text = q.get('share_text') || '';
+      const title = q.get('share_title') || '';
+      if (!url && !text && !title) return null;
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+      return url || firstUrl(text) || [title, text].filter(Boolean).join('\n') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [activeTab, setActiveTab] = useState<Tab>(sharedRecipe ? 'cookbook' : 'planning');
   // "Add to a day…" from a recipe in the Cookbook: Planning opens its day chooser for it.
   const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
   
@@ -39,6 +54,8 @@ export default function App() {
             store={store}
             onNavigateTab={handleNavigateTab}
             onAddToDay={(recipe) => { setPendingAddRecipeId(recipe.id); setActiveTab('planning'); }}
+            startAddWith={sharedRecipe}
+            onStartAddHandled={() => setSharedRecipe(null)}
           />
         )}
         {activeTab === 'planning' && (
