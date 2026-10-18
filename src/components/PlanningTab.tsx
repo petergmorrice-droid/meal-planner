@@ -708,7 +708,9 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   // Move a meal to another day (or swap two days). Leftovers follow their cook.
   const handleMoveMeal = (from: string, to: string) => {
     if (!currentPlan || from === to) return;
-    const r = moveMeal(currentPlan.days, from, to);
+    // The latest days: the panel may have just saved a note or people for this day.
+    const live: MealPlan = (store.getState?.().mealPlans || []).find((p: MealPlan) => p.id === currentPlan.id) || currentPlan;
+    const r = moveMeal(live.days, from, to);
     const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
     offerUndo((r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh);
     writeDays(r.days);

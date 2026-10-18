@@ -366,7 +366,8 @@ export function DaySheet({
         </div>
 
         <div className="overflow-y-auto px-4 py-3 space-y-4">
-          {extra}
+          {/* Save people/notes first, so a button here (tick, start cooking) doesn't lose them. */}
+          {extra && <div onClickCapture={commit}>{extra}</div>}
           {hasRecipe && onOpenRecipe && (
             <button type="button" onClick={() => { commit(); onOpenRecipe(); }} className="text-[15px] font-semibold text-emerald-800 inline-flex items-center gap-1.5 cursor-pointer" data-open-recipe>
               <BookOpen className="w-4 h-4" />Open the recipe

@@ -747,6 +747,8 @@ export function useStore() {
 
   return {
     state,
+    /** The very latest state, including edits made earlier in the same tap (state is a render behind). */
+    getState: () => stateRef.current,
     selectedPlanId,
     setSelectedPlanId,
     addRecipe,
