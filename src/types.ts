@@ -53,6 +53,8 @@ export interface Recipe {
   sourceUrl?: string;
   /** Your own notes on it ("we use half the chilli"), separate from the recipe's intro. */
   notes?: string;
+  /** What you said after cooking it: have it again, or not for us. */
+  verdict?: 'again' | 'not_for_us';
   /** Starred in the Cookbook. */
   favourite?: boolean;
   tags: string[];
@@ -85,6 +87,10 @@ export interface PlannedMeal {
   note?: string; // Optional note for takeout, eating out, or no meal needed
   cooked?: boolean; // Flag when meal has been marked as cooked
   sides?: PlannedMealSide[];
+  /** Portions put in the freezer when this was cooked (so unticking can take them back out). */
+  froze?: { batchId: string; portions: number };
+  /** Portions taken out of the freezer when this was eaten (so unticking can put them back). */
+  tookFromFreezer?: { batchId: string; portions: number; batch?: BatchItem };
 }
 
 export interface DayPlan {
@@ -198,6 +204,8 @@ export interface UserPreferences {
   shopRoute?: ShopRoute;
   /** Your last shops: how many items, how long. Newest first. */
   shopHistory?: ShopRecord[];
+  /** When you usually eat dinner ("19:00"), for "start by" times on the Cook tab. */
+  dinnerTime?: string;
 }
 
 export interface ShopRoute {

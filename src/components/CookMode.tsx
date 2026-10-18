@@ -1,23 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { formatCookingAmount } from '../shopping';
-import { 
-  ChevronLeft, 
-  ChefHat, 
-  Plus, 
-  Minus, 
-  X, 
-  Zap, 
-  Flame, 
-  Timer, 
-  Check, 
-  RotateCcw, 
-  Sparkles, 
-  Clock, 
-  Users,
-  Sun
+import {
+  ChevronLeft, ChevronRight, ChefHat, Plus, Minus, Check, Timer, Type, Volume2, VolumeX,
+  ThumbsUp, ThumbsDown, Snowflake, Refrigerator, NotebookPen,
 } from 'lucide-react';
-import { Recipe, PlannedMeal, MealPlan, CookingMethod } from '../types';
+import { Recipe, PlannedMeal, MealPlan, CookingMethod, Ingredient } from '../types';
 import { scaleRecipeStepQuantities, DAYS_OF_WEEK } from '../utils';
+import { ingredientsForStep, stepMinutes, stepTimerLabel, timeLeft, timerText, freezePortionsFromNote } from '../cookInfo';
+import { useCookTimers } from '../hooks/useCookTimers';
+import { TimerBar } from './cook/TimerBar';
 
 interface CookModeProps {
   store: any;
@@ -26,781 +17,518 @@ interface CookModeProps {
   initialActiveMealId: string;
   onClose: () => void;
   activePlan?: MealPlan;
-  onMarkCooked?: (mealId: string, cooked: boolean) => void;
+  /** Tick the meal as cooked; `froze` says what was put in the freezer from the Finished screen. */
+  onMarkCooked?: (mealId: string, cooked: boolean, extra?: { froze?: { batchId: string; portions: number } }) => void;
   initialServings?: number;
 }
 
-// Extract first duration in minutes found in instructions (e.g. "Simmer for 10-15 minutes" -> 10)
-function extractMinutes(text: string): number | null {
-  const match = text.match(/(\d+)\s*(?:-|to)?\s*(\d+)?\s*(?:minutes|mins|minute|min)\b/i);
-  if (match) {
-    return parseInt(match[1], 10);
-  }
-  return null;
+const METHOD_LABEL: Record<string, string> = { oven_hob: 'Oven/Hob', ninja: 'Ninja' };
+const readPref = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
+const savePref = (k: string, v: boolean) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch { /* per phone */ } };
+
+/** "500 g potatoes", "4 pork sausages", "salt" for an ingredient at this scale. */
+function ingredientLine(ing: Ingredient, scale: number): { amount: string; name: string } {
+  const amount = formatCookingAmount((Number(ing.amount) || 0) * scale, ing.unit);
+  return { amount: amount ? `${amount}${ing.unit ? ` ${ing.unit}` : ''}` : '', name: ing.name };
 }
 
-export default function CookMode({ 
-  store, 
-  dayName, 
-  meals, 
-  initialActiveMealId, 
+/** Keep the screen on while cooking (where the browser allows it). */
+function useScreenAwake() {
+  useEffect(() => {
+    const nav: any = navigator;
+    if (!nav?.wakeLock?.request) return;
+    let lock: any = null;
+    let stopped = false;
+    const grab = async () => {
+      try { if (document.visibilityState === 'visible' && !stopped) lock = await nav.wakeLock.request('screen'); } catch { /* not allowed */ }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void grab(); };
+    void grab();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { stopped = true; document.removeEventListener('visibilitychange', onVisible); try { lock?.release?.(); } catch { /* ignore */ } };
+  }, []);
+}
+
+/**
+ * Cooking mode: one column of steps, starting with "Get everything out". Each step shows what it
+ * uses and can start a named timer. Big steps shows one step at a time in large text with a big
+ * Next button; Read aloud reads each step out. Finishing asks what matters: fridge, freezer, how
+ * it was and a note for next time.
+ */
+export default function CookMode({
+  store,
+  dayName,
+  meals,
+  initialActiveMealId,
   onClose,
   activePlan,
   onMarkCooked,
-  initialServings
+  initialServings,
 }: CookModeProps) {
+  useScreenAwake();
+  const { timers, now, start } = useCookTimers();
   const [activeMealId, setActiveMealId] = useState<string>(initialActiveMealId);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-  const [mobileView, setMobileView] = useState<'ingredients' | 'steps'>('ingredients');
+  const [finished, setFinished] = useState(false);
+  const [big, setBig] = useState(() => readPref('cook_big_steps'));
+  const [readAloud, setReadAloud] = useState(() => readPref('cook_read_aloud'));
 
-  // Screen Wake Lock State & API
-  const [wakeLockActive, setWakeLockActive] = useState<boolean>(false);
-  const [wakeLockSupported, setWakeLockSupported] = useState<boolean>(false);
-  const wakeLockRef = useRef<any>(null);
+  const activeMeal = useMemo(() => meals.find((m) => m.id === activeMealId) || meals[0], [meals, activeMealId]);
+  const recipe = useMemo<Recipe | null>(
+    () => (activeMeal?.recipeId ? store.state.recipes.find((r: Recipe) => r.id === activeMeal.recipeId) || null : null),
+    [store.state.recipes, activeMeal],
+  );
 
-  useEffect(() => {
-    const isSupported = 'wakeLock' in navigator;
-    setWakeLockSupported(isSupported);
-
-    if (isSupported) {
-      let isSubscribed = true;
-
-      const requestLock = async () => {
-        try {
-          if (!wakeLockRef.current && isSubscribed) {
-            const lock = await (navigator as any).wakeLock.request('screen');
-            wakeLockRef.current = lock;
-            setWakeLockActive(true);
-
-            lock.addEventListener('release', () => {
-              if (isSubscribed) {
-                wakeLockRef.current = null;
-                setWakeLockActive(false);
-              }
-            });
-          }
-        } catch (err) {
-          // May fail if tab in background or battery saver
-          if (isSubscribed) setWakeLockActive(false);
-        }
-      };
-
-      requestLock();
-
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible' && isSubscribed) {
-          requestLock();
-        }
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      return () => {
-        isSubscribed = false;
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        if (wakeLockRef.current) {
-          wakeLockRef.current.release().catch(() => {});
-          wakeLockRef.current = null;
-        }
-      };
-    }
-  }, []);
-
-  // Find currently active meal in the list
-  const activeMeal = useMemo(() => {
-    return meals.find(m => m.id === activeMealId) || meals[0];
-  }, [meals, activeMealId]);
-
-  // Find the full recipe details for the active meal
-  const recipe = useMemo<Recipe | null>(() => {
-    if (!activeMeal?.recipeId) return null;
-    return store.state.recipes.find((r: Recipe) => r.id === activeMeal.recipeId) || null;
-  }, [store.state.recipes, activeMeal]);
-
-  // Calculate servings and banner double cooking message for active recipe
-  const servingsData = useMemo(() => {
-    if (!activeMeal || !recipe) return { servings: 2, bannerMessage: null, isDoubleCook: false, isTripleCook: false };
-
-    if (activeMeal.type === 'leftover') {
-      return {
-        servings: activeMeal.servings || 2,
-        bannerMessage: (
-          <span>
-            <strong>Leftover Meal:</strong> This portion should already be prepared in your fridge from earlier this week. No fresh prep required!
-          </span>
-        ),
-        isDoubleCook: false,
-        isTripleCook: false
-      };
-    }
-
-    if (activeMeal.type === 'batch') {
-      return {
-        servings: activeMeal.servings || recipe.servings || 2,
-        bannerMessage: (
-          <span>
-            <strong>Batch Cooking:</strong> This meal is planned for freezer storage. Follow standard portions!
-          </span>
-        ),
-        isDoubleCook: false,
-        isTripleCook: false
-      };
-    }
-
-    // Cooking Fresh (Recipe) -> Check for subsequent leftovers
-    const dayNames = activePlan
-      ? [
-          ...DAYS_OF_WEEK.filter(day => activePlan.days[day]),
-          ...Object.keys(activePlan.days).filter(day => !DAYS_OF_WEEK.includes(day))
-        ]
-      : [];
-    const startIdx = dayNames.indexOf(dayName);
-    let totalServings = activeMeal.servings || 2;
+  // Cook extra for later leftovers ("Cook for 6: extra for Wednesday").
+  const plan = useMemo(() => {
+    if (!activeMeal || !recipe) return { servings: 2, leftoverDays: [] as string[], extra: 0, banner: null as string | null };
+    if (activeMeal.type === 'leftover') return { servings: activeMeal.servings || 2, leftoverDays: [], extra: 0, banner: 'Leftovers: just reheat until piping hot.' };
+    if (activeMeal.type === 'batch') return { servings: activeMeal.servings || 2, leftoverDays: [], extra: 0, banner: 'From the freezer: heat it through until piping hot.' };
+    const days = activePlan ? DAYS_OF_WEEK.filter((d) => activePlan.days[d]) : [];
+    let extra = 0;
     const leftoverDays: string[] = [];
-
-    if (activePlan && startIdx !== -1) {
-      for (let i = startIdx + 1; i < dayNames.length; i++) {
-        const nextDayMeals = activePlan.days[dayNames[i]].meals;
-        let foundNewBatch = false;
-
-        for (const m of nextDayMeals) {
-          if (m.recipeId === activeMeal.recipeId) {
-            if (m.type === 'leftover') {
-              totalServings += (m.servings || 2);
-              leftoverDays.push(dayNames[i]);
-            } else if (m.type === 'recipe') {
-              foundNewBatch = true;
-              break;
-            }
-          }
-        }
-
-        if (foundNewBatch) break;
-      }
+    for (let i = days.indexOf(dayName) + 1; i > 0 && i < days.length; i++) {
+      const m = (activePlan!.days[days[i]].meals || []).find((x) => x.recipeId === activeMeal.recipeId);
+      if (!m) continue;
+      if (m.type === 'leftover') { extra += m.servings || 2; leftoverDays.push(days[i]); } else break;
     }
-
-    const isDoubleCook = leftoverDays.length > 0;
-    const isTripleCook = isDoubleCook && (totalServings / (activeMeal.servings || 2) >= 3);
-
-    let bannerMessage = null;
-    if (isDoubleCook) {
-      const doubleTripleWord = isTripleCook ? 'Triple' : 'Double';
-      bannerMessage = (
-        <span>
-          <strong>Cook {doubleTripleWord}!</strong> Scale ingredients up to prepare portions for leftovers on <strong>{leftoverDays.join(' & ')}</strong>.
-        </span>
-      );
-    }
-
+    const own = activeMeal.servings || 2;
     return {
-      servings: totalServings,
-      bannerMessage,
-      isDoubleCook,
-      isTripleCook,
-      leftoverDays
+      servings: own + extra,
+      leftoverDays,
+      extra,
+      banner: extra ? `Cook for ${own + extra}: ${extra} extra for ${leftoverDays.join(' and ')}.` : null,
     };
   }, [activeMeal, recipe, activePlan, dayName]);
 
   const baseServings = recipe?.servings || 2;
-  const [servings, setServings] = useState<number>(initialServings ?? servingsData.servings);
+  const [servings, setServings] = useState<number>(initialServings ?? plan.servings);
+  useEffect(() => { setServings(initialServings ?? plan.servings); }, [plan.servings, initialServings]);
 
-  // Sync servings state whenever the active meal changes or initialServings updates
-  useEffect(() => {
-    setServings(initialServings ?? servingsData.servings);
-  }, [servingsData, initialServings]);
+  const methods = (recipe?.cookingMethods && recipe.cookingMethods.length ? recipe.cookingMethods : ['oven_hob']) as CookingMethod[];
+  // Start on the appliance you said you prefer, when the recipe has steps for it.
+  const preferred = store.state.preferences?.preferredCookingMethod;
+  const firstMethod = (preferred && preferred !== 'all' && methods.includes(preferred) ? preferred : methods[0]) as CookingMethod;
+  const [method, setMethod] = useState<CookingMethod>(firstMethod);
+  useEffect(() => { setMethod(firstMethod); }, [recipe?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Handle selected cooking method
-  const defaultMethod = useMemo<CookingMethod>(() => {
-    if (recipe?.cookingMethods && recipe.cookingMethods.length > 0) {
-      return recipe.cookingMethods[0];
-    }
-    return 'oven_hob';
-  }, [recipe]);
-
-  const [selectedCookingMethod, setSelectedCookingMethod] = useState<CookingMethod>(defaultMethod);
-
-  // Sync cooking method whenever the active meal/recipe changes
-  useEffect(() => {
-    setSelectedCookingMethod(defaultMethod);
-  }, [defaultMethod]);
-
-  const activeInstructions = useMemo<string[]>(() => {
+  const instructions = useMemo<string[]>(() => {
     if (!recipe) return [];
-    if (recipe.methodInstructions && selectedCookingMethod && recipe.methodInstructions[selectedCookingMethod]) {
-      return recipe.methodInstructions[selectedCookingMethod]!;
-    }
-    return recipe.instructions || [];
-  }, [recipe, selectedCookingMethod]);
+    return recipe.methodInstructions?.[method] || recipe.instructions || [];
+  }, [recipe, method]);
 
-  const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
-  const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
+  // Step 0 is "Get everything out"; the recipe's steps follow.
+  const stepCount = instructions.length + 1;
+  const [step, setStep] = useState(0);
+  const [ticked, setTicked] = useState<Record<string, boolean>>({});
+  useEffect(() => { setTicked({}); setStep(0); }, [activeMealId, method]);
 
-  // Reset checked ingredients and step index on meal change
+  const scale = servings / baseServings;
+  const prep = (recipe?.methodPrepTime?.[method] ?? recipe?.prepTime ?? 0) as number;
+  const cook = (recipe?.methodCookTime?.[method] ?? recipe?.cookTime ?? 0) as number;
+  const ingredients = recipe?.ingredients || [];
+  const tickedCount = ingredients.filter((i, idx) => ticked[i.id || String(idx)]).length;
+
+  // Keep the current step in view in the list.
+  const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    setCheckedIngredients({});
-    setActiveStepIndex(0);
-  }, [activeMealId]);
+    if (big) return;
+    const el = listRef.current?.querySelector(`[data-step="${step}"]`) as HTMLElement | null;
+    el?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  }, [step, big]);
+
+  // Read each step out as you get to it.
+  const stepText = (i: number) => {
+    if (i === 0) return `Get everything out. ${ingredients.map((ing) => { const l = ingredientLine(ing, scale); return `${l.amount} ${l.name}`.trim(); }).join(', ')}.`;
+    return scaleRecipeStepQuantities(instructions[i - 1] || '', ingredients, scale);
+  };
+  useEffect(() => {
+    const synth: SpeechSynthesis | undefined = (window as any).speechSynthesis;
+    if (!readAloud || !synth || finished) return;
+    try {
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(i18nStep(step, stepCount, stepText(step)));
+      u.lang = 'en-GB';
+      u.rate = 0.95;
+      synth.speak(u);
+    } catch { /* no speech on this device */ }
+  }, [readAloud, step, method, activeMealId, finished]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { try { (window as any).speechSynthesis?.cancel(); } catch { /* ignore */ } }, []);
 
   if (!activeMeal || !recipe) {
     return (
       <div className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-12 h-12 rounded-xl bg-zinc-100 flex items-center justify-center mb-4 text-zinc-400">
-          <ChefHat className="w-6 h-6" />
-        </div>
-        <h3 className="font-semibold text-sm text-zinc-900">No Recipe Data</h3>
-        <p className="text-xs text-zinc-500 mt-1 max-w-sm">
-          Could not find recipe details. Try closing and opening again.
-        </p>
-        <button 
-          onClick={onClose}
-          className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl"
-        >
-          Close
-        </button>
+        <ChefHat className="w-8 h-8 text-zinc-400 mb-3" />
+        <h3 className="font-semibold text-zinc-900">Couldn't find this recipe</h3>
+        <button onClick={onClose} className="mt-4 px-4 py-2 bg-zinc-900 text-white text-sm font-semibold rounded-xl">Close</button>
       </div>
     );
   }
 
-  const scale = servings / baseServings;
+  const next = () => (step >= stepCount - 1 ? setFinished(true) : setStep((s) => s + 1));
+  const back = () => setStep((s) => Math.max(0, s - 1));
 
-  const toggleIngredient = (id: string) => {
-    setCheckedIngredients(prev => ({ ...prev, [id]: !prev[id] }));
+  /** Timer button for a step (or the running timer, if there is one). */
+  const stepTimer = (text: string, large = false) => {
+    const minutes = stepMinutes(text);
+    if (!minutes) return null;
+    const label = stepTimerLabel(text);
+    const running = timers.find((t) => t.label === label && t.recipe === recipe.name);
+    if (running) {
+      return (
+        <span className={`inline-flex items-center gap-1.5 rounded-xl px-3 ${large ? 'py-2.5 text-lg' : 'py-1.5 text-sm'} font-semibold ${running.state === 'ringing' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-50 text-emerald-800'}`} data-step-timer-running>
+          <Timer className="w-4 h-4" />{running.state === 'ringing' ? 'Done!' : timerText(timeLeft(running, now))}
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); start(label, minutes, recipe.name); }}
+        className={`inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white text-emerald-800 font-semibold cursor-pointer active:bg-emerald-50 ${large ? 'px-4 py-3 text-lg' : 'px-3 py-1.5 text-sm'}`}
+        data-start-timer={minutes}
+      >
+        <Timer className={large ? 'w-5 h-5' : 'w-4 h-4'} /> Start {minutes} min timer
+      </button>
+    );
   };
 
-  const currentPrepTime = recipe.methodPrepTime?.[selectedCookingMethod] ?? recipe.prepTime ?? 10;
-  const currentCookTime = recipe.methodCookTime?.[selectedCookingMethod] ?? recipe.cookTime ?? 20;
+  const needs = (text: string, large = false) => {
+    const used = ingredientsForStep(text, ingredients);
+    if (!used.length) return null;
+    return (
+      <div className={`flex flex-wrap gap-1.5 ${large ? 'mt-4' : 'mt-2'}`} data-step-needs>
+        {used.map((ing, i) => {
+          const l = ingredientLine(ing, scale);
+          return (
+            <span key={ing.id || i} className={`rounded-lg bg-amber-50 border border-amber-200 text-amber-950 ${large ? 'px-3 py-1.5 text-lg' : 'px-2 py-0.5 text-sm'}`}>
+              {l.amount && <strong className="font-semibold">{l.amount} </strong>}{l.name}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const checklist = (large = false) => (
+    <ul className={`divide-y divide-zinc-100 ${large ? 'mt-3' : 'mt-2'}`} data-get-out>
+      {ingredients.map((ing, idx) => {
+        const key = ing.id || String(idx);
+        const on = !!ticked[key];
+        const l = ingredientLine(ing, scale);
+        return (
+          <li key={key}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setTicked((t) => ({ ...t, [key]: !t[key] })); }}
+              aria-pressed={on}
+              className={`w-full text-left flex items-start gap-3 cursor-pointer ${large ? 'py-3' : 'py-2'}`}
+            >
+              <span className={`mt-0.5 rounded-md border flex items-center justify-center shrink-0 ${large ? 'w-7 h-7' : 'w-5 h-5'} ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-300 bg-white'}`}>
+                {on && <Check className="w-3.5 h-3.5" />}
+              </span>
+              <span className={`min-w-0 flex-1 leading-snug ${large ? 'text-xl' : 'text-[15px]'} ${on ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}>
+                {l.amount && <span className="font-semibold tabular-nums">{l.amount} </span>}{l.name}
+                {ing.note && <span className={`block ${large ? 'text-base' : 'text-[13px]'} ${on ? 'text-zinc-400' : 'text-zinc-500'}`}>{ing.note}</span>}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
-    <div id="cook-mode-overlay" className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col overflow-hidden animate-in fade-in duration-200">
-      
-      {/* Immersive Celebratory Success Dialog */}
-      {isCompleted && (
-        <div className="absolute inset-0 z-50 bg-white flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95 duration-200 select-none">
-          <div className="max-w-md w-full flex flex-col items-center">
-            <div className="w-20 h-20 rounded-3xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-6 animate-bounce">
-              <ChefHat className="w-10 h-10 text-emerald-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-zinc-900">Cooking Finished! 🍲</h2>
-            <p className="text-sm text-zinc-500 mt-3 max-w-sm leading-relaxed">
-              Fantastic work! You have successfully prepared <strong>{recipe.name}</strong> for <strong>{dayName}</strong>. Ready to serve {servings} {servings === 1 ? 'portion' : 'portions'}.
-            </p>
-            <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 mt-6 w-full text-left flex items-start gap-3">
-              <Sparkles className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-xs font-semibold text-zinc-950 uppercase tracking-wider">Chef Tip</h4>
-                <p className="text-xs text-zinc-600 mt-1 leading-relaxed">
-                  If you scaled up to cook extra for leftovers, allow the additional portions to cool fully before storing them in airtight containers inside the fridge!
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (onMarkCooked && activeMeal?.id) {
-                  onMarkCooked(activeMeal.id, true);
-                }
-                onClose();
-              }}
-              className="mt-8 px-6 py-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Check className="w-4 h-4" />
-              <span>Mark as Cooked & Return</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-2.5 px-6 py-2 w-full text-zinc-500 hover:text-zinc-800 text-xs font-medium cursor-pointer transition-colors"
-            >
-              Close without marking cooked
-            </button>
-          </div>
-        </div>
+    <div id="cook-mode-overlay" className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col overflow-hidden animate-in fade-in duration-200" data-cook-mode>
+      {finished && (
+        <FinishedScreen
+          store={store}
+          recipe={recipe}
+          meal={activeMeal}
+          dayName={dayName}
+          servings={servings}
+          plannedMeal={!!onMarkCooked && dayName !== 'Cookbook'}
+          fridge={plan.extra > 0 ? { portions: plan.extra, days: plan.leftoverDays } : null}
+          onBack={() => setFinished(false)}
+          onDone={(result) => {
+            if (result.markCooked && onMarkCooked) onMarkCooked(activeMeal.id, true, { froze: result.froze });
+            onClose();
+          }}
+        />
       )}
 
-      {/* Header based on Cookbook / Planner / Shop styling */}
-      <header className="bg-white border-b border-zinc-200/80 px-4 sm:px-5 py-3 shrink-0 relative z-40">
-        <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
-          
-          {/* Back Action & Context */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-zinc-500 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 rounded-full transition-all cursor-pointer shadow-3xs"
-              title="Exit Cook Mode"
-            >
-              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 block">
-                  {dayName === 'Cookbook' ? 'Cookbook' : `${dayName}`} Mode
-                </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-100 uppercase tracking-wider shrink-0">
-                  Active Cook
-                </span>
-              </div>
-              <h2 className="text-sm sm:text-base font-bold text-zinc-900 truncate leading-tight mt-0.5">
-                {recipe.name}
-              </h2>
-            </div>
+      {/* Header: the recipe, who for, times; method, big steps, read aloud */}
+      <header className="bg-white border-b border-zinc-200 px-3 pt-2.5 pb-2 shrink-0">
+        <div className="max-w-2xl mx-auto flex items-center gap-2">
+          <button type="button" onClick={onClose} className="w-10 h-10 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-600 shrink-0 cursor-pointer" aria-label="Leave cooking mode" data-cook-close>
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold text-zinc-900 truncate leading-tight" data-cook-title>{recipe.name}</h2>
+            <p className="text-xs text-zinc-500 truncate" data-cook-times>
+              {prep ? `Prep ${prep}` : ''}{prep && cook ? ' · ' : ''}{cook ? `cook ${cook}` : ''}{prep || cook ? ' min' : ''}{dayName && dayName !== 'Cookbook' ? ` · ${dayName}` : ''}
+            </p>
           </div>
-
-          {/* Cooking Method / Servings / Wake Lock Controls */}
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 ml-auto sm:ml-0">
-            {/* Screen Wake Lock Status Indicator (Non-interactive, Always on by default) */}
-            {wakeLockActive && (
-              <div 
-                className="flex items-center gap-1.5 px-1 py-1.5 text-zinc-500 animate-pulse"
-                title="Screen stay-awake is active automatically during cooking mode"
-              >
-                <Sun className="w-3.5 h-3.5 text-amber-500" />
-                <span className="text-[11px] font-semibold text-zinc-500 lowercase">screen awake active</span>
-              </div>
-            )}
-
-            {/* Prep/Cook Timing Badges */}
-            <div className="hidden md:flex items-center gap-1.5 mr-1">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 bg-zinc-50 border border-zinc-200/60 rounded-xl shadow-3xs">
-                <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Prep: {currentPrepTime}m</span>
-              </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 bg-zinc-50 border border-zinc-200/60 rounded-xl shadow-3xs">
-                <Timer className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Cook: {currentCookTime}m</span>
-              </span>
-            </div>
-
-            {/* Selected Cooking Method Switcher */}
-            {recipe.cookingMethods && recipe.cookingMethods.length > 1 && (
-              <div className="flex items-center bg-zinc-100/80 p-0.5 rounded-xl border border-zinc-200 shrink-0">
-                {recipe.cookingMethods.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCookingMethod(m);
-                      setActiveStepIndex(0);
-                    }}
-                    className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
-                      selectedCookingMethod === m
-                        ? 'bg-white text-zinc-900 shadow-3xs font-extrabold border border-zinc-200/30'
-                        : 'text-zinc-500 hover:text-zinc-900'
-                    }`}
-                  >
-                    {m === 'ninja' ? 'Combi' : m === 'oven_hob' ? 'Oven/Hob' : 'Slow'}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Contextual Double/Triple Cook Badge next to portion counter */}
-            {servingsData.isDoubleCook && (
-              <span className="hidden sm:inline-flex items-center px-2.5 py-1 text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200/60 rounded-xl shadow-3xs shrink-0 select-none">
-                <span>
-                  <strong>Cook {servingsData.isTripleCook ? 'Triple' : 'Double'}:</strong> {servingsData.servings} portions (extra for {servingsData.leftoverDays.join(' & ')})
-                </span>
-              </span>
-            )}
-
-            {/* Dynamic Servings Controls */}
-            <div className="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded-xl p-1 shrink-0 shadow-3xs">
-              <button
-                type="button"
-                onClick={() => setServings(prev => Math.max(1, prev - 1))}
-                className="w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-zinc-900 rounded-lg hover:bg-zinc-200/60 transition-colors cursor-pointer"
-                title="Decrease portions"
-              >
-                <Minus className="w-3 h-3" />
-              </button>
-              <span className="text-xs font-bold text-zinc-800 px-1.5 min-w-[24px] text-center font-mono">
-                {servings}p
-              </span>
-              <button
-                type="button"
-                onClick={() => setServings(prev => Math.min(24, prev + 1))}
-                className="w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-zinc-900 rounded-lg hover:bg-zinc-200/60 transition-colors cursor-pointer"
-                title="Increase portions"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
+          <div className="flex items-center shrink-0 rounded-xl border border-zinc-200 bg-zinc-50" data-cook-people>
+            <button type="button" onClick={() => setServings((n) => Math.max(1, n - 1))} className="w-9 h-10 flex items-center justify-center text-zinc-600 cursor-pointer" aria-label="One fewer"><Minus className="w-4 h-4" /></button>
+            <span className="text-sm font-semibold text-zinc-900 whitespace-nowrap tabular-nums" data-cook-servings>for {servings}</span>
+            <button type="button" onClick={() => setServings((n) => Math.min(24, n + 1))} className="w-9 h-10 flex items-center justify-center text-zinc-600 cursor-pointer" aria-label="One more"><Plus className="w-4 h-4" /></button>
           </div>
-
         </div>
+        <div className="max-w-2xl mx-auto flex items-center gap-2 mt-2">
+          {methods.length > 1 && (
+            <div className="flex items-center bg-zinc-100 p-0.5 rounded-xl border border-zinc-200" data-cook-method>
+              {methods.map((m) => (
+                <button key={m} type="button" onClick={() => setMethod(m)} aria-pressed={method === m}
+                  className={`px-3 py-1.5 text-sm font-semibold rounded-lg cursor-pointer ${method === m ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-500'}`}>
+                  {METHOD_LABEL[m] || m}
+                </button>
+              ))}
+            </div>
+          )}
+          <span className="ml-auto flex items-center gap-1.5">
+            <button type="button" onClick={() => { const v = !big; setBig(v); savePref('cook_big_steps', v); }} aria-pressed={big}
+              className={`h-9 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${big ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`} data-cook-big>
+              <Type className="w-4 h-4" /> Big steps
+            </button>
+            <button type="button" onClick={() => { const v = !readAloud; setReadAloud(v); savePref('cook_read_aloud', v); if (!v) { try { (window as any).speechSynthesis?.cancel(); } catch { /* ignore */ } } }} aria-pressed={readAloud}
+              className={`h-9 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${readAloud ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`} data-cook-read aria-label="Read the steps aloud">
+              {readAloud ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />} Read
+            </button>
+          </span>
+        </div>
+        {meals.length > 1 && (
+          <div className="max-w-2xl mx-auto flex items-center gap-1.5 mt-2 overflow-x-auto">
+            {meals.map((m) => (
+              <button key={m.id} type="button" onClick={() => setActiveMealId(m.id)}
+                className={`px-3 py-1.5 text-sm font-semibold rounded-lg border shrink-0 cursor-pointer ${m.id === activeMealId ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-200 text-zinc-700'}`}>
+                {m.name.replace(/^(Leftovers?|Batch):\s*/i, '')}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
-      {/* Header Tabs for Multiple Cooking Meals on Same Day */}
-      {meals.length > 1 && (
-        <div className="bg-white border-b border-zinc-100 px-4 py-1.5 shrink-0 z-30">
-          <div className="max-w-6xl mx-auto w-full flex items-center gap-2 overflow-x-auto scrollbar-none py-0.5">
-            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider shrink-0 mr-1">Meals Today:</span>
-            {meals.map((m) => {
-              const isSelected = m.id === activeMealId;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveMealId(m.id);
-                  }}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all shrink-0 cursor-pointer ${
-                    isSelected
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs font-bold'
-                      : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600 hover:text-zinc-900'
-                  }`}
-                >
-                  {m.name.replace(/^Leftovers?:\s*/i, '')}
-                </button>
-              );
-            })}
+      {(plan.banner || (activeMeal.sides && activeMeal.sides.length > 0)) && (
+        <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-950" data-cook-banner>
+          <div className="max-w-2xl mx-auto space-y-0.5">
+            {plan.banner && <p className="font-semibold">{plan.banner}</p>}
+            {activeMeal.sides && activeMeal.sides.length > 0 && <p>With: {activeMeal.sides.map((s) => s.name).join(', ')}</p>}
           </div>
         </div>
       )}
 
-      {/* Main Responsive Body Layout */}
-      <div className="flex-1 overflow-hidden flex flex-col md:flex-row max-w-6xl mx-auto w-full">
-        
-        {/* Mobile View Toggle Tabs (Only visible on mobile screens) */}
-        <div className="block md:hidden bg-white border-b border-zinc-100 px-4 py-2 shrink-0 z-20">
-          <div className="flex bg-zinc-100 p-0.5 rounded-xl border border-zinc-200/80">
-            <button
-              type="button"
-              onClick={() => setMobileView('ingredients')}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer text-center ${
-                mobileView === 'ingredients'
-                  ? 'bg-white text-zinc-900 shadow-2xs font-bold'
-                  : 'text-zinc-500 hover:text-zinc-900'
-              }`}
-            >
-              Ingredients ({recipe.ingredients.length})
+      <TimerBar />
+
+      {big ? (
+        // ---------- Big steps: one at a time, large text, the lower part of the screen is Next ----------
+        <div className="flex-1 flex flex-col min-h-0" data-big-step={step}>
+          <div className="flex-1 overflow-y-auto px-5 pt-4 pb-3">
+            <div className="max-w-2xl mx-auto">
+              <p className="text-sm font-semibold text-zinc-500 mb-2">{step === 0 ? 'First' : `Step ${step} of ${stepCount - 1}`}</p>
+              {step === 0 ? (
+                <>
+                  <h3 className="text-3xl font-bold text-zinc-900 leading-tight">Get everything out</h3>
+                  <p className="text-base text-zinc-500 mt-1">{tickedCount} of {ingredients.length} out</p>
+                  {checklist(true)}
+                </>
+              ) : (
+                <>
+                  <p className="text-[28px] leading-snug font-semibold text-zinc-900" data-big-text>{stepText(step)}</p>
+                  {needs(instructions[step - 1], true)}
+                  <div className="mt-5">{stepTimer(instructions[step - 1], true)}</div>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0 flex gap-2 px-3 pb-3 pt-2 bg-[#fafafa]" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+            <button type="button" onClick={back} disabled={step === 0} className="w-20 rounded-2xl border border-zinc-300 bg-white text-zinc-700 flex items-center justify-center disabled:opacity-30 cursor-pointer" aria-label="Back a step" data-big-back>
+              <ChevronLeft className="w-7 h-7" />
             </button>
-            <button
-              type="button"
-              onClick={() => setMobileView('steps')}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer text-center ${
-                mobileView === 'steps'
-                  ? 'bg-white text-zinc-900 shadow-2xs font-bold'
-                  : 'text-zinc-500 hover:text-zinc-900'
-              }`}
-            >
-              Cooking Steps ({activeInstructions.length})
+            <button type="button" onClick={next} className={`flex-1 h-[30vh] min-h-[140px] rounded-2xl text-white text-2xl font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] ${step >= stepCount - 1 ? 'bg-emerald-600' : 'bg-zinc-900'}`} data-big-next>
+              {step >= stepCount - 1 ? 'Finished' : 'Next'} <ChevronRight className="w-8 h-8" />
             </button>
           </div>
         </div>
-
-        {/* Panel 1: Ingredients Checklist (visible on desktop or if mobileView === 'ingredients') */}
-        <div className={`${mobileView === 'ingredients' ? 'flex' : 'hidden md:flex'} md:w-80 lg:w-96 border-r border-zinc-200/60 bg-white flex-col h-full overflow-hidden shrink-0`}>
-          <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/30">
-            <h3 className="font-semibold text-xs uppercase tracking-wider text-zinc-400">
-              Ingredients
-            </h3>
-            <button
-              type="button"
-              onClick={() => setCheckedIngredients({})}
-              className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer"
-            >
-              Reset Checklist
-            </button>
-          </div>
-          
-          {servingsData.bannerMessage && (
-            <div className="p-4 bg-amber-50/60 border-b border-amber-100/70 text-amber-900 text-xs leading-relaxed flex items-start gap-2 shrink-0">
-              <div>{servingsData.bannerMessage}</div>
-            </div>
-          )}
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {recipe.ingredients.map((ing, idx) => {
-              const formattedAmount = formatCookingAmount(ing.amount * scale, ing.unit);
-              const isChecked = checkedIngredients[ing.id] || false;
-
-              return (
-                <label
-                  key={ing.id || idx}
-                  className={`flex items-start gap-3 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
-                    isChecked
-                      ? 'bg-emerald-50/30 border-emerald-100 text-zinc-400'
-                      : 'bg-white hover:bg-zinc-50 border-zinc-100 text-zinc-800'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={() => toggleIngredient(ing.id)}
-                    className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer mt-0.5"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <span className={`text-sm font-semibold leading-relaxed ${isChecked ? 'line-through text-zinc-400' : 'text-zinc-800'}`}>
-                      {ing.name}
-                    </span>
-                    {ing.note && (
-                      <span className={`text-sm leading-relaxed ${isChecked ? 'text-zinc-400' : 'text-zinc-500'}`}>, {ing.note}</span>
-                    )}
-                    {ing.amount > 0 && (
-                      <span className="text-xs font-mono text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded ml-2 font-bold whitespace-nowrap">
-                        {formattedAmount} {ing.unit}
+      ) : (
+        // ---------- All the steps in one column ----------
+        <>
+          <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3">
+            <div className="max-w-2xl mx-auto space-y-2.5">
+              <section
+                data-step={0}
+                onClick={() => setStep(0)}
+                className={`rounded-2xl border p-4 cursor-pointer ${step === 0 ? 'bg-white border-zinc-900 ring-1 ring-zinc-900' : 'bg-white border-zinc-200'}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-base font-bold text-zinc-900">Get everything out</h3>
+                  <span className="text-sm text-zinc-500 tabular-nums">{tickedCount} of {ingredients.length}</span>
+                </div>
+                {checklist()}
+              </section>
+              {instructions.map((text, i) => {
+                const n = i + 1;
+                const active = n === step;
+                const passed = n < step;
+                return (
+                  <section
+                    key={i}
+                    data-step={n}
+                    onClick={() => setStep(n)}
+                    className={`rounded-2xl border p-4 cursor-pointer ${active ? 'bg-white border-zinc-900 ring-1 ring-zinc-900' : passed ? 'bg-zinc-50 border-zinc-200 opacity-60' : 'bg-white border-zinc-200'}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${active ? 'bg-zinc-900 text-white' : passed ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'}`}>
+                        {passed ? <Check className="w-4 h-4" /> : n}
                       </span>
-                    )}
-                  </div>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Panel 2: Cooking Steps List (visible on desktop or if mobileView === 'steps') */}
-        <div className={`${mobileView === 'steps' ? 'flex' : 'hidden md:flex'} flex-1 flex-col h-full bg-[#fafafa] overflow-hidden`}>
-          
-          {/* Progress Indicators & Double Leftovers Notice */}
-          <div className="p-4 bg-white border-b border-zinc-100 space-y-3 shrink-0">
-            
-            {activeMeal.sides && activeMeal.sides.length > 0 && (
-              <div className="bg-indigo-50 text-indigo-950 px-3.5 py-2.5 rounded-xl border border-indigo-200/60 text-xs leading-relaxed flex items-start gap-2.5 shadow-2xs animate-in slide-in-from-top-1">
-                <span className="text-base shrink-0">🥗</span>
-                <div>
-                  <strong>Cook Side Dish:</strong> This meal is planned with side dish{activeMeal.sides.length === 1 ? '' : 'es'} that need to be prepared: <strong>{activeMeal.sides.map(s => `${s.name} (${s.amount}${s.unit})`).join(', ')}</strong>.
-                </div>
-              </div>
-            )}
-
-            {/* Stepper Progress Bar */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold text-zinc-600">
-                <span>Cooking Progress</span>
-                <span className="font-mono">
-                  {Math.round(((activeStepIndex + 1) / activeInstructions.length) * 100)}%
-                </span>
-              </div>
-              <div className="h-2 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/50">
-                <div
-                  className="h-full bg-indigo-600 rounded-full transition-all duration-300"
-                  style={{ width: `${((activeStepIndex + 1) / activeInstructions.length) * 100}%` }}
-                />
-              </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-[17px] leading-relaxed ${active ? 'text-zinc-950 font-semibold' : 'text-zinc-700'}`}>{scaleRecipeStepQuantities(text, ingredients, scale)}</p>
+                        {needs(text)}
+                        {stepMinutes(text) && <div className="mt-2.5">{stepTimer(text)}</div>}
+                      </div>
+                    </div>
+                  </section>
+                );
+              })}
+              {instructions.length === 0 && <p className="text-sm text-zinc-500 px-1">This recipe has no steps yet.</p>}
             </div>
-
           </div>
-
-          {/* Stepper Steps Area */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 md:p-6 space-y-4">
-            {activeInstructions.map((step, idx) => {
-              const isActive = idx === activeStepIndex;
-              const isPassed = idx < activeStepIndex;
-              const stepTimerMinutes = extractMinutes(step);
-              const scaledStep = scaleRecipeStepQuantities(step, recipe.ingredients, scale);
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() => setActiveStepIndex(idx)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${
-                    isActive
-                      ? 'bg-white border-indigo-600 shadow-xs ring-1 ring-indigo-600'
-                      : isPassed
-                      ? 'bg-zinc-50/50 border-zinc-200/60 opacity-50'
-                      : 'bg-white border-zinc-200/80 hover:border-zinc-300 opacity-80'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    
-                    {/* Circle step badge */}
-                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                      isActive 
-                        ? 'bg-indigo-600 text-white shadow-xs' 
-                        : isPassed 
-                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200/40' 
-                        : 'bg-zinc-100 text-zinc-500 border border-zinc-200/50'
-                    }`}>
-                      {isPassed ? '✓' : idx + 1}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm sm:text-base leading-relaxed ${
-                        isActive 
-                          ? 'text-zinc-950 font-semibold' 
-                          : 'text-zinc-600'
-                      }`}>
-                        {scaledStep}
-                      </p>
-
-                      {/* Display timer inside the step details if time matches! */}
-                      {stepTimerMinutes && (
-                        <div className="mt-1">
-                          <CookingTimer 
-                            key={`${selectedCookingMethod}-${idx}-${stepTimerMinutes}`} 
-                            durationMinutes={stepTimerMinutes} 
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Stepper Controls bottom panel */}
-          <div className="p-4 border-t border-zinc-200 bg-white flex items-center justify-between shrink-0 z-30 shadow-md">
-            <button
-              type="button"
-              disabled={activeStepIndex === 0}
-              onClick={() => setActiveStepIndex(prev => Math.max(0, prev - 1))}
-              className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
-                activeStepIndex === 0
-                  ? 'text-zinc-300 border-zinc-100 bg-zinc-50 cursor-not-allowed'
-                  : 'text-zinc-700 hover:bg-zinc-50 bg-white border-zinc-200 shadow-2xs'
-              }`}
-            >
-              Previous Step
+          <div className="shrink-0 border-t border-zinc-200 bg-white px-3 py-2.5 flex items-center gap-3" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+            <button type="button" onClick={back} disabled={step === 0} className="h-12 px-4 rounded-xl border border-zinc-300 text-zinc-700 font-semibold disabled:opacity-30 cursor-pointer" data-cook-back>Back</button>
+            <span className="flex-1 text-center text-sm text-zinc-500 tabular-nums" data-cook-step>{step === 0 ? 'Get everything out' : `Step ${step} of ${stepCount - 1}`}</span>
+            <button type="button" onClick={next} className={`h-12 px-6 rounded-xl text-white font-semibold cursor-pointer ${step >= stepCount - 1 ? 'bg-emerald-600' : 'bg-zinc-900'}`} data-cook-next>
+              {step >= stepCount - 1 ? 'Finished' : 'Next'}
             </button>
-            
-            <div className="text-xs font-bold text-zinc-500 font-mono">
-              {activeStepIndex + 1} / {activeInstructions.length}
-            </div>
-
-            {activeStepIndex === activeInstructions.length - 1 ? (
-              <button
-                type="button"
-                onClick={() => setIsCompleted(true)}
-                className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-xs transition-colors cursor-pointer"
-              >
-                Finish Cooking 🎉
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setActiveStepIndex(prev => Math.min(activeInstructions.length - 1, prev + 1))}
-                className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer"
-              >
-                Next Step
-              </button>
-            )}
           </div>
-
-        </div>
-
-      </div>
-
+        </>
+      )}
     </div>
   );
 }
 
-interface CookingTimerProps {
-  key?: string;
-  durationMinutes: number;
+/** What's read out for a step: "Step 2 of 4. Boil the potatoes…". */
+function i18nStep(step: number, count: number, text: string) {
+  return step === 0 ? text : `Step ${step} of ${count - 1}. ${text}`;
 }
 
-function CookingTimer({ durationMinutes }: CookingTimerProps) {
-  const [secondsLeft, setSecondsLeft] = useState<number>(durationMinutes * 60);
-  const [isRunning, setIsRunning] = useState<boolean>(false);
-  const [hasFinished, setHasFinished] = useState<boolean>(false);
+/**
+ * The end of cooking: what to do with what's left (fridge for later leftovers, freezer for a
+ * batch), how it was (have it again / not for us), a note for next time (saved to the recipe),
+ * then tick it as cooked.
+ */
+function FinishedScreen({
+  store,
+  recipe,
+  meal,
+  dayName,
+  servings,
+  plannedMeal,
+  fridge,
+  onBack,
+  onDone,
+}: {
+  store: any;
+  recipe: Recipe;
+  meal: PlannedMeal;
+  dayName: string;
+  servings: number;
+  /** A meal on the plan (so it can be ticked as cooked). */
+  plannedMeal: boolean;
+  fridge: { portions: number; days: string[] } | null;
+  onBack: () => void;
+  onDone: (result: { markCooked: boolean; froze?: { batchId: string; portions: number } }) => void;
+}) {
+  const fromNote = freezePortionsFromNote(meal.note) ?? 0;
+  const [freeze, setFreeze] = useState<number>(fromNote);
+  const [verdict, setVerdict] = useState<Recipe['verdict']>(recipe.verdict);
+  const [note, setNote] = useState('');
+  const isCook = meal.type === 'recipe';
 
-  // Sync state whenever the duration minutes prop updates
-  useEffect(() => {
-    setSecondsLeft(durationMinutes * 60);
-    setIsRunning(false);
-    setHasFinished(false);
-  }, [durationMinutes]);
-
-  useEffect(() => {
-    let intervalId: any = null;
-    if (isRunning && secondsLeft > 0) {
-      intervalId = setInterval(() => {
-        setSecondsLeft(prev => prev - 1);
-      }, 1000);
-    } else if (secondsLeft === 0 && isRunning) {
-      setIsRunning(false);
-      setHasFinished(true);
-      // Play a soft notification beep if audio context supports it
-      try {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.35);
-      } catch (e) {
-        // Fallback silently if audio context block is active
-      }
+  const finish = (markCooked: boolean) => {
+    let froze: { batchId: string; portions: number } | undefined;
+    if (isCook && freeze > 0 && store.addBatch) {
+      const batchId = crypto.randomUUID();
+      store.addBatch({ id: batchId, name: recipe.name, recipeId: recipe.id, portions: freeze, dateAdded: new Date().toISOString() });
+      froze = { batchId, portions: freeze };
     }
-    return () => clearInterval(intervalId);
-  }, [isRunning, secondsLeft]);
-
-  // Handle resetting the timer
-  const handleReset = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsRunning(false);
-    setSecondsLeft(durationMinutes * 60);
-    setHasFinished(false);
-  };
-
-  const handleToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (hasFinished) {
-      // Re-trigger from beginning if completed
-      setSecondsLeft(durationMinutes * 60);
-      setHasFinished(false);
-      setIsRunning(true);
-    } else {
-      setIsRunning(!isRunning);
+    const trimmed = note.trim();
+    if ((verdict && verdict !== recipe.verdict) || trimmed) {
+      const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const notes = trimmed ? [recipe.notes?.trim(), `${date}: ${trimmed}`].filter(Boolean).join('\n') : recipe.notes;
+      store.updateRecipe?.({ ...recipe, ...(verdict ? { verdict } : {}), notes });
     }
-  };
-
-  const formatTime = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const remainingSecs = secs % 60;
-    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
+    onDone({ markCooked, froze });
   };
 
   return (
-    <div 
-      onClick={e => e.stopPropagation()}
-      className={`inline-flex items-center gap-3 border px-3 py-1.5 rounded-xl transition-all shadow-2xs mt-2 select-none ${
-        hasFinished 
-          ? 'bg-amber-50 border-amber-200 text-amber-900 animate-pulse' 
-          : 'bg-zinc-100 hover:bg-zinc-200/80 border-zinc-200 text-zinc-800'
-      }`}
-    >
-      <div className="flex items-center gap-1.5">
-        <span className="relative flex h-2 w-2">
-          {isRunning && (
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          )}
-          <span className={`relative inline-flex rounded-full h-2 w-2 ${
-            hasFinished ? 'bg-amber-500' : isRunning ? 'bg-emerald-500' : 'bg-zinc-400'
-          }`}></span>
-        </span>
-        <span className="text-xs font-mono font-bold">
-          {formatTime(secondsLeft)}
-        </span>
+    <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in fade-in duration-200" data-finished>
+      <div className="flex-1 overflow-y-auto px-5 pt-8 pb-4">
+        <div className="max-w-md mx-auto">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto mb-3">
+            <ChefHat className="w-8 h-8 text-emerald-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-zinc-900 text-center">{recipe.name} is done</h2>
+          <p className="text-sm text-zinc-500 text-center mt-1">for {servings}{dayName && dayName !== 'Cookbook' ? ` · ${dayName}` : ''}</p>
+
+          <div className="mt-6 space-y-3">
+            {fridge && (
+              <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3" data-finished-fridge>
+                <Refrigerator className="w-5 h-5 text-sky-700 shrink-0 mt-0.5" />
+                <p className="text-[15px] text-sky-950">
+                  Put <strong>{fridge.portions} {fridge.portions === 1 ? 'portion' : 'portions'}</strong> in the fridge for {fridge.days.join(' and ')}.
+                </p>
+              </div>
+            )}
+
+            {isCook && (
+              <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3" data-finished-freeze>
+                <div className="flex items-center gap-3">
+                  <Snowflake className="w-5 h-5 text-cyan-700 shrink-0" />
+                  <span className="flex-1 text-[15px] text-cyan-950 font-semibold">{freeze > 0 ? `Freeze ${freeze} ${freeze === 1 ? 'portion' : 'portions'}` : 'Freeze some?'}</span>
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => setFreeze((n) => Math.max(0, n - 1))} disabled={freeze <= 0} className="w-10 h-10 rounded-xl border border-cyan-300 bg-white flex items-center justify-center disabled:opacity-40 cursor-pointer" aria-label="One fewer portion to freeze"><Minus className="w-4 h-4" /></button>
+                    <span className="w-8 text-center text-lg font-bold tabular-nums" data-freeze-count>{freeze}</span>
+                    <button type="button" onClick={() => setFreeze((n) => Math.min(24, n + 1))} className="w-10 h-10 rounded-xl border border-cyan-300 bg-white flex items-center justify-center cursor-pointer" aria-label="One more portion to freeze"><Plus className="w-4 h-4" /></button>
+                  </div>
+                </div>
+                {freeze > 0 && <p className="text-xs text-cyan-900/80 mt-1.5 pl-8">They'll be added to the Freezer tab.</p>}
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-zinc-200 px-4 py-3" data-finished-verdict>
+              <p className="text-[15px] font-semibold text-zinc-900 mb-2">How was it?</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setVerdict(verdict === 'again' ? undefined : 'again')} aria-pressed={verdict === 'again'}
+                  className={`h-12 rounded-xl border text-[15px] font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${verdict === 'again' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-zinc-300 text-zinc-800'}`} data-verdict="again">
+                  <ThumbsUp className="w-4 h-4" /> Have it again
+                </button>
+                <button type="button" onClick={() => setVerdict(verdict === 'not_for_us' ? undefined : 'not_for_us')} aria-pressed={verdict === 'not_for_us'}
+                  className={`h-12 rounded-xl border text-[15px] font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${verdict === 'not_for_us' ? 'bg-rose-600 border-rose-600 text-white' : 'bg-white border-zinc-300 text-zinc-800'}`} data-verdict="not_for_us">
+                  <ThumbsDown className="w-4 h-4" /> Not for us
+                </button>
+              </div>
+            </div>
+
+            <label className="block rounded-2xl border border-zinc-200 px-4 py-3">
+              <span className="flex items-center gap-1.5 text-[15px] font-semibold text-zinc-900 mb-1.5"><NotebookPen className="w-4 h-4" /> Note for next time</span>
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. needed more chilli, 10 mins less in the oven"
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-[15px] outline-none focus:border-emerald-500" data-finished-note />
+              <span className="text-xs text-zinc-500 mt-1 block">Saved to the recipe's notes.</span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={handleToggle}
-          className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
-            hasFinished
-              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-              : isRunning
-              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-              : 'bg-indigo-600 text-white hover:bg-indigo-700'
-          }`}
-        >
-          {hasFinished ? 'Restart' : isRunning ? 'Pause' : 'Start'}
-        </button>
-        <button
-          type="button"
-          onClick={handleReset}
-          className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg bg-zinc-200 text-zinc-700 hover:bg-zinc-300 transition-colors cursor-pointer"
-        >
-          Reset
-        </button>
+      <div className="shrink-0 border-t border-zinc-200 px-5 py-3 space-y-2" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+        <div className="max-w-md mx-auto space-y-2">
+          <button type="button" onClick={() => finish(plannedMeal)} className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold inline-flex items-center justify-center gap-2 cursor-pointer" data-finished-done>
+            <Check className="w-4 h-4" /> {plannedMeal ? 'Done: tick it as cooked' : 'Done'}
+          </button>
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={onBack} className="text-sm font-medium text-zinc-500 cursor-pointer py-1" data-finished-back>Back to the steps</button>
+            {plannedMeal && <button type="button" onClick={() => finish(false)} className="text-sm font-medium text-zinc-500 cursor-pointer py-1">Done, don't tick it</button>}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
+

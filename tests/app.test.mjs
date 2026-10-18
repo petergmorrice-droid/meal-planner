@@ -8,6 +8,9 @@ import {
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy,
+  parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
+  ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
+  addMinute, timerText,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
 } from '../.test-build/app.mjs';
 
@@ -398,6 +401,85 @@ test('shop: history, best and average time, milestones', () => {
   assert.equal(milestoneCrossed(51, 60), null);
   assert.equal(milestoneCrossed(90, 100), null, '100% has its own celebration');
   assert.equal(isToBuy({ checked: false, outOfStock: true }), false, 'out of stock is not "to buy"');
+});
+
+// ---------- Cook ----------
+test('cook: start-by time from when you eat', () => {
+  assert.equal(parseClock('19:00'), 1140);
+  assert.equal(parseClock('7pm'), null);
+  assert.equal(clockText(1065), '5:45pm');
+  assert.equal(clockText(1140), '7pm');
+  assert.equal(clockText(750), '12:30pm');
+  assert.equal(clockText(30), '12:30am');
+  assert.equal(startBy('19:00', 75), 1065);
+  const r = R('c', 'Chilli', { prepTime: 15, cookTime: 60, methodPrepTime: { ninja: 10 }, methodCookTime: { ninja: 35 } });
+  assert.equal(recipeMinutes(r, 'oven_hob'), 75);
+  assert.equal(recipeMinutes(r, 'ninja'), 45);
+  assert.equal(recipeMinutes(null), 0);
+});
+
+test('cook: what to do the night before', () => {
+  const tikka = R('t', 'Tikka', { instructions: ['Marinate the chicken in the yoghurt and spices overnight.', 'Grill for 15 mins.'] });
+  assert.equal(prepTonight({ id: 'm', type: 'recipe', recipeId: 't', name: 'Tikka' }, tikka), 'Get ahead tonight: Marinate the chicken in the yoghurt and spices overnight.');
+  assert.equal(prepTonight({ id: 'm', type: 'batch', batchId: 'b1', name: 'Batch: Chilli con carne' }, null), 'Take the Chilli con carne out of the freezer tonight');
+  assert.equal(prepTonight({ id: 'm', type: 'recipe', recipeId: 'x', name: 'Omelette' }, R('x', 'Omelette', { instructions: ['Whisk the eggs.'] })), null);
+  assert.equal(prepTonight({ id: 'm', type: 'leftover', recipeId: 't', name: 'Leftovers: Tikka' }, tikka), null);
+  assert.equal(prepTonight({ id: 'm', type: 'batch', name: 'Batch: Chilli', cooked: true }, null), null, 'already eaten');
+  assert.deepEqual(stepsToDoAhead(R('b', 'Beans', { instructions: ['Soak the beans in cold water.'], methodInstructions: { ninja: ['Soak the beans in cold water.'] } })), ['Soak the beans in cold water.']);
+  assert.equal(freezePortionsFromNote('Batch cook: freeze 4'), 4);
+  assert.equal(freezePortionsFromNote('Pizza night'), null);
+});
+
+test('cook: each step lists the ingredients it uses', () => {
+  const ings = [
+    { id: '1', name: 'pork sausages', amount: 4, unit: '' },
+    { id: '2', name: 'potatoes', amount: 500, unit: 'g' },
+    { id: '3', name: 'butter', amount: 25, unit: 'g' },
+    { id: '4', name: 'milk', amount: 50, unit: 'ml' },
+    { id: '5', name: 'gravy granules', amount: 2, unit: 'tbsp' },
+    { id: '6', name: 'frozen peas', amount: 150, unit: 'g' },
+    { id: '7', name: 'olive oil', amount: 1, unit: 'tbsp' },
+  ];
+  const names = (step) => ingredientsForStep(step, ings).map((i) => i.name);
+  assert.deepEqual(names('Grill the sausages for 20 mins, turning.'), ['pork sausages']);
+  assert.deepEqual(names('Boil the potatoes for 20 mins, drain and mash with the butter and milk.'), ['potatoes', 'butter', 'milk']);
+  assert.deepEqual(names('Make the gravy and cook the peas.'), ['gravy granules', 'frozen peas'], '"granules" is just the form; peas matches frozen peas');
+  assert.deepEqual(names('Heat the olive oil in a pan.'), ['olive oil'], 'full name');
+  assert.deepEqual(names('Add a splash of oil.'), [], '"oil" alone is too general');
+});
+
+test('cook: timers keep time from the clock', () => {
+  assert.equal(stepMinutes('Grill the sausages for 20 mins, turning.'), 20);
+  assert.equal(stepMinutes('Simmer for 10-15 minutes.'), 10);
+  assert.equal(stepMinutes('Roast for 1 hour 15 minutes.'), 75);
+  assert.equal(stepMinutes('Slow cook for 2 hours.'), 120);
+  assert.equal(stepMinutes('Season to taste.'), null);
+  assert.equal(stepTimerLabel('Grill the sausages for 20 mins, turning.'), 'Grill the sausages');
+  assert.equal(stepTimerLabel('Boil the potatoes for 20 mins, drain and mash.'), 'Boil the potatoes');
+  assert.equal(stepTimerLabel('Add tomatoes and beans and simmer for 45 mins.'), 'Simmer');
+  assert.equal(stepTimerLabel('Heat oven to 200C/180C fan. Roast the potatoes in 2 tbsp olive oil for 15 mins.'), 'Roast the potatoes');
+  assert.equal(stepTimerLabel('Mix the chicken with the yogurt and tikka paste and leave for 10 mins.'), 'Leave');
+  assert.equal(stepTimerLabel('Melt the butter, cook the eggs for 2 mins, add the cheese and fold.'), 'Cook the eggs');
+  assert.equal(stepTimerLabel('Fry the onion, carrots and celery for 10 mins.'), 'Fry the onion');
+  assert.equal(stepTimerLabel('Slow cook for 2 hours.'), 'Slow cook');
+  const t0 = 1_000_000;
+  let t = newTimer('a', 'Potatoes', 20, t0, 'Sausage & mash');
+  assert.equal(timeLeft(t, t0 + 5 * 60_000), 15 * 60_000, 'counts from the clock, even if the phone slept');
+  t = pauseTimer(t, t0 + 5 * 60_000);
+  assert.equal(timeLeft(t, t0 + 50 * 60_000), 15 * 60_000, 'paused stays put');
+  t = resumeTimer(t, t0 + 50 * 60_000);
+  assert.equal(timeLeft(t, t0 + 60 * 60_000), 5 * 60_000);
+  t = addMinute(t, t0 + 60 * 60_000);
+  assert.equal(timeLeft(t, t0 + 60 * 60_000), 6 * 60_000, '+1 minute');
+  const [rung] = tickTimers([t], t0 + 70 * 60_000);
+  assert.equal(rung.state, 'ringing');
+  assert.equal(tickTimers([t], t0 + 60 * 60_000)[0], t, 'unchanged until time is up');
+  const again = addMinute(rung, t0 + 70 * 60_000);
+  assert.equal(again.state, 'running');
+  assert.equal(timeLeft(again, t0 + 70 * 60_000), 60_000, 'ringing +1 min: another minute');
+  assert.equal(timerText(245_000), '4:05');
+  assert.equal(timerText(3_720_000), '1:02:00');
+  assert.equal(timerText(8_200), '0:09');
 });
 
 test('your own notes on leftovers are kept', () => {

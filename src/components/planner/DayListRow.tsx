@@ -302,6 +302,7 @@ export function DaySheet({
   onRemove,
   onOpenRecipe,
   onClose,
+  extra,
 }: {
   day: string;
   dayPlan?: DayPlan;
@@ -312,12 +313,15 @@ export function DaySheet({
   plannedDays: { day: string; date?: string; meal?: PlannedMeal | null }[];
   hasRecipe: boolean;
   onSave: (patch: { servings: number; note: string }) => void;
-  onSides: () => void;
+  /** Change the sides (left out on the Cook tab, which just shows them). */
+  onSides?: () => void;
   onChangeMeal: () => void;
   onMove: (to: string) => void;
   onRemove: () => void;
   onOpenRecipe?: () => void;
   onClose: () => void;
+  /** Extra buttons at the top (the Cook tab's Start cooking / Tick as cooked). */
+  extra?: React.ReactNode;
 }) {
   const d = describeMeal(meal, fromDay);
   const [servings, setServings] = useState<number>(meal.servings || 2);
@@ -362,6 +366,7 @@ export function DaySheet({
         </div>
 
         <div className="overflow-y-auto px-4 py-3 space-y-4">
+          {extra}
           {hasRecipe && onOpenRecipe && (
             <button type="button" onClick={() => { commit(); onOpenRecipe(); }} className="text-[15px] font-semibold text-emerald-800 inline-flex items-center gap-1.5 cursor-pointer" data-open-recipe>
               <BookOpen className="w-4 h-4" />Open the recipe
@@ -383,15 +388,17 @@ export function DaySheet({
             </div>
           )}
 
-          {canSide && (
+          {canSide && (onSides || (meal.sides && meal.sides.length > 0)) && (
             <div className="flex items-center justify-between gap-3" data-day-sides>
               <div className="min-w-0">
                 <span className="text-base font-semibold text-zinc-900 block">Sides</span>
                 <span className="text-sm text-zinc-600 block truncate">{meal.sides && meal.sides.length ? meal.sides.map((s) => s.name).join(', ') : 'None'}</span>
               </div>
-              <button type="button" onClick={() => { commit(); onSides(); }} className="h-10 px-3 rounded-xl border border-zinc-300 text-sm font-semibold shrink-0 cursor-pointer">
-                {meal.sides && meal.sides.length ? 'Change' : 'Add a side'}
-              </button>
+              {onSides && (
+                <button type="button" onClick={() => { commit(); onSides(); }} className="h-10 px-3 rounded-xl border border-zinc-300 text-sm font-semibold shrink-0 cursor-pointer">
+                  {meal.sides && meal.sides.length ? 'Change' : 'Add a side'}
+                </button>
+              )}
             </div>
           )}
 

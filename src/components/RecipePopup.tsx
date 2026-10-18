@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   X, Pencil, Sparkles, Minus, Plus, Check, Clock, Users, Flame, Zap, Leaf, Snowflake, CalendarCheck,
-  CalendarPlus, ChefHat, ExternalLink, History, Star, Share2,
+  CalendarPlus, ChefHat, ExternalLink, History, Star, Share2, ThumbsUp, ThumbsDown,
 } from 'lucide-react';
 import { Recipe, CookingMethod } from '../types';
 import { RecipeEditor, methodSteps } from './RecipeEditor';
@@ -283,6 +283,25 @@ export function RecipeModal({
                   >
                     <Star className={`w-4 h-4 ${edited.favourite ? 'fill-amber-400 text-amber-500' : 'text-zinc-500'}`} />
                     {edited.favourite ? 'Favourite' : 'Add to favourites'}
+                  </button>
+                )}
+                {edited.verdict && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = { ...edited, verdict: undefined };
+                      setEdited(next);
+                      store?.updateRecipe?.(next);
+                    }}
+                    title="What you said after cooking it. Tap to clear."
+                    data-recipe-verdict={edited.verdict}
+                    className={`h-9 px-3 rounded-full border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
+                      edited.verdict === 'again' ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-rose-50 border-rose-300 text-rose-900'
+                    }`}
+                  >
+                    {edited.verdict === 'again' ? <ThumbsUp className="w-4 h-4" /> : <ThumbsDown className="w-4 h-4" />}
+                    {edited.verdict === 'again' ? 'Have it again' : 'Not for us'}
+                    <X className="w-3.5 h-3.5 opacity-60" />
                   </button>
                 )}
                 <button

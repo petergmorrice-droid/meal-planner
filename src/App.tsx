@@ -12,7 +12,8 @@ import CookBookTab from './components/CookBookTab';
 import PlanningTab from './components/PlanningTab';
 import ShopTab, { readOpenShop } from './components/ShopTab';
 import BatchTab from './components/BatchTab';
-import ThisWeekTab from './components/ThisWeekTab';
+import CookTab from './components/CookTab';
+import { TimerDock } from './components/cook/TimerBar';
 import SettingsTab from './components/SettingsTab';
 
 type Tab = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
@@ -70,11 +71,14 @@ export default function App() {
             onPendingAddDone={() => setPendingAddRecipeId(null)}
           />
         )}
-        {activeTab === 'this_week' && <ThisWeekTab store={store} onNavigateTab={handleNavigateTab} />}
+        {activeTab === 'this_week' && <CookTab store={store} onNavigateTab={handleNavigateTab} />}
         {activeTab === 'shop' && <ShopTab store={store} onNavigateTab={handleNavigateTab} openPlanId={shopPlanRequest} onOpenPlanHandled={() => setShopPlanRequest(null)} />}
         {activeTab === 'batch' && <BatchTab store={store} />}
         {activeTab === 'settings' && <SettingsTab store={store} onNavigateTab={handleNavigateTab} />}
       </main>
+
+      {/* Kitchen timers keep going (and ring) on every tab; the Cook tab shows them at the top. */}
+      <TimerDock hidden={activeTab === 'this_week'} />
 
       {/* Minimalist Bottom Navigation */}
       <nav className="bg-white/95 backdrop-blur-md border-t border-zinc-200/80 pb-safe shrink-0 relative z-30">
