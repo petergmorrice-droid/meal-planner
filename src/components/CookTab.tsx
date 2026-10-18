@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ChevronLeft, ChevronRight, ChevronDown, ChefHat, Check, Clock, Snowflake, Moon, Minus, Plus, CalendarPlus, Pencil,
+  ChevronLeft, ChevronRight, ChefHat, Check, Clock, Snowflake, Moon, Minus, Plus, Pencil,
   ArrowLeftRight, RotateCcw, ShoppingBag, Utensils, X, FileText, BookOpen, Sparkles,
 } from 'lucide-react';
 import { MealPlan, PlannedMeal, Recipe, BatchItem, DayPlan } from '../types';
@@ -115,7 +115,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
   const [viewing, setViewing] = useState<{ planId: string; day: string; meal: PlannedMeal; recipe: Recipe; servings: number } | null>(null);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const [freezePrompt, setFreezePrompt] = useState<{ planId: string; day: string; mealId: string; name: string; recipeId?: string; portions: number } | null>(null);
-  const [showEarlier, setShowEarlier] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [editingTime, setEditingTime] = useState(false);
   // Keep "start by" right as the evening goes on.
   const [, setMinute] = useState(0);
@@ -262,6 +262,18 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
     setCooking({ planId, day, meal, servings });
   };
 
+  // Open at today's card (Monday to Sunday are all there; earlier days are just above).
+  const todayInPlan = plan && isThisWeek ? DAYS_OF_WEEK.find((d) => plan.days[d] && dayISO(plan, d) === todayIso) : undefined;
+  useEffect(() => {
+    if (!todayInPlan) { scrollRef.current?.scrollTo?.({ top: 0 }); return; }
+    const raf = requestAnimationFrame(() => {
+      const box = scrollRef.current;
+      const el = box?.querySelector(`[data-cook-row="${todayInPlan}"]`) as HTMLElement | null;
+      if (box && el) box.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 12) });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [plan?.id, todayInPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!plan) {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-[#fafafa] p-6 text-center">
@@ -282,110 +294,54 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
   });
   const cookable = rows.filter((r) => isCookable(r.meal));
   const cookedCount = cookable.filter((r) => r.meal!.cooked).length;
-  const earlier = isThisWeek ? rows.filter((r) => r.isPast) : [];
-  const earlierCooked = earlier.filter((r) => r.meal?.cooked).length;
-  const earlierOpen = earlier.filter((r) => isCookable(r.meal) && !r.meal!.cooked).length;
-  const shownRows = showEarlier || !earlier.length ? rows : rows.filter((r) => !r.isPast);
 
-  // ---------- Tonight ----------
-  const tonightCard = (() => {
+  // ---------- Today's card gets more: when to start, and anything to do tonight for tomorrow ----------
+  const todayPanel = (() => {
     if (!isThisWeek || !tonight) return null;
-    const { plan: tp, day, meal } = tonight;
-    const d = meal ? describeMeal(meal, leftoverSourceDay(tp.days, day, meal)) : null;
+    const { day, meal } = tonight;
     const recipe = recipeFor(meal);
-    const after = meal ? leftoversAfter(tp.days, day, meal) : { extra: 0, days: [] };
-    const people = meal ? (meal.servings || 2) + after.extra : 0;
     const minutes = !meal ? 0 : meal.type === 'recipe' ? recipeMinutes(recipe, methodFor(recipe)) : REHEAT_MINUTES[meal.type] || 0;
     const start = minutes ? startBy(dinnerTime, minutes) : null;
     const nowMins = now.getHours() * 60 + now.getMinutes();
     const dinner = parseClock(dinnerTime)!;
     const verb = meal?.type === 'recipe' ? 'Start' : 'Start reheating';
     const timeLine = start === null ? null : nowMins > dinner ? null : nowMins >= start ? `${verb} now to eat at` : `${verb} by ${clockText(start)} to eat at`;
+    const showTime = !!meal && isCookable(meal) && !meal.cooked;
+
+    const tm = tomorrowMeal?.meal || null;
+    const b = tm?.batchId ? batches.find((x) => x.id === tm.batchId) || null : null;
+    const prep = tm ? prepTonight(tm, recipeFor(tm), b?.name || recipeFor(tm)?.name) : null;
+    if (!showTime && !prep) return null;
 
     return (
-      <section className="rounded-2xl bg-white border border-zinc-200 shadow-2xs overflow-hidden" data-tonight>
-        <div className="px-4 pt-3.5 pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-emerald-700">Tonight · {shortDay(tp, day)}</span>
-            {meal?.cooked && <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800"><Check className="w-3.5 h-3.5" />{meal.type === 'recipe' ? 'Cooked' : 'Done'}</span>}
-          </div>
-          {meal ? (
-            <>
-              <button type="button" onClick={() => setDaySheet(day)} className="block text-left w-full cursor-pointer" data-tonight-meal>
-                <h2 className={`text-[22px] font-bold leading-tight mt-1 break-words ${meal.cooked ? 'text-zinc-500' : 'text-zinc-900'}`}>{mealTitle(meal)}</h2>
-              </button>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[15px] text-zinc-700">
-                {d?.label?.text && <span className={`inline-flex items-center gap-1 text-xs font-semibold border rounded-md px-1.5 py-px ${d.label.tone}`}>{d.label.icon}{d.label.text}</span>}
-                {meal.type !== 'no_meal' && <span data-tonight-people>for {people}{after.extra ? ` (${after.extra} extra for ${after.days.map((x) => x.slice(0, 3)).join(', ')})` : ''}</span>}
-              </div>
-              {meal.sides && meal.sides.length > 0 && <p className="text-sm text-zinc-600 mt-1">With {meal.sides.map((s) => s.name).join(', ')}</p>}
-              {d?.note && <p className="text-sm text-zinc-700 mt-1.5 bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1.5" data-tonight-note>{d.note}</p>}
-
-              {isCookable(meal) && !meal.cooked && (
-                <div className="mt-2.5 flex items-center gap-1.5 text-[15px] text-zinc-800" data-start-by>
-                  <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
-                  {editingTime ? (
-                    <span className="inline-flex items-center gap-2">
-                      Eat at
-                      <input type="time" defaultValue={dinnerTime} autoFocus onBlur={(e) => saveDinnerTime(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveDinnerTime((e.target as HTMLInputElement).value); if (e.key === 'Escape') setEditingTime(false); }}
-                        className="h-9 rounded-lg border border-zinc-300 px-2 text-[15px]" data-dinner-input aria-label="Dinner time" />
-                    </span>
-                  ) : (
-                    <span>
-                      {timeLine || 'Eat at'}{' '}
-                      <button type="button" onClick={() => setEditingTime(true)} className="font-semibold underline decoration-dotted underline-offset-2 cursor-pointer inline-flex items-center gap-0.5" data-dinner-time aria-label={`Dinner at ${clockText(dinner)}. Change it`}>
-                        {clockText(dinner)}<Pencil className="w-3 h-3 text-zinc-400" />
-                      </button>
-                      {minutes > 0 && meal.type === 'recipe' && <span className="text-zinc-500"> · {minutes} min</span>}
-                    </span>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <h2 className="text-lg font-bold text-zinc-500 mt-1">Nothing planned</h2>
-              <button type="button" onClick={() => onNavigateTab?.('planning', tp.id)} className="mt-2 h-10 px-3 rounded-xl border border-zinc-300 text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer">
-                <CalendarPlus className="w-4 h-4" />Plan something
-              </button>
-            </>
-          )}
-        </div>
-
-        {meal && meal.type !== 'no_meal' && (
-          <div className="px-4 pb-3.5 flex gap-2">
-            {meal.type === 'recipe' && recipe && !meal.cooked && (
-              <button type="button" onClick={() => startCooking(tp.id, day, meal)} className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold inline-flex items-center justify-center gap-2 cursor-pointer" data-tonight-start>
-                <ChefHat className="w-5 h-5" />Start cooking
-              </button>
+      <div className="mt-3 space-y-2" data-tonight={day}>
+        {showTime && (
+          <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-[15px] text-emerald-950" data-start-by>
+            <Clock className="w-5 h-5 text-emerald-700 shrink-0 mt-px" />
+            {editingTime ? (
+              <span className="inline-flex items-center gap-2 flex-wrap">
+                Eat at
+                <input type="time" defaultValue={dinnerTime} autoFocus onBlur={(e) => saveDinnerTime(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveDinnerTime((e.target as HTMLInputElement).value); if (e.key === 'Escape') setEditingTime(false); }}
+                  className="h-9 rounded-lg border border-zinc-300 bg-white px-2 text-[15px]" data-dinner-input aria-label="Dinner time" />
+              </span>
+            ) : (
+              <span className="min-w-0">
+                <span className="font-semibold">{timeLine || 'Eat at'}</span>{' '}
+                <button type="button" onClick={() => setEditingTime(true)} className="font-bold underline decoration-dotted underline-offset-2 cursor-pointer inline-flex items-center gap-0.5" data-dinner-time aria-label={`Dinner at ${clockText(dinner)}. Change it`}>
+                  {clockText(dinner)}<Pencil className="w-3 h-3 text-emerald-700/70" />
+                </button>
+                {minutes > 0 && meal!.type === 'recipe' && <span className="block text-sm text-emerald-900/70">{minutes} min of prep and cooking</span>}
+              </span>
             )}
-            {isCookable(meal) ? (
-              <button type="button" onClick={() => setCooked(tp.id, day, meal.id, !meal.cooked)} aria-pressed={!!meal.cooked}
-                className={`h-12 rounded-xl border font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${meal.type === 'recipe' && recipe && !meal.cooked ? 'px-4 border-zinc-300 text-zinc-800' : 'flex-1'} ${meal.cooked ? 'border-zinc-300 text-zinc-600' : meal.type !== 'recipe' || !recipe ? 'bg-zinc-900 border-zinc-900 text-white' : ''}`}
-                data-tonight-tick>
-                <Check className="w-5 h-5" />{meal.cooked ? 'Untick' : meal.type === 'recipe' ? 'Cooked' : 'Done'}
-              </button>
-            ) : null}
           </div>
         )}
-
-        {tomorrowMeal && (() => {
-          const tm = tomorrowMeal.meal;
-          const b = tm?.batchId ? batches.find((x) => x.id === tm.batchId) || null : null;
-          const prep = tm ? prepTonight(tm, recipeFor(tm), b?.name || recipeFor(tm)?.name) : null;
-          const label = tm ? describeMeal(tm, leftoverSourceDay(tomorrowMeal.plan.days, tomorrowMeal.day, tm)).label?.text : '';
-          return (
-            <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-2.5" data-tomorrow>
-              <p className="text-sm text-zinc-700 truncate"><span className="font-semibold text-zinc-900">Tomorrow:</span> {tm ? mealTitle(tm) : 'nothing planned'}{label ? ` · ${label}` : ''}</p>
-              {prep && (
-                <p className="mt-1.5 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-sm font-semibold text-amber-950" data-prep-tonight>
-                  {tm?.type === 'batch' ? <Snowflake className="w-4 h-4 shrink-0 mt-0.5 text-cyan-700" /> : <Moon className="w-4 h-4 shrink-0 mt-0.5" />}{prep}
-                </p>
-              )}
-            </div>
-          );
-        })()}
-      </section>
+        {prep && (
+          <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-[15px] text-amber-950" data-prep-tonight>
+            {tm?.type === 'batch' ? <Snowflake className="w-5 h-5 shrink-0 mt-px text-cyan-700" /> : <Moon className="w-5 h-5 shrink-0 mt-px text-amber-700" />}
+            <span><span className="font-semibold">For tomorrow{tomorrowMeal && tomorrowMeal.plan.id !== plan.id ? ' (next week)' : ''}:</span> {prep}</span>
+          </div>
+        )}
+      </div>
     );
   })();
 
@@ -418,18 +374,10 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
       {/* Cooking mode shows its own */}
       {!cooking && <TimerBar />}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" ref={scrollRef} data-cook-scroll>
         <div className="max-w-2xl mx-auto px-3 pt-3 pb-24 space-y-3">
-          {tonightCard}
-
           <div className="space-y-3" data-cook-week>
-            {earlier.length > 0 && (
-              <button type="button" onClick={() => setShowEarlier((v) => !v)} aria-expanded={showEarlier} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-zinc-200 text-sm text-zinc-600 cursor-pointer hover:bg-zinc-50" data-earlier-toggle>
-                <ChevronDown className={`w-4 h-4 transition-transform ${showEarlier ? '' : '-rotate-90'}`} />
-                <span>Earlier this week · {earlierCooked} cooked{earlierOpen ? ` · ${earlierOpen} not ticked` : ''}</span>
-              </button>
-            )}
-            {shownRows.map(({ day, meal, iso, isToday, isPast }) => {
+            {rows.map(({ day, meal, iso, isToday, isPast }) => {
               const recipe = recipeFor(meal);
               const method = methodFor(recipe);
               return (
@@ -457,6 +405,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
                   }}
                   onNote={() => setNoting(day)}
                   onPlan={() => onNavigateTab?.('planning', plan.id)}
+                  todayPanel={isToday ? todayPanel : null}
                 />
               );
             })}
@@ -596,11 +545,13 @@ const TYPE_STYLE: Record<string, { label: string; text: string; tile: string; ic
 
 /**
  * One day of the week: what's on, how long it takes, who for, sides, what it's cooking extra for,
- * the note, and the buttons you use most (tick, move or swap, cook, recipe, note).
+ * the note, and the buttons you use most (tick, swap, recipe, cook). Today's card also says when
+ * to start and anything to do tonight for tomorrow, with a big Start cooking button.
+ * The buttons share the card's width evenly, so they always fit.
  */
 function DayCard({
   day, dateText, meal, recipe, isToday, isTomorrow, isPast, fromDay, after, prep, cook,
-  onOpen, onTick, onMove, onCook, onRecipe, onNote, onPlan,
+  onOpen, onTick, onMove, onCook, onRecipe, onNote, onPlan, todayPanel,
 }: {
   key?: React.Key;
   day: string;
@@ -621,48 +572,85 @@ function DayCard({
   onRecipe: () => void;
   onNote: () => void;
   onPlan: () => void;
+  todayPanel?: React.ReactNode;
 }) {
   const style = meal ? TYPE_STYLE[meal.type] || TYPE_STYLE.recipe : null;
   const d = meal ? describeMeal(meal, fromDay) : null;
   const cooked = !!meal?.cooked;
   const label = meal?.type === 'leftover' ? (d?.label?.text || 'Leftovers') : style?.label;
   const people = meal ? (meal.servings || 2) + after.extra : 0;
+  const note = (d?.note || '').trim();
+  const canCook = meal?.type === 'recipe' && !!recipe && !cooked;
   const times = !meal ? null
     : meal.type === 'recipe' ? [prep ? `Prep ${prep}m` : '', cook ? `Cook ${cook}m` : ''].filter(Boolean).join(' · ')
     : meal.type === 'leftover' ? 'Reheat'
     : meal.type === 'batch' ? 'Heat through'
     : null;
 
+  const btn = 'h-14 min-w-0 px-1 rounded-xl border text-[12px] font-semibold flex flex-col items-center justify-center gap-0.5 cursor-pointer';
+  const actions: React.ReactNode[] = [];
+  if (meal && isCookable(meal)) {
+    actions.push(
+      <button key="tick" type="button" onClick={onTick} aria-pressed={cooked} aria-label={cooked ? `Untick ${day}` : `Tick ${day} as cooked`} data-cook-tick={day}
+        className={`${btn} ${cooked ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white border-zinc-300 text-zinc-700'}`}>
+        <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${cooked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-400 bg-white'}`}>{cooked && <Check className="w-3.5 h-3.5" />}</span>
+        <span className="truncate max-w-full">{meal.type === 'recipe' ? 'Cooked' : 'Done'}</span>
+      </button>,
+    );
+  }
+  if (meal) {
+    actions.push(
+      <button key="swap" type="button" onClick={onMove} aria-label={`Move or swap ${day}`} data-cook-move={day} className={`${btn} bg-white border-zinc-300 text-zinc-700`}>
+        <ArrowLeftRight className="w-5 h-5" /><span className="truncate max-w-full">Swap</span>
+      </button>,
+    );
+  }
+  if (recipe) {
+    actions.push(
+      <button key="recipe" type="button" onClick={onRecipe} aria-label={`Open the recipe for ${day}`} data-cook-recipe={day} className={`${btn} bg-white border-zinc-300 text-zinc-700`}>
+        <BookOpen className="w-5 h-5" /><span className="truncate max-w-full">Recipe</span>
+      </button>,
+    );
+  }
+  if (canCook && !isToday) {
+    actions.push(
+      <button key="cook" type="button" onClick={onCook} data-cook-start={day} className={`${btn} bg-emerald-600 border-emerald-600 text-white`}>
+        <ChefHat className="w-5 h-5" /><span className="truncate max-w-full">Cook</span>
+      </button>,
+    );
+  }
+
   return (
     <section
-      className={`rounded-2xl bg-white overflow-hidden ${isToday ? 'border-2 border-emerald-500/70 shadow-sm' : 'border border-zinc-200'} ${isPast && !isToday ? 'opacity-75' : ''}`}
+      className={`rounded-2xl bg-white overflow-hidden ${isToday ? 'border-2 border-emerald-500 shadow-md' : 'border border-zinc-200'} ${isPast && !isToday ? 'opacity-80' : ''}`}
       data-cook-row={day}
     >
-      <div className={`px-3.5 py-2 flex items-center justify-between gap-2 border-b ${isToday ? 'bg-emerald-50 border-emerald-100' : 'bg-zinc-50 border-zinc-100'}`}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`text-sm font-bold ${isToday ? 'text-emerald-900' : 'text-zinc-900'}`}>{day}</span>
-          <span className={`text-xs ${isToday ? 'text-emerald-700' : 'text-zinc-500'}`}>· {dateText}</span>
-          {isToday && <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-600 text-white rounded-full px-2 py-px">Today</span>}
-          {isTomorrow && <span className="text-[11px] font-semibold bg-zinc-200 text-zinc-700 rounded-full px-2 py-px">Tomorrow</span>}
-        </div>
-        {times && <span className="text-xs font-medium text-zinc-600 shrink-0" data-cook-times-row>{times}</span>}
+      <div className={`px-3.5 py-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b ${isToday ? 'bg-emerald-50 border-emerald-100' : 'bg-zinc-50 border-zinc-100'}`}>
+        <span className={`text-sm font-bold ${isToday ? 'text-emerald-900' : 'text-zinc-900'}`}>{day}</span>
+        <span className={`text-xs ${isToday ? 'text-emerald-700' : 'text-zinc-500'}`}>{dateText}</span>
+        {isToday && <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-600 text-white rounded-full px-2 py-px">Today</span>}
+        {isTomorrow && <span className="text-[11px] font-semibold bg-zinc-200 text-zinc-700 rounded-full px-2 py-px">Tomorrow</span>}
+        {times && <span className="ml-auto text-xs font-medium text-zinc-600 whitespace-nowrap" data-cook-times-row>{times}</span>}
       </div>
 
       {!meal ? (
-        <div className="px-3.5 py-3 flex items-center justify-between gap-2">
-          <span className="text-sm text-zinc-500">Nothing planned</span>
-          <button type="button" onClick={onPlan} className="text-sm font-semibold text-zinc-700 inline-flex items-center gap-0.5 cursor-pointer">Plan a meal<ChevronRight className="w-4 h-4" /></button>
+        <div className="px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm text-zinc-500">Nothing planned</span>
+            <button type="button" onClick={onPlan} className="h-10 text-sm font-semibold text-zinc-700 inline-flex items-center gap-0.5 cursor-pointer">Plan a meal<ChevronRight className="w-4 h-4" /></button>
+          </div>
+          {todayPanel}
         </div>
       ) : (
         <div className="px-3.5 pt-3 pb-3">
           <button type="button" onClick={onOpen} className="w-full flex items-start gap-3 text-left cursor-pointer" data-cook-open>
             {recipe?.imageUrl ? (
-              <span className="relative w-14 h-14 rounded-xl overflow-hidden border border-zinc-200 shrink-0">
+              <span className={`relative rounded-xl overflow-hidden border border-zinc-200 shrink-0 ${isToday ? 'w-16 h-16' : 'w-14 h-14'}`}>
                 <img src={recipe.imageUrl} alt="" className={`w-full h-full object-cover ${cooked ? 'grayscale' : ''}`} />
                 {cooked && <span className="absolute inset-0 bg-emerald-950/40 flex items-center justify-center"><Check className="w-5 h-5 text-white" /></span>}
               </span>
             ) : (
-              <span className={`w-14 h-14 rounded-xl border flex items-center justify-center shrink-0 ${cooked ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : style!.tile}`}>
+              <span className={`rounded-xl border flex items-center justify-center shrink-0 ${isToday ? 'w-16 h-16' : 'w-14 h-14'} ${cooked ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : style!.tile}`}>
                 {cooked ? <Check className="w-6 h-6" /> : style!.icon}
               </span>
             )}
@@ -671,28 +659,28 @@ function DayCard({
                 {label && label.toLowerCase() !== mealTitle(meal).toLowerCase() && <span className={`text-[11px] font-bold uppercase tracking-wide ${cooked ? 'text-zinc-500' : style!.text}`}>{label}</span>}
                 {cooked && <span className="inline-flex items-center gap-0.5 text-[11px] font-bold uppercase tracking-wide rounded bg-emerald-100 text-emerald-800 px-1.5"><Check className="w-3 h-3" />{meal.type === 'recipe' ? 'Cooked' : 'Done'}</span>}
               </span>
-              <span className={`block text-base font-bold leading-snug break-words ${cooked ? 'text-zinc-500 line-through decoration-zinc-300' : 'text-zinc-900'}`}>{mealTitle(meal)}</span>
-              <span className="block text-[13px] text-zinc-600 mt-0.5">
+              <span className={`block font-bold leading-snug break-words ${isToday ? 'text-xl' : 'text-base'} ${cooked ? 'text-zinc-500 line-through decoration-zinc-300' : 'text-zinc-900'}`}>{mealTitle(meal)}</span>
+              <span className="block text-[13px] text-zinc-600 mt-0.5" data-cook-people>
                 {meal.type === 'no_meal' ? 'No cooking' : `${people} ${people === 1 ? 'person' : 'people'}`}
                 {meal.sides && meal.sides.length > 0 && <> · With {meal.sides.map((s) => `${s.name}${s.amount ? ` (${s.amount}${s.unit ? ` ${s.unit}` : ''})` : ''}`).join(', ')}</>}
               </span>
               {!cooked && after.extra > 0 && (
                 <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900" data-cook-extra>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />Cook for {people}: {after.extra} extra for {after.days.join(' and ')}
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />Cook for {people}: {after.extra} extra for {after.days.join(' and ')}
                 </span>
               )}
               {!cooked && meal.type === 'batch' && (
                 <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 border border-cyan-200 px-2 py-0.5 text-xs font-semibold text-cyan-900">
-                  <Snowflake className="w-3.5 h-3.5 text-cyan-600" />From the freezer: take it out the night before
+                  <Snowflake className="w-3.5 h-3.5 text-cyan-600 shrink-0" />From the freezer: take it out the night before
                 </span>
               )}
             </span>
           </button>
 
-          {(d?.note || '').trim() ? (
+          {note ? (
             <button type="button" onClick={onNote} className="mt-2.5 w-full flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-left cursor-pointer" data-cook-note={day}>
               <FileText className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-              <span className="flex-1 min-w-0 text-sm text-amber-950 whitespace-pre-line break-words">{d!.note}</span>
+              <span className="flex-1 min-w-0 text-sm text-amber-950 whitespace-pre-line break-words">{note}</span>
               <span className="text-xs font-bold text-amber-700 shrink-0 mt-0.5">Edit</span>
             </button>
           ) : (
@@ -703,30 +691,16 @@ function DayCard({
             </div>
           )}
 
-          <div className={`${(d?.note || '').trim() ? 'mt-2.5' : 'mt-1'} pt-2.5 border-t border-zinc-100 flex items-center gap-1.5`}>
-            {isCookable(meal) && (
-              <button type="button" onClick={onTick} aria-pressed={cooked}
-                className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${cooked ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white border-zinc-300 text-zinc-700'}`}
-                aria-label={cooked ? `Untick ${day}` : `Tick ${day} as cooked`} data-cook-tick={day}>
-                <span className={`w-4 h-4 rounded border flex items-center justify-center ${cooked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-400 bg-white'}`}>{cooked && <Check className="w-3 h-3" />}</span>
-                {meal.type === 'recipe' ? 'Cooked' : 'Done'}
-              </button>
-            )}
-            <button type="button" onClick={onMove} className="h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm font-semibold text-zinc-700 inline-flex items-center gap-1.5 cursor-pointer" aria-label={`Move or swap ${day}`} data-cook-move={day}>
-              <ArrowLeftRight className="w-4 h-4" />Swap
+          {todayPanel}
+
+          {isToday && canCook && (
+            <button type="button" onClick={onCook} className="mt-3 w-full h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold inline-flex items-center justify-center gap-2 cursor-pointer" data-tonight-start data-cook-start={day}>
+              <ChefHat className="w-5 h-5" />Start cooking
             </button>
-            <span className="ml-auto flex items-center gap-1.5">
-              {meal.type === 'recipe' && recipe && !cooked && (
-                <button type="button" onClick={onCook} className="h-10 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer" data-cook-start={day}>
-                  <ChefHat className="w-4 h-4" />Cook
-                </button>
-              )}
-              {recipe && (
-                <button type="button" onClick={onRecipe} className="h-10 w-10 rounded-xl border border-zinc-200 text-zinc-500 inline-flex items-center justify-center cursor-pointer hover:bg-zinc-50" aria-label={`Open the recipe for ${day}`} data-cook-recipe={day}>
-                  <BookOpen className="w-4 h-4" />
-                </button>
-              )}
-            </span>
+          )}
+
+          <div className={`${note || todayPanel || (isToday && canCook) ? 'mt-3' : 'mt-1'} pt-3 border-t border-zinc-100 grid gap-1.5`} style={{ gridTemplateColumns: `repeat(${Math.max(3, actions.length)}, minmax(0, 1fr))` }} data-cook-actions>
+            {actions}
           </div>
         </div>
       )}
