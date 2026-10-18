@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 're
 import { formatCookingAmount } from '../shopping';
 import {
   ChevronLeft, ChevronRight, ChefHat, Plus, Minus, Check, Timer, Type, Volume2, VolumeX,
-  ThumbsUp, ThumbsDown, Snowflake, Refrigerator, NotebookPen,
+  ThumbsUp, ThumbsDown, Snowflake, Refrigerator, NotebookPen, Mic, MicOff, MessageCircleQuestionMark, Send, LoaderCircle, X,
 } from 'lucide-react';
 import { Recipe, PlannedMeal, MealPlan, CookingMethod, Ingredient } from '../types';
 import { scaleRecipeStepQuantities, DAYS_OF_WEEK } from '../utils';
@@ -10,6 +10,8 @@ import { ingredientsForStep, stepMinutes, stepTimerLabel, timeLeft, timerText, f
 import { useCookTimers } from '../hooks/useCookTimers';
 import { TimerBar } from './cook/TimerBar';
 import { canSpeak, speak, stopSpeaking } from '../speech';
+import { canListen, createListener, parseAlternatives, VoiceCommand } from '../voiceCommands';
+import { askAboutRecipeApi, NoGeminiKeyError } from '../services/geminiService';
 
 interface CookModeProps {
   store: any;
@@ -67,7 +69,7 @@ export default function CookMode({
   initialServings,
 }: CookModeProps) {
   useScreenAwake();
-  const { timers, now, start } = useCookTimers();
+  const { timers, now, start, stop } = useCookTimers();
   const [activeMealId, setActiveMealId] = useState<string>(initialActiveMealId);
   const [finished, setFinished] = useState(false);
   const [big, setBig] = useState(() => readPref('cook_big_steps'));
@@ -153,33 +155,162 @@ export default function CookMode({
     if (i === 0) return `Get everything out. ${ingredients.map((ing) => { const l = ingredientLine(ing, scale); return `${l.amount} ${l.name}`.trim(); }).join(', ')}.`;
     return scaleRecipeStepQuantities(instructions[i - 1] || '', ingredients, scale);
   };
-  const sayStep = (i: number) => {
-    const ok = speak(i18nStep(i, stepCount, stepText(i)), {
+  // ---- Voice: "next", "back", "repeat", "start the timer", "question, …" ----
+  const listenOK = useMemo(() => canListen(), []);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const voiceOnRef = useRef(false);
+  voiceOnRef.current = voiceOn;
+  const [listening, setListening] = useState(false);
+  const [heard, setHeard] = useState<{ text: string; understood: boolean } | null>(null);
+  useEffect(() => {
+    if (!heard) return;
+    const t = setTimeout(() => setHeard(null), 4000);
+    return () => clearTimeout(t);
+  }, [heard]);
+  const listenerRef = useRef<ReturnType<typeof createListener> | null>(null);
+
+  /** Say something; the microphone pauses meanwhile so it doesn't hear itself. */
+  const talk = (text: string, onFail?: () => void) => {
+    listenerRef.current?.pause();
+    const done = () => { setSpeaking(false); if (voiceOnRef.current) listenerRef.current?.resume(); };
+    const ok = speak(text, {
       onStart: () => setSpeaking(true),
-      onEnd: () => setSpeaking(false),
+      onEnd: done,
       onError: (reason) => {
-        setSpeaking(false);
+        done();
         setReadNote(reason === 'not-allowed' ? 'Your phone stopped the reading. Tap “Read it again”.' : "Couldn't read that out. Check the phone's volume and try “Read it again”.");
       },
     });
-    if (!ok) setReadNote(NO_SPEECH);
+    if (!ok) { done(); (onFail || (() => setReadNote(NO_SPEECH)))(); }
   };
+  const sayStep = (i: number) => talk(i18nStep(i, stepCount, stepText(i)));
   const toggleRead = () => {
     if (!speechOK) { setReadNote(NO_SPEECH); return; }
     const v = !readAloud;
     setReadAloud(v);
     savePref('cook_read_aloud', v);
     if (v) sayStep(step);
-    else { stopSpeaking(); setSpeaking(false); }
+    else { stopSpeaking(); setSpeaking(false); if (voiceOnRef.current) listenerRef.current?.resume(); }
   };
   const firstStep = useRef(true);
   useEffect(() => {
-    // Opening cooking mode with Read on reads the first step; after that, each step you move to.
+    // Opening cooking mode with Read on reads the first step; after that, each step you move to
+    // (and always when you're cooking by voice).
     if (firstStep.current) { firstStep.current = false; if (!readAloudRef.current) return; }
-    if (readAloudRef.current && !finished) sayStep(step);
+    if ((readAloudRef.current || voiceOnRef.current) && !finished) sayStep(step);
   }, [step, method, activeMealId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (finished) { stopSpeaking(); setSpeaking(false); } }, [finished]);
-  useEffect(() => () => stopSpeaking(), []);
+
+  // Questions: typed or spoken, answered by Gemini from this recipe as you're cooking it.
+  const [answer, setAnswer] = useState<{ q: string; a?: string; loading?: boolean; problem?: boolean } | null>(null);
+  const [asking, setAsking] = useState(false);
+  const askSeq = useRef(0);
+  const ask = async (question: string, aloud: boolean) => {
+    const q = question.trim();
+    if (!q || !recipe) return;
+    const seq = ++askSeq.current;
+    setAnswer({ q, loading: true });
+    if (aloud) talk('Let me check.', () => {});
+    let a: string;
+    let problem = false;
+    try {
+      a = await askAboutRecipeApi(recipe, q, {
+        method,
+        servings,
+        step,
+        steps: instructions.map((x) => scaleRecipeStepQuantities(x, ingredients, scale)),
+        ingredients: ingredients.map((ing) => { const l = ingredientLine(ing, scale); return `${l.amount} ${l.name}${ing.note ? `, ${ing.note}` : ''}`.trim(); }),
+      });
+    } catch (e) {
+      problem = true;
+      a = e instanceof NoGeminiKeyError
+        ? 'To ask questions, add your Gemini key in Settings, under connections.'
+        : "Sorry, I couldn't get an answer just now. Check you're online and try again.";
+    }
+    if (seq !== askSeq.current) return;
+    setAnswer({ q, a, problem });
+    if (aloud || readAloudRef.current) talk(a, () => {});
+  };
+
+  const timerFor = (i: number) => {
+    const text = instructions[i - 1];
+    const minutes = i > 0 && text ? stepMinutes(text) : null;
+    return minutes ? { label: stepTimerLabel(text), minutes } : null;
+  };
+  const minutesLeft = (ms: number) => { const m = Math.ceil(ms / 60000); return m <= 1 ? 'about a minute' : `${m} minutes`; };
+  const runCommand = (c: VoiceCommand) => {
+    switch (c.kind) {
+      case 'next': next(); break;
+      case 'back': if (step === 0) talk("You're at the start."); else setStep((x) => Math.max(0, x - 1)); break;
+      case 'repeat': sayStep(step); break;
+      case 'goto':
+        if (c.step >= 1 && c.step <= instructions.length) setStep(c.step);
+        else talk(`There are ${instructions.length} steps.`);
+        break;
+      case 'finish': setFinished(true); break;
+      case 'timer_start': {
+        if (c.minutes) { start(`Timer`, c.minutes, recipe!.name); talk(`Timer set for ${c.minutes === 1 ? 'one minute' : `${c.minutes} minutes`}.`); break; }
+        const t = timerFor(step);
+        if (!t) { talk("This step doesn't have a time. Say, set a timer for ten minutes."); break; }
+        const running = timers.find((x) => x.label === t.label && x.recipe === recipe!.name);
+        if (running) { talk(`${t.label} is already running, ${minutesLeft(timeLeft(running, Date.now()))} left.`); break; }
+        start(t.label, t.minutes, recipe!.name);
+        talk(`${t.label} timer started, ${t.minutes} minutes.`);
+        break;
+      }
+      case 'timer_stop': {
+        const ringing = timers.filter((x) => x.state === 'ringing');
+        const target = ringing.length ? ringing : timers.slice(-1);
+        if (!target.length) { talk('No timers are running.'); break; }
+        target.forEach((x) => stop(x.id));
+        talk(target.length > 1 ? 'Timers stopped.' : `${target[0].label} stopped.`);
+        break;
+      }
+      case 'time_left': {
+        if (!timers.length) { talk('No timers are running.'); break; }
+        talk(timers.map((x) => (x.state === 'ringing' ? `${x.label} is done.` : `${x.label}, ${minutesLeft(timeLeft(x, Date.now()))} left.`)).join(' '));
+        break;
+      }
+      case 'ingredients': {
+        const used = step === 0 ? ingredients : ingredientsForStep(instructions[step - 1] || '', ingredients);
+        talk(used.length ? `${step === 0 ? 'You need' : 'For this step'}: ${used.map((ing) => { const l = ingredientLine(ing, scale); return `${l.amount} ${l.name}`.trim(); }).join(', ')}.` : "This step doesn't use any of the ingredients.");
+        break;
+      }
+      case 'help': talk(VOICE_HELP); break;
+      case 'question': ask(c.text, true); break;
+    }
+  };
+  const runCommandRef = useRef(runCommand);
+  runCommandRef.current = runCommand;
+
+  const stopVoice = () => { listenerRef.current?.stop(); setVoiceOn(false); setListening(false); };
+  const toggleVoice = () => {
+    if (voiceOn) { stopVoice(); return; }
+    if (!listenOK) { setReadNote(NO_LISTEN); return; }
+    if (!listenerRef.current) {
+      listenerRef.current = createListener({
+        onHeard: (alts) => {
+          const hit = parseAlternatives(alts);
+          setHeard({ text: hit?.heard || alts[0], understood: !!hit });
+          if (hit) runCommandRef.current(hit.command);
+        },
+        onListening: (on) => setListening(on),
+        onProblem: (problem) => {
+          setVoiceOn(false);
+          setListening(false);
+          setReadNote(problem === 'blocked' ? "The microphone isn't allowed here. Allow it for this site in your browser's settings (it can't be used inside a preview in another app), then tap Voice again."
+            : problem === 'no-mic' ? "Couldn't find a microphone."
+            : problem === 'network' ? 'Voice needs internet. Check your connection and tap Voice again.'
+            : problem === 'unsupported' ? NO_LISTEN
+            : 'Voice stopped listening. Tap Voice to start again.');
+        },
+      });
+    }
+    setVoiceOn(true);
+    voiceOnRef.current = true;
+    listenerRef.current.start();
+  };
+  useEffect(() => { if (finished) { stopSpeaking(); setSpeaking(false); listenerRef.current?.pause(); } else if (voiceOnRef.current) listenerRef.current?.resume(); }, [finished]);
+  useEffect(() => () => { stopSpeaking(); listenerRef.current?.stop(); }, []);
 
   // Big steps: the step's text shrinks until it fits the screen (down to a size that's still easy
   // to read; past that it scrolls).
@@ -288,6 +419,14 @@ export default function CookMode({
 
   return (
     <div id="cook-mode-overlay" className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col overflow-hidden animate-in fade-in duration-200" data-cook-mode>
+      {asking && (
+        <AskSheet
+          recipeName={recipe.name}
+          canDictate={false}
+          onAsk={(q) => { setAsking(false); ask(q, false); }}
+          onClose={() => setAsking(false)}
+        />
+      )}
       {finished && (
         <FinishedScreen
           store={store}
@@ -323,27 +462,29 @@ export default function CookMode({
             <button type="button" onClick={() => setServings((n) => Math.min(24, n + 1))} className="w-9 h-10 flex items-center justify-center text-zinc-600 cursor-pointer" aria-label="One more"><Plus className="w-4 h-4" /></button>
           </div>
         </div>
-        <div className="max-w-2xl mx-auto flex items-center gap-2 mt-2">
+        <div className="max-w-2xl mx-auto flex flex-wrap items-center gap-2 mt-2">
           {methods.length > 1 && (
             <div className="flex items-center bg-zinc-100 p-0.5 rounded-xl border border-zinc-200" data-cook-method>
               {methods.map((m) => (
                 <button key={m} type="button" onClick={() => setMethod(m)} aria-pressed={method === m}
-                  className={`px-3 py-1.5 text-sm font-semibold rounded-lg cursor-pointer ${method === m ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-500'}`}>
+                  className={`px-2.5 h-9 text-[13px] font-semibold rounded-lg cursor-pointer ${method === m ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-500'}`}>
                   {METHOD_LABEL[m] || m}
                 </button>
               ))}
             </div>
           )}
-          <span className="ml-auto flex items-center gap-1.5">
-            <button type="button" onClick={() => { const v = !big; setBig(v); savePref('cook_big_steps', v); }} aria-pressed={big}
-              className={`h-9 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${big ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`} data-cook-big>
-              <Type className="w-4 h-4" /> Big steps
-            </button>
-            <button type="button" onClick={toggleRead} aria-pressed={readAloud}
-              className={`h-9 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${readAloud ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'} ${speechOK ? '' : 'opacity-60'}`}
-              data-cook-read aria-label={readAloud ? 'Stop reading the steps aloud' : 'Read the steps aloud'} title="Reads each step out loud as you go">
-              {readAloud ? <Volume2 className={`w-4 h-4 ${speaking ? 'animate-pulse' : ''}`} /> : <VolumeX className="w-4 h-4" />} Read
-            </button>
+          <span className="ml-auto flex items-center gap-1">
+            {([
+              { key: 'big', label: 'Big', on: big, icon: <Type className="w-4 h-4" />, onClick: () => { const v = !big; setBig(v); savePref('cook_big_steps', v); }, attrs: { 'data-cook-big': true, 'aria-label': 'Big steps: one step at a time in large text' } },
+              { key: 'read', label: 'Read', on: readAloud, dim: !speechOK, icon: readAloud ? <Volume2 className={`w-4 h-4 ${speaking ? 'animate-pulse' : ''}`} /> : <VolumeX className="w-4 h-4" />, onClick: toggleRead, attrs: { 'data-cook-read': true, 'aria-label': readAloud ? 'Stop reading the steps aloud' : 'Read the steps aloud' } },
+              { key: 'voice', label: 'Voice', on: voiceOn, dim: !listenOK, icon: voiceOn ? <Mic className={`w-4 h-4 ${listening ? 'animate-pulse' : ''}`} /> : <MicOff className="w-4 h-4" />, onClick: toggleVoice, attrs: { 'data-cook-voice': true, 'aria-label': voiceOn ? 'Stop listening' : 'Voice: say next, back, repeat, or ask a question' } },
+              { key: 'ask', label: 'Ask', on: asking, icon: <MessageCircleQuestionMark className="w-4 h-4" />, onClick: () => setAsking(true), attrs: { 'data-cook-ask': true, 'aria-label': 'Ask a question about this recipe' } },
+            ] as const).map((b: any) => (
+              <button key={b.key} type="button" onClick={b.onClick} aria-pressed={b.on} {...b.attrs}
+                className={`w-11 h-11 rounded-xl border flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold leading-none cursor-pointer ${b.on ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'} ${b.dim ? 'opacity-60' : ''}`}>
+                {b.icon}{b.label}
+              </button>
+            ))}
           </span>
         </div>
         {meals.length > 1 && (
@@ -363,12 +504,37 @@ export default function CookMode({
           <div className="max-w-2xl mx-auto flex items-start gap-2"><VolumeX className="w-4 h-4 shrink-0 mt-0.5" /><span>{readNote}</span></div>
         </div>
       )}
-      {readAloud && !readNote && (
+      {(readAloud || voiceOn) && !readNote && (
         <div className="shrink-0 bg-zinc-100 border-b border-zinc-200 px-4 py-1.5 text-[13px] text-zinc-700" data-read-on>
           <div className="max-w-2xl mx-auto flex items-center gap-2">
-            <Volume2 className={`w-4 h-4 shrink-0 ${speaking ? 'text-emerald-600 animate-pulse' : 'text-zinc-500'}`} />
-            <span className="flex-1 min-w-0 truncate">{speaking ? 'Reading the step…' : 'Reads each step as you go'}</span>
+            {voiceOn
+              ? <Mic className={`w-4 h-4 shrink-0 ${listening && !speaking ? 'text-rose-600 animate-pulse' : 'text-zinc-400'}`} />
+              : <Volume2 className={`w-4 h-4 shrink-0 ${speaking ? 'text-emerald-600 animate-pulse' : 'text-zinc-500'}`} />}
+            <span className="flex-1 min-w-0 truncate" data-voice-status>
+              {heard
+                ? (heard.understood ? <>Heard “<strong>{heard.text}</strong>”</> : <span className="text-zinc-500">Heard “{heard.text}”, not a command</span>)
+                : speaking ? 'Reading…'
+                : voiceOn ? (listening ? 'Listening: say “next”, “back”, “repeat” or “question, …”' : 'Starting the microphone…')
+                : 'Reads each step as you go'}
+            </span>
             <button type="button" onClick={() => sayStep(step)} className="shrink-0 font-semibold underline underline-offset-2 cursor-pointer" data-read-again>Read it again</button>
+          </div>
+        </div>
+      )}
+      {answer && (
+        <div className="shrink-0 bg-sky-50 border-b border-sky-200 px-4 py-2" data-answer>
+          <div className="max-w-2xl mx-auto flex items-start gap-2">
+            <MessageCircleQuestionMark className="w-4 h-4 shrink-0 mt-0.5 text-sky-700" />
+            <div className="flex-1 min-w-0 max-h-36 overflow-y-auto">
+              <p className="text-[13px] font-semibold text-sky-950" data-answer-q>{answer.q}</p>
+              {answer.loading
+                ? <p className="text-sm text-sky-900/80 inline-flex items-center gap-1.5 mt-0.5"><LoaderCircle className="w-3.5 h-3.5 animate-spin" />Asking Gemini…</p>
+                : <p className={`text-sm leading-snug mt-0.5 ${answer.problem ? 'text-rose-800' : 'text-sky-950'}`} data-answer-a>{answer.a}</p>}
+            </div>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <button type="button" onClick={() => { askSeq.current++; setAnswer(null); }} className="w-8 h-8 -mr-1 -mt-1 rounded-lg flex items-center justify-center text-sky-800 cursor-pointer" aria-label="Close the answer" data-answer-close><X className="w-4 h-4" /></button>
+              {answer.a && !answer.problem && speechOK && <button type="button" onClick={() => talk(answer.a!)} className="text-xs font-semibold text-sky-800 underline underline-offset-2 cursor-pointer" data-answer-read>Read it</button>}
+            </div>
           </div>
         </div>
       )}
@@ -492,6 +658,35 @@ export default function CookMode({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+const NO_LISTEN = "Voice commands aren't available here. They work in Chrome on Android and Safari on iPhone (and need internet), not inside some other apps' browsers.";
+const VOICE_HELP = 'Say next, back, or repeat. Say start the timer, how long left, or stop. Or say question, then ask anything about the recipe.';
+
+/** Type a question about the recipe (or pick a common one). */
+function AskSheet({ recipeName, onAsk, onClose }: { recipeName: string; canDictate?: boolean; onAsk: (q: string) => void; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const ideas = ['What can I use instead of…', 'Can I make this ahead?', 'How do I know when it’s done?', 'Can I freeze this?'];
+  return (
+    <div className="absolute inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
+      <div role="dialog" aria-label="Ask about this recipe" data-ask-sheet className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()} style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        <span className="text-sm font-semibold text-zinc-500 block">Ask about</span>
+        <h3 className="text-lg font-bold text-zinc-900 leading-snug break-words">{recipeName}</h3>
+        <form onSubmit={(e) => { e.preventDefault(); if (q.trim()) onAsk(q); }} className="mt-3 flex items-end gap-2">
+          <textarea value={q} onChange={(e) => setQ(e.target.value)} rows={2} autoFocus placeholder="e.g. Can I use crème fraîche instead of soured cream?"
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (q.trim()) onAsk(q); } }}
+            className="flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-base leading-snug outline-none focus:border-emerald-500 resize-none" data-ask-input aria-label="Your question" />
+          <button type="submit" disabled={!q.trim()} className="h-11 w-11 rounded-xl bg-zinc-900 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer shrink-0" aria-label="Ask" data-ask-send><Send className="w-4 h-4" /></button>
+        </form>
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {ideas.map((x) => (
+            <button key={x} type="button" onClick={() => (x.endsWith('…') ? setQ(x.replace('…', ' ')) : onAsk(x))} className="h-8 px-2.5 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-700 cursor-pointer">{x}</button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-zinc-500">Gemini answers from this recipe, for the number of people you're cooking for. With Voice on you can also just say “question,” then ask.</p>
+      </div>
     </div>
   );
 }

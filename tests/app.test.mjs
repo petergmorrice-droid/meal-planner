@@ -10,7 +10,7 @@ import {
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy,
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
-  addMinute, timerText, eatAtFor, DEFAULT_EAT_AT, speechChunks,
+  addMinute, timerText, eatAtFor, DEFAULT_EAT_AT, speechChunks, forSpeech, parseVoiceCommand, parseAlternatives,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
 } from '../.test-build/app.mjs';
 
@@ -426,6 +426,40 @@ test('cook: read aloud in sentence-sized pieces (some phones stop reading long o
   assert.equal(parts.join(' ').replace(/\s+/g, ' '), long.trim().replace(/\s+/g, ' '), 'nothing lost');
   assert.deepEqual(speechChunks('No full stop at the end'), ['No full stop at the end']);
   assert.deepEqual(speechChunks('   '), []);
+});
+
+test('cook: voice commands — short phrases only, questions need "question"/"chef"', () => {
+  const k = (s) => parseVoiceCommand(s)?.kind ?? null;
+  for (const s of ['next', 'Next step', 'OK next please', 'go on', 'carry on']) assert.equal(k(s), 'next', s);
+  for (const s of ['back', 'go back', 'previous step']) assert.equal(k(s), 'back', s);
+  for (const s of ['repeat', 'say that again', 'read it again', 'pardon?']) assert.equal(k(s), 'repeat', s);
+  for (const s of ['stop', 'stop the timer', 'stop the alarm']) assert.equal(k(s), 'timer_stop', s);
+  for (const s of ['how long left', "how long's left", 'time left']) assert.equal(k(s), 'time_left', s);
+  assert.equal(k('start the timer'), 'timer_start');
+  assert.deepEqual(parseVoiceCommand('set a timer for 10 minutes'), { kind: 'timer_start', minutes: 10 });
+  assert.deepEqual(parseVoiceCommand('start a five minute timer'), { kind: 'timer_start', minutes: 5 });
+  assert.deepEqual(parseVoiceCommand('timer for an hour'), { kind: 'timer_start', minutes: 60 });
+  assert.deepEqual(parseVoiceCommand('go to step three'), { kind: 'goto', step: 3 });
+  assert.deepEqual(parseVoiceCommand('step 2'), { kind: 'goto', step: 2 });
+  assert.equal(k('what do I need'), 'ingredients');
+  assert.equal(k("I'm done"), 'finish');
+  assert.equal(k('what can I say'), 'help');
+  assert.deepEqual(parseVoiceCommand('question, can I use crème fraîche instead of soured cream'), { kind: 'question', text: 'Can I use crème fraîche instead of soured cream?' });
+  assert.deepEqual(parseVoiceCommand('Hey chef how do I know the chicken is cooked?'), { kind: 'question', text: 'How do I know the chicken is cooked?' });
+  // Kitchen chatter is ignored
+  for (const s of ['we need to go next week to the shops', 'can you pass the salt', 'is it going back to school tomorrow', 'question', '']) assert.equal(k(s), null, s);
+  // The recogniser's second guess is used if the first means nothing
+  assert.equal(parseAlternatives(['necks', 'next'])?.command.kind, 'next');
+  assert.equal(parseAlternatives(['hello there']), null);
+});
+
+test('cook: kitchen shorthand is read out in words', () => {
+  assert.equal(forSpeech('Add 500g mince and brown for 5 mins.'), 'Add 500 grams mince and brown for 5 minutes.');
+  assert.equal(forSpeech('Heat oven to 200C/180C fan.'), 'Heat oven to 200 degrees, or 180 degrees fan.');
+  assert.equal(forSpeech('1 tbsp olive oil, 2 tsp cumin, 1½ kg potatoes'), '1 tablespoon olive oil, 2 teaspoons cumin, 1 and a half kilos potatoes');
+  assert.equal(forSpeech('1⅓ x 400g tins kidney beans'), '1 and a third 400 gram tins kidney beans');
+  assert.equal(forSpeech('150 ml cream, ½ lemon, simmer 1 min'), '150 millilitres cream, half lemon, simmer 1 minute');
+  assert.equal(forSpeech('Season to taste.'), 'Season to taste.');
 });
 
 test('cook: when you eat — Settings, 6pm if not set, or just tonight', () => {

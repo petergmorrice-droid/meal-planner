@@ -1240,3 +1240,46 @@ Return a structured JSON object with the "actions" array detailing any recommend
     return cleanGroceryDatabaseLocally(items);
   }
 }
+
+/** No Gemini key on this phone: questions about a recipe can't be answered. */
+export class NoGeminiKeyError extends Error {
+  constructor() { super('No Gemini key'); }
+}
+
+/**
+ * A question asked while cooking ("Can I use crème fraîche instead?", "How do I know it's done?").
+ * Gemini answers from the recipe as you're cooking it (your amounts, your appliance, the step
+ * you're on) in a couple of short spoken-style sentences.
+ */
+export async function askAboutRecipeApi(
+  recipe: Recipe,
+  question: string,
+  context: { method: string; servings: number; step: number; steps: string[]; ingredients: string[] },
+): Promise<string> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new NoGeminiKeyError();
+  const where = context.step === 0
+    ? 'They are getting the ingredients out, before step 1.'
+    : `They are on step ${context.step} of ${context.steps.length}: "${context.steps[context.step - 1] || ''}"`;
+  const prompt = [
+    `Recipe: ${recipe.name}`,
+    `Cooking for ${context.servings} people, using the ${context.method === 'ninja' ? 'Ninja multi-cooker' : 'oven and hob'}.`,
+    'Ingredients (for these people):',
+    ...context.ingredients.map((x) => `- ${x}`),
+    'Method:',
+    ...context.steps.map((x, i) => `${i + 1}. ${x}`),
+    recipe.notes ? `Their own notes on this recipe: ${recipe.notes}` : '',
+    where,
+    '',
+    `Question: ${question}`,
+  ].filter(Boolean).join('\n');
+  const system = [
+    'You are a calm, practical cooking helper in a UK family kitchen. Someone is cooking this recipe right now and asked a question, often by voice.',
+    'Answer in one to three short sentences of plain text that read well aloud: no lists, no markdown, no headings.',
+    'Use British English and metric units (and gas marks only if asked). Give amounts for the number of people they are cooking for.',
+    'Answer from the recipe when it says; otherwise give sensible, safe general cooking advice and say briefly that it is not in the recipe.',
+    'Be accurate about food safety (cooking meat through, reheating, allergens). If you are not sure, say so.',
+  ].join(' ');
+  const text = await callGeminiRest(apiKey, prompt, system, undefined, { temperature: 0.4 });
+  return String(text || '').replace(/[*#_`]+/g, '').replace(/\s+/g, ' ').trim();
+}

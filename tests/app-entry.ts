@@ -16,4 +16,5 @@ export {
   addMinute, timerText, eatAtFor, DEFAULT_EAT_AT,
 } from '../src/cookInfo';
 export { moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart } from '../src/planning';
-export { speechChunks } from '../src/speech';
+export { speechChunks, forSpeech } from '../src/speech';
+export { parseVoiceCommand, parseAlternatives } from '../src/voiceCommands';

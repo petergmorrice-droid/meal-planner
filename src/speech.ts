@@ -41,6 +41,33 @@ export function speechChunks(text: string, max = 180): string[] {
   return out;
 }
 
+const FRACTIONS: Record<string, [string, string]> = {
+  // after a whole number, on its own
+  '½': ['and a half', 'half'], '⅓': ['and a third', 'a third'], '⅔': ['and two thirds', 'two thirds'],
+  '¼': ['and a quarter', 'a quarter'], '¾': ['and three quarters', 'three quarters'],
+};
+
+/**
+ * Written kitchen shorthand as it should be said: "500g" → "500 grams", "2 tbsp" → "2 tablespoons",
+ * "200C/180C fan" → "200 degrees, or 180 degrees fan", "1½" → "1 and a half", "10 mins" → "10 minutes".
+ */
+export function forSpeech(text: string): string {
+  return text
+    .replace(/\s*x\s*(\d+)\s*g\s+(tins?|cans?|packs?|jars?)\b/gi, ' $1 gram $2')
+    .replace(/([\d½⅓⅔¼¾])\s*kg\b/gi, '$1 kilos')
+    .replace(/([\d½⅓⅔¼¾])\s*g\b/g, '$1 grams')
+    .replace(/([\d½⅓⅔¼¾])\s*ml\b/gi, '$1 millilitres')
+    .replace(/([\d½⅓⅔¼¾])\s*l\b/g, '$1 litres')
+    .replace(/(\d)\s*([½⅓⅔¼¾])/g, (_m, d, f) => `${d} ${FRACTIONS[f][0]}`)
+    .replace(/([½⅓⅔¼¾])/g, (f) => FRACTIONS[f][1])
+    .replace(/\b1\s*tbsp\b/gi, '1 tablespoon').replace(/\btbsps?\b/gi, 'tablespoons')
+    .replace(/\b1\s*tsp\b/gi, '1 teaspoon').replace(/\btsps?\b/gi, 'teaspoons')
+    .replace(/(\d+)\s*°?\s*C\b/g, '$1 degrees')
+    .replace(/degrees\s*\/\s*/g, 'degrees, or ')
+    .replace(/\bmins?\b/gi, 'minutes').replace(/\bhrs?\b/gi, 'hours')
+    .replace(/\b1 minutes\b/g, '1 minute').replace(/\b1 hours\b/g, '1 hour');
+}
+
 export interface SpeakEvents {
   onStart?: () => void;
   onEnd?: () => void;
@@ -54,7 +81,7 @@ export function speak(text: string, events: SpeakEvents = {}): boolean {
   if (!s || !canSpeak()) return false;
   try {
     s.cancel();
-    const chunks = speechChunks(text);
+    const chunks = speechChunks(forSpeech(text));
     if (!chunks.length) return false;
     const voice = pickVoice(s);
     chunks.forEach((chunk, i) => {
