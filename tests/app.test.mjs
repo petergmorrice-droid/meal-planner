@@ -10,7 +10,7 @@ import {
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy,
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
-  addMinute, timerText,
+  addMinute, timerText, eatAtFor, DEFAULT_EAT_AT,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
 } from '../.test-build/app.mjs';
 
@@ -416,6 +416,17 @@ test('cook: start-by time from when you eat', () => {
   assert.equal(recipeMinutes(r, 'oven_hob'), 75);
   assert.equal(recipeMinutes(r, 'ninja'), 45);
   assert.equal(recipeMinutes(null), 0);
+});
+
+test('cook: when you eat — Settings, 6pm if not set, or just tonight', () => {
+  assert.equal(DEFAULT_EAT_AT, '18:00');
+  assert.deepEqual(eatAtFor(undefined, '2026-10-14'), { time: '18:00', usual: '18:00', tonightOnly: false });
+  assert.deepEqual(eatAtFor({ eatAt: '19:15' }, '2026-10-14'), { time: '19:15', usual: '19:15', tonightOnly: false });
+  assert.deepEqual(eatAtFor({ eatAt: 'soon' }, '2026-10-14').time, '18:00', 'bad setting falls back to 6pm');
+  const tonight = { eatAt: '18:00', eatAtTonight: { date: '2026-10-14', time: '19:30' } };
+  assert.deepEqual(eatAtFor(tonight, '2026-10-14'), { time: '19:30', usual: '18:00', tonightOnly: true });
+  assert.deepEqual(eatAtFor(tonight, '2026-10-15'), { time: '18:00', usual: '18:00', tonightOnly: false }, 'back to usual the next day');
+  assert.equal(startBy(eatAtFor(undefined, 'x').time, 75), 17 * 60 + 45 - 60, '75 min before 6pm is 4:45pm');
 });
 
 test('cook: what to do the night before', () => {

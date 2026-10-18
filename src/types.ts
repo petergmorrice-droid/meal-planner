@@ -204,8 +204,10 @@ export interface UserPreferences {
   shopRoute?: ShopRoute;
   /** Your last shops: how many items, how long. Newest first. */
   shopHistory?: ShopRecord[];
-  /** When you usually eat dinner ("19:00"), for "start by" times on the Cook tab. */
-  dinnerTime?: string;
+  /** When you usually eat dinner ("18:00"; 6pm if not set), for "start by" times on the Cook tab. Settings → my household. */
+  eatAt?: string;
+  /** A different time just for one evening, set on the Cook tab. */
+  eatAtTonight?: { date: string; time: string };
 }
 
 export interface ShopRoute {

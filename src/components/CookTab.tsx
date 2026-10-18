@@ -7,7 +7,7 @@ import { MealPlan, PlannedMeal, Recipe, BatchItem, DayPlan } from '../types';
 import { DAYS_OF_WEEK, formatDateISO, getMonday, getNextMonday, isWeekWithinForwardLimit } from '../utils';
 import { leftoverSourceDay, moveMeal, relinkLeftovers, cooksForText } from '../planning';
 import { formatWeekSpan, weekStartShort } from '../shopList';
-import { recipeMinutes, startBy, clockText, parseClock, prepTonight, freezePortionsFromNote } from '../cookInfo';
+import { recipeMinutes, startBy, clockText, parseClock, prepTonight, freezePortionsFromNote, eatAtFor } from '../cookInfo';
 import { DaySheet, describeMeal, mealTitle } from './planner/DayListRow';
 import { TimerBar } from './cook/TimerBar';
 import CookMode from './CookMode';
@@ -20,7 +20,6 @@ interface CookTabProps {
   onNavigateTab?: (tab: TabName, planId?: string) => void;
 }
 
-const DEFAULT_DINNER = '19:00';
 const isCookable = (m?: PlannedMeal | null) => !!m && (m.type === 'recipe' || m.type === 'leftover' || m.type === 'batch');
 /** Reheating leftovers or a freezer meal: roughly how long before dinner to start. */
 const REHEAT_MINUTES: Record<string, number> = { leftover: 15, batch: 30 };
@@ -68,7 +67,9 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
   const recipes: Recipe[] = store.state.recipes || [];
   const batches: BatchItem[] = store.state.batches || [];
   const prefs = store.state.preferences || {};
-  const dinnerTime: string = parseClock(prefs.dinnerTime) !== null ? prefs.dinnerTime : DEFAULT_DINNER;
+  // Your usual time is in Settings (6pm if not set); the Cook tab can change it just for tonight.
+  const eatAt = eatAtFor(prefs, todayIso);
+  const dinnerTime = eatAt.time;
   const recipeFor = (m?: PlannedMeal | null) => (m?.recipeId ? recipes.find((r) => r.id === m.recipeId) || null : null);
   const methodFor = (r: Recipe | null) => {
     const ms = r?.cookingMethods?.length ? r.cookingMethods : ['oven_hob'];
@@ -225,9 +226,12 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
     setToast({ text: `${portionsText(portions)} of ${f.name} added to the freezer`, undo: () => setCooked(f.planId, f.day, f.mealId, false) });
   };
 
+  /** Eating at a different time tonight (back to the usual time tomorrow). */
   const saveDinnerTime = (v: string) => {
-    if (parseClock(v) !== null) store.updatePreferences({ dinnerTime: v });
     setEditingTime(false);
+    if (parseClock(v) === null || v === dinnerTime) return;
+    store.updatePreferences({ eatAtTonight: v === eatAt.usual ? undefined : { date: todayIso, time: v } });
+    setToast({ text: v === eatAt.usual ? `Back to your usual ${clockText(parseClock(v)!)}` : `Eating at ${clockText(parseClock(v)!)} tonight. Your usual time is in Settings.` });
   };
 
   // ---------- Day panel actions (same panel as Planning) ----------
@@ -322,7 +326,8 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
               <span className="inline-flex items-center gap-2 flex-wrap">
                 Eat at
                 <input type="time" defaultValue={dinnerTime} autoFocus onBlur={(e) => saveDinnerTime(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveDinnerTime((e.target as HTMLInputElement).value); if (e.key === 'Escape') setEditingTime(false); }}
-                  className="h-9 rounded-lg border border-zinc-300 bg-white px-2 text-[15px]" data-dinner-input aria-label="Dinner time" />
+                  className="h-9 rounded-lg border border-zinc-300 bg-white px-2 text-[15px]" data-dinner-input aria-label="Dinner time tonight" />
+                <span className="text-sm text-emerald-900/70">just tonight</span>
               </span>
             ) : (
               <span className="min-w-0">
@@ -331,6 +336,12 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
                   {clockText(dinner)}<Pencil className="w-3 h-3 text-emerald-700/70" />
                 </button>
                 {minutes > 0 && meal!.type === 'recipe' && <span className="block text-sm text-emerald-900/70">{minutes} min of prep and cooking</span>}
+                {eatAt.tonightOnly && (
+                  <span className="block text-sm text-emerald-900/70" data-eat-at-tonight>
+                    Just tonight · usually {clockText(parseClock(eatAt.usual)!)}{' '}
+                    <button type="button" onClick={() => saveDinnerTime(eatAt.usual)} className="font-semibold underline underline-offset-2 cursor-pointer" data-eat-at-reset>use {clockText(parseClock(eatAt.usual)!)}</button>
+                  </span>
+                )}
               </span>
             )}
           </div>

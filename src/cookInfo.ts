@@ -26,6 +26,23 @@ export function startBy(dinner: string, minutesNeeded: number): number | null {
   return d === null ? null : d - Math.max(0, minutesNeeded);
 }
 
+/** When you eat if you haven't said: 6pm. */
+export const DEFAULT_EAT_AT = '18:00';
+
+/**
+ * When you're eating tonight: the time set just for tonight on the Cook tab, else your usual
+ * time from Settings, else 6pm.
+ */
+export function eatAtFor(
+  prefs: { eatAt?: string; eatAtTonight?: { date: string; time: string } } | null | undefined,
+  todayIso: string,
+): { time: string; usual: string; tonightOnly: boolean } {
+  const usual = parseClock(prefs?.eatAt) !== null ? prefs!.eatAt! : DEFAULT_EAT_AT;
+  const t = prefs?.eatAtTonight;
+  if (t && t.date === todayIso && parseClock(t.time) !== null && t.time !== usual) return { time: t.time, usual, tonightOnly: true };
+  return { time: usual, usual, tonightOnly: false };
+}
+
 /** Prep + cook time for the method you'll use (falls back to the recipe's times). */
 export function recipeMinutes(recipe: Recipe | null | undefined, method?: string): number {
   if (!recipe) return 0;

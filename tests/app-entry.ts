@@ -13,6 +13,6 @@ export {
 export {
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
-  addMinute, timerText,
+  addMinute, timerText, eatAtFor, DEFAULT_EAT_AT,
 } from '../src/cookInfo';
 export { moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart } from '../src/planning';

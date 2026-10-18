@@ -20,6 +20,7 @@ import {
   Sparkles,
   Cloud
 } from 'lucide-react';
+import { parseClock, DEFAULT_EAT_AT } from '../cookInfo';
 import { AppState, MealPlan, Recipe, UserPreferences, PlannedMeal, GroceryItem, DatabaseCleanAction } from '../types';
 import { 
   isPastWeek, 
@@ -622,7 +623,7 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
   const sidebarItems = [
     { id: 'archive', label: 'past weeks', icon: History, desc: 'Clone and review completed plan history' },
     { id: 'grocery_db', label: 'grocery database', icon: BookOpen, desc: 'Standard shopping units and steps' },
-    { id: 'household', label: 'my household', icon: Users, desc: 'Portions & multi-cooker preferences' },
+    { id: 'household', label: 'my household', icon: Users, desc: 'Portions, when you eat & multi-cooker preferences' },
     { id: 'github', label: 'connections', icon: Cloud, desc: 'Sync with private GitHub Gist and configure Gemini AI' },
     { id: 'system', label: 'backup', icon: Download, desc: 'Download, restore and reset' }
   ] as const;
@@ -1189,6 +1190,22 @@ export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) 
                           +
                         </button>
                         <span className="text-[11px] text-zinc-500">portions</span>
+                      </div>
+                    </div>
+
+                    {/* When you eat: the Cook tab works out when to start from it */}
+                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2" data-setting-eat-at>
+                      <label htmlFor="setting-eat-at" className="text-xs font-semibold text-zinc-900 block">We usually eat at</label>
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          id="setting-eat-at"
+                          type="time"
+                          value={parseClock(prefs.eatAt) !== null ? prefs.eatAt : DEFAULT_EAT_AT}
+                          onChange={(e) => { if (parseClock(e.target.value) !== null) store.updatePreferences({ eatAt: e.target.value }); }}
+                          className="h-9 px-2 bg-white border border-zinc-200 rounded-lg text-sm font-bold tabular-nums focus:outline-none focus:border-emerald-500"
+                          data-setting-eat-at-input
+                        />
+                        <span className="text-[11px] text-zinc-500 leading-snug">The Cook tab says when to start cooking to eat at this time. You can change it just for one evening there.</span>
                       </div>
                     </div>
                   </div>
