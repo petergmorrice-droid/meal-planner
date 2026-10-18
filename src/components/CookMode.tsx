@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { formatCookingAmount } from '../shopping';
 import {
   ChevronLeft, ChevronRight, ChefHat, Plus, Minus, Check, Timer, Type, Volume2, VolumeX,
@@ -9,6 +9,7 @@ import { scaleRecipeStepQuantities, DAYS_OF_WEEK } from '../utils';
 import { ingredientsForStep, stepMinutes, stepTimerLabel, timeLeft, timerText, freezePortionsFromNote } from '../cookInfo';
 import { useCookTimers } from '../hooks/useCookTimers';
 import { TimerBar } from './cook/TimerBar';
+import { canSpeak, speak, stopSpeaking } from '../speech';
 
 interface CookModeProps {
   store: any;
@@ -70,7 +71,17 @@ export default function CookMode({
   const [activeMealId, setActiveMealId] = useState<string>(initialActiveMealId);
   const [finished, setFinished] = useState(false);
   const [big, setBig] = useState(() => readPref('cook_big_steps'));
-  const [readAloud, setReadAloud] = useState(() => readPref('cook_read_aloud'));
+  const speechOK = useMemo(() => canSpeak(), []);
+  const [readAloud, setReadAloud] = useState(() => speechOK && readPref('cook_read_aloud'));
+  const readAloudRef = useRef(readAloud);
+  readAloudRef.current = readAloud;
+  const [speaking, setSpeaking] = useState(false);
+  const [readNote, setReadNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!readNote) return;
+    const t = setTimeout(() => setReadNote(null), 8000);
+    return () => clearTimeout(t);
+  }, [readNote]);
 
   const activeMeal = useMemo(() => meals.find((m) => m.id === activeMealId) || meals[0], [meals, activeMealId]);
   const recipe = useMemo<Recipe | null>(
@@ -136,23 +147,61 @@ export default function CookMode({
     el?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   }, [step, big]);
 
-  // Read each step out as you get to it.
+  // Read each step out as you get to it (Read on). Reading starts from the tap itself, which
+  // phones need before they'll speak.
   const stepText = (i: number) => {
     if (i === 0) return `Get everything out. ${ingredients.map((ing) => { const l = ingredientLine(ing, scale); return `${l.amount} ${l.name}`.trim(); }).join(', ')}.`;
     return scaleRecipeStepQuantities(instructions[i - 1] || '', ingredients, scale);
   };
+  const sayStep = (i: number) => {
+    const ok = speak(i18nStep(i, stepCount, stepText(i)), {
+      onStart: () => setSpeaking(true),
+      onEnd: () => setSpeaking(false),
+      onError: (reason) => {
+        setSpeaking(false);
+        setReadNote(reason === 'not-allowed' ? 'Your phone stopped the reading. Tap “Read it again”.' : "Couldn't read that out. Check the phone's volume and try “Read it again”.");
+      },
+    });
+    if (!ok) setReadNote(NO_SPEECH);
+  };
+  const toggleRead = () => {
+    if (!speechOK) { setReadNote(NO_SPEECH); return; }
+    const v = !readAloud;
+    setReadAloud(v);
+    savePref('cook_read_aloud', v);
+    if (v) sayStep(step);
+    else { stopSpeaking(); setSpeaking(false); }
+  };
+  const firstStep = useRef(true);
   useEffect(() => {
-    const synth: SpeechSynthesis | undefined = (window as any).speechSynthesis;
-    if (!readAloud || !synth || finished) return;
-    try {
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(i18nStep(step, stepCount, stepText(step)));
-      u.lang = 'en-GB';
-      u.rate = 0.95;
-      synth.speak(u);
-    } catch { /* no speech on this device */ }
-  }, [readAloud, step, method, activeMealId, finished]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { try { (window as any).speechSynthesis?.cancel(); } catch { /* ignore */ } }, []);
+    // Opening cooking mode with Read on reads the first step; after that, each step you move to.
+    if (firstStep.current) { firstStep.current = false; if (!readAloudRef.current) return; }
+    if (readAloudRef.current && !finished) sayStep(step);
+  }, [step, method, activeMealId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (finished) { stopSpeaking(); setSpeaking(false); } }, [finished]);
+  useEffect(() => () => stopSpeaking(), []);
+
+  // Big steps: the step's text shrinks until it fits the screen (down to a size that's still easy
+  // to read; past that it scrolls).
+  const fitRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = fitRef.current;
+    if (!big || !el) return;
+    const fit = () => {
+      let size = 30;
+      el.style.setProperty('--fit', `${size}px`);
+      while (size > 17 && el.scrollHeight > el.clientHeight + 1) {
+        size -= 1;
+        el.style.setProperty('--fit', `${size}px`);
+      }
+    };
+    fit();
+    const RO = (window as any).ResizeObserver;
+    if (!RO) return;
+    const ro = new RO(() => fit());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [big, step, method, activeMealId, servings, tickedCount, timers.length, readAloud]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!activeMeal || !recipe) {
     return (
@@ -290,9 +339,10 @@ export default function CookMode({
               className={`h-9 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${big ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`} data-cook-big>
               <Type className="w-4 h-4" /> Big steps
             </button>
-            <button type="button" onClick={() => { const v = !readAloud; setReadAloud(v); savePref('cook_read_aloud', v); if (!v) { try { (window as any).speechSynthesis?.cancel(); } catch { /* ignore */ } } }} aria-pressed={readAloud}
-              className={`h-9 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${readAloud ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`} data-cook-read aria-label="Read the steps aloud">
-              {readAloud ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />} Read
+            <button type="button" onClick={toggleRead} aria-pressed={readAloud}
+              className={`h-9 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${readAloud ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'} ${speechOK ? '' : 'opacity-60'}`}
+              data-cook-read aria-label={readAloud ? 'Stop reading the steps aloud' : 'Read the steps aloud'} title="Reads each step out loud as you go">
+              {readAloud ? <Volume2 className={`w-4 h-4 ${speaking ? 'animate-pulse' : ''}`} /> : <VolumeX className="w-4 h-4" />} Read
             </button>
           </span>
         </div>
@@ -308,6 +358,20 @@ export default function CookMode({
         )}
       </header>
 
+      {readNote && (
+        <div className="shrink-0 bg-zinc-900 text-white px-4 py-2 text-sm" role="status" data-read-note>
+          <div className="max-w-2xl mx-auto flex items-start gap-2"><VolumeX className="w-4 h-4 shrink-0 mt-0.5" /><span>{readNote}</span></div>
+        </div>
+      )}
+      {readAloud && !readNote && (
+        <div className="shrink-0 bg-zinc-100 border-b border-zinc-200 px-4 py-1.5 text-[13px] text-zinc-700" data-read-on>
+          <div className="max-w-2xl mx-auto flex items-center gap-2">
+            <Volume2 className={`w-4 h-4 shrink-0 ${speaking ? 'text-emerald-600 animate-pulse' : 'text-zinc-500'}`} />
+            <span className="flex-1 min-w-0 truncate">{speaking ? 'Reading the step…' : 'Reads each step as you go'}</span>
+            <button type="button" onClick={() => sayStep(step)} className="shrink-0 font-semibold underline underline-offset-2 cursor-pointer" data-read-again>Read it again</button>
+          </div>
+        </div>
+      )}
       {(plan.banner || (activeMeal.sides && activeMeal.sides.length > 0)) && (
         <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-950" data-cook-banner>
           <div className="max-w-2xl mx-auto space-y-0.5">
@@ -320,32 +384,59 @@ export default function CookMode({
       <TimerBar />
 
       {big ? (
-        // ---------- Big steps: one at a time, large text, the lower part of the screen is Next ----------
+        // ---------- Big steps: one at a time, as big as fits on the screen ----------
         <div className="flex-1 flex flex-col min-h-0" data-big-step={step}>
-          <div className="flex-1 overflow-y-auto px-5 pt-4 pb-3">
+          <div ref={fitRef} className="flex-1 min-h-0 overflow-y-auto px-5 pt-3 pb-2" style={{ ['--fit' as any]: '30px' }} data-big-fit>
             <div className="max-w-2xl mx-auto">
-              <p className="text-sm font-semibold text-zinc-500 mb-2">{step === 0 ? 'First' : `Step ${step} of ${stepCount - 1}`}</p>
+              <p className="font-semibold text-zinc-500 mb-1.5" style={{ fontSize: 'max(13px, calc(var(--fit) * 0.5))' }}>{step === 0 ? 'First' : `Step ${step} of ${stepCount - 1}`}</p>
               {step === 0 ? (
                 <>
-                  <h3 className="text-3xl font-bold text-zinc-900 leading-tight">Get everything out</h3>
-                  <p className="text-base text-zinc-500 mt-1">{tickedCount} of {ingredients.length} out</p>
-                  {checklist(true)}
+                  <h3 className="font-bold text-zinc-900 leading-tight" style={{ fontSize: 'var(--fit)' }}>Get everything out</h3>
+                  <p className="text-zinc-500 mt-0.5" style={{ fontSize: 'max(13px, calc(var(--fit) * 0.55))' }}>{tickedCount} of {ingredients.length} out</p>
+                  <ul className="divide-y divide-zinc-100 mt-1" data-get-out>
+                    {ingredients.map((ing, idx) => {
+                      const key = ing.id || String(idx);
+                      const on = !!ticked[key];
+                      const l = ingredientLine(ing, scale);
+                      return (
+                        <li key={key}>
+                          <button type="button" onClick={() => setTicked((t) => ({ ...t, [key]: !t[key] }))} aria-pressed={on}
+                            className="w-full text-left flex items-center gap-3 cursor-pointer" style={{ paddingTop: 'calc(var(--fit) * 0.25)', paddingBottom: 'calc(var(--fit) * 0.25)', fontSize: 'max(15px, calc(var(--fit) * 0.68))' }}>
+                            <span className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-300 bg-white'}`}>{on && <Check className="w-3.5 h-3.5" />}</span>
+                            <span className={`min-w-0 flex-1 leading-snug ${on ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}>
+                              {l.amount && <span className="font-semibold tabular-nums">{l.amount} </span>}{l.name}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </>
               ) : (
                 <>
-                  <p className="text-[28px] leading-snug font-semibold text-zinc-900" data-big-text>{stepText(step)}</p>
-                  {needs(instructions[step - 1], true)}
-                  <div className="mt-5">{stepTimer(instructions[step - 1], true)}</div>
+                  <p className="font-semibold text-zinc-900" style={{ fontSize: 'var(--fit)', lineHeight: 1.3 }} data-big-text>{stepText(step)}</p>
+                  {(() => {
+                    const used = ingredientsForStep(instructions[step - 1], ingredients);
+                    return used.length ? (
+                      <div className="flex flex-wrap gap-1.5 mt-3" data-step-needs style={{ fontSize: 'max(14px, calc(var(--fit) * 0.6))' }}>
+                        {used.map((ing, i) => {
+                          const l = ingredientLine(ing, scale);
+                          return <span key={ing.id || i} className="rounded-lg bg-amber-50 border border-amber-200 text-amber-950 px-2.5 py-1">{l.amount && <strong className="font-semibold">{l.amount} </strong>}{l.name}</span>;
+                        })}
+                      </div>
+                    ) : null;
+                  })()}
+                  {stepMinutes(instructions[step - 1]) && <div className="mt-3">{stepTimer(instructions[step - 1])}</div>}
                 </>
               )}
             </div>
           </div>
-          <div className="shrink-0 flex gap-2 px-3 pb-3 pt-2 bg-[#fafafa]" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-            <button type="button" onClick={back} disabled={step === 0} className="w-20 rounded-2xl border border-zinc-300 bg-white text-zinc-700 flex items-center justify-center disabled:opacity-30 cursor-pointer" aria-label="Back a step" data-big-back>
-              <ChevronLeft className="w-7 h-7" />
+          <div className="shrink-0 flex gap-2 px-3 pt-2 bg-[#fafafa] border-t border-zinc-200" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+            <button type="button" onClick={back} disabled={step === 0} className="w-14 h-14 rounded-xl border border-zinc-300 bg-white text-zinc-700 flex items-center justify-center disabled:opacity-30 cursor-pointer shrink-0" aria-label="Back a step" data-big-back>
+              <ChevronLeft className="w-6 h-6" />
             </button>
-            <button type="button" onClick={next} className={`flex-1 h-[30vh] min-h-[140px] rounded-2xl text-white text-2xl font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] ${step >= stepCount - 1 ? 'bg-emerald-600' : 'bg-zinc-900'}`} data-big-next>
-              {step >= stepCount - 1 ? 'Finished' : 'Next'} <ChevronRight className="w-8 h-8" />
+            <button type="button" onClick={next} className={`flex-1 h-14 rounded-xl text-white text-lg font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99] ${step >= stepCount - 1 ? 'bg-emerald-600' : 'bg-zinc-900'}`} data-big-next>
+              {step >= stepCount - 1 ? 'Finished' : 'Next'} <ChevronRight className="w-6 h-6" />
             </button>
           </div>
         </div>
@@ -404,6 +495,8 @@ export default function CookMode({
     </div>
   );
 }
+
+const NO_SPEECH = "Reading aloud isn't available here. It works when the app is opened in Chrome or Safari (or added to your home screen), not inside some other apps' browsers.";
 
 /** What's read out for a step: "Step 2 of 4. Boil the potatoes…". */
 function i18nStep(step: number, count: number, text: string) {

@@ -10,7 +10,7 @@ import {
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy,
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
-  addMinute, timerText, eatAtFor, DEFAULT_EAT_AT,
+  addMinute, timerText, eatAtFor, DEFAULT_EAT_AT, speechChunks,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
 } from '../.test-build/app.mjs';
 
@@ -416,6 +416,16 @@ test('cook: start-by time from when you eat', () => {
   assert.equal(recipeMinutes(r, 'oven_hob'), 75);
   assert.equal(recipeMinutes(r, 'ninja'), 45);
   assert.equal(recipeMinutes(null), 0);
+});
+
+test('cook: read aloud in sentence-sized pieces (some phones stop reading long ones)', () => {
+  assert.deepEqual(speechChunks('Step 1 of 4. Fry the onions for 8 mins.'), ['Step 1 of 4. Fry the onions for 8 mins.']);
+  const long = 'Spoon the chilli over the rice, scatter with coriander and soured cream. '.repeat(5);
+  const parts = speechChunks(long);
+  assert.ok(parts.length >= 2 && parts.every((x) => x.length <= 180), JSON.stringify(parts.map((x) => x.length)));
+  assert.equal(parts.join(' ').replace(/\s+/g, ' '), long.trim().replace(/\s+/g, ' '), 'nothing lost');
+  assert.deepEqual(speechChunks('No full stop at the end'), ['No full stop at the end']);
+  assert.deepEqual(speechChunks('   '), []);
 });
 
 test('cook: when you eat — Settings, 6pm if not set, or just tonight', () => {
