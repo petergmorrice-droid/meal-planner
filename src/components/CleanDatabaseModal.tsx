@@ -403,7 +403,7 @@ export function CleanDatabaseModal({
                 </h3>
                 <p className="text-xs text-red-700">
                   {error === 'GEMINI_API_KEY_MISSING' 
-                    ? 'Please configure your Gemini API Key in the Settings connections tab to scan and optimize your database.' 
+                    ? 'Add your Gemini key first: Settings, under This phone.' 
                     : error}
                 </p>
               </div>

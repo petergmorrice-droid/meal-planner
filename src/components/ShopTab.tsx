@@ -97,6 +97,9 @@ interface ShopTabProps {
   /** Open on this week (e.g. "See the list" after sending a week from Planning). */
   openPlanId?: string | null;
   onOpenPlanHandled?: () => void;
+  /** Open one of the Shop's panels straight away (from Settings → Shopping). */
+  openPanel?: 'aisles' | 'staples' | 'history' | null;
+  onOpenPanelHandled?: () => void;
 }
 
 type ViewMode = 'sections' | 'food_type' | 'all';
@@ -149,7 +152,7 @@ export function formatListWithAnd(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
-export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHandled }: ShopTabProps) {
+export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHandled, openPanel, onOpenPanelHandled }: ShopTabProps) {
   // The latest store, for buttons pressed later (Undo in a message).
   const storeRef = useRef(store);
   storeRef.current = store;
@@ -328,6 +331,14 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     return defaultWeekId();
   });
   useEffect(() => { if (openPlanId) onOpenPlanHandled?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // From Settings → Shopping: open that panel.
+  useEffect(() => {
+    if (!openPanel) return;
+    if (openPanel === 'aisles') setShowAisleOrder(true);
+    else if (openPanel === 'staples') setShowEditStaplesModal(true);
+    else if (openPanel === 'history') setShowHistory(true);
+    onOpenPanelHandled?.();
+  }, [openPanel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the selected week valid (e.g. a week removed on the other phone)
   useEffect(() => {
@@ -3189,6 +3200,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
           <button 
             type="button" 
             onClick={onClose}
+            aria-label="Close"
             className="text-zinc-400 hover:text-zinc-600 p-1.5 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />

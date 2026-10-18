@@ -868,7 +868,7 @@ function geminiFailure(err: any, task: string): Error {
   const raw = String(err?.message || err || '');
   let reason = 'it may be busy or unreachable';
   if (/quota|exhaust|rate|429/i.test(raw)) reason = "today's free Gemini limit may have been reached";
-  else if (/api key|permission|401|403/i.test(raw)) reason = 'the Gemini API key was not accepted (check Settings → connections)';
+  else if (/api key|permission|401|403/i.test(raw)) reason = 'the Gemini API key was not accepted (check Settings → This phone)';
   else if (/abort|timeout|network|fetch/i.test(raw)) reason = 'there was no connection, or it took too long';
   else if (/json|unexpected token/i.test(raw)) reason = 'its answer could not be read';
   return new Error(`Gemini couldn't ${task}: ${reason}. Nothing has been saved, so please try again in a minute.`);
@@ -1282,4 +1282,21 @@ export async function askAboutRecipeApi(
   ].join(' ');
   const text = await callGeminiRest(apiKey, prompt, system, undefined, { temperature: 0.4 });
   return String(text || '').replace(/[*#_`]+/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** Check a Gemini key works (Settings → This phone → Test it), with a plain answer. */
+export async function testGeminiKeyApi(key: string): Promise<{ ok: boolean; message: string }> {
+  const k = key.trim();
+  if (!k) return { ok: false, message: 'Paste a key first.' };
+  try {
+    await callGeminiRest(k, 'Reply with the single word OK.', undefined, undefined, { temperature: 0 });
+    return { ok: true, message: 'It works.' };
+  } catch (e: any) {
+    const m = String(e?.message || e || '');
+    if (/api key not valid|api_key_invalid|invalid api key|api key expired/i.test(m)) return { ok: false, message: "Google says that key isn't valid. Copy it again from Google AI Studio." };
+    if (/quota|exhausted|rate limit|429/i.test(m)) return { ok: true, message: "The key works, but today's free limit has been used. It'll work again tomorrow." };
+    if (/permission|forbidden|403/i.test(m)) return { ok: false, message: "That key isn't allowed to use Gemini. Make a new one in Google AI Studio." };
+    if (/failed to fetch|network|load failed|abort/i.test(m)) return { ok: false, message: "Couldn't reach Gemini. Check the phone is online." };
+    return { ok: false, message: m || "Gemini didn't answer." };
+  }
 }

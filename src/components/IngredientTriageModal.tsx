@@ -243,7 +243,7 @@ export function IngredientTriageModal({
                 </span>
               </div>
               <p className="text-[11px] text-amber-700/90 leading-tight">
-                Match to your grocery database for accurate shopping lists.
+                Match to one of your products (Settings → Products) for accurate shopping lists.
               </p>
             </div>
           </div>

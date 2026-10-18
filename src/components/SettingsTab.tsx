@@ -1,48 +1,28 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  Calendar, 
-  Check, 
-  Copy, 
-  RotateCcw, 
-  Download, 
-  Upload, 
-  Search, 
-  X,
-  Zap, 
-  History,
-  ChevronDown,
-  Trash2,
-  BookOpen,
-  Plus,
-  Minus,
-  Users,
-  Heart,
-  Sparkles,
-  Cloud
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Check, Copy, Download, Upload, Search, X, Plus, Minus, ChevronRight, ChevronLeft, Sparkles,
+  RefreshCw, ListOrdered, RotateCcw, Trophy, Package, History, ThumbsUp, ThumbsDown, Trash2,
 } from 'lucide-react';
 import { parseClock, DEFAULT_EAT_AT } from '../cookInfo';
-import { AppState, MealPlan, Recipe, UserPreferences, PlannedMeal, GroceryItem, DatabaseCleanAction } from '../types';
-import { 
-  isPastWeek, 
-  formatWeekRange, 
-  formatDateISO, 
-  getMonday, 
-  DAYS_OF_WEEK, 
-  formatWeekStart,
-  findGroceryDatabaseMatch,
-  getGroceryAisle,
-  GROCERY_AISLES,
-  parseQtyAndUnit,
-  syncRecurringStaplesForAllPlans
-} from '../utils';
-import { RecipeModal } from './CookBookTab';
+import { AppState, MealPlan, Recipe, UserPreferences, GroceryItem, DatabaseCleanAction } from '../types';
+import { isPastWeek, formatDateISO, getMonday, DAYS_OF_WEEK } from '../utils';
 import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
 import { useDeviceIdentity, setCurrentDeviceIdentity } from '../hooks/useDeviceIdentity';
 import { CleanDatabaseModal } from './CleanDatabaseModal';
+import { describeMeal, mealTitle } from './planner/DayListRow';
+import { leftoverSourceDay } from '../planning';
+import { formatWeekSpan } from '../shopList';
+import { testGeminiKeyApi, getGeminiApiKey, saveGeminiApiKey, clearGeminiApiKey } from '../services/geminiService';
+import { runningVersion, checkForUpdate, updateNow, builtText, UpdateCheck } from '../appVersion';
+import { agoText, syncProblemText, backupSummary } from '../settingsInfo';
+
+type TabName = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
+type ShopPanel = 'aisles' | 'staples' | 'history';
 
 interface SettingsTabProps {
   store: {
     state: AppState;
+    getState?: () => AppState;
     updatePreferences: (prefs: Partial<UserPreferences>) => void;
     resetPreferences: () => void;
     updateMealPlan: (plan: MealPlan) => void;
@@ -50,12 +30,9 @@ interface SettingsTabProps {
     clearPastWeeks: () => void;
     exportAllData: () => string;
     importAllData: (data: string) => boolean;
-    updateShoppingList?: (list: any[]) => void;
     updateGroceryDatabase?: (db: GroceryItem[]) => void;
     updateGroceryOverride?: (id: string, updates: Partial<GroceryItem>) => void;
     applyGroceryCleanActions?: (actions: DatabaseCleanAction[]) => Promise<void>;
-    
-    // GitHub Gist Fields
     githubConfig: { pat: string; gistId: string } | null;
     syncStatus: 'idle' | 'loading' | 'synced' | 'error';
     lastSynced: Date | null;
@@ -66,1744 +43,717 @@ interface SettingsTabProps {
     clearGithubConfig: () => void;
     manualSync: () => Promise<void>;
   };
-  onNavigateTab?: (tab: 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings') => void;
+  onNavigateTab?: (tab: TabName) => void;
+  /** Open the Shop with one of its panels (aisles, staples, past shops). */
+  onOpenShopPanel?: (panel: ShopPanel) => void;
 }
 
-type SubSection = 'archive' | 'grocery_db' | 'household' | 'system' | 'github';
+const LAST_BACKUP_KEY = 'last_backup_at';
+const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-500 px-1 mb-1.5';
+const card = 'bg-white rounded-2xl border border-zinc-200 divide-y divide-zinc-100';
+const row = 'w-full px-4 py-3 flex items-center gap-3 text-left';
 
-export default function SettingsTab({ store, onNavigateTab }: SettingsTabProps) {
-  const currentMonday = getMonday(new Date());
-  const currentMondayStr = formatDateISO(currentMonday);
-  const activeMember = useDeviceIdentity();
+/**
+ * Settings on one page: this phone, household, sync, shopping, history, backup and the app's
+ * version. Products and past weeks open as their own pages.
+ */
+export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: SettingsTabProps) {
+  const who = useDeviceIdentity();
+  const prefs: UserPreferences = (store.state.preferences || {}) as UserPreferences;
+  const [view, setView] = useState<'main' | 'products' | 'history'>('main');
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; body: string; action: string; danger?: boolean; run: () => void } | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), toast.undo ? 6000 : 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  const say = (text: string, undo?: () => void) => setToast({ text, undo });
 
-  // Tab State - order matches user request: past weeks, reocurring staples, grocery database, my household, system
-  const [activeSubSection, setActiveSubSection] = useState<SubSection>('archive');
-  
-  // Collapse Search states
-  const [showArchiveSearch, setShowArchiveSearch] = useState(false);
-  const [showDbSearch, setShowDbSearch] = useState(false);
-  
-  // Popup States
-  const [isAddPopupOpen, setIsAddPopupOpen] = useState(false);
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-
-  // Normal States
-  const [searchArchive, setSearchArchive] = useState('');
-  const [selectedPastPlanId, setSelectedPastPlanId] = useState<string | null>(null);
-  const [expandedPlanIds, setExpandedPlanIds] = useState<Record<string, boolean>>({});
-  const [targetWeeks, setTargetWeeks] = useState<Record<string, string>>({});
-  const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [templateTargetWeek, setTemplateTargetWeek] = useState<string>(currentMondayStr);
-  const [showResetSettingsModal, setShowResetSettingsModal] = useState(false);
-  const [isCleanDbModalOpen, setIsCleanDbModalOpen] = useState(false);
-  const [localPat, setLocalPat] = useState('');
-  const [localGistId, setLocalGistId] = useState('');
-  const [localGeminiKey, setLocalGeminiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
-
-  // Grocery Database Search & Filters
-  const [dbSearch, setDbSearch] = useState('');
-  const [dbCategoryFilter, setDbCategoryFilter] = useState('All');
-
-  // Popup Form States (Insert)
-  const [dbNewName, setDbNewName] = useState('');
-  const [dbNewUnit, setDbNewUnit] = useState('g');
-  const [dbNewIncrement, setDbNewIncrement] = useState<number>(100);
-  const [dbNewCategory, setDbNewCategory] = useState('Produce');
-
-  // Popup Form States (Edit)
-  const [editingItemName, setEditingItemName] = useState('');
-  const [editingItemUnit, setEditingItemUnit] = useState('');
-  const [editingItemIncrement, setEditingItemIncrement] = useState<number>(1);
-  const [editingItemCategory, setEditingItemCategory] = useState('');
-
-  const groceryDatabase = store.state.groceryDatabase || [];
-
-  const hydratedCatalog = useMemo<GroceryItem[]>(() => {
-    const baseItems = store.state.groceryDatabase && store.state.groceryDatabase.length > 0
-      ? store.state.groceryDatabase
-      : INITIAL_GROCERY_DATABASE;
+  // Products: the built-in list plus your changes (what the Shop uses).
+  const catalog = useMemo<GroceryItem[]>(() => {
+    const base = store.state.groceryDatabase && store.state.groceryDatabase.length ? store.state.groceryDatabase : INITIAL_GROCERY_DATABASE;
     const overrides = store.state.groceryOverrides || {};
-    return baseItems.map(item => ({
-      ...item,
-      ...(overrides[item.id] || {})
-    }));
+    return base.map((item) => ({ ...item, ...(overrides[item.id] || {}) }));
   }, [store.state.groceryDatabase, store.state.groceryOverrides]);
 
-  const handleApplyCleanChanges = async (actions: DatabaseCleanAction[]) => {
-    if (store.applyGroceryCleanActions) {
-      await store.applyGroceryCleanActions(actions);
-    } else if (store.updateGroceryDatabase) {
-      const itemMap = new Map<string, GroceryItem>(hydratedCatalog.map(i => [i.id, { ...i }]));
-      const deletedIds = new Set<string>();
-
-      for (const action of actions) {
-        if (action.actionType === 'merge') {
-          const primary = itemMap.get(action.primaryItemId);
-          const secondary = action.secondaryItemId ? itemMap.get(action.secondaryItemId) : undefined;
-          if (primary && secondary) {
-            const aliases = new Set((primary.aliases || []).map(a => a.toLowerCase().trim()));
-            aliases.add(secondary.name.toLowerCase().trim());
-            (secondary.aliases || []).forEach(a => aliases.add(a.toLowerCase().trim()));
-            primary.aliases = Array.from(aliases);
-            if (action.newName) primary.name = action.newName.trim();
-            if (action.newAisle) primary.category = action.newAisle.trim();
-            deletedIds.add(secondary.id);
-          }
-        } else if (action.actionType === 'rename') {
-          const primary = itemMap.get(action.primaryItemId);
-          if (primary && action.newName) {
-            const aliases = new Set((primary.aliases || []).map(a => a.toLowerCase().trim()));
-            aliases.add(primary.name.toLowerCase().trim());
-            primary.aliases = Array.from(aliases);
-            primary.name = action.newName.trim();
-          }
-        } else if (action.actionType === 'recategorize') {
-          const primary = itemMap.get(action.primaryItemId);
-          if (primary && action.newAisle) {
-            primary.category = action.newAisle.trim();
-          }
-        }
-      }
-
-      const finalItems = Array.from(itemMap.values()).filter(i => !deletedIds.has(i.id));
-      store.updateGroceryDatabase(finalItems);
-    }
+  const applyClean = async (actions: DatabaseCleanAction[]) => {
+    if (store.applyGroceryCleanActions) await store.applyGroceryCleanActions(actions);
   };
 
-  const handleAddGroceryItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!dbNewName.trim()) return;
+  const pastPlans: MealPlan[] = useMemo(
+    () => (store.state.mealPlans || []).filter((p) => isPastWeek(p.startDate)).sort((a, b) => b.startDate.localeCompare(a.startDate)),
+    [store.state.mealPlans],
+  );
 
-    const newItem: GroceryItem = {
-      id: `gdb-${Date.now()}`,
-      name: dbNewName.trim(),
-      unit: dbNewUnit.trim(),
-      increment: Math.max(0.01, dbNewIncrement),
-      category: dbNewCategory
-    };
+  const body = view === 'products'
+    ? <ProductsPage catalog={catalog} store={store} onBack={() => setView('main')} onClean={() => setCleaning(true)} say={say} setConfirm={setConfirm} />
+    : view === 'history'
+    ? <HistoryPage plans={pastPlans} store={store} onBack={() => setView('main')} say={say} setConfirm={setConfirm} onNavigateTab={onNavigateTab} />
+    : (
+      <div className="flex-1 overflow-y-auto" id="settings-scroll-container">
+        <div className="max-w-2xl mx-auto px-3 pt-3 pb-24 space-y-5">
+          <ThisPhone who={who} say={say} />
+          <Household prefs={prefs} store={store} />
+          <SyncSection store={store} say={say} setConfirm={setConfirm} />
+          <section data-settings-shopping>
+            <h3 className={sectionTitle}>Shopping</h3>
+            <div className={card}>
+              <NavRow icon={<ListOrdered className="w-5 h-5" />} title="Arrange aisles" sub="The order you walk round your shop" onClick={() => onOpenShopPanel?.('aisles')} attr="aisles" />
+              <NavRow icon={<RotateCcw className="w-5 h-5" />} title="Weekly staples" sub={(prefs.recurringItems || []).map((x) => x.name).slice(0, 4).join(', ') || 'Things you buy every week'} onClick={() => onOpenShopPanel?.('staples')} attr="staples" />
+              <NavRow icon={<Trophy className="w-5 h-5" />} title="Past shops" sub={(prefs.shopHistory || []).length ? `${(prefs.shopHistory || []).length} shops recorded` : 'How long your shops take'} onClick={() => onOpenShopPanel?.('history')} attr="past-shops" />
+              <NavRow icon={<Package className="w-5 h-5" />} title="Products" sub={`${catalog.length} products: how they're sold and which aisle`} onClick={() => setView('products')} attr="products" />
+            </div>
+          </section>
+          <section data-settings-history>
+            <h3 className={sectionTitle}>History</h3>
+            <div className={card}>
+              <NavRow icon={<History className="w-5 h-5" />} title="Past weeks" sub={pastPlans.length ? `${pastPlans.length} ${pastPlans.length === 1 ? 'week' : 'weeks'}: what you ate, and copy one to a new week` : 'Finished weeks appear here'} onClick={() => setView('history')} attr="past-weeks" />
+            </div>
+          </section>
+          <BackupSection store={store} catalog={catalog} say={say} setConfirm={setConfirm} />
+          <AboutSection />
+        </div>
+      </div>
+    );
 
-    const updatedDb = [...groceryDatabase, newItem];
-    if (store.updateGroceryDatabase) {
-      store.updateGroceryDatabase(updatedDb);
-    }
-    setDbNewName('');
-    showToast(`Added "${newItem.name}" to database`);
+  return (
+    <div className="h-full flex flex-col bg-[#fafafa] relative overflow-hidden">
+      {view === 'main' && (
+        <header className="bg-white border-b border-zinc-200/80 px-4 py-2.5 shrink-0">
+          <div className="max-w-2xl mx-auto"><h2 className="text-[15px] font-bold text-zinc-900">Settings</h2></div>
+        </header>
+      )}
+      {body}
+
+      {toast && (
+        <div className="absolute left-3 right-3 bottom-3 z-30 flex justify-center pointer-events-none">
+          <div className="pointer-events-auto max-w-md w-full bg-zinc-900 text-white rounded-xl shadow-lg px-4 py-3 flex items-center gap-3" role="status" data-toast>
+            <span className="flex-1 text-sm">{toast.text}</span>
+            {toast.undo && <button type="button" onClick={() => { const u = toast.undo!; setToast(null); u(); }} className="shrink-0 text-sm font-bold text-emerald-300 cursor-pointer" data-toast-undo>Undo</button>}
+          </div>
+        </div>
+      )}
+
+      {confirm && (
+        <Sheet label={confirm.title} onClose={() => setConfirm(null)}>
+          <div className="p-4" data-confirm>
+            <h3 className="text-lg font-bold text-zinc-900">{confirm.title}</h3>
+            <p className="text-[15px] text-zinc-700 mt-1 whitespace-pre-line">{confirm.body}</p>
+            <div className="mt-4 flex gap-2">
+              <button type="button" onClick={() => setConfirm(null)} className="flex-1 h-12 rounded-xl border border-zinc-300 font-semibold cursor-pointer" data-confirm-cancel>Cancel</button>
+              <button type="button" onClick={() => { const r = confirm.run; setConfirm(null); r(); }} className={`flex-1 h-12 rounded-xl text-white font-semibold cursor-pointer ${confirm.danger ? 'bg-rose-600' : 'bg-zinc-900'}`} data-confirm-ok>{confirm.action}</button>
+            </div>
+          </div>
+        </Sheet>
+      )}
+
+      <CleanDatabaseModal
+        isOpen={cleaning}
+        onClose={() => setCleaning(false)}
+        groceryItems={catalog}
+        onApplyChanges={applyClean}
+        showToast={(m: string) => say(m)}
+        onNavigateTab={onNavigateTab as any}
+      />
+    </div>
+  );
+}
+
+// ---------- Small parts ----------
+
+function NavRow({ icon, title, sub, onClick, attr }: { icon: React.ReactNode; title: string; sub?: string; onClick: () => void; attr: string }) {
+  return (
+    <button type="button" onClick={onClick} className={`${row} cursor-pointer hover:bg-zinc-50`} data-setting-link={attr}>
+      <span className="w-9 h-9 rounded-xl bg-zinc-100 text-zinc-600 flex items-center justify-center shrink-0">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold text-zinc-900">{title}</span>
+        {sub && <span className="block text-[13px] text-zinc-500 truncate">{sub}</span>}
+      </span>
+      <ChevronRight className="w-4 h-4 text-zinc-400 shrink-0" />
+    </button>
+  );
+}
+
+function Segmented<T extends string>({ value, options, onChange, attr }: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void; attr: string }) {
+  return (
+    <div className="flex items-center bg-zinc-100 p-0.5 rounded-xl border border-zinc-200" data-segmented={attr}>
+      {options.map((o) => (
+        <button key={o.id} type="button" onClick={() => onChange(o.id)} aria-pressed={value === o.id}
+          className={`h-9 px-3 text-sm font-semibold rounded-lg cursor-pointer whitespace-nowrap ${value === o.id ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-500'}`}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Sheet({ label, children, onClose }: { label: string; children: React.ReactNode; onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150" onClick={onClose}>
+      <div role="dialog" aria-label={label} className="bg-white w-full sm:max-w-md max-h-[90dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()} style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const SubHeader = ({ title, onBack, right }: { title: string; onBack: () => void; right?: React.ReactNode }) => (
+  <header className="bg-white border-b border-zinc-200/80 px-2 py-1.5 shrink-0">
+    <div className="max-w-2xl mx-auto flex items-center gap-1">
+      <button type="button" onClick={onBack} className="h-10 pl-1 pr-2 rounded-xl text-sm font-semibold text-zinc-600 inline-flex items-center cursor-pointer" data-settings-back><ChevronLeft className="w-5 h-5" />Settings</button>
+      <h2 className="flex-1 text-center text-[15px] font-bold text-zinc-900 truncate pr-2">{title}</h2>
+      <span className="min-w-[88px] flex justify-end">{right}</span>
+    </div>
+  </header>
+);
+
+// ---------- This phone ----------
+
+function ThisPhone({ who, say }: { who: string; say: (t: string) => void }) {
+  const [hasKey, setHasKey] = useState(() => !!getGeminiApiKey());
+  const [editing, setEditing] = useState(false);
+  const [key, setKey] = useState('');
+  const [test, setTest] = useState<{ busy?: boolean; ok?: boolean; message?: string } | null>(null);
+  const runTest = async (k: string) => {
+    setTest({ busy: true });
+    setTest(await testGeminiKeyApi(k));
   };
+  return (
+    <section data-settings-phone>
+      <h3 className={sectionTitle}>This phone</h3>
+      <div className={card}>
+        <div className={row} data-setting-who>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-zinc-900">Who's using this phone</span>
+            <span className="block text-[13px] text-zinc-500">Shown on what you add and tick</span>
+          </span>
+          <Segmented value={who as 'P' | 'R'} options={[{ id: 'P', label: 'Peter' }, { id: 'R', label: 'Rachel' }]} onChange={(v) => { setCurrentDeviceIdentity(v); say(`This is ${v === 'P' ? "Peter's" : "Rachel's"} phone`); }} attr="who" />
+        </div>
+        <div className="px-4 py-3" data-setting-gemini>
+          <div className="flex items-center gap-3">
+            <span className="flex-1 min-w-0">
+              <span className="block text-[15px] font-semibold text-zinc-900">Gemini key</span>
+              <span className={`block text-[13px] ${test && !test.busy ? (test.ok ? 'text-emerald-700' : 'text-rose-700') : 'text-zinc-500'}`} data-gemini-status>
+                {test?.busy ? 'Checking…' : test?.message ? test.message : hasKey ? 'Saved on this phone' : 'Not added: needed for importing recipes and asking questions'}
+              </span>
+            </span>
+            {!editing && hasKey && <button type="button" onClick={() => void runTest(getGeminiApiKey() || '')} disabled={test?.busy} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer disabled:opacity-50" data-gemini-test>Test it</button>}
+            {!editing && <button type="button" onClick={() => { setEditing(true); setKey(''); setTest(null); }} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer" data-gemini-edit>{hasKey ? 'Change' : 'Add'}</button>}
+          </div>
+          {editing && (
+            <div className="mt-3 space-y-2">
+              <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste the key (starts AIza…)" autoComplete="off"
+                className="w-full h-11 rounded-xl border border-zinc-300 px-3 text-base outline-none focus:border-emerald-500" data-gemini-input aria-label="Gemini key" />
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={!key.trim()} onClick={() => { saveGeminiApiKey(key); setHasKey(true); setEditing(false); say('Gemini key saved'); void runTest(key); }} className="h-10 px-4 rounded-xl bg-emerald-600 text-white text-sm font-semibold disabled:opacity-40 cursor-pointer" data-gemini-save>Save and test</button>
+                <button type="button" onClick={() => setEditing(false)} className="h-10 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer">Cancel</button>
+                {hasKey && <button type="button" onClick={() => { clearGeminiApiKey(); setHasKey(false); setEditing(false); setTest(null); say('Gemini key removed from this phone'); }} className="h-10 px-3 rounded-xl text-sm font-semibold text-rose-700 cursor-pointer" data-gemini-remove>Remove</button>}
+              </div>
+              <p className="text-xs text-zinc-500">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="underline">Google AI Studio</a>. Each phone needs its own copy: it's kept only on this phone and never synced.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-  const handleDeleteGroceryItem = (id: string, name: string) => {
-    if (!window.confirm(`Delete "${name}" from the database?`)) return;
-    const updatedDb = groceryDatabase.filter(item => item.id !== id);
-    if (store.updateGroceryDatabase) {
-      store.updateGroceryDatabase(updatedDb);
-    }
-    showToast(`Deleted "${name}"`);
-  };
+// ---------- Household ----------
 
-  const handleSaveEditGroceryItem = () => {
-    if (!editingItemId || !editingItemName.trim()) return;
+function Household({ prefs, store }: { prefs: UserPreferences; store: SettingsTabProps['store'] }) {
+  const people = prefs.defaultServings || 2;
+  const appliance = (prefs.preferredCookingMethod || 'all') as 'all' | 'oven_hob' | 'ninja';
+  return (
+    <section data-settings-household>
+      <h3 className={sectionTitle}>Household</h3>
+      <div className={card}>
+        <div className={row} data-setting-people>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-zinc-900">Usually cooking for</span>
+            <span className="block text-[13px] text-zinc-500">New meals start with this many people</span>
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={() => store.updatePreferences({ defaultServings: Math.max(1, people - 1) })} disabled={people <= 1} className="w-10 h-10 rounded-xl border border-zinc-300 flex items-center justify-center disabled:opacity-40 cursor-pointer" aria-label="One fewer person"><Minus className="w-4 h-4" /></button>
+            <span className="w-8 text-center text-lg font-bold tabular-nums" data-people-count>{people}</span>
+            <button type="button" onClick={() => store.updatePreferences({ defaultServings: Math.min(12, people + 1) })} className="w-10 h-10 rounded-xl border border-zinc-300 flex items-center justify-center cursor-pointer" aria-label="One more person"><Plus className="w-4 h-4" /></button>
+          </div>
+        </div>
+        <label className={row} data-setting-eat-at>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-zinc-900">We usually eat at</span>
+            <span className="block text-[13px] text-zinc-500">The Cook tab says when to start. Change it for one evening there.</span>
+          </span>
+          <input id="setting-eat-at" type="time" value={parseClock(prefs.eatAt) !== null ? prefs.eatAt : DEFAULT_EAT_AT}
+            onChange={(e) => { if (parseClock(e.target.value) !== null) store.updatePreferences({ eatAt: e.target.value }); }}
+            className="h-10 px-2 bg-white border border-zinc-300 rounded-xl text-base font-bold tabular-nums" data-setting-eat-at-input aria-label="We usually eat at" />
+        </label>
+        <div className="px-4 py-3" data-setting-appliance>
+          <span className="block text-[15px] font-semibold text-zinc-900">Usual appliance</span>
+          <span className="block text-[13px] text-zinc-500 mb-2">Cooking mode and start times use these steps when a recipe has both</span>
+          <Segmented value={appliance} options={[{ id: 'oven_hob', label: 'Oven & hob' }, { id: 'ninja', label: 'Ninja' }, { id: 'all', label: 'Either' }]} onChange={(v) => store.updatePreferences({ preferredCookingMethod: v })} attr="appliance" />
+        </div>
+      </div>
+    </section>
+  );
+}
 
-    const updatedDb = groceryDatabase.map(item => {
-      if (item.id === editingItemId) {
-        return {
-          ...item,
-          name: editingItemName.trim(),
-          unit: editingItemUnit.trim(),
-          increment: Math.max(0.01, editingItemIncrement),
-          category: editingItemCategory
-        };
-      }
-      return item;
-    });
+// ---------- Sync ----------
 
-    if (store.updateGroceryDatabase) {
-      store.updateGroceryDatabase(updatedDb);
-    }
-    setEditingItemId(null);
-    showToast(`Saved changes to "${editingItemName}"`);
-  };
+function SyncSection({ store, say, setConfirm }: { store: SettingsTabProps['store']; say: (t: string) => void; setConfirm: (c: any) => void }) {
+  const cfg = store.githubConfig;
+  const [, tick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => tick((n) => n + 1), 30_000); return () => clearInterval(iv); }, []);
+  const [pat, setPat] = useState('');
+  const [code, setCode] = useState('');
+  const [mode, setMode] = useState<'merge' | 'pull' | 'push'>('merge');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState('');
+  const status = store.syncStatus;
+  const problemNow = status === 'error' ? syncProblemText(store.syncError) : '';
 
-  const filteredGroceryItems = useMemo(() => {
-    return groceryDatabase.filter(item => {
-      const nameMatches = item.name.toLowerCase().includes(dbSearch.toLowerCase());
-      const catMatches = dbCategoryFilter === 'All' || item.category === dbCategoryFilter;
-      return nameMatches && catMatches;
-    });
-  }, [groceryDatabase, dbSearch, dbCategoryFilter]);
-
-  const uniqueDbCategories = useMemo(() => {
-    const cats = new Set(groceryDatabase.map(item => item.category));
-    return ['All', ...Array.from(cats)].sort();
-  }, [groceryDatabase]);
-
-  // Staples States
-  const [newItemName, setNewItemName] = useState('');
-  const [showStapleSuggestions, setShowStapleSuggestions] = useState(false);
-
-  const stapleSuggestions = useMemo(() => {
-    if (!newItemName.trim()) return [];
-    const query = newItemName.toLowerCase();
-    return groceryDatabase
-      .filter(g => g.name.toLowerCase().includes(query))
-      .slice(0, 5);
-  }, [newItemName, groceryDatabase]);
-
-  const handleQuickAddStaple = (name: string) => {
-    if (!name.trim()) return;
-
-    const matched = findGroceryDatabaseMatch(name, groceryDatabase);
-
-    let finalName = name.trim();
-    let finalUnit = 'item';
-    let finalCategory = 'Dairy & Eggs';
-
-    if (matched) {
-      finalName = matched.name;
-      finalUnit = matched.unit || finalUnit;
-      finalCategory = matched.category || finalCategory;
-    } else {
-      // Auto-categorize using the imported getGroceryAisle utility
-      const aisle = getGroceryAisle({ name: finalName });
-      const catMap: Record<string, string> = {
-        produce: 'Produce',
-        meat_seafood: 'Meat & Seafood',
-        dairy_eggs: 'Dairy & Eggs',
-        grains_pasta: 'Grains & Pasta',
-        canned_jars: 'Canned & Jars',
-        bakery: 'Bakery',
-        frozen: 'Frozen',
-        pantry_spices: 'Pantry & Spices',
-        household_other: 'Household & Other'
-      };
-      finalCategory = catMap[aisle] || 'Pantry & Spices';
-
-      // Create a brand new item and add it to the grocery database state so that it is registered
-      const newDbItem: GroceryItem = {
-        id: `gdb-${Date.now()}`,
-        name: finalName,
-        unit: finalUnit,
-        increment: 1,
-        category: finalCategory
-      };
-      
-      const updatedDb = [...groceryDatabase, newDbItem];
-      if (store.updateGroceryDatabase) {
-        store.updateGroceryDatabase(updatedDb);
-      }
-      showToast(`Added "${finalName}" to grocery database`);
-    }
-
-    const newRecItem = {
-      id: crypto.randomUUID(),
-      name: finalName,
-      amount: 1, // Default qty to 1 like shopping list quick add
-      unit: finalUnit,
-      category: finalCategory
-    };
-
-    const currentRecurring = prefs.recurringItems || [];
-    const updatedRecurring = [...currentRecurring, newRecItem];
-    store.updatePreferences({
-      recurringItems: updatedRecurring
-    });
-    if (store.updateShoppingList) {
-      const nextShoppingList = syncRecurringStaplesForAllPlans(
-        store.state.mealPlans || [],
-        store.state.shoppingList || [],
-        updatedRecurring
-      );
-      store.updateShoppingList(nextShoppingList);
-    }
-
-    setNewItemName('');
-    setShowStapleSuggestions(false);
-    showToast(`Added "${newRecItem.name}" to staples`);
-  };
-
-  const handleRemoveRecurringItem = (id: string, name: string) => {
-    const currentRecurring = prefs.recurringItems || [];
-    const updatedRecurring = currentRecurring.filter(item => item.id !== id);
-    store.updatePreferences({
-      recurringItems: updatedRecurring
-    });
-    if (store.updateShoppingList) {
-      const nextShoppingList = syncRecurringStaplesForAllPlans(
-        store.state.mealPlans || [],
-        store.state.shoppingList || [],
-        updatedRecurring
-      );
-      store.updateShoppingList(nextShoppingList);
-    }
-    showToast(`Removed "${name}"`);
-  };
-
-  const getStapleStep = (name: string): number => {
-    const matched = findGroceryDatabaseMatch(name, groceryDatabase);
-    return matched?.increment || 1;
-  };
-
-  const handleUpdateStapleQuantity = (id: string, delta: number) => {
-    const currentRecurring = prefs.recurringItems || [];
-    const updatedRecurring = currentRecurring.map(item => {
-      if (item.id === id) {
-        const step = getStapleStep(item.name);
-        const actualDelta = delta < 0 ? -step : step;
-        const newAmount = Math.max(step, (item.amount || 1) + actualDelta);
-        
-        let nextUnit = item.unit;
-        if (['item', 'items'].includes((item.unit || '').toLowerCase().trim())) {
-          nextUnit = newAmount === 1 ? 'item' : 'items';
-        }
-
-        return {
-          ...item,
-          amount: Math.round(newAmount * 100) / 100,
-          unit: nextUnit
-        };
-      }
-      return item;
-    });
-
-    store.updatePreferences({
-      recurringItems: updatedRecurring
-    });
-    if (store.updateShoppingList) {
-      const nextShoppingList = syncRecurringStaplesForAllPlans(
-        store.state.mealPlans || [],
-        store.state.shoppingList || [],
-        updatedRecurring
-      );
-      store.updateShoppingList(nextShoppingList);
-    }
-  };
-
-  const handleUpdateStapleQtyAndUnit = (id: string, amount: number, unit: string) => {
-    const currentRecurring = prefs.recurringItems || [];
-    const updatedRecurring = currentRecurring.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          amount: Math.max(0.1, amount),
-          unit: unit
-        };
-      }
-      return item;
-    });
-
-    store.updatePreferences({
-      recurringItems: updatedRecurring
-    });
-    if (store.updateShoppingList) {
-      const nextShoppingList = syncRecurringStaplesForAllPlans(
-        store.state.mealPlans || [],
-        store.state.shoppingList || [],
-        updatedRecurring
-      );
-      store.updateShoppingList(nextShoppingList);
-    }
-  };
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
-  const favourites = useMemo<{ name: string; category: string }[]>(() => {
-    if (store?.state?.preferences?.favouriteItems && store.state.preferences.favouriteItems.length > 0) {
-      return store.state.preferences.favouriteItems;
-    }
+  const connect = async () => {
+    if (!pat.trim()) { setProblem('Paste the GitHub token first.'); return; }
+    setBusy(true);
+    setProblem('');
     try {
-      const stored = localStorage.getItem('mealPlannerCustomFavouritesObj');
-      if (stored) return JSON.parse(stored);
-      const legacy = localStorage.getItem('mealPlannerCustomFavourites');
-      if (legacy) {
-        const parsed = JSON.parse(legacy);
-        if (Array.isArray(parsed)) return parsed.map((p: string) => ({ name: p, category: 'Staples' }));
-      }
-    } catch (err) {}
-    return [];
-  }, [store?.state?.preferences?.favouriteItems]);
-
-  const toggleFavourite = (name: string, category: string = 'Staples') => {
-    const exists = favourites.some(f => f.name.toLowerCase() === name.toLowerCase());
-    const nextFavs = exists
-      ? favourites.filter(f => f.name.toLowerCase() !== name.toLowerCase())
-      : [...favourites, { name, category }];
-
-    try {
-      localStorage.setItem('mealPlannerCustomFavouritesObj', JSON.stringify(nextFavs));
-    } catch (err) {}
-
-    store.updatePreferences({ favouriteItems: nextFavs });
+      if (code.trim()) await store.saveGithubConfig(pat, code, mode);
+      else await store.createGistFromLocal(pat);
+      say('Syncing is on');
+      setPat(''); setCode('');
+    } catch (e: any) {
+      setProblem(syncProblemText(e?.message || String(e)));
+    } finally { setBusy(false); }
   };
 
-  const pastPlans: MealPlan[] = useMemo(() => {
-    return (store.state.mealPlans || [])
-      .filter((p: MealPlan) => isPastWeek(p.startDate))
-      .sort((a: MealPlan, b: MealPlan) => b.startDate.localeCompare(a.startDate));
-  }, [store.state.mealPlans]);
+  return (
+    <section data-settings-sync>
+      <h3 className={sectionTitle}>Sync between phones</h3>
+      <div className={card}>
+        {cfg ? (
+          <>
+            <div className={row}>
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${status === 'error' ? 'bg-rose-500' : status === 'loading' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-semibold text-zinc-900" data-sync-status>
+                  {status === 'loading' ? 'Syncing…' : status === 'error' ? 'Not syncing right now' : store.lastSynced ? `Synced ${agoText(store.lastSynced)}` : 'Connected'}
+                </span>
+                <span className={`block text-[13px] ${problemNow ? 'text-rose-700' : 'text-zinc-500'}`} data-sync-detail>
+                  {problemNow || `Changes go up straight away; the other phone's appear within about ${store.syncPollSeconds || 20} seconds.`}
+                </span>
+              </span>
+              <button type="button" onClick={async () => { await store.manualSync(); say('Synced'); }} disabled={status === 'loading'} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0" data-sync-now>
+                <RefreshCw className={`w-4 h-4 ${status === 'loading' ? 'animate-spin' : ''}`} />Sync now
+              </button>
+            </div>
+            <div className="px-4 py-3 flex items-center gap-3">
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] text-zinc-500">Sync code (for the other phone)</span>
+                <span className="block font-mono text-sm text-zinc-800 truncate" data-sync-code>{cfg.gistId}</span>
+              </span>
+              <button type="button" onClick={() => { navigator.clipboard?.writeText(cfg.gistId).then(() => say('Sync code copied')).catch(() => say("Couldn't copy: select it and copy instead")); }} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0"><Copy className="w-4 h-4" />Copy</button>
+            </div>
+            <button type="button" onClick={() => setConfirm({ title: 'Stop syncing on this phone?', body: "Everything stays on this phone, but changes won't go to or come from the other phone until you connect again.", action: 'Stop syncing', danger: true, run: () => { store.clearGithubConfig(); say('Syncing stopped on this phone'); } })}
+              className={`${row} text-sm font-semibold text-rose-700 cursor-pointer`} data-sync-stop>Stop syncing on this phone</button>
+          </>
+        ) : (
+          <div className="px-4 py-3 space-y-3" data-sync-setup>
+            <p className="text-[15px] text-zinc-700">Both phones keep the same recipes, plans, lists and freezer through a private file on your GitHub account.</p>
+            <ol className="text-sm text-zinc-700 list-decimal pl-5 space-y-1">
+              <li>On github.com, make a token with only the <strong>gist</strong> permission (Settings → Developer settings → Personal access tokens).</li>
+              <li>Paste it below.</li>
+              <li>On the second phone, also paste the <strong>sync code</strong> shown on the first phone.</li>
+            </ol>
+            <input type="password" value={pat} onChange={(e) => setPat(e.target.value)} placeholder="GitHub token (ghp_…)" autoComplete="off" className="w-full h-11 rounded-xl border border-zinc-300 px-3 text-base" aria-label="GitHub token" data-sync-token />
+            <div>
+              <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Sync code from the other phone" className="w-full h-11 rounded-xl border border-zinc-300 px-3 text-base" aria-label="Sync code" data-sync-code-input />
+              <span className="block text-xs text-zinc-500 mt-1">Leave this empty on the first phone.</span>
+            </div>
+            <details className="text-sm text-zinc-600">
+              <summary className="cursor-pointer font-semibold">Advanced: what if both have data?</summary>
+              <div className="mt-2 space-y-1.5">
+                {([['merge', 'Combine both (recommended)'], ['pull', "Use what's on GitHub (replace this phone's)"], ['push', "Use this phone's (replace what's on GitHub)"]] as const).map(([id, label]) => (
+                  <label key={id} className="flex items-center gap-2"><input type="radio" name="sync-mode" checked={mode === id} onChange={() => setMode(id)} />{label}</label>
+                ))}
+              </div>
+            </details>
+            {problem && <p className="text-sm text-rose-700" data-sync-problem>{problem}</p>}
+            <button type="button" onClick={() => void connect()} disabled={busy} className="w-full h-12 rounded-xl bg-emerald-600 text-white font-semibold disabled:opacity-50 cursor-pointer" data-sync-connect>
+              {busy ? 'Connecting…' : code.trim() ? 'Connect to the other phone' : 'Start syncing'}
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
-  const filteredPastPlans = useMemo(() => {
-    if (!searchArchive.trim()) return pastPlans;
-    const q = searchArchive.toLowerCase();
-    return pastPlans.filter(p => {
-      const dateMatches = formatWeekRange(p.startDate).toLowerCase().includes(q) || p.startDate.includes(q);
-      const meals = Object.values(p.days).flatMap(d => d.meals || []);
-      const mealMatches = meals.some(m => 
-        m.name.toLowerCase().includes(q) || 
-        (m.note && m.note.toLowerCase().includes(q))
-      );
-      return dateMatches || mealMatches;
-    });
-  }, [pastPlans, searchArchive]);
+// ---------- Backup ----------
 
-  const prefs = store.state.preferences || {
-    showPrepTime: true,
-    showCookTime: true,
-    showTotalTime: true,
-    showMethod: true,
-    showVegetarian: true,
-    showVegan: true,
-    defaultServings: 2,
-    adultCount: 2,
-    childCount: 0,
-    currencySymbol: '£',
-    weeklyBudgetLimit: 60,
-    maxForwardWeeks: 4,
-    preferredCookingMethod: 'all',
-    ninjaModel: 'Ninja Combi 12-in-1',
-    recurringItems: []
-  };
+function BackupSection({ store, catalog, say, setConfirm }: { store: SettingsTabProps['store']; catalog: GroceryItem[]; say: (t: string) => void; setConfirm: (c: any) => void }) {
+  const [last, setLast] = useState<string | null>(() => { try { return localStorage.getItem(LAST_BACKUP_KEY); } catch { return null; } });
+  const [restore, setRestore] = useState<{ name: string; text: string; parts: string[] } | null>(null);
+  const [badFile, setBadFile] = useState('');
+  const productsInput = useRef<HTMLInputElement>(null);
 
-  const availableTargetWeeks = useMemo(() => {
-    const list: { startDate: string; label: string }[] = [];
-    const maxWeeks = prefs.maxForwardWeeks || 4;
-    for (let i = 0; i < maxWeeks; i++) {
-      const d = new Date(currentMonday);
-      d.setDate(currentMonday.getDate() + i * 7);
-      const iso = formatDateISO(d);
-      const label = i === 0 ? `Current Week (${formatWeekStart(iso)})` : `In ${i} week${i > 1 ? 's' : ''} (${formatWeekStart(iso)})`;
-      list.push({ startDate: iso, label });
-    }
-    return list;
-  }, [currentMonday, prefs.maxForwardWeeks]);
-
-  const copyWeekSummary = (plan: MealPlan) => {
-    const lines: string[] = [];
-    lines.push(`Meal Plan: ${formatWeekRange(plan.startDate)}`);
-    lines.push(`Status: ${plan.status}`);
-    const metrics = calculatePlanMetrics(plan);
-    lines.push(`Total Meals: ${metrics.mealsCount}`);
-    lines.push('');
-    DAYS_OF_WEEK.forEach(d => {
-      const day = plan.days[d];
-      const meals = (day?.meals || []).map(m => {
-        const note = m.note ? ` (${m.note})` : '';
-        return `${m.name}${note}`;
-      }).join(', ');
-      lines.push(`${d} (${day?.date || ''}): ${meals || 'No meals'}`);
-    });
-
-    navigator.clipboard.writeText(lines.join('\n'));
-    showToast('Week summary copied to clipboard!');
-  };
-
-  const exportBackup = () => {
-    const dataStr = store.exportAllData();
-    const blob = new Blob([dataStr], { type: 'application/json' });
+  const download = (text: string, filename: string) => {
+    const blob = new Blob([text], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `meal-planner-backup-${formatDateISO(new Date())}.json`;
+    a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
-    showToast('Backup downloaded successfully');
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const backup = () => {
+    download(store.exportAllData(), `meal-planner-backup-${formatDateISO(new Date())}.json`);
+    const now = new Date().toISOString();
+    try { localStorage.setItem(LAST_BACKUP_KEY, now); } catch { /* fine */ }
+    setLast(now);
+    say('Backup downloaded');
+  };
+  const pickRestore = (file: File) => {
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        const success = store.importAllData(content);
-        if (success) {
-          showToast('Data restored successfully!');
-        } else {
-          showToast('Failed to restore data. Invalid JSON format.');
-        }
-      }
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      const s = backupSummary(text);
+      if (!s.ok) { setBadFile(`“${file.name}” isn't a backup from this app.`); return; }
+      setBadFile('');
+      setRestore({ name: file.name, text, parts: s.parts });
     };
     reader.readAsText(file);
   };
-
-  // Export and Import Grocery Database specific actions
-  const exportGroceryDatabaseJson = () => {
-    try {
-      const dataStr = JSON.stringify(groceryDatabase, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `grocery_database_${formatDateISO(new Date())}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('Grocery database exported');
-    } catch (e) {
-      showToast('Failed to export grocery database');
-    }
-  };
-
-  const handleImportGroceryDatabaseJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const importProducts = (file: File) => {
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = () => {
       try {
-        const content = event.target?.result as string;
-        if (!content) return;
-
-        const imported = JSON.parse(content);
-        if (!Array.isArray(imported)) {
-          showToast('Invalid format: Expected a JSON array');
-          return;
-        }
-
-        const validatedItems: GroceryItem[] = [];
-        for (let i = 0; i < imported.length; i++) {
-          const item = imported[i];
-          if (typeof item !== 'object' || item === null) continue;
-          if (!item.name || typeof item.name !== 'string') continue;
-
-          validatedItems.push({
-            id: item.id && typeof item.id === 'string' ? item.id : `gdb-imported-${i}-${Date.now()}`,
-            name: item.name.trim(),
-            category: item.category && typeof item.category === 'string' ? item.category.trim() : 'Produce',
-            unit: item.unit && typeof item.unit === 'string' ? item.unit.trim() : 'item',
-            increment: typeof item.increment === 'number' ? Math.max(0.01, item.increment) : 1,
-            aliases: Array.isArray(item.aliases) ? item.aliases.filter(a => typeof a === 'string') : []
-          });
-        }
-
-        if (validatedItems.length === 0) {
-          showToast('No valid grocery items found in file');
-          return;
-        }
-
-        if (store.updateGroceryDatabase) {
-          store.updateGroceryDatabase(validatedItems);
-          showToast(`Imported ${validatedItems.length} grocery items!`);
-        } else {
-          showToast('Update database method not available');
-        }
-      } catch (err) {
-        showToast('Failed to parse JSON file');
-      }
+        const arr = JSON.parse(String(reader.result || ''));
+        if (!Array.isArray(arr)) throw new Error('not a list');
+        const items: GroceryItem[] = arr.filter((x) => x && typeof x.name === 'string').map((x: any, i: number) => ({
+          id: typeof x.id === 'string' ? x.id : `gdb-imported-${i}-${Date.now()}`,
+          name: x.name.trim(),
+          category: typeof x.category === 'string' ? x.category : 'Produce',
+          unit: typeof x.unit === 'string' ? x.unit : 'item',
+          increment: typeof x.increment === 'number' ? Math.max(0.01, x.increment) : 1,
+          aliases: Array.isArray(x.aliases) ? x.aliases.filter((a: any) => typeof a === 'string') : [],
+        }));
+        if (!items.length) throw new Error('empty');
+        setConfirm({ title: `Replace your products with ${items.length} from the file?`, body: 'The Shop will use these to turn recipe amounts into things you buy.', action: 'Replace products', run: () => { store.updateGroceryDatabase?.(items); say(`${items.length} products loaded`); } });
+      } catch { say("That file isn't a products list"); }
     };
     reader.readAsText(file);
-    e.target.value = ''; // clear input
   };
-
-  const calculatePlanMetrics = (plan: MealPlan) => {
-    let mealsCount = 0;
-    Object.values(plan.days).forEach(day => {
-      (day.meals || []).forEach(meal => {
-        if (meal.type !== 'no_meal') {
-          mealsCount += 1;
-        }
-      });
-    });
-    return { mealsCount };
-  };
-
-  // Re-ordered tabs matching user's requested layout:
-  // 1. past weeks, 2. grocery database, 3. my household, 4. system
-  const sidebarItems = [
-    { id: 'archive', label: 'past weeks', icon: History, desc: 'Clone and review completed plan history' },
-    { id: 'grocery_db', label: 'grocery database', icon: BookOpen, desc: 'Standard shopping units and steps' },
-    { id: 'household', label: 'my household', icon: Users, desc: 'Portions, when you eat & multi-cooker preferences' },
-    { id: 'github', label: 'connections', icon: Cloud, desc: 'Sync with private GitHub Gist and configure Gemini AI' },
-    { id: 'system', label: 'backup', icon: Download, desc: 'Download, restore and reset' }
-  ] as const;
 
   return (
-    <div className="h-full flex flex-col bg-zinc-50 overflow-hidden">
-      {/* Toast alert */}
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-          <Check className="w-4 h-4 text-emerald-300 stroke-[2.5]" />
-          <span>{toastMessage}</span>
+    <section data-settings-backup>
+      <h3 className={sectionTitle}>Backup &amp; reset</h3>
+      <div className={card}>
+        <div className={row}>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-zinc-900">Download a backup</span>
+            <span className="block text-[13px] text-zinc-500" data-last-backup>{last ? `Last downloaded on this phone ${agoText(last)}` : 'Never downloaded on this phone'}</span>
+          </span>
+          <button type="button" onClick={backup} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0" data-backup-download><Download className="w-4 h-4" />Download</button>
         </div>
-      )}
-
-      {/* Main Responsive Split Layout */}
-      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row max-w-4xl mx-auto w-full">
-        
-        {/* Navigation Horizontal Tabs (Mobile) / Vertical Tabs (Desktop) */}
-        <nav className="lg:w-56 bg-white border-b lg:border-b-0 lg:border-r border-zinc-200 shrink-0 overflow-x-auto lg:overflow-y-auto flex lg:flex-col p-2 lg:p-3 gap-1 select-none scrollbar-none">
-          {sidebarItems.map(item => {
-            const Icon = item.icon;
-            const isActive = activeSubSection === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setActiveSubSection(item.id);
-                  // Reset search states on tab change to save vertical space
-                  setShowArchiveSearch(false);
-                  setShowDbSearch(false);
-                  const mainContent = document.getElementById('settings-scroll-container');
-                  if (mainContent) mainContent.scrollTop = 0;
-                }}
-                className={`flex items-center gap-2 px-3 py-1.5 lg:py-2 rounded-xl text-left transition-all shrink-0 cursor-pointer ${
-                  isActive
-                    ? 'bg-indigo-600 text-white font-semibold shadow-xs'
-                    : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
-                <div className="min-w-0">
-                  <span className="text-xs block whitespace-nowrap lowercase">{item.label}</span>
-                </div>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Scrollable Panel Area */}
-        <div 
-          id="settings-scroll-container"
-          className="flex-1 overflow-y-auto min-h-0 bg-zinc-50/50"
-        >
-          <div className="p-4 sm:p-5 space-y-4">
-
-            {/* SECTION 1: PAST WEEKS ARCHIVE */}
-            {activeSubSection === 'archive' && (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
-                  
-                  {/* Collapsible Search and Header Row */}
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-100/80">
-                    <div className="flex items-center gap-2">
-                      <History className="w-4 h-4 text-zinc-400" />
-                      <h3 className="text-sm font-bold text-zinc-900 lowercase">past weeks</h3>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      {/* Search Bar Collapsed into an Icon Button */}
-                      {showArchiveSearch ? (
-                        <div className="relative flex items-center animate-in fade-in slide-in-from-right-2 duration-150">
-                          <input
-                            type="text"
-                            value={searchArchive}
-                            onChange={(e) => setSearchArchive(e.target.value)}
-                            placeholder="search completed plans..."
-                            className="text-xs pl-3 pr-8 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 w-36 sm:w-48"
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSearchArchive('');
-                              setShowArchiveSearch(false);
-                            }}
-                            className="absolute right-2 text-zinc-400 hover:text-zinc-600 p-0.5 cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowArchiveSearch(true)}
-                          className="p-1.5 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
-                          title="Search plans"
-                        >
-                          <Search className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-
-                      {/* Clear confirmation shortcut */}
-                      {pastPlans.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm("Permanently clear all completed past weeks from archive?")) {
-                              store.clearPastWeeks();
-                              showToast('Cleared archive');
-                            }
-                          }}
-                          className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          title="Clear past plans"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {pastPlans.length === 0 ? (
-                    <div className="bg-white rounded-2xl border border-zinc-200 p-6 text-center space-y-3">
-                      <p className="text-xs text-zinc-500">No finished weeks yet.</p>
-                      <p className="text-[11px] text-zinc-400">Once a week is over it appears here, where you can look back at it or copy it to a new week.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredPastPlans.length === 0 ? (
-                        <div className="text-center py-4 bg-zinc-50 border border-dashed border-zinc-200 rounded-xl text-xs text-zinc-400">
-                          No matching completed plans.
-                        </div>
-                      ) : (
-                        filteredPastPlans.map(plan => {
-                          const isExpanded = !!expandedPlanIds[plan.id];
-                          const metrics = calculatePlanMetrics(plan);
-                          const planTargetWeek = targetWeeks[plan.id] || templateTargetWeek;
-                          
-                          return (
-                            <div
-                              key={plan.id}
-                              className={`bg-white border rounded-xl overflow-hidden transition-all duration-150 ${
-                                isExpanded 
-                                  ? 'border-zinc-950 ring-1 ring-zinc-950/5' 
-                                  : 'border-zinc-200/80 hover:border-zinc-300'
-                              }`}
-                            >
-                              {/* Summary Row */}
-                              <div
-                                onClick={() => setExpandedPlanIds(prev => ({ ...prev, [plan.id]: !prev[plan.id] }))}
-                                className="px-3.5 py-2.5 flex items-center justify-between gap-3 cursor-pointer select-none bg-white hover:bg-zinc-50/50"
-                              >
-                                <div className="min-w-0">
-                                  <span className="text-xs font-bold text-zinc-900 block truncate">
-                                    {formatWeekRange(plan.startDate)}
-                                  </span>
-                                  {/* Clean metadata without boxes */}
-                                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mt-0.5">
-                                    <span>{metrics.mealsCount} planned dinners</span>
-                                    <span aria-hidden="true">·</span>
-                                    <span>mon, {formatWeekStart(plan.startDate)}</span>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setExpandedPlanIds(prev => ({ ...prev, [plan.id]: true }));
-                                    }}
-                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-md text-[11px] font-bold cursor-pointer"
-                                  >
-                                    Reuse
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setExpandedPlanIds(prev => ({ ...prev, [plan.id]: !prev[plan.id] }));
-                                    }}
-                                    className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 cursor-pointer"
-                                  >
-                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Collapsible Re-use panel */}
-                              {isExpanded && (
-                                <div className="border-t border-zinc-100 bg-zinc-50/30 p-3 space-y-3">
-                                  <div className="bg-zinc-900 text-white rounded-lg p-3 space-y-3.5 border border-zinc-800">
-                                    <div className="min-w-0">
-                                      <h4 className="text-[11px] font-bold text-white">Duplicate Whole Plan</h4>
-                                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-normal">
-                                        Clone this week's schedules directly into any active or upcoming week.
-                                      </p>
-                                    </div>
-                                    
-                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
-                                      <div className="flex-1">
-                                        <select
-                                          value={planTargetWeek}
-                                          onChange={(e) => setTargetWeeks(prev => ({ ...prev, [plan.id]: e.target.value }))}
-                                          className="w-full text-xs px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md text-white focus:outline-none"
-                                        >
-                                          {availableTargetWeeks.map(target => (
-                                            <option key={target.startDate} value={target.startDate}>{target.label}</option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          store.duplicatePlanToWeek(plan.id, planTargetWeek);
-                                          showToast(`Copied template to week of ${formatWeekStart(planTargetWeek)}`);
-                                          if (onNavigateTab) {
-                                            setTimeout(() => onNavigateTab('planning'), 600);
-                                          }
-                                        }}
-                                        className="px-3 py-1.5 bg-white hover:bg-zinc-100 text-zinc-950 text-[11px] font-bold rounded-md transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                                      >
-                                        <Check className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
-                                        <span>Apply</span>
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Simple Breakdown */}
-                                  <div className="space-y-1">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      {DAYS_OF_WEEK.map(dayName => {
-                                        const day = plan.days[dayName];
-                                        const meals = day?.meals || [];
-                                        return (
-                                          <div key={dayName} className="p-2 bg-white rounded-lg border border-zinc-200 text-[11px]">
-                                            <div className="flex items-center justify-between font-bold border-b border-zinc-100 pb-1 text-[11px] text-zinc-500">
-                                              <span>{dayName}</span>
-                                              <span>{day?.date}</span>
-                                            </div>
-                                            {meals.length === 0 ? (
-                                              <span className="text-zinc-400 italic block mt-1">no meals</span>
-                                            ) : (
-                                              meals.map(meal => (
-                                                <div key={meal.id} className="mt-1 flex items-center justify-between text-zinc-700 font-medium">
-                                                  <span className="truncate">{meal.name}</span>
-                                                  {/* Metadata unboxed text */}
-                                                  <span className="text-[11px] text-zinc-400 shrink-0 font-semibold lowercase">
-                                                    · {meal.type}
-                                                  </span>
-                                                </div>
-                                              ))
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-
-                                    <div className="flex justify-end pt-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => copyWeekSummary(plan)}
-                                        className="text-[11px] font-bold text-zinc-500 hover:text-zinc-800 hover:underline flex items-center gap-1"
-                                      >
-                                        <Copy className="w-3 h-3" />
-                                        <span>Copy text breakdown</span>
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* SECTION 3: GROCERY DATABASE MANAGER */}
-            {activeSubSection === 'grocery_db' && (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                {/* 🧹 Grocery Database Health Card */}
-                <div className="bg-gradient-to-br from-indigo-50/70 via-white to-sky-50/40 rounded-2xl border border-indigo-200/90 p-4 sm:p-5 shadow-xs space-y-3.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
-                        <Sparkles className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
-                            🧹 Grocery Database Health
-                          </h3>
-                          <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-md">
-                            Gemini AI
-                          </span>
-                        </div>
-                        <p className="text-xs text-zinc-600 leading-normal">
-                          Scan your item catalog for duplicates, inconsistent naming, and aisle misclassifications using AI.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t border-indigo-100/70">
-                    <button
-                      type="button"
-                      onClick={() => setIsCleanDbModalOpen(true)}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer hover:shadow-indigo-200"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Run Database Clean-Up</span>
-                    </button>
-                    <span className="text-[11px] text-zinc-500 italic">
-                      Reconciles aliases, merges duplicates, and optimizes smart aggregation.
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
-                  
-                  {/* Collapsed Search and Header Bar */}
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-100/80">
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-zinc-400" />
-                      <h3 className="text-sm font-bold text-zinc-900 lowercase">grocery database</h3>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      
-                      {/* Search bar collapsed into a search icon button */}
-                      {showDbSearch ? (
-                        <div className="relative flex items-center animate-in fade-in slide-in-from-right-2 duration-150">
-                          <input
-                            type="text"
-                            value={dbSearch}
-                            onChange={(e) => setDbSearch(e.target.value)}
-                            placeholder="search database..."
-                            className="text-xs pl-3 pr-8 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 w-36 sm:w-48"
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDbSearch('');
-                              setShowDbSearch(false);
-                            }}
-                            className="absolute right-2 text-zinc-400 hover:text-zinc-600 p-0.5 cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowDbSearch(true)}
-                          className="p-1.5 text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
-                          title="Search items"
-                        >
-                          <Search className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-
-                      {/* Trigger Add Item popup modal instead of inline form */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDbNewName('');
-                          setDbNewUnit('g');
-                          setDbNewIncrement(100);
-                          setDbNewCategory('Produce');
-                          setIsAddPopupOpen(true);
-                        }}
-                        className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-colors cursor-pointer"
-                        title="Add database item"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Reset Presets */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm("Restore the default grocery database presets? This overrides all customized units.")) {
-                            if (store.updateGroceryDatabase) {
-                              store.updateGroceryDatabase(INITIAL_GROCERY_DATABASE);
-                              showToast('Reset presets');
-                            }
-                          }
-                        }}
-                        className="p-1.5 text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
-                        title="Reset database presets"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Filter and JSON Import/Export Actions Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <select
-                      value={dbCategoryFilter}
-                      onChange={(e) => setDbCategoryFilter(e.target.value)}
-                      className="text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none text-zinc-700 font-semibold cursor-pointer shadow-3xs"
-                    >
-                      <option value="All">All Categories</option>
-                      {uniqueDbCategories.filter(c => c !== 'All').map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-
-                    <div className="flex items-center gap-1.5">
-                      {/* JSON Export Button */}
-                      <button
-                        type="button"
-                        onClick={exportGroceryDatabaseJson}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-zinc-200 hover:bg-zinc-50 text-zinc-600 rounded-lg text-xs font-semibold cursor-pointer shadow-3xs"
-                        title="Export database as JSON"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Export Database JSON</span>
-                      </button>
-
-                      {/* JSON Import Button */}
-                      <label className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-zinc-200 hover:bg-zinc-50 text-zinc-600 rounded-lg text-xs font-semibold cursor-pointer shadow-3xs">
-                        <Upload className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Import Database JSON</span>
-                        <input
-                          type="file"
-                          accept=".json"
-                          onChange={handleImportGroceryDatabaseJson}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Touch/Mobile-friendly List View instead of a heavy overflowing table */}
-                  <div className="divide-y divide-zinc-100 border border-zinc-200/80 rounded-2xl overflow-hidden shadow-4xs bg-white max-h-96 overflow-y-auto">
-                    {filteredGroceryItems.length === 0 ? (
-                      <div className="p-8 text-center text-zinc-500 italic text-xs">
-                        No matching grocery database items.
-                      </div>
-                    ) : (
-                      filteredGroceryItems.map(item => (
-                        <div 
-                          key={item.id} 
-                          className="p-3 hover:bg-zinc-50/40 transition-colors flex items-center justify-between gap-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <span className="font-semibold text-xs sm:text-sm text-zinc-900 block truncate">
-                              {item.name}
-                            </span>
-                            {/* Metadata unboxed text with typographic middots */}
-                            <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-medium mt-0.5 lowercase">
-                              <span>{item.category}</span>
-                              <span aria-hidden="true" className="text-zinc-300">·</span>
-                              <span>step: {item.increment} {item.unit || 'item'}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                // Open edit popup modal
-                                setEditingItemId(item.id);
-                                setEditingItemName(item.name);
-                                setEditingItemUnit(item.unit);
-                                setEditingItemIncrement(item.increment);
-                                setEditingItemCategory(item.category);
-                              }}
-                              className="px-2.5 py-1.5 text-[11px] font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg cursor-pointer transition-colors"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteGroceryItem(item.id, item.name)}
-                              className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                              title="Delete item"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* SECTION 4: MY HOUSEHOLD */}
-            {activeSubSection === 'household' && (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
-                  <div className="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                    <Users className="w-4 h-4 text-zinc-400" />
-                    <h3 className="text-sm font-bold text-zinc-900 lowercase">household configuration</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    
-                    {/* Member selection */}
-                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex flex-col justify-between">
-                      <div>
-                        <label className="text-xs font-semibold text-zinc-900 block">Active Planner</label>
-                      </div>
-                      
-                      <div className="flex gap-2 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCurrentDeviceIdentity('P');
-                            showToast("Switched member to Peter");
-                          }}
-                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                            activeMember === 'P'
-                              ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                              : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                          }`}
-                        >
-                          Peter (P)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCurrentDeviceIdentity('R');
-                            showToast("Switched member to Rachel");
-                          }}
-                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                            activeMember === 'R'
-                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
-                              : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                          }`}
-                        >
-                          Rachel (R)
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Portion sizes */}
-                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2">
-                      <label className="text-xs font-semibold text-zinc-900 block">Default Portions</label>
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() => store.updatePreferences({ defaultServings: Math.max(1, (prefs.defaultServings || 2) - 1) })}
-                          className="w-8 h-8 rounded-lg border border-zinc-200 bg-white flex items-center justify-center text-zinc-600 hover:bg-zinc-100 font-bold cursor-pointer"
-                        >
-                          -
-                        </button>
-                        <span className="text-sm font-bold w-6 text-center tabular-nums">{prefs.defaultServings || 2}</span>
-                        <button
-                          type="button"
-                          onClick={() => store.updatePreferences({ defaultServings: Math.min(12, (prefs.defaultServings || 2) + 1) })}
-                          className="w-8 h-8 rounded-lg border border-zinc-200 bg-white flex items-center justify-center text-zinc-600 hover:bg-zinc-100 font-bold cursor-pointer"
-                        >
-                          +
-                        </button>
-                        <span className="text-[11px] text-zinc-500">portions</span>
-                      </div>
-                    </div>
-
-                    {/* When you eat: the Cook tab works out when to start from it */}
-                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2" data-setting-eat-at>
-                      <label htmlFor="setting-eat-at" className="text-xs font-semibold text-zinc-900 block">We usually eat at</label>
-                      <div className="flex items-center gap-2.5">
-                        <input
-                          id="setting-eat-at"
-                          type="time"
-                          value={parseClock(prefs.eatAt) !== null ? prefs.eatAt : DEFAULT_EAT_AT}
-                          onChange={(e) => { if (parseClock(e.target.value) !== null) store.updatePreferences({ eatAt: e.target.value }); }}
-                          className="h-9 px-2 bg-white border border-zinc-200 rounded-lg text-sm font-bold tabular-nums focus:outline-none focus:border-emerald-500"
-                          data-setting-eat-at-input
-                        />
-                        <span className="text-[11px] text-zinc-500 leading-snug">The Cook tab says when to start cooking to eat at this time. You can change it just for one evening there.</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hardware card */}
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
-                  <div className="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                    <Zap className="w-4 h-4 text-zinc-400" />
-                    <h3 className="text-sm font-bold text-zinc-900 lowercase">appliances & hardware</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="text-xs font-semibold text-zinc-700 block">Multi-Cooker Model</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Ninja Combi 12-in-1"
-                        value={prefs.ninjaModel || 'Ninja Combi 12-in-1'}
-                        onChange={(e) => store.updatePreferences({ ninjaModel: e.target.value })}
-                        className="w-full mt-1.5 text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-zinc-700 block">Cooking Method focus</label>
-                      <select
-                        value={prefs.preferredCookingMethod || 'all'}
-                        onChange={(e) => store.updatePreferences({ preferredCookingMethod: e.target.value as any })}
-                        className="w-full mt-1.5 text-xs px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none font-medium cursor-pointer"
-                      >
-                        <option value="all">all methods</option>
-                        <option value="ninja">ninja combi focus</option>
-                        <option value="oven_hob">traditional oven & hob</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* SECTION: GITHUB CLOUD SYNC */}
-            {activeSubSection === 'github' && (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
-                  <div className="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                    <Cloud className="w-4 h-4 text-zinc-400" />
-                    <h3 className="text-sm font-bold text-zinc-900 lowercase font-semibold">cloud sync (github gist)</h3>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-500 leading-normal">
-                    Store and synchronize your recipes, meal plans, shopping lists, and preferences privately inside a GitHub Gist.
-                    {store.githubConfig && (
-                      <> Changes upload automatically, and the other phone's changes appear within about {store.syncPollSeconds || 20} seconds while the app is open.</>
-                    )}
-                  </p>
-
-                  {store.githubConfig ? (
-                    // Configured State
-                    <div className="space-y-4">
-                      <div className="p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-xl space-y-2 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-zinc-500">Sync Status:</span>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[11px] uppercase ${
-                            store.syncStatus === 'synced' ? 'bg-emerald-100 text-emerald-700' :
-                            store.syncStatus === 'loading' ? 'bg-amber-100 text-amber-700 animate-pulse' :
-                            store.syncStatus === 'error' ? 'bg-rose-100 text-rose-700' : 'bg-zinc-100 text-zinc-700'
-                          }`}>
-                            {store.syncStatus}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-zinc-500">Gist ID:</span>
-                          <span className="font-mono text-zinc-800 break-all bg-white px-1.5 py-0.5 border border-zinc-200 rounded">{store.githubConfig.gistId}</span>
-                        </div>
-                        {store.lastSynced && (
-                          <div className="flex justify-between items-center text-[11px] text-zinc-500">
-                            <span>Last Synced:</span>
-                            <span>{store.lastSynced.toLocaleTimeString()}</span>
-                          </div>
-                        )}
-                        {store.syncError && (
-                          <div className="p-2 bg-rose-50 text-rose-700 text-[11px] rounded border border-rose-100 font-medium">
-                            Error: {store.syncError}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await store.manualSync();
-                            showToast("Database synced successfully!");
-                          }}
-                          disabled={store.syncStatus === 'loading'}
-                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs animate-none"
-                        >
-                          {store.syncStatus === 'loading' ? 'Syncing...' : 'Sync Now'}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm("Disconnect cloud sync? Your local data remains safe, but Gist cloud sync will stop.")) {
-                              store.clearGithubConfig();
-                              showToast("Cloud sync disconnected");
-                            }
-                          }}
-                          className="px-3.5 py-2 bg-white hover:bg-zinc-100 text-rose-600 border border-zinc-200 hover:border-zinc-300 font-bold rounded-xl text-xs cursor-pointer shadow-3xs"
-                        >
-                          Disconnect Cloud Sync
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    // Setup Form State
-                    <form onSubmit={async (e) => {
-                      e.preventDefault();
-                      const target = e.currentTarget;
-                      const mode = (target.elements.namedItem('syncMode') as HTMLSelectElement).value as 'pull' | 'push' | 'merge';
-                      
-                      try {
-                        await store.saveGithubConfig(localPat, localGistId, mode);
-                        showToast("Successfully connected and synced!");
-                      } catch (err: any) {
-                        showToast(err.message || "Failed to connect to Gist.");
-                      }
-                    }} className="space-y-4">
-                      <div>
-                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
-                          GitHub Personal Access Token (PAT)
-                        </label>
-                        <input
-                          name="pat"
-                          type="password"
-                          required
-                          value={localPat}
-                          onChange={(e) => setLocalPat(e.target.value)}
-                          placeholder="ghp_..."
-                          className="w-full text-xs px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                        />
-                        <span className="text-[11px] text-zinc-400 block mt-1">
-                          Needs 'gist' permission. You can generate one in GitHub Settings &gt; Developer settings.
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
-                            Gist ID (Leave empty to create new)
-                          </label>
-                          <input
-                            name="gistId"
-                            type="text"
-                            value={localGistId}
-                            onChange={(e) => setLocalGistId(e.target.value)}
-                            placeholder="Optional"
-                            className="w-full text-xs px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
-                            Initial Sync Strategy
-                          </label>
-                          <select
-                            name="syncMode"
-                            className="w-full text-xs px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-400 focus:bg-white transition-all font-semibold text-zinc-700 cursor-pointer shadow-3xs"
-                          >
-                            <option value="merge">Merge Gist & Local Data (Recommended)</option>
-                            <option value="pull">Pull Gist Data (Overwrite Local)</option>
-                            <option value="push">Push Local Data (Overwrite Gist)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
-                        <button
-                          type="submit"
-                          className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs transition-colors"
-                        >
-                          Connect Existing Gist
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!localPat.trim()) {
-                              alert("Please enter your GitHub Personal Access Token first!");
-                              return;
-                            }
-                            try {
-                              const newId = await store.createGistFromLocal(localPat);
-                              showToast(`Private Gist created successfully: ${newId}`);
-                            } catch (err: any) {
-                              showToast(err.message || "Failed to create private Gist.");
-                            }
-                          }}
-                          className="flex-1 px-4 py-2.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 hover:border-zinc-300 font-bold rounded-xl text-xs cursor-pointer shadow-3xs transition-colors"
-                        >
-                          Create New Private Gist
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-
-                {/* GEMINI AI API CARD */}
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs mt-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                    <Sparkles className="w-4 h-4 text-zinc-400 shrink-0" />
-                    <h3 className="text-sm font-bold text-zinc-900 lowercase font-semibold">gemini ai (bring your own key)</h3>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-500 leading-normal">
-                    This application uses a client-side <strong>Bring Your Own Key (BYOK)</strong> pattern. Your Gemini API key is stored securely in your browser's local storage and used directly to communicate with Google's API, ensuring 100% serverless, private, and static-ready hosting.
-                  </p>
-
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
-                        Gemini API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={localGeminiKey}
-                        onChange={(e) => setLocalGeminiKey(e.target.value)}
-                        placeholder="AIzaSy..."
-                        className="w-full text-xs px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                      />
-                      <span className="text-[11px] text-zinc-400 block mt-1">
-                        Get a free or paid API key from the <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Google AI Studio Console</a>.
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (localGeminiKey.trim()) {
-                            localStorage.setItem('gemini_api_key', localGeminiKey.trim());
-                            showToast("Gemini API key saved successfully!");
-                          } else {
-                            localStorage.removeItem('gemini_api_key');
-                            showToast("Gemini API key cleared.");
-                          }
-                        }}
-                        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs transition-colors"
-                      >
-                        Save API Key
-                      </button>
-
-                      {localStorage.getItem('gemini_api_key') && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            localStorage.removeItem('gemini_api_key');
-                            setLocalGeminiKey('');
-                            showToast("Gemini API key deleted.");
-                          }}
-                          className="px-3.5 py-2 bg-white hover:bg-zinc-100 text-rose-600 border border-zinc-200 hover:border-zinc-300 font-bold rounded-xl text-xs cursor-pointer shadow-3xs"
-                        >
-                          Clear Key
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {/* SECTION 5: SYSTEM & BACKUPS */}
-            {activeSubSection === 'system' && (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
-                  <div className="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                    <Sparkles className="w-4 h-4 text-zinc-400" />
-                    <h3 className="text-sm font-bold text-zinc-900 lowercase">tidy the grocery list</h3>
-                  </div>
-
-                  <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2">
-                    <p className="text-[11px] text-zinc-500 leading-normal">
-                      Gemini looks for duplicate or oddly named products on your grocery list and suggests merges. You approve each change.
-                    </p>
-
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setIsCleanDbModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-xs"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Run AI Catalog Clean-Up</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 sm:p-5 space-y-4 shadow-xs">
-                  <div className="flex items-center gap-2 pb-2 border-b border-zinc-100">
-                    <Download className="w-4 h-4 text-zinc-400" />
-                    <h3 className="text-sm font-bold text-zinc-900 lowercase">backups</h3>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={exportBackup}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download Backup JSON</span>
-                    </button>
-
-                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer shadow-3xs">
-                      <Upload className="w-3.5 h-3.5 text-zinc-500" />
-                      <span>Restore Backup</span>
-                      <input
-                        type="file"
-                        accept=".json"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowResetSettingsModal(true)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-zinc-500 hover:text-zinc-900 text-xs font-semibold hover:bg-zinc-100 rounded-lg transition-colors ml-auto cursor-pointer"
-                    >
-                      <span>Reset preferences</span>
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
+        <label className={`${row} cursor-pointer`}>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-zinc-900">Restore from a backup…</span>
+            <span className={`block text-[13px] ${badFile ? 'text-rose-700' : 'text-zinc-500'}`}>{badFile || "Shows what's in the file before anything changes"}</span>
+          </span>
+          <Upload className="w-4 h-4 text-zinc-500" />
+          <input type="file" accept=".json,application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickRestore(f); e.target.value = ''; }} data-restore-input />
+        </label>
+        <div className="px-4 py-3">
+          <span className="block text-[15px] font-semibold text-zinc-900">Products list</span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => { download(JSON.stringify(store.state.groceryDatabase?.length ? store.state.groceryDatabase : catalog, null, 2), `products-${formatDateISO(new Date())}.json`); say('Products downloaded'); }} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer">Download</button>
+            <button type="button" onClick={() => productsInput.current?.click()} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer">Load from a file…</button>
+            <button type="button" onClick={() => setConfirm({ title: 'Go back to the built-in products?', body: "Products you've added or changed are replaced by the app's own list.", action: 'Use built-in list', danger: true, run: () => { store.updateGroceryDatabase?.(INITIAL_GROCERY_DATABASE); say('Products reset'); } })} className="h-9 px-3 rounded-xl text-sm font-semibold text-rose-700 cursor-pointer" data-products-reset>Reset to built-in</button>
+            <input ref={productsInput} type="file" accept=".json,application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importProducts(f); e.target.value = ''; }} />
           </div>
         </div>
+        <button type="button" onClick={() => setConfirm({ title: 'Reset settings?', body: 'People, eating time, appliance and how recipe cards look go back to how they started.\nYour recipes, plans, lists, freezer, staples, aisle order and past shops are kept.', action: 'Reset settings', danger: true, run: () => { store.resetPreferences(); say('Settings reset'); } })}
+          className={`${row} text-sm font-semibold text-rose-700 cursor-pointer`} data-settings-reset>Reset settings…</button>
       </div>
 
-      {/* Insert Database Item Popup Modal */}
-      {isAddPopupOpen && (
-        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-150">
-          <div 
-            className="bg-white w-full max-w-sm rounded-2xl shadow-xl border border-zinc-200/80 overflow-hidden animate-in slide-in-from-bottom-4 duration-150"
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="px-4 py-3.5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-              <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">add database item</h3>
-              <button 
-                type="button" 
-                onClick={() => setIsAddPopupOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 p-1 rounded-lg cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => {
-              handleAddGroceryItem(e);
-              setIsAddPopupOpen(false);
-            }} className="p-4 space-y-3.5">
-              <div>
-                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Item Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Baby Spinach, Chicken Breast"
-                  value={dbNewName}
-                  onChange={(e) => setDbNewName(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                  autoFocus
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Standard Unit</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. g, ml, whole, tin"
-                    value={dbNewUnit}
-                    onChange={(e) => setDbNewUnit(e.target.value)}
-                    className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Step Increment</label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="any"
-                    required
-                    value={dbNewIncrement}
-                    onChange={(e) => setDbNewIncrement(parseFloat(e.target.value) || 100)}
-                    className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Aisle Category</label>
-                <select
-                  value={dbNewCategory}
-                  onChange={(e) => setDbNewCategory(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all font-semibold text-zinc-700 cursor-pointer shadow-3xs"
-                >
-                  <option value="Produce">Produce</option>
-                  <option value="Meat">Meat</option>
-                  <option value="Fish">Fish</option>
-                  <option value="Dairy">Dairy</option>
-                  <option value="Canned">Canned</option>
-                  <option value="Pasta">Pasta</option>
-                  <option value="Bakery">Bakery</option>
-                  <option value="Frozen">Frozen</option>
-                  <option value="Pantry">Pantry</option>
-                  <option value="Household">Household</option>
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAddPopupOpen(false)}
-                  className="flex-1 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
-                >
-                  Save Item
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Grocery Item Popup Modal */}
-      {editingItemId && (
-        <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-150">
-          <div 
-            className="bg-white w-full max-w-sm rounded-2xl shadow-xl border border-zinc-200/80 overflow-hidden animate-in slide-in-from-bottom-4 duration-150"
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="px-4 py-3.5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-              <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">edit database item</h3>
-              <button 
-                type="button" 
-                onClick={() => setEditingItemId(null)}
-                className="text-zinc-400 hover:text-zinc-600 p-1 rounded-lg cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3.5">
-              <div>
-                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Item Name</label>
-                <input
-                  type="text"
-                  required
-                  value={editingItemName}
-                  onChange={(e) => setEditingItemName(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                  autoFocus
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Standard Unit</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingItemUnit}
-                    onChange={(e) => setEditingItemUnit(e.target.value)}
-                    className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Step Increment</label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="any"
-                    required
-                    value={editingItemIncrement}
-                    onChange={(e) => setEditingItemIncrement(parseFloat(e.target.value) || 1)}
-                    className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all shadow-3xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Aisle Category</label>
-                <select
-                  value={editingItemCategory}
-                  onChange={(e) => setEditingItemCategory(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all font-semibold text-zinc-700 cursor-pointer shadow-3xs"
-                >
-                  <option value="Produce">Produce</option>
-                  <option value="Meat">Meat</option>
-                  <option value="Fish">Fish</option>
-                  <option value="Dairy">Dairy</option>
-                  <option value="Canned">Canned</option>
-                  <option value="Pasta">Pasta</option>
-                  <option value="Bakery">Bakery</option>
-                  <option value="Frozen">Frozen</option>
-                  <option value="Pantry">Pantry</option>
-                  <option value="Household">Household</option>
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-1.5">
-                <button
-                  type="button"
-                  onClick={() => setEditingItemId(null)}
-                  className="flex-1 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveEditGroceryItem}
-                  className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
-                >
-                  Save Changes
-                </button>
-              </div>
+      {restore && (
+        <Sheet label="Restore from a backup" onClose={() => setRestore(null)}>
+          <div className="p-4" data-restore-sheet>
+            <h3 className="text-lg font-bold text-zinc-900">Restore this backup?</h3>
+            <p className="text-sm text-zinc-500 mt-0.5 break-all">{restore.name}</p>
+            <ul className="mt-3 space-y-1 text-[15px] text-zinc-800" data-restore-parts>
+              {restore.parts.map((p) => <li key={p} className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-600" />{p}</li>)}
+            </ul>
+            <p className="mt-3 text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">This replaces everything on this phone{store.githubConfig ? ', and then the other phone too when it syncs' : ''}. Download a backup first if you're not sure.</p>
+            <div className="mt-4 flex gap-2">
+              <button type="button" onClick={() => setRestore(null)} className="flex-1 h-12 rounded-xl border border-zinc-300 font-semibold cursor-pointer">Cancel</button>
+              <button type="button" onClick={() => { const ok = store.importAllData(restore.text); setRestore(null); say(ok ? 'Backup restored' : "Couldn't restore that file"); }} className="flex-1 h-12 rounded-xl bg-rose-600 text-white font-semibold cursor-pointer" data-restore-ok>Replace and restore</button>
             </div>
           </div>
-        </div>
+        </Sheet>
       )}
+    </section>
+  );
+}
 
+// ---------- About ----------
 
+function AboutSection() {
+  const running = runningVersion();
+  const [check, setCheck] = useState<UpdateCheck | 'checking' | null>(null);
+  return (
+    <section data-settings-about>
+      <h3 className={sectionTitle}>About this app</h3>
+      <div className={card}>
+        <div className={row}>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-zinc-900">Version</span>
+            <span className="block text-[13px] text-zinc-500" data-app-version>
+              {running ? `${builtText(running.built) || 'This version'} · ${running.id.slice(0, 7)}` : 'Preview (not the installed app)'}
+            </span>
+            {check && check !== 'checking' && (
+              <span className={`block text-[13px] mt-0.5 ${check === 'available' ? 'text-emerald-700 font-semibold' : 'text-zinc-500'}`} data-update-result>
+                {check === 'available' ? 'A newer version has been uploaded.' : check === 'current' ? "You're on the latest version." : "Couldn't check just now (no internet?)."}
+              </span>
+            )}
+          </span>
+          {check === 'available'
+            ? <button type="button" onClick={() => void updateNow()} className="h-9 px-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer shrink-0">Update</button>
+            : <button type="button" disabled={!running || check === 'checking'} onClick={async () => { setCheck('checking'); setCheck(await checkForUpdate()); }} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer disabled:opacity-40 shrink-0" data-update-check>{check === 'checking' ? 'Checking…' : 'Check for updates'}</button>}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-      {/* Reset Preferences Confirmation Modal */}
-      {showResetSettingsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-zinc-200 space-y-4">
-            <div className="text-center space-y-1.5">
-              <h3 className="text-sm font-bold text-zinc-900">Reset preferences?</h3>
-              <p className="text-xs text-zinc-500">
-                This will reset all your family sizes, display units, and cooking preferences to factory defaults. Your recipes and meal plans are unaffected.
-              </p>
+// ---------- Products ----------
+
+const PAGE = 60;
+
+function ProductsPage({ catalog, store, onBack, onClean, say, setConfirm }: {
+  catalog: GroceryItem[];
+  store: SettingsTabProps['store'];
+  onBack: () => void;
+  onClean: () => void;
+  say: (t: string, undo?: () => void) => void;
+  setConfirm: (c: any) => void;
+}) {
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  const [q, setQ] = useState('');
+  const [aisle, setAisle] = useState('All');
+  const [limit, setLimit] = useState(PAGE);
+  const [editing, setEditing] = useState<GroceryItem | 'new' | null>(null);
+  const aisles = useMemo(() => ['All', ...Array.from(new Set(catalog.map((i) => i.category).filter(Boolean))).sort()], [catalog]);
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return catalog
+      .filter((i) => (aisle === 'All' || i.category === aisle) && (!t || i.name.toLowerCase().includes(t) || (i.aliases || []).some((a) => a.toLowerCase().includes(t))))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [catalog, q, aisle]);
+  useEffect(() => setLimit(PAGE), [q, aisle]);
+  const base = (): GroceryItem[] => (store.state.groceryDatabase && store.state.groceryDatabase.length ? store.state.groceryDatabase : INITIAL_GROCERY_DATABASE);
+
+  const save = (item: GroceryItem, isNew: boolean) => {
+    if (isNew) store.updateGroceryDatabase?.([...base(), item]);
+    else if (store.updateGroceryOverride) store.updateGroceryOverride(item.id, { name: item.name, unit: item.unit, increment: item.increment, category: item.category });
+    else store.updateGroceryDatabase?.(base().map((x) => (x.id === item.id ? { ...x, ...item } : x)));
+    setEditing(null);
+    say(isNew ? `Added ${item.name}` : `Saved ${item.name}`);
+  };
+  const remove = (item: GroceryItem) => {
+    const before = base();
+    store.updateGroceryDatabase?.(before.filter((x) => x.id !== item.id));
+    setEditing(null);
+    say(`Removed ${item.name}`, () => storeRef.current.updateGroceryDatabase?.([...before]));
+  };
+
+  return (
+    <>
+      <SubHeader title="Products" onBack={onBack} right={<button type="button" onClick={() => setEditing('new')} className="h-9 px-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold inline-flex items-center gap-1 cursor-pointer" data-product-add><Plus className="w-4 h-4" />Add</button>} />
+      <div className="flex-1 overflow-y-auto" data-products-page>
+        <div className="max-w-2xl mx-auto px-3 pt-3 pb-24">
+          <p className="text-sm text-zinc-600 px-1">The Shop uses these to turn recipe amounts into things you buy: how each is sold (in steps of 250 g, by the bunch) and which aisle it's in.</p>
+          <div className="sticky top-0 z-10 bg-[#fafafa] pt-3 pb-2 space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${catalog.length} products`} className="w-full h-11 rounded-xl border border-zinc-300 bg-white pl-9 pr-9 text-base outline-none focus:border-emerald-500" data-products-search aria-label="Search products" />
+              {q && <button type="button" onClick={() => setQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-zinc-400 cursor-pointer" aria-label="Clear"><X className="w-4 h-4" /></button>}
             </div>
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowResetSettingsModal(false)}
-                className="w-full py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 rounded-lg cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  store.resetPreferences();
-                  setShowResetSettingsModal(false);
-                  showToast('Preferences reset');
-                }}
-                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
-              >
-                Confirm
-              </button>
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-3 px-3" data-products-aisles>
+              {aisles.map((a) => (
+                <button key={a} type="button" onClick={() => setAisle(a)} aria-pressed={aisle === a} className={`h-8 px-3 rounded-full text-sm font-semibold whitespace-nowrap border cursor-pointer ${aisle === a ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`}>{a === 'All' ? 'All aisles' : a}</button>
+              ))}
             </div>
           </div>
+          <button type="button" onClick={onClean} className="mb-2 w-full h-11 rounded-xl border border-zinc-300 bg-white text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer" data-products-tidy><Sparkles className="w-4 h-4 text-emerald-600" />Tidy duplicates with Gemini</button>
+          <div className={card} data-products-list>
+            {shown.length === 0 && <p className="px-4 py-6 text-center text-sm text-zinc-500">Nothing matches.</p>}
+            {shown.slice(0, limit).map((i) => (
+              <button key={i.id} type="button" onClick={() => setEditing(i)} className={`${row} cursor-pointer hover:bg-zinc-50`} data-product={i.name}>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-zinc-900 truncate">{i.name}</span>
+                  <span className="block text-[13px] text-zinc-500 truncate">{i.category} · sold in {i.increment} {i.unit || 'item'}</span>
+                </span>
+                <ChevronRight className="w-4 h-4 text-zinc-400 shrink-0" />
+              </button>
+            ))}
+          </div>
+          {shown.length > limit && <button type="button" onClick={() => setLimit(shown.length)} className="mt-2 w-full h-11 rounded-xl border border-zinc-300 bg-white text-sm font-semibold cursor-pointer" data-products-more>Show all {shown.length}</button>}
         </div>
-      )}
+      </div>
+      {editing && <ProductSheet item={editing === 'new' ? null : editing} aisles={aisles.filter((a) => a !== 'All')} onSave={save} onRemove={(i) => setConfirm({ title: `Remove ${i.name}?`, body: "The Shop won't know how it's sold any more (you can add it back).", action: 'Remove', danger: true, run: () => remove(i) })} onClose={() => setEditing(null)} />}
+    </>
+  );
+}
 
-      {/* AI Database Clean-Up & Reconciliation Modal */}
-      <CleanDatabaseModal
-        isOpen={isCleanDbModalOpen}
-        onClose={() => setIsCleanDbModalOpen(false)}
-        groceryItems={hydratedCatalog}
-        onApplyChanges={handleApplyCleanChanges}
-        showToast={showToast}
-        onNavigateTab={onNavigateTab}
-      />
+function ProductSheet({ item, aisles, onSave, onRemove, onClose }: { item: GroceryItem | null; aisles: string[]; onSave: (i: GroceryItem, isNew: boolean) => void; onRemove: (i: GroceryItem) => void; onClose: () => void }) {
+  const [name, setName] = useState(item?.name || '');
+  const [unit, setUnit] = useState(item?.unit || 'item');
+  const [step, setStep] = useState(String(item?.increment ?? 1));
+  const [aisle, setAisle] = useState(item?.category || aisles[0] || 'Produce');
+  const n = Number(step);
+  const ok = name.trim() && n > 0;
+  return (
+    <Sheet label={item ? item.name : 'Add a product'} onClose={onClose}>
+      <form className="p-4 space-y-3" data-product-sheet onSubmit={(e) => { e.preventDefault(); if (ok) onSave({ ...(item || {}), id: item?.id || `gdb-${Date.now()}`, name: name.trim(), unit: unit.trim(), increment: n, category: aisle } as GroceryItem, !item); }}>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-lg font-bold text-zinc-900">{item ? 'Change product' : 'Add a product'}</h3>
+          <button type="button" onClick={onClose} className="w-9 h-9 rounded-full border border-zinc-200 flex items-center justify-center cursor-pointer" aria-label="Close"><X className="w-4 h-4" /></button>
+        </div>
+        <label className="block"><span className="text-xs font-semibold text-zinc-600 block mb-1">Name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-11 rounded-xl border border-zinc-300 px-3 text-base" data-product-name autoFocus={!item} /></label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block"><span className="text-xs font-semibold text-zinc-600 block mb-1">Sold in steps of</span>
+            <input value={step} onChange={(e) => setStep(e.target.value)} inputMode="decimal" className="w-full h-11 rounded-xl border border-zinc-300 px-3 text-base" data-product-step /></label>
+          <label className="block"><span className="text-xs font-semibold text-zinc-600 block mb-1">Unit</span>
+            <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="g, ml, pack, bunch…" className="w-full h-11 rounded-xl border border-zinc-300 px-3 text-base" data-product-unit /></label>
+        </div>
+        <label className="block"><span className="text-xs font-semibold text-zinc-600 block mb-1">Aisle</span>
+          <select value={aisle} onChange={(e) => setAisle(e.target.value)} className="w-full h-11 rounded-xl border border-zinc-300 px-2 text-base bg-white" data-product-aisle>
+            {Array.from(new Set([...aisles, aisle])).map((a) => <option key={a} value={a}>{a}</option>)}
+          </select></label>
+        <div className="flex gap-2 pt-1">
+          {item && <button type="button" onClick={() => onRemove(item)} className="h-12 px-3 rounded-xl text-rose-700 font-semibold inline-flex items-center gap-1.5 cursor-pointer" data-product-remove><Trash2 className="w-4 h-4" />Remove</button>}
+          <button type="submit" disabled={!ok} className="flex-1 h-12 rounded-xl bg-emerald-600 text-white font-semibold disabled:opacity-40 cursor-pointer" data-product-save>{item ? 'Save' : 'Add product'}</button>
+        </div>
+      </form>
+    </Sheet>
+  );
+}
 
-      {/* Recipe Details Modal */}
-      {viewingRecipe && (
-        <RecipeModal
-          store={store}
-          recipe={viewingRecipe}
-          onClose={() => setViewingRecipe(null)}
-        />
-      )}
-    </div>
+// ---------- History ----------
+
+function HistoryPage({ plans, store, onBack, say, setConfirm, onNavigateTab }: {
+  plans: MealPlan[];
+  store: SettingsTabProps['store'];
+  onBack: () => void;
+  say: (t: string) => void;
+  setConfirm: (c: any) => void;
+  onNavigateTab?: (tab: TabName) => void;
+}) {
+  const [q, setQ] = useState('');
+  const [copying, setCopying] = useState<MealPlan | null>(null);
+  const recipes: Recipe[] = store.state.recipes || [];
+  const t = q.trim().toLowerCase();
+  const shown = t ? plans.filter((p) => Object.values(p.days || {}).some((d) => (d.meals || []).some((m) => mealTitle(m).toLowerCase().includes(t)))) : plans;
+
+  const copyText = (p: MealPlan) => {
+    const lines = [`Meals ${formatWeekSpan(p.startDate)}`, ...DAYS_OF_WEEK.map((d) => { const m = p.days?.[d]?.meals?.[0]; return `${d}: ${m ? mealTitle(m) : '—'}${m?.note ? ` (${m.note})` : ''}`; })];
+    navigator.clipboard?.writeText(lines.join('\n')).then(() => say('Copied the week as text')).catch(() => say("Couldn't copy on this phone"));
+  };
+
+  return (
+    <>
+      <SubHeader title="Past weeks" onBack={onBack} />
+      <div className="flex-1 overflow-y-auto" data-history-page>
+        <div className="max-w-2xl mx-auto px-3 pt-3 pb-24 space-y-3">
+          {plans.length > 3 && (
+            <div className="relative">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a meal you had" className="w-full h-11 rounded-xl border border-zinc-300 bg-white pl-9 pr-3 text-base" data-history-search aria-label="Find a meal" />
+            </div>
+          )}
+          {plans.length === 0 && <p className="text-center text-sm text-zinc-500 py-10">Finished weeks appear here, with what you ate. You can copy one to a new week.</p>}
+          {shown.map((p) => (
+            <section key={p.id} className="bg-white rounded-2xl border border-zinc-200" data-history-week={p.startDate}>
+              <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2">
+                <h3 className="text-[15px] font-bold text-zinc-900">{formatWeekSpan(p.startDate)}</h3>
+                <span className="text-xs text-zinc-500">{DAYS_OF_WEEK.filter((d) => p.days?.[d]?.meals?.[0]?.cooked).length} cooked</span>
+              </div>
+              <ul className="px-4 divide-y divide-zinc-100">
+                {DAYS_OF_WEEK.map((d) => {
+                  const m = p.days?.[d]?.meals?.[0] || null;
+                  const label = m ? describeMeal(m, leftoverSourceDay(p.days, d, m)).label?.text : '';
+                  const recipe = m?.recipeId ? recipes.find((r) => r.id === m.recipeId) : null;
+                  return (
+                    <li key={d} className="py-1.5 flex items-center gap-2 text-sm" data-history-day={d}>
+                      <span className="w-9 text-xs font-bold text-zinc-500 shrink-0">{d.slice(0, 3)}</span>
+                      <span className={`flex-1 min-w-0 truncate ${m ? 'text-zinc-800' : 'text-zinc-400'}`}>
+                        {m ? mealTitle(m) : 'Nothing planned'}
+                        {label && label.toLowerCase() !== (m ? mealTitle(m).toLowerCase() : '') && <span className="text-zinc-500"> · {label}</span>}
+                      </span>
+                      {recipe?.verdict === 'again' && <ThumbsUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-label="Have it again" />}
+                      {recipe?.verdict === 'not_for_us' && <ThumbsDown className="w-3.5 h-3.5 text-rose-600 shrink-0" aria-label="Not for us" />}
+                      {m?.cooked && <Check className="w-4 h-4 text-emerald-600 shrink-0" aria-label="Cooked" />}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="px-4 py-3 flex flex-wrap gap-2 border-t border-zinc-100">
+                <button type="button" onClick={() => setCopying(p)} className="h-9 px-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold cursor-pointer" data-history-copy>Copy to a week…</button>
+                <button type="button" onClick={() => copyText(p)} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer"><Copy className="w-4 h-4" />Copy as text</button>
+              </div>
+            </section>
+          ))}
+          {plans.length > 0 && (
+            <button type="button" onClick={() => setConfirm({ title: 'Clear all past weeks?', body: `${plans.length} finished ${plans.length === 1 ? 'week is' : 'weeks are'} deleted from both phones. Recipes keep their "last had" dates only while the weeks exist.`, action: 'Clear past weeks', danger: true, run: () => { store.clearPastWeeks(); say('Past weeks cleared'); } })}
+              className="w-full h-11 text-sm font-semibold text-rose-700 cursor-pointer" data-history-clear>Clear all past weeks…</button>
+          )}
+        </div>
+      </div>
+      {copying && <CopyWeekSheet plan={copying} store={store} onClose={() => setCopying(null)} onDone={(label) => { setCopying(null); say(`Copied to ${label}`); setTimeout(() => onNavigateTab?.('planning'), 700); }} />}
+    </>
+  );
+}
+
+function CopyWeekSheet({ plan, store, onClose, onDone }: { plan: MealPlan; store: SettingsTabProps['store']; onClose: () => void; onDone: (label: string) => void }) {
+  const monday = getMonday(new Date());
+  const maxWeeks = store.state.preferences?.maxForwardWeeks || 4;
+  const weeks = Array.from({ length: maxWeeks }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i * 7);
+    const start = formatDateISO(d);
+    const existing = (store.state.mealPlans || []).find((p) => p.startDate === start);
+    const count = existing ? Object.values(existing.days || {}).reduce((n, day) => n + (day.meals?.length || 0), 0) : 0;
+    const label = i === 0 ? 'this week' : i === 1 ? 'next week' : `w/c ${d.getDate()} ${d.toLocaleDateString('en-GB', { month: 'short' })}`;
+    return { start, label, count, span: formatWeekSpan(start) };
+  });
+  return (
+    <Sheet label="Copy to a week" onClose={onClose}>
+      <div className="p-4" data-copy-week>
+        <h3 className="text-lg font-bold text-zinc-900">Copy {formatWeekSpan(plan.startDate)} to…</h3>
+        <p className="text-sm text-zinc-600 mt-0.5">The meals, people and notes come across, not yet cooked.</p>
+        <div className="mt-3 space-y-1.5">
+          {weeks.map((w) => (
+            <button key={w.start} type="button" onClick={() => { store.duplicatePlanToWeek(plan.id, w.start); onDone(w.label); }} data-copy-to={w.start}
+              className="w-full text-left rounded-xl border border-zinc-200 hover:bg-zinc-50 px-3 py-2.5 flex items-center gap-3 cursor-pointer">
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-semibold text-zinc-900 capitalize">{w.label}</span>
+                <span className="block text-xs text-zinc-500">{w.span}</span>
+              </span>
+              <span className={`text-xs font-bold rounded-lg px-2 py-1 ${w.count ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>{w.count ? `Replaces ${w.count} meals` : 'Empty'}</span>
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={onClose} className="mt-3 w-full h-11 rounded-xl border border-zinc-300 font-semibold cursor-pointer">Cancel</button>
+      </div>
+    </Sheet>
   );
 }

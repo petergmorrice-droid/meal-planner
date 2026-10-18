@@ -113,8 +113,12 @@ export interface BatchItem {
   id: string;
   name?: string;
   recipeId?: string;
+  /** One person's helping each (a meal for 2 takes 2). */
   portions: number;
+  /** When it went in the freezer. */
   dateAdded: string;
+  /** "Garage freezer, blue tub". */
+  note?: string;
   lastModifiedAt?: number;
 }
 
@@ -204,7 +208,7 @@ export interface UserPreferences {
   shopRoute?: ShopRoute;
   /** Your last shops: how many items, how long. Newest first. */
   shopHistory?: ShopRecord[];
-  /** When you usually eat dinner ("18:00"; 6pm if not set), for "start by" times on the Cook tab. Settings → my household. */
+  /** When you usually eat dinner ("18:00"; 6pm if not set), for "start by" times on the Cook tab. Settings → Household. */
   eatAt?: string;
   /** A different time just for one evening, set on the Cook tab. */
   eatAtTonight?: { date: string; time: string };

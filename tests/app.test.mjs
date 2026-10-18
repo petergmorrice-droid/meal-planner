@@ -11,6 +11,8 @@ import {
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
   addMinute, timerText, eatAtFor, DEFAULT_EAT_AT, speechChunks, forSpeech, parseVoiceCommand, parseAlternatives,
+  frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText,
+  versionInServiceWorker, builtText, agoText, syncProblemText, backupSummary,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
 } from '../.test-build/app.mjs';
 
@@ -460,6 +462,85 @@ test('cook: kitchen shorthand is read out in words', () => {
   assert.equal(forSpeech('1⅓ x 400g tins kidney beans'), '1 and a third 400 gram tins kidney beans');
   assert.equal(forSpeech('150 ml cream, ½ lemon, simmer 1 min'), '150 millilitres cream, half lemon, simmer 1 minute');
   assert.equal(forSpeech('Season to taste.'), 'Season to taste.');
+});
+
+test('freezer: how long ago, and portions as meals', () => {
+  assert.equal(frozenAgo('2026-10-18', '2026-10-18'), 'today');
+  assert.equal(frozenAgo('2026-10-17T19:00:00.000Z', '2026-10-18'), 'yesterday');
+  assert.equal(frozenAgo('2026-10-10', '2026-10-18'), '8 days ago');
+  assert.equal(frozenAgo('2026-09-22', '2026-10-18'), '4 weeks ago');
+  assert.equal(frozenAgo('2026-07-14', '2026-10-18'), '3 months ago');
+  assert.equal(frozenAgo('2025-01-01', '2026-10-18'), 'over a year ago');
+  assert.equal(mealsFor(3, 2), 'enough for 1 meal for 2, and 1 over');
+  assert.equal(mealsFor(4, 2), 'enough for 2 meals for 2');
+  assert.equal(mealsFor(1, 2), 'one helping');
+});
+
+test('freezer: grouped by dish, oldest first, with what the plan wants', () => {
+  const recipes = [R('r-chilli', 'Chilli con carne'), R('r-bol', 'Spaghetti bolognese')];
+  const batches = [
+    { id: 'b1', name: 'Chilli con carne', recipeId: 'r-chilli', portions: 3, dateAdded: '2026-09-22' },
+    { id: 'b2', name: 'Lentil soup', portions: 2, dateAdded: '2026-07-14' },
+    { id: 'b4', name: 'Chilli con carne', recipeId: 'r-chilli', portions: 4, dateAdded: '2026-10-14T18:00:00.000Z' },
+  ];
+  const plan = { id: 'p', startDate: '2026-10-12', status: 'finalized', days: {
+    Wednesday: { date: '2026-10-14', meals: [{ id: 'm3', type: 'batch', batchId: 'b1', recipeId: 'r-chilli', name: 'Batch: Chilli con carne', servings: 2 }] },
+    Monday: { date: '2026-10-19', meals: [] },
+    Thursday: { date: '2026-10-15', meals: [{ id: 'm4', type: 'batch', batchId: 'b1', recipeId: 'r-chilli', name: 'Batch: Chilli con carne', servings: 2 }] },
+    Friday: { date: '2026-10-16', meals: [{ id: 'm5', type: 'batch', batchId: 'b4', recipeId: 'r-chilli', name: 'Batch: Chilli con carne', servings: 4, cooked: true }] },
+  } };
+  const g = freezerGroups(batches, recipes, [plan], '2026-10-15');
+  assert.deepEqual(g.map((x) => x.name), ['Lentil soup', 'Chilli con carne'], 'oldest first');
+  const soup = g[0], chilli = g[1];
+  assert.equal(soup.useSoon, true, '93 days: use soon');
+  assert.equal(chilli.portions, 7);
+  assert.deepEqual(chilli.batches.map((b) => b.id), ['b1', 'b4'], 'oldest batch first');
+  assert.equal(chilli.plannedPortions, 2, 'Wed is past, Fri already eaten: only Thu counts');
+  assert.equal(chilli.spare, 5);
+  assert.equal(chilli.useSoon, false);
+  assert.equal(whenText('2026-10-15', '2026-10-15'), 'today');
+  assert.equal(whenText('2026-10-16', '2026-10-15'), 'tomorrow');
+  assert.equal(whenText('2026-10-17', '2026-10-15'), 'Sat');
+  assert.equal(whenText('2026-10-26', '2026-10-15'), 'Mon 26 Oct');
+});
+
+test('freezer: plan a freezer meal on a day (leftovers of what it replaces become fresh)', () => {
+  const days = {
+    Monday: { date: '2026-10-12', meals: [{ id: 'a', type: 'recipe', recipeId: 'r-bol', name: 'Spaghetti bolognese', servings: 2 }] },
+    Tuesday: { date: '2026-10-13', meals: [{ id: 'b', type: 'leftover', recipeId: 'r-bol', name: 'Leftovers: Spaghetti bolognese', servings: 2, note: 'Reheat from Monday' }] },
+  };
+  const r = planFreezerMeal(days, 'Monday', { name: 'Chilli con carne', recipeId: 'r-chilli', batches: [{ id: 'b1', portions: 3, dateAdded: '2026-09-22' }] }, 2, 'new');
+  assert.equal(r.replaced.name, 'Spaghetti bolognese');
+  assert.deepEqual(r.days.Monday.meals[0], { id: 'new', type: 'batch', batchId: 'b1', recipeId: 'r-chilli', name: 'Batch: Chilli con carne', servings: 2, note: '' });
+  assert.equal(r.days.Tuesday.meals[0].type, 'recipe');
+  assert.deepEqual(r.freshDays, ['Tuesday']);
+});
+
+test('settings: plain words for times, sync problems and backups', () => {
+  const now = Date.parse('2026-10-18T12:00:00Z');
+  assert.equal(agoText('2026-10-18T11:59:50Z', now), 'just now');
+  assert.equal(agoText('2026-10-18T11:58:00Z', now), '2 min ago');
+  assert.equal(agoText('2026-10-18T09:00:00Z', now), '3 hours ago');
+  assert.equal(agoText('2026-10-17T10:00:00Z', now), 'yesterday');
+  assert.equal(agoText('2026-10-01T10:00:00Z', now), '1 Oct');
+  assert.equal(agoText(null, now), '');
+  assert.match(syncProblemText('GitHub API error 401: Bad credentials'), /didn't accept the token/);
+  assert.match(syncProblemText('Failed to fetch'), /No internet/);
+  assert.match(syncProblemText('Gist not found (404)'), /Couldn't find/);
+  assert.equal(syncProblemText(''), '');
+  const ok = backupSummary(JSON.stringify({ recipes: [{}, {}], mealPlans: [{}], shoppingList: [], batches: [{}] }));
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.parts, ['2 recipes', '1 week', '0 shopping list items', '1 freezer item']);
+  assert.equal(backupSummary('{"hello":1}').ok, false);
+  assert.equal(backupSummary('not json').ok, false);
+});
+
+test('app version: read from sw.js, shown as a date', () => {
+  assert.equal(versionInServiceWorker("const CACHE = 'meal-planner-ab313b96a6b2';\nconst X = 'meal-planner-';"), 'ab313b96a6b2');
+  assert.equal(versionInServiceWorker("const CACHE = 'meal-planner-__BUILD_VERSION__';"), null);
+  assert.equal(versionInServiceWorker(''), null);
+  assert.match(builtText('2026-10-18T12:01:30.796Z'), /^18 Oct 2026, \d\d:\d\d$/);
+  assert.equal(builtText('nonsense'), '');
 });
 
 test('cook: when you eat — Settings, 6pm if not set, or just tonight', () => {

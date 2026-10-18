@@ -158,7 +158,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   const nextMondayStr = formatDateISO(nextMondayDateTop);
   // local nextMondayDate removed
   const maxWeeks = store.state.preferences?.maxForwardWeeks || MAX_FORWARD_WEEKS;
-  // New meals are planned for your usual number of people (Settings → my household).
+  // New meals are planned for your usual number of people (Settings → Household).
   const defaultServings = Math.max(1, Math.min(24, Number(store.state.preferences?.defaultServings) || 2));
   const lastMondayDate = new Date(currentMondayStr + 'T00:00:00');
   lastMondayDate.setDate(lastMondayDate.getDate() - 7);

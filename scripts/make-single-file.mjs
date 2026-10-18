@@ -53,6 +53,11 @@ if (scripts === 0) {
   process.exit(1);
 }
 
+// A version stamp for this build: the same one goes in sw.js (below), so the app can tell when a
+// newer version has been uploaded (Settings → About this app, and the "new version" banner).
+const version = crypto.createHash('sha256').update(html).digest('hex').slice(0, 12);
+html = html.replace(/<head>/i, `<head>\n<meta name="app-version" content="${version}" data-built="${new Date().toISOString()}">`);
+
 fs.mkdirSync(outDir, { recursive: true });
 const outFile = path.join(outDir, 'index.html');
 fs.writeFileSync(outFile, html);
@@ -60,7 +65,6 @@ console.log(`Inlined ${scripts} script(s) and ${styles} stylesheet(s) -> ${outFi
 
 // Copy the files that must stay separate. sw.js gets a version stamp so phones
 // replace their saved copy of the app when a new version is uploaded.
-const version = crypto.createHash('sha256').update(html).digest('hex').slice(0, 12);
 const extras = [];
 for (const entry of fs.readdirSync(buildDir, { withFileTypes: true })) {
   if (!entry.isFile() || entry.name === 'index.html' || entry.name.endsWith('.map')) continue;

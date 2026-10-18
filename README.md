@@ -9,21 +9,22 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 | Tab | What it does |
 | --- | --- |
 | **Cookbook** | Your recipe book. Add a recipe by pasting it, pasting a link to it (Gemini opens the page), taking a photo of a cookbook page, or asking Gemini to write one; on Android you can also share a recipe page from Chrome to the app. Gemini copies recipes exactly as written, then you check them on the same editor as the recipe page, where each ingredient shows what it's bought as on the shopping list (*Shop as*). It spots recipes you already have (replace or keep both). Search covers names, ingredients and notes; one-tap filters: Favourites, Not had lately, Under 30 min, Veggie, Ninja, In the freezer. Cards show the time, Oven/Hob or Ninja, vegetarian/vegan, when you last had it (or when it's planned) and portions in the freezer. Opening a recipe shows everything on one page, with Favourite, Share, *Start cooking* and *Add to a day…*. |
-| **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → my household*). It opens on this week Monday–Thursday and next week Friday–Sunday; ‹ › switch weeks. Two views, chosen per phone under the eye button: *Classic* (search and one-tap filters for your meals, drag them onto the week strip below) and *List* (the seven days as a list). Today is highlighted, past days greyed, cooked meals ticked, leftovers say where they're from ("Leftovers from Mon") and the cook day says how many to cook for. Adding a recipe that's in the freezer, or that an earlier day already cooks, asks how you're having it: *Leftovers from Wed*, *From the freezer* (nothing to buy) or *Cook it fresh*. Tap a day for one panel: people, sides, notes, change meal, move or swap (leftovers follow), remove (with Undo). An M–S row shows the week at a glance. *Send to shopping list* puts the week's ingredients on the list; change it afterwards and an *Update list* button appears (and a note on Shop). *Copy a week* fills an empty week from another. |
+| **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → Household*). It opens on this week Monday–Thursday and next week Friday–Sunday; ‹ › switch weeks. Two views, chosen per phone under the eye button: *Classic* (search and one-tap filters for your meals, drag them onto the week strip below) and *List* (the seven days as a list). Today is highlighted, past days greyed, cooked meals ticked, leftovers say where they're from ("Leftovers from Mon") and the cook day says how many to cook for. Adding a recipe that's in the freezer, or that an earlier day already cooks, asks how you're having it: *Leftovers from Wed*, *From the freezer* (nothing to buy) or *Cook it fresh*. Tap a day for one panel: people, sides, notes, change meal, move or swap (leftovers follow), remove (with Undo). An M–S row shows the week at a glance. *Send to shopping list* puts the week's ingredients on the list; change it afterwards and an *Update list* button appears (and a note on Shop). *Copy a week* fills an empty week from another. |
 | **Shop** | The week's list: meal ingredients, weekly staples and anything you add, one row per product, aisle by aisle in the order you walk your shop (*Arrange aisles…*; shared by both phones). ‹ › switch weeks; it opens on the week you're most likely shopping for. Type to add ("2 pints milk", "6 eggs", "bin bags"), or *Browse*; *Add a recipe's ingredients…* for a batch cook or anything not on the plan. Tick the circle (it stays in place, crossed out with *Undo*, for a few seconds before moving down, here and in shopping mode); tap the rest of a row for its panel: amount, note ("semi-skimmed"), aisle (remembered), which meals it's for, favourite, move to the following week, remove (with Undo). A *cupboard check* takes off the oils, spices, rice and stock you already have. Share copies the list as text. *Go shopping* is full screen with % done (milestones at 25/50/75%, a buzz on Android, a party at 100%): finished aisles fold away, *Undo* for the last tick stays in the bottom bar, press and hold for *out of stock* (doesn't count against the %), ticks from the other phone show within seconds ("✓ Rachel"), the screen stays on, and it reopens mid-shop if the phone locks. *Done shopping* moves, keeps or removes anything you didn't get (out-of-stock things only move if you ask), saves the shop to *Past shops* (best and average time) and learns your route round the shop: the aisles and items follow the order you usually pick things up, unless you've arranged the aisles yourself. |
-| **Cook** | The week Monday to Sunday as compact cards, opening at today's. Each card has the date down the left, the meal, one line about it (Freezer / Leftovers from Wed / Takeaway, people or "Cook for 4 (2 for Fri)", minutes, sides), the note, a tick on the right, and small *Swap*, *Recipe* and *Note* buttons (the recipe has *Start cooking*). Past days just show the tick. Today's card has more: "Start by 4:45pm to eat at 6pm" (your usual time is in *Settings → my household*, 6pm unless you change it; tap the time to change it just for tonight), anything to do tonight for tomorrow ("Take the chilli out of the freezer tonight", or a marinate/soak/overnight step) and a *Start cooking* button. *Swap* moves the meal to a free day or swaps it with another (Undo). Tapping a meal opens the same panel as Planning. Ticking a freezer meal takes its portions out of the Freezer; ticking a "freeze 4" batch cook asks how many went in; unticking (or Undo) puts it right. Cooking mode: one column starting with *Get everything out* (a checklist with amounts), each step showing what it uses and a *Start N min timer* button; named timers, several at once, +1 min, they ring and buzz until stopped and keep going on every tab; *Voice* (hands-free: say "next", "back", "repeat", "go to step 3", "start the timer", "set a timer for 10 minutes", "how long left", "stop", "what do I need", or "question, …" to ask anything; it reads each step out as you move and only acts on short commands, so kitchen chatter doesn't move the steps; it uses the browser's own speech recognition, so it needs Chrome or Safari and internet), *Ask* (type a question; Gemini answers from the recipe as you're cooking it: your amounts, people, appliance and step; needs the Gemini key), *Big steps* (one step at a time, the text as big as fits on the screen, a normal-sized Next) and *Read* (reads each step aloud as you move to it, with *Read it again*; it uses the phone's own voice, which works in Chrome and Safari and the home-screen app but not inside some other apps' browsers, and says so there); Oven/Hob or Ninja. *Finished* says what goes in the fridge for later leftovers, adds portions to the freezer, asks "Have it again" or "Not for us" (shown on the recipe) and saves a note for next time to the recipe's notes. |
-| **Freezer** | Batch-cooked meals in the freezer, which can be dropped into a week's plan. |
-| **Settings** | Past weeks, grocery database, household (who's planning, default portions, when you usually eat, appliances), connections (GitHub sync + Gemini key), and backup. |
+| **Cook** | The week Monday to Sunday as compact cards, opening at today's. Each card has the date down the left, the meal, one line about it (Freezer / Leftovers from Wed / Takeaway, people or "Cook for 4 (2 for Fri)", minutes, sides), the note, a tick on the right, and small *Swap*, *Recipe* and *Note* buttons (the recipe has *Start cooking*). Past days just show the tick. Today's card has more: "Start by 4:45pm to eat at 6pm" (your usual time is in *Settings → Household*, 6pm unless you change it; tap the time to change it just for tonight), anything to do tonight for tomorrow ("Take the chilli out of the freezer tonight", or a marinate/soak/overnight step) and a *Start cooking* button. *Swap* moves the meal to a free day or swaps it with another (Undo). Tapping a meal opens the same panel as Planning. Ticking a freezer meal takes its portions out of the Freezer; ticking a "freeze 4" batch cook asks how many went in; unticking (or Undo) puts it right. Cooking mode: one column starting with *Get everything out* (a checklist with amounts), each step showing what it uses and a *Start N min timer* button; named timers, several at once, +1 min, they ring and buzz until stopped and keep going on every tab; *Voice* (hands-free: say "next", "back", "repeat", "go to step 3", "start the timer", "set a timer for 10 minutes", "how long left", "stop", "what do I need", or "question, …" to ask anything; it reads each step out as you move and only acts on short commands, so kitchen chatter doesn't move the steps; it uses the browser's own speech recognition, so it needs Chrome or Safari and internet), *Ask* (type a question; Gemini answers from the recipe as you're cooking it: your amounts, people, appliance and step; needs the Gemini key), *Big steps* (one step at a time, the text as big as fits on the screen, a normal-sized Next) and *Read* (reads each step aloud as you move to it, with *Read it again*; it uses the phone's own voice, which works in Chrome and Safari and the home-screen app but not inside some other apps' browsers, and says so there); Oven/Hob or Ninja. *Finished* says what goes in the fridge for later leftovers, adds portions to the freezer, asks "Have it again" or "Not for us" (shown on the recipe) and saves a note for next time to the recipe's notes. |
+| **Freezer** | What's in the freezer by dish (two chilli batches are one line), oldest first, in **portions** (one person's helping, the same as everywhere else in the app) with "enough for 3 meals for 2". Each shows how long it's been frozen ("Use soon" after 3 months), what the plan already wants from it ("Planned Thu (2) · 5 spare", or a warning if there isn't enough) and *Have it on…* to plan it (nothing to buy). Tap one for its panel: portions, the date it was frozen, a note ("garage freezer, blue tub"), the recipe, and Remove with Undo. *Add* picks from your recipes or takes any name, with portions, date and note. |
+| **Settings** | One page. *This phone*: who's using it, and the Gemini key with *Test it*. *Household*: how many you usually cook for, when you usually eat, your usual appliance. *Sync between phones*: "Synced 2 min ago" or what's wrong in plain words, *Sync now*, the sync code to copy; or simple setup steps. *Shopping*: shortcuts to Arrange aisles, Weekly staples, Past shops, and *Products* (how each product is sold and which aisle; search, edit, add, Gemini tidy). *History*: past weeks with what you ate, ticks and verdicts; *Copy to a week…* and *Copy as text*. *Backup & reset*: download (remembers when), restore (shows what's in the file first), products file, reset settings (keeps staples, aisle order and past shops). *About this app*: the version and *Check for updates*; a banner says when newer files have been uploaded. |
 
 ## Where the data lives
 
 - **On each phone:** everything is saved in the browser's local storage, so the
   app works offline.
-- **Shared between phones:** if a GitHub token and Gist ID are entered in
-  *Settings → Connections*, the whole app state is synced to one private
-  GitHub Gist (`family-meal-planner.json`).
-- **AI recipe parsing:** uses your own Gemini API key, entered in
-  *Settings → Connections*. It is stored only on that phone.
+- **Shared between phones:** if a GitHub token (and, on the second phone, the
+  sync code) is entered in *Settings → Sync between phones*, the whole app
+  state is synced to one private GitHub Gist (`family-meal-planner.json`).
+  The "sync code" is the Gist ID.
+- **AI recipe parsing and questions:** use your own Gemini API key, entered in
+  *Settings → This phone*. It is stored only on that phone.
 
 There is no server and no database to pay for. The built app is a set of
 static files that can be hosted for free anywhere.
@@ -51,8 +52,9 @@ phone's saved settings belong to the address.
 
 **iPhone:** the home-screen app keeps its own storage, separate from Safari.
 The first time you open it from the home screen, enter the GitHub and Gemini
-details again (*Settings → connections*, choose **Pull**) and everything
-comes down from the Gist.
+details again (*Settings → Sync between phones*: the token, the sync code
+from the other phone, and under *Advanced* choose "Use what's on GitHub")
+and everything comes down from the Gist.
 
 ## Previewing inside Claude
 
@@ -85,7 +87,7 @@ own files; your data is never sent anywhere new.
 ## How shopping quantities work
 
 Every product you buy has one **master record** in the grocery list
-(*Settings → grocery database*): its name, aisle, the unit you buy it in and
+(*Settings → Products*): its name, aisle, the unit you buy it in and
 the step it's sold in (e.g. Beef Mince: 250 g steps; Chopped Tomatoes: 1 can).
 The app also knows how recipe amounts relate to it (a can is 400 g, a garlic
 clove is 5 g, an onion is about 150 g, a tablespoon is 15 ml…).
@@ -173,15 +175,16 @@ for the combining rules.
 Each website address keeps its own saved data and settings, so a newly
 hosted copy of the app starts empty on each phone. To move across:
 
-1. In the **old** app on each phone, open *Settings → connections* and tap
-   **Sync Now**, so everything is in the Gist. Note the **Gist ID** shown there.
+1. In the **old** app on each phone, open *Settings → Sync between phones*
+   and tap **Sync now**, so everything is in the Gist. Note the **sync code**
+   (Gist ID) shown there.
 2. **Stop using the old app** on both phones. Its older sync can undo
    deletions made in the new one.
-3. Open the **new** app → *Settings → connections*. Paste your GitHub token
-   and the Gist ID, leave the strategy on **Merge**, and tap
-   **Connect Existing Gist**. Do the same on the second phone.
-4. Re-enter the Gemini API key (same screen), and check *my household* shows
-   the right person for that phone.
+3. Open the **new** app → *Settings → Sync between phones*. Paste your GitHub
+   token and the sync code, leave *Advanced* on **Combine both**, and tap
+   **Connect to the other phone**. Do the same on the second phone.
+4. Re-enter the Gemini key (*Settings → This phone*, then **Test it**), and
+   check *Who's using this phone* shows the right person.
 
 If you no longer have the GitHub token, create a new one at
 github.com → Settings → Developer settings → Personal access tokens, with the
@@ -377,3 +380,14 @@ Main files:
   out. Read aloud now says kitchen shorthand in words ("500 grams",
   "200 degrees, or 180 degrees fan", "1 and a half"). The cooking-mode
   controls are now four small buttons: Big, Read, Voice, Ask.
+- `Freezer and Settings rebuilt` — the Freezer counts portions like the rest
+  of the app (it said "3 meals · 2 adults each" for 3 portions), groups a
+  dish's batches, shows how long things have been frozen and what the plan
+  wants, plans a freezer meal on a day, and has a panel with Undo and a
+  better Add (`src/freezer.ts`, tested; `BatchItem.note`). Settings is one
+  page (`SettingsTab.tsx`, helpers in `settingsInfo.ts`): the Multi-cooker
+  model (unused) and the duplicate Gemini clean-up are gone; Products and
+  Past weeks are their own pages; restore previews the file; reset keeps
+  staples, aisle order and shop history; the build stamps a version into
+  index.html and sw.js (`appVersion.ts`) so Settings shows it and a banner
+  offers new uploads.

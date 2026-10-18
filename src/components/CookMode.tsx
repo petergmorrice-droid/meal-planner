@@ -223,7 +223,7 @@ export default function CookMode({
     } catch (e) {
       problem = true;
       a = e instanceof NoGeminiKeyError
-        ? 'To ask questions, add your Gemini key in Settings, under connections.'
+        ? 'To ask questions, add your Gemini key in Settings, under This phone.'
         : "Sorry, I couldn't get an answer just now. Check you're online and try again.";
     }
     if (seq !== askSeq.current) return;

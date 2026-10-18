@@ -14,6 +14,8 @@ import ShopTab, { readOpenShop } from './components/ShopTab';
 import BatchTab from './components/BatchTab';
 import CookTab from './components/CookTab';
 import { TimerDock } from './components/cook/TimerBar';
+import { checkForUpdate, updateNow } from './appVersion';
+import { useEffect } from 'react';
 import SettingsTab from './components/SettingsTab';
 
 type Tab = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
@@ -42,6 +44,7 @@ export default function App() {
 
   // Shop opens on its own best week, unless you came from "See the list" for a particular week.
   const [shopPlanRequest, setShopPlanRequest] = useState<string | null>(null);
+  const [shopPanelRequest, setShopPanelRequest] = useState<'aisles' | 'staples' | 'history' | null>(null);
   const handleNavigateTab = (tab: Tab, planId?: string) => {
     if (planId) {
       store.setSelectedPlanId?.(planId);
@@ -52,6 +55,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-[#fafafa] text-zinc-900 overflow-hidden">
+      <UpdateBanner />
       <main className="flex-1 overflow-hidden relative flex flex-col">
         {activeTab === 'cookbook' && (
           <CookBookTab
@@ -72,9 +76,9 @@ export default function App() {
           />
         )}
         {activeTab === 'this_week' && <CookTab store={store} onNavigateTab={handleNavigateTab} />}
-        {activeTab === 'shop' && <ShopTab store={store} onNavigateTab={handleNavigateTab} openPlanId={shopPlanRequest} onOpenPlanHandled={() => setShopPlanRequest(null)} />}
-        {activeTab === 'batch' && <BatchTab store={store} />}
-        {activeTab === 'settings' && <SettingsTab store={store} onNavigateTab={handleNavigateTab} />}
+        {activeTab === 'shop' && <ShopTab store={store} onNavigateTab={handleNavigateTab} openPlanId={shopPlanRequest} onOpenPlanHandled={() => setShopPlanRequest(null)} openPanel={shopPanelRequest} onOpenPanelHandled={() => setShopPanelRequest(null)} />}
+        {activeTab === 'batch' && <BatchTab store={store} onNavigateTab={handleNavigateTab} />}
+        {activeTab === 'settings' && <SettingsTab store={store} onNavigateTab={handleNavigateTab} onOpenShopPanel={(panel) => { setShopPanelRequest(panel); setActiveTab('shop'); }} />}
       </main>
 
       {/* Kitchen timers keep going (and ring) on every tab; the Cook tab shows them at the top. */}
@@ -150,5 +154,35 @@ function TabButton({
       </div>
       <span className="text-[11px] sm:text-[11px] tracking-tight mt-0.5 whitespace-nowrap truncate w-full text-center">{label}</span>
     </button>
+  );
+}
+
+/**
+ * "A new version of the app is ready": shown when newer files have been uploaded than the ones
+ * this phone is running (checked on opening and when coming back to the app, at most every
+ * 10 minutes).
+ */
+function UpdateBanner() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    let last = 0;
+    const check = async () => {
+      const now = Date.now();
+      if (now - last < 10 * 60_000) return;
+      last = now;
+      if ((await checkForUpdate()) === 'available') setShow(true);
+    };
+    void check();
+    const onVisible = () => { if (document.visibilityState === 'visible') void check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+  if (!show) return null;
+  return (
+    <div className="shrink-0 bg-emerald-700 text-white px-4 py-2 flex items-center gap-3 text-sm" role="status" data-update-banner>
+      <span className="flex-1 min-w-0">A new version of the app is ready.</span>
+      <button type="button" onClick={() => void updateNow()} className="h-8 px-3 rounded-lg bg-white text-emerald-800 font-bold cursor-pointer" data-update-now>Update</button>
+      <button type="button" onClick={() => setShow(false)} className="h-8 px-2 text-emerald-100 font-semibold cursor-pointer" aria-label="Not now">Later</button>
+    </div>
   );
 }
