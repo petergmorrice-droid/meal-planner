@@ -165,7 +165,7 @@ test('a "serves 4" recipe cooked for 2: the shopping list is worked out for 2', 
   assert.equal(list['Celery'], '1 bunch');
   assert.equal(list['Garlic'], '1 bulb');
   assert.equal(list['Parmesan'], '100 g', '"to serve" with no amount still buys the smallest pack');
-  assert.equal(list['Stock Cubes'], '1 pack [cupboard]');
+  assert.equal(list['Beef Stock Cubes'], '1 pack [cupboard]');
   assert.ok(Object.values(list).every((v) => !v.includes('[check')), JSON.stringify(list));
 });
 
@@ -185,7 +185,7 @@ test('messy units from the copy step still give sensible quantities', () => {
   assert.equal(list['Coriander'], '1 bunch');
   assert.equal(list['Ginger'], '50 g');
   assert.equal(list['Coconut Milk'], '1 can');
-  assert.equal(list['Curry Paste'], '1 jar');
+  assert.equal(list['Tikka Masala Paste'], '1 jar');
   assert.ok(Object.values(list).every((v) => !v.includes('[check')), JSON.stringify(list));
 });
 

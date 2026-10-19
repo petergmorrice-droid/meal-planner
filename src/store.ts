@@ -19,7 +19,7 @@ import {
   keepOnlyChangesSince, LONG_ABSENCE_MS
 } from './services/syncMerge';
 import {
-  CATALOG_VERSION, missingExtraProducts, outdatedDefaults, builtInProducts, catalogForState,
+  CATALOG_VERSION, builtInProducts, catalogForState, upgradeProductDefaults,
   normaliseProducts, saveProductIn, updateProductIn, removeProductIn, restoreProductIn, mergeProductsIn,
   markDifferentIn, resetProductsIn, replaceProductsIn, type RemovedProduct,
 } from './shopping';
@@ -57,14 +57,14 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   preferredCookingMethod: 'all',
   compactPlanningCards: false,
   favouriteItems: [
-    { name: 'Milk', category: 'Dairy' },
-    { name: 'Eggs', category: 'Dairy' },
-    { name: 'Bread', category: 'Bakery' },
-    { name: 'Butter', category: 'Dairy' },
-    { name: 'Coffee', category: 'Pantry' },
-    { name: 'Tea', category: 'Pantry' },
-    { name: 'Toilet Paper', category: 'Household' },
-    { name: 'Olive Oil', category: 'Pantry' }
+    { name: 'Milk', category: 'Dairy, Chilled & Eggs' },
+    { name: 'Eggs', category: 'Dairy, Chilled & Eggs' },
+    { name: 'Bread', category: 'Bakery & Bread' },
+    { name: 'Butter', category: 'Dairy, Chilled & Eggs' },
+    { name: 'Coffee', category: 'Pantry, Oils & Spices' },
+    { name: 'Tea', category: 'Pantry, Oils & Spices' },
+    { name: 'Toilet Roll', category: 'Household & Other' },
+    { name: 'Olive Oil', category: 'Pantry, Oils & Spices' }
   ]
 };
 
@@ -305,6 +305,8 @@ export function useStore() {
           merged = stateRef.current;
           setPending(true);
         }
+        // Newer built-in product defaults (UK pack sizes, names), once per version, on the latest data.
+        if (upgradeProductsIfDue()) merged = stateRef.current;
 
         const gistIsBehind = remote ? !statesEqual(merged, remote) : false;
         const willUpload = pendingRef.current || gistIsBehind || gistIsEmpty;
@@ -364,30 +366,22 @@ export function useStore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [githubConfig?.gistId, githubConfig?.pat, fastSync]);
 
-  // Phones that don't sync: keep the product list in one piece on open (syncing phones do it after each sync).
+  /** Newer built-in product defaults, applied once per catalogue version. True if it did anything. */
+  const upgradeProductsIfDue = (): boolean => {
+    const current = stateRef.current;
+    if ((current.preferences?.catalogVersion ?? 1) >= CATALOG_VERSION) return false;
+    commit(current, upgradeProductDefaults(current, DEFAULT_PREFERENCES));
+    return true;
+  };
+
+  // Phones that don't sync: keep the product list in one piece and up to date on open
+  // (syncing phones do it after each sync, so it works on the latest shared data).
   useEffect(() => {
     if (getGistConfig()) return;
     const current = stateRef.current;
     const tidied = normaliseProducts(current, Date.now());
     if (tidied !== current) replaceState(normalizeState(tidied));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // One-off: add products from newer versions of the built-in product list (spices, herbs...)
-  // and update built-in defaults that changed (milk in pints) to the shared grocery list. Runs once per data set; the other phone gets them via sync.
-  useEffect(() => {
-    const current = stateRef.current;
-    if ((current.preferences?.catalogVersion ?? 1) >= CATALOG_VERSION) return;
-    const additions = missingExtraProducts(current.groceryDatabase);
-    const updated = new Map(outdatedDefaults(current.groceryDatabase).map((i) => [i.id, i]));
-    commit(current, {
-      ...current,
-      groceryDatabase: [
-        ...(current.groceryDatabase || builtInProducts()).map((i) => updated.get(i.id) || i),
-        ...additions,
-      ],
-      preferences: { ...(current.preferences || DEFAULT_PREFERENCES), catalogVersion: CATALOG_VERSION },
-    });
+    upgradeProductsIfDue();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

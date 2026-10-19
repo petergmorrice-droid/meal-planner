@@ -331,7 +331,8 @@ test('shop: typing into the add box', () => {
   assert.equal(q('6 eggs'), 'Eggs: 6 eggs');
   assert.equal(q('3 lemons'), 'Lemons: 3');
   assert.equal(q('milk x3'), 'Milk: 3 pints');
-  assert.equal(q('tortilla chips'), 'Tortilla chips: 1');
+  assert.equal(q('tortilla chips'), 'Tortilla Chips: 1 bag');
+  assert.equal(q('birthday candles'), 'Birthday candles: 1', 'something the app does not know: one of it');
 });
 
 test('shop: the list as text, what is left to buy, aisle by aisle', () => {

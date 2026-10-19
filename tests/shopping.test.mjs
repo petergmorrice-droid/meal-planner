@@ -65,8 +65,8 @@ test('matching: messy ingredient names find the right product', () => {
     ['extra virgin olive oil', 'Olive Oil'], ['salt', 'Salt'], ['sea salt flakes', 'Salt'], ['freshly ground black pepper', 'Black Pepper'], ['pepper to taste', 'Black Pepper'],
     ['red pepper', 'Bell Peppers'], ['peppers', 'Bell Peppers'], ['fresh coriander', 'Coriander'], ['ground coriander', 'Ground Coriander'], ['coriander seeds', 'Coriander Seeds'],
     ['fresh ginger', 'Ginger'], ['ground ginger', 'Ground Ginger'], ['ground cumin', 'Ground Cumin'], ['smoked paprika', 'Smoked Paprika'], ['chilli flakes', 'Chilli Flakes'],
-    ['red chilli', 'Chilli Peppers'], ['chilli powder', 'Chilli Powder'], ['garlic powder', 'Garlic Powder'], ['onion powder', 'Onion Powder'], ['chicken stock', 'Stock Cubes'],
-    ['hot vegetable stock', 'Stock Cubes'], ['beef stock cube', 'Stock Cubes'], ['plain flour', 'Flour'], ['caster sugar', 'Sugar'], ['light brown sugar', 'Brown Sugar'],
+    ['red chilli', 'Chilli Peppers'], ['chilli powder', 'Chilli Powder'], ['garlic powder', 'Garlic Powder'], ['onion powder', 'Onion Powder'], ['chicken stock', 'Chicken Stock Cubes'],
+    ['hot vegetable stock', 'Stock Cubes'], ['beef stock cube', 'Beef Stock Cubes'], ['plain flour', 'Flour'], ['caster sugar', 'Caster Sugar'], ['self-raising flour', 'Self-Raising Flour'], ['icing sugar', 'Icing Sugar'], ['dry white wine', 'White Wine'], ['tikka masala paste', 'Tikka Masala Paste'], ['new potatoes', 'Baby Potatoes'], ['light brown sugar', 'Brown Sugar'],
     ['juice of 1 lemon', 'Lemons'], ['lemon juice', 'Lemons'], ['lime zest', 'Limes'], ['orange juice', 'Orange Juice'], ['spring onions', 'Spring Onions'],
     ['celery sticks', 'Celery'], ['streaky bacon rashers', 'Bacon'], ['bacon lardons', 'Pancetta'], ['chorizo', 'Chorizo'], ['crème fraîche', 'Crème Fraîche'],
     ['red lentils', 'Lentils'], ['basmati rice', 'Basmati Rice'], ['spaghetti pasta', 'Spaghetti'], ['egg pasta', null], ['long grain rice', 'Basmati Rice'], ['penne pasta', 'Penne'], ['rigatoni', 'Pasta'],
@@ -85,9 +85,9 @@ test('matching: messy ingredient names find the right product', () => {
 
 test('matching: things that must NOT match the obvious-looking product', () => {
   const cases = [
-    ['tomato soup', null], ['mushroom soup', null], ['chicken seasoning', null], ['fajita seasoning', null], ['goats cheese', null],
-    ['tuna steak', null], ['sun dried tomatoes', null], ['frozen spinach', null], ['coconut', null], ['cream', null], ['chicken', null], ['beef stock pot', 'Stock Cubes'],
-    ['chilli oil', null], ['truffle oil', null], ['risotto rice', null], ['cauliflower steak', null], ['cooking oil', 'Vegetable Oil'], ['quail eggs', null],
+    ['tomato soup', 'Tinned Soup'], ['mushroom soup', 'Tinned Soup'], ['chicken seasoning', null], ['fajita seasoning', null], ['goats cheese', "Goat's Cheese"], ['cream cheese', 'Cream Cheese'],
+    ['tuna steak', null], ['sun dried tomatoes', null], ['frozen spinach', null], ['coconut', null], ['cream', null], ['chicken', null], ['beef stock pot', 'Beef Stock Cubes'],
+    ['chilli oil', null], ['truffle oil', null], ['risotto rice', 'Risotto Rice'], ['cauliflower steak', null], ['cooking oil', 'Vegetable Oil'], ['quail eggs', null],
   ];
   const wrong = [];
   for (const [name, want] of cases) {
@@ -132,7 +132,7 @@ test('single ingredients: realistic UK shop quantities', () => {
     ['lime juice', 3, 'tbsp', '3'], ['coriander', 1, 'handful', '1 bunch'], ['basil', 0.25, 'bunch', '1 bunch'], ['spring onions', 4, '', '1 bunch'],
     ['celery', 2, 'sticks', '1 bunch'], ['potatoes', 800, 'g', '1000 g'], ['potatoes', 4, '', '1000 g'], ['kidney beans', 1, 'can', '1 can'],
     ['coconut milk', 400, 'ml', '1 can'], ['coconut milk', 200, 'ml', '1 can'], ['passata', 500, 'g', '1 carton'], ['passata', 700, 'g', '2 cartons'],
-    ['salmon fillets', 2, '', '2 fillets'], ['bacon', 4, 'rashers', '1 pack'], ['bacon', 10, 'rashers', '2 packs'], ['sausages', 8, '', '2 packs'],
+    ['salmon fillets', 2, '', '2 fillets'], ['bacon', 4, 'rashers', '1 pack'], ['bacon', 10, 'rashers', '1 pack'], ['bacon', 12, 'rashers', '2 packs'], ['sausages', 8, '', '2 packs'],
     ['stock cube', 1, '', '1 pack'], ['chicken stock', 500, 'ml', '1 pack'], ['salt', 1, 'tsp', '250 g'], ['soy sauce', 2, 'tbsp', '150 ml'],
     ['parmesan', 30, 'g', '100 g'], ['cheddar', 150, 'g', '200 g'], ['mozzarella', 2, 'balls', '2 balls'], ['mozzarella', 250, 'g', '2 balls'],
   ];
@@ -241,12 +241,58 @@ test('amounts read the way you buy and cook them', () => {
 });
 
 test('built-in defaults that changed are updated only if you never edited them', () => {
-  const db = S.INITIAL_GROCERY_DATABASE.map((i) => (i.id === 'gdb-79' ? { ...i, unit: 'ml', increment: 500 } : i));
+  const db = S.builtInProducts().map((i) => (i.id === 'gdb-79' ? { ...i, unit: 'ml', increment: 500 } : i));
   const upd = S.outdatedDefaults(db);
   assert.equal(upd.length, 1); assert.equal(upd[0].unit, 'pint'); assert.equal(upd[0].increment, 1);
   const edited = db.map((i) => (i.id === 'gdb-79' ? { ...i, unit: 'l', increment: 1 } : i));
   assert.deepEqual(S.outdatedDefaults(edited), [], 'your own setting is kept');
-  assert.deepEqual(S.outdatedDefaults(S.INITIAL_GROCERY_DATABASE), [], 'new data already has pints');
+  assert.deepEqual(S.outdatedDefaults(S.builtInProducts()), [], 'new data already has the new defaults');
+});
+
+test('UK pack sizes: what typical recipe amounts put on the list', () => {
+  const uk = buildCatalog(null, null);
+  const cases = [
+    ['chicken breasts', 2, '', 'Chicken Breasts: 300 g'], ['chicken thighs', 4, '', 'Chicken Thighs: 600 g'],
+    ['pork mince', 400, 'g', 'Pork Mince: 500 g'], ['carrots', 3, '', 'Carrots: 1 kg'], ['tomatoes', 2, '', 'Tomatoes: 2'],
+    ['potatoes', 800, 'g', 'Potatoes: 2.5 kg'], ['new potatoes', 500, 'g', 'Baby Potatoes: 1 kg'], ['sweet potatoes', 2, '', 'Sweet Potatoes: 2'],
+    ['mushrooms', 200, 'g', 'Mushrooms: 300 g'], ['green beans', 200, 'g', 'Green Beans: 200 g'], ['cheddar', 100, 'g', 'Cheddar Cheese: 400 g'],
+    ['frozen peas', 100, 'g', 'Frozen Peas: 1 kg'], ['spaghetti', 200, 'g', 'Spaghetti: 500 g'], ['basmati rice', 300, 'g', 'Basmati Rice: 1 kg'],
+    ['self-raising flour', 150, 'g', 'Self-Raising Flour: 1.5 kg'], ['icing sugar', 50, 'g', 'Icing Sugar: 500 g'],
+    ['vegetable oil', 2, 'tbsp', 'Vegetable Oil: 1 l'], ['white wine vinegar', 1, 'tbsp', 'White Wine Vinegar: 350 ml'],
+    ['chicken stock', 500, 'ml', 'Chicken Stock Cubes: 1 pack'], ['white wine', 150, 'ml', 'White Wine: 1 bottle'],
+    ['pepper', 1, 'pinch', 'Black Pepper: 100 g'], ['red pepper', 2, '', 'Peppers: 2'], ['bacon rashers', 6, '', 'Bacon: 1 pack'],
+  ];
+  const bad = [];
+  for (const [n, a, u, want] of cases) {
+    const r = shoppingQuantityFor(uk, n, a, u);
+    const got = `${r.name}: ${r.amount}${r.unit ? ' ' + r.unit : ''}`;
+    if (got !== want) bad.push(`${a} ${u} ${n}: got "${got}", wanted "${want}"`);
+  }
+  assert.deepEqual(bad, []);
+  const rice = uk.byId.get('gdb-99');
+  assert.equal(rice.item.category, 'Pasta, Rice & Grains');
+});
+
+test('upgrade once: new defaults only where you never changed them; staples and favourites get UK names', () => {
+  const db = S.INITIAL_GROCERY_DATABASE.map((i) => ({ ...i, category: S.aisleCategory(i) }));
+  const edited = db.map((i) => (i.id === 'gdb-51' ? { ...i, increment: 200 } : i.id === 'gdb-8' ? { ...i, name: 'Mixed Peppers' } : i));
+  const st = { recipes: [], mealPlans: [], batches: [], shoppingList: [], groceryDatabase: edited,
+    preferences: { catalogVersion: 3, recurringItems: [{ id: 's', name: 'Toilet Paper', amount: 1, unit: 'pack' }], favouriteItems: [{ name: 'Toilet Paper' }, { name: 'Toilet Roll' }, { name: 'Tea' }] } };
+  const up = S.upgradeProductDefaults(st, {});
+  const g = (id) => up.groceryDatabase.find((x) => x.id === id);
+  assert.equal(g('gdb-51').increment, 200, 'your own chicken breast step kept');
+  assert.equal(g('gdb-8').name, 'Mixed Peppers', 'your own name kept');
+  assert.equal(g('gdb-52').increment, 600);
+  assert.equal(g('gdb-5').unit, 'kg'); assert.equal(g('gdb-5').increment, 2.5);
+  assert.equal(g('gdb-133').name, 'Plain Flour'); assert.equal(g('gdb-133').unit, 'kg');
+  assert.equal(g('gdb-99').category, 'Pasta, Rice & Grains');
+  assert.equal(g('gdb-158').name, 'Washing-up Liquid');
+  assert.equal(up.preferences.catalogVersion, S.CATALOG_VERSION);
+  assert.equal(up.preferences.recurringItems[0].name, 'Toilet Roll');
+  assert.deepEqual(up.preferences.favouriteItems.map((f) => f.name), ['Toilet Roll', 'Tea'], 'no duplicate favourite');
+  const n = S.normaliseProducts({ ...up, syncMeta: { tombstones: {} } }, 9000);
+  assert.ok(n.groceryDatabase.some((x) => x.id === 'gdb-x-self-raising-flour'), 'new products are added');
+  assert.ok(n.groceryDatabase.some((x) => x.id === 'gdb-x-yorkshire'));
 });
 
 test('hand-added items: "1" means one pack', () => {

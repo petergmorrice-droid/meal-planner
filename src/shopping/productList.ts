@@ -6,12 +6,12 @@
  * Everything here is a plain function of the app's data, so it can be tested on its own and
  * both phones get the same answer.
  */
-import type { AppState, GroceryItem, ShoppingListItem } from '../types';
+import type { AppState, GroceryItem, ShoppingListItem, UserPreferences } from '../types';
 import { getSyncMeta, stableStringify } from '../services/syncMerge';
 import { aisleCategory, isAisleName } from './aisles';
 import {
   EXTRA_PRODUCTS, builtInProducts, builtInSameAs, isBuiltInProduct, matchProduct, alsoCalled,
-  type Catalog, type Product,
+  applyDefaultChanges, listRenames, CATALOG_VERSION, type Catalog, type Product,
 } from './catalog';
 import { matchKey, nameWords } from './names';
 import { canonicalUnit } from './units';
@@ -109,6 +109,50 @@ export function normaliseProducts(state: AppState, now: number): AppState {
   return { ...state, groceryDatabase: out, groceryOverrides, syncMeta: meta };
 }
 
+/**
+ * Once per catalogue version (after syncing, so it works on the latest data): built-in products
+ * that still have an old default get the new one (UK pack sizes, names, aisles), staples and
+ * favourites with a product's old name get its new name, and the version is recorded. Products
+ * you've changed yourselves are left alone. (New products are added by normaliseProducts.)
+ */
+export function upgradeProductDefaults(state: AppState, defaultPrefs: UserPreferences): AppState {
+  const list = state.groceryDatabase || [];
+  let listChanged = false;
+  const groceryDatabase = list.map((g) => {
+    if (!g || g.removed) return g;
+    const next = applyDefaultChanges(g);
+    if (!next) return g;
+    listChanged = true;
+    return next;
+  });
+  const renames = listRenames();
+  const rename = <T extends { name: string }>(x: T): T => {
+    const to = renames.get(String(x?.name ?? '').trim().toLowerCase());
+    return to ? { ...x, name: to } : x;
+  };
+  const prefs = state.preferences || defaultPrefs;
+  const staples = (prefs.recurringItems || []).map(rename);
+  const staplesChanged = staples.some((x, i) => x !== prefs.recurringItems![i]);
+  const seen = new Set<string>();
+  const favs = (prefs.favouriteItems || []).map(rename).filter((f) => {
+    const k = String(f?.name ?? '').trim().toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const favsChanged = favs.length !== (prefs.favouriteItems || []).length || favs.some((x, i) => x !== prefs.favouriteItems![i]);
+  return {
+    ...state,
+    groceryDatabase: listChanged ? groceryDatabase : state.groceryDatabase,
+    preferences: {
+      ...prefs,
+      catalogVersion: CATALOG_VERSION,
+      ...(staplesChanged ? { recurringItems: staples } : {}),
+      ...(favsChanged ? { favouriteItems: favs } : {}),
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Where each product is used
 // ---------------------------------------------------------------------------
@@ -196,7 +240,10 @@ function oneEditApart(a: string, b: string): boolean {
   return edits + (a.length - i) + (b.length - j) <= 1;
 }
 
-const saidDifferent = (a: Product, b: Product) => Boolean(a.item.notSameAs?.includes(b.id) || b.item.notSameAs?.includes(a.id));
+/** Built-in products that share a name on purpose ("pepper": peppers by the each, black pepper by the pinch). */
+const KNOWN_DIFFERENT = new Set(['gdb-132|gdb-8']);
+const saidDifferent = (a: Product, b: Product) =>
+  KNOWN_DIFFERENT.has([a.id, b.id].sort().join('|')) || Boolean(a.item.notSameAs?.includes(b.id) || b.item.notSameAs?.includes(a.id));
 
 /**
  * Pairs of products that look like the same thing: the same name apart from words like "fresh"

@@ -421,3 +421,14 @@ Main files:
   day and staples, favourites and past shops item by item (always the same
   answer whatever order the phones sync in, tested with random edits), and a
   phone away for over 90 days takes the shared copy first.
+- `UK products` — the built-in products checked against what UK supermarkets
+  sell: real pack sizes (chicken breasts in 300 g, potatoes in 2.5 kg bags,
+  pasta 500 g, rice 1 kg, flour 1.5 kg, frozen peas 1 kg…), UK names (Peppers,
+  Soft Cheese, Soured Cream, Tinned Tuna, Washing-up Liquid, Toilet Roll…),
+  rice and grains in their own aisle, and separate products for things you
+  buy separately (plain / self-raising / strong flour; granulated / caster /
+  icing sugar; chicken / beef / vegetable stock; red / white wine; tikka,
+  korma and Thai pastes). About 70 UK staples added (parsnips, swede, baby
+  potatoes, gammon, crumpets, Marmite, Yorkshire puddings, cling film…). The
+  new defaults are applied once (`CATALOG_VERSION` 4, `DEFAULT_CHANGES` in
+  `src/shopping/catalog.ts`), only to products you haven't changed yourselves.

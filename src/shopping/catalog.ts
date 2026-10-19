@@ -62,23 +62,25 @@ const weighed = (gramsEach: number | null, aliases: string[] = [], extra: Record
 const jar = (grams: number, aliases: string[] = [], cupboard = true): ProductSpec => ({ base: 'g', per: { jar: grams, pack: grams, each: grams, tsp: 2.5, tbsp: 7 }, cupboard, aliases });
 const liquid = (aliases: string[] = [], per: Record<string, number> = {}, cupboard = false): ProductSpec => ({ base: 'ml', per, cupboard, aliases });
 
+const stock = (aliases: string[]): ProductSpec => ({ base: 'each', cupboard: true, per: { pack: 8, cube: 1, each: 1, pot: 1, sachet: 1, ml: 1 / 500 }, aliases });
+
 export const PRODUCT_SPECS: Record<string, ProductSpec> = {
   'gdb-1': weighed(null, ['baby spinach', 'spinach leaf'], { handful: 30, bag: 200 }),
   'gdb-2': { base: 'g', per: { clove: 5, each: 5, bulb: 50, head: 50, tsp: 5, tbsp: 15 }, aliases: ['garlic clove', 'clove garlic', 'garlic bulb', 'minced garlic', 'garlic paste'] },
   'gdb-3': weighed(150, ['brown onion', 'white onion', 'yellow onion', 'cooking onion']),
   'gdb-4': weighed(150, ['red onion']),
-  'gdb-5': weighed(200, ['potato', 'baking potato', 'new potato', 'baby potato', 'maris piper', 'maris piper potato', 'charlotte potato', 'floury potato', 'waxy potato']),
+  'gdb-5': weighed(200, ['potato', 'baking potato', 'jacket potato', 'maris piper', 'maris piper potato', 'king edward', 'floury potato', 'waxy potato']),
   'gdb-6': weighed(250, ['sweet potato']),
   'gdb-7': weighed(350, ['broccoli floret', 'tenderstem broccoli'], { head: 350, floret: 15 }),
-  'gdb-8': weighed(160, ['red pepper', 'green pepper', 'yellow pepper', 'orange pepper', 'sweet pepper', 'bell pepper', 'romano pepper', 'mixed pepper']),
+  'gdb-8': weighed(160, ['bell pepper', 'red pepper', 'green pepper', 'yellow pepper', 'orange pepper', 'sweet pepper', 'bell pepper', 'romano pepper', 'mixed pepper']),
   'gdb-9': weighed(80, ['carrot']),
   'gdb-10': weighed(150, ['avocado']),
   'gdb-11': weighed(100, ['tomato', 'vine tomato', 'salad tomato', 'beef tomato', 'beefsteak tomato']),
   'gdb-12': weighed(15, ['cherry tomato', 'baby plum tomato', 'grape tomato', 'cherry vine tomato'], { pack: 250 }),
   'gdb-13': weighed(300, ['cucumber']),
   'gdb-14': { base: 'each', per: { head: 1, leaf: 0.08, g: 1 / 300 }, aliases: ['iceberg lettuce', 'little gem', 'little gem lettuce', 'romaine lettuce', 'cos lettuce', 'gem lettuce'] },
-  'gdb-15': weighed(120, ['salad leaf', 'mixed leaf', 'mixed salad leaf', 'salad', 'rocket', 'arugula', 'watercress', 'baby leaf salad', 'green salad'], { bag: 120, handful: 30 }),
-  'gdb-16': weighed(20, ['mushroom', 'chestnut mushroom', 'button mushroom', 'closed cup mushroom', 'portobello mushroom', 'flat mushroom'], { pack: 250 }),
+  'gdb-15': weighed(120, ['salad mix', 'salad bag', 'salad leaf', 'mixed leaf', 'mixed salad leaf', 'salad', 'rocket', 'arugula', 'watercress', 'baby leaf salad', 'green salad'], { bag: 120, handful: 30 }),
+  'gdb-16': weighed(20, ['mushroom', 'chestnut mushroom', 'button mushroom', 'closed cup mushroom', 'portobello mushroom', 'flat mushroom'], { pack: 300 }),
   'gdb-17': weighed(200, ['courgette', 'zucchini']),
   'gdb-18': { base: 'g', sameAs: 'gdb-17' },
   'gdb-19': weighed(250, ['aubergine', 'eggplant']),
@@ -119,7 +121,7 @@ export const PRODUCT_SPECS: Record<string, ProductSpec> = {
   'gdb-54': weighed(null, ['minced pork', 'ground pork', 'pork mince']),
   'gdb-55': weighed(null, ['minced lamb', 'ground lamb', 'lamb mince']),
   'gdb-56': each(180, ['pork chop', 'pork loin chop'], { chop: 1 }),
-  'gdb-57': { base: 'each', per: { pack: 8, rasher: 1, slice: 1, each: 1, g: 1 / 25 }, aliases: ['bacon rasher', 'streaky bacon', 'back bacon', 'smoked bacon', 'smoked streaky bacon', 'smoked back bacon'] },
+  'gdb-57': { base: 'each', per: { pack: 10, rasher: 1, slice: 1, each: 1, g: 1 / 25 }, aliases: ['bacon rasher', 'streaky bacon', 'back bacon', 'smoked bacon', 'smoked streaky bacon', 'smoked back bacon'] },
   'gdb-58': { base: 'each', per: { pack: 6, sausage: 1, each: 1, g: 1 / 67 }, aliases: ['sausage', 'pork sausage', 'chipolata', 'cumberland sausage'] },
   'gdb-59': each(225, ['sirloin steak', 'rump steak', 'ribeye steak', 'rib eye steak', 'fillet steak', 'beef steak'], { steak: 1 }),
   'gdb-60': weighed(null, ['minced turkey', 'ground turkey', 'turkey mince']),
@@ -133,11 +135,11 @@ export const PRODUCT_SPECS: Record<string, ProductSpec> = {
   'gdb-68': each(100, ['mackerel fillet', 'smoked mackerel', 'mackerel'], { fillet: 1 }),
   'gdb-69': each(140, ['haddock', 'haddock fillet', 'smoked haddock'], { fillet: 1 }),
   'gdb-70': weighed(null, ['cheddar', 'mature cheddar', 'grated cheddar', 'extra mature cheddar', 'cheddar cheese', 'mild cheddar'], { cup: 100, handful: 30, tbsp: 7 }),
-  'gdb-71': weighed(125, ['mozzarella ball', 'buffalo mozzarella', 'mozzarella', 'grated mozzarella'], { ball: 125, pack: 125 }),
+  'gdb-71': weighed(125, ['mozzarella ball', 'buffalo mozzarella', 'mozzarella'], { ball: 125, pack: 125 }),
   'gdb-72': weighed(null, ['parmesan cheese', 'parmigiano reggiano', 'grana padano', 'vegetarian italian hard cheese', 'parmesan'], { tbsp: 5, cup: 80, handful: 20 }),
   'gdb-73': weighed(225, ['halloumi'], { pack: 225, block: 225 }),
   'gdb-74': weighed(200, ['feta'], { pack: 200, block: 200 }),
-  'gdb-75': { base: 'g', per: { pack: 180, tub: 180, each: 180, tbsp: 15 }, aliases: ['soft cheese', 'full fat soft cheese', 'light soft cheese', 'philadelphia'] },
+  'gdb-75': { base: 'g', per: { pack: 180, tub: 180, each: 180, tbsp: 15 }, aliases: ['cream cheese', 'soft cheese', 'full fat soft cheese', 'light soft cheese', 'philadelphia'] },
   'gdb-76': liquid(['light cream', 'single cream'], { pot: 150 }),
   'gdb-77': liquid(['heavy cream', 'whipping cream', 'double cream'], { pot: 150 }),
   'gdb-78': liquid(['soured cream', 'sour cream'], { pack: 300, pot: 300, tub: 300 }),
@@ -153,7 +155,7 @@ export const PRODUCT_SPECS: Record<string, ProductSpec> = {
   'gdb-88': { base: 'each', per: { pack: 6, each: 1 }, aliases: ['pitta', 'pitta bread', 'pita'] },
   'gdb-89': { base: 'each', per: { pack: 5, each: 1 }, aliases: ['bagel'] },
   'gdb-90': { base: 'each', per: { pack: 4, each: 1 }, aliases: ['croissant'] },
-  'gdb-91': { base: 'each', per: { pack: 6, roll: 1, each: 1 }, aliases: ['bread roll', 'burger bun', 'brioche bun', 'roll', 'bun', 'sub roll'] },
+  'gdb-91': { base: 'each', per: { pack: 6, roll: 1, each: 1 }, aliases: ['bread roll', 'burger bun', 'roll', 'bun', 'sub roll', 'crusty roll'] },
   'gdb-92': { base: 'g', cupboard: true, aliases: ['spaghetti'] },
   'gdb-93': { base: 'g', cupboard: true, aliases: ['penne'] },
   'gdb-94': { base: 'g', cupboard: true, aliases: ['fusilli'] },
@@ -179,7 +181,7 @@ export const PRODUCT_SPECS: Record<string, ProductSpec> = {
   'gdb-114': { base: 'g', cupboard: true, per: { tube: 200, each: 200, tbsp: 16, tsp: 5 }, aliases: ['tomato puree', 'tomato paste', 'double concentrated tomato puree'] },
   'gdb-115': { base: 'g', per: { jar: 190, each: 190, tbsp: 15 }, aliases: ['pesto', 'basil pesto', 'green pesto', 'red pesto'] },
   'gdb-116': { base: 'g', per: { jar: 500, each: 500 }, aliases: ['pasta sauce', 'tomato pasta sauce', 'bolognese sauce'] },
-  'gdb-117': { base: 'g', per: { jar: 200, each: 200, tbsp: 15, tsp: 5 }, aliases: ['curry paste', 'thai red curry paste', 'thai green curry paste', 'red curry paste', 'green curry paste', 'korma paste', 'tikka paste', 'tikka masala paste', 'balti paste', 'madras paste', 'rogan josh paste'] },
+  'gdb-117': { base: 'g', per: { jar: 283, each: 283, tbsp: 15, tsp: 5 }, aliases: ['curry paste', 'balti paste', 'madras paste', 'rogan josh paste', 'jalfrezi paste', 'bhuna paste', 'vindaloo paste'] },
   'gdb-118': jar(340, ['peanut butter', 'smooth peanut butter', 'crunchy peanut butter']),
   'gdb-119': jar(340, ['jam', 'strawberry jam', 'raspberry jam']),
   'gdb-120': { base: 'g', density: 1.4, cupboard: true, per: { jar: 340, bottle: 340, each: 340 }, aliases: ['honey', 'runny honey', 'clear honey'] },
@@ -195,10 +197,10 @@ export const PRODUCT_SPECS: Record<string, ProductSpec> = {
   'gdb-130': liquid(['hot sauce', 'sriracha', 'tabasco', 'chilli sauce', 'hot chilli sauce'], { bottle: 150 }, true),
   'gdb-131': { base: 'g', density: 1.2, cupboard: true, per: { pinch: 0.5, each: 500 }, aliases: ['salt', 'sea salt', 'table salt', 'salt and pepper', 'salt and black pepper', 'sea salt flake', 'kosher salt', 'salt flake'] },
   'gdb-132': { base: 'g', density: 0.5, cupboard: true, per: { pinch: 0.25, each: 100 }, aliases: ['black pepper', 'pepper', 'ground black pepper', 'black peppercorn', 'white pepper', 'cracked black pepper', 'freshly ground black pepper'] },
-  'gdb-133': { base: 'g', density: 0.55, cupboard: true, per: { cup: 125 }, aliases: ['flour', 'plain flour', 'self raising flour', 'self rising flour', 'all purpose flour', 'strong white bread flour', 'bread flour', 'wholemeal flour'] },
-  'gdb-134': { base: 'g', density: 0.85, cupboard: true, per: { cup: 200 }, aliases: ['sugar', 'caster sugar', 'granulated sugar', 'white sugar', 'icing sugar', 'golden caster sugar'] },
+  'gdb-133': { base: 'g', density: 0.55, cupboard: true, per: { cup: 125 }, aliases: ['flour', 'plain flour', 'plain white flour', 'all purpose flour'] },
+  'gdb-134': { base: 'g', density: 0.85, cupboard: true, per: { cup: 200 }, aliases: ['sugar', 'granulated sugar', 'white sugar', 'golden granulated sugar'] },
   'gdb-135': { base: 'g', density: 0.8, cupboard: true, per: { cup: 200 }, aliases: ['brown sugar', 'light brown sugar', 'dark brown sugar', 'soft brown sugar', 'light muscovado sugar', 'dark muscovado sugar', 'muscovado sugar', 'demerara sugar'] },
-  'gdb-136': { base: 'each', cupboard: true, per: { pack: 8, cube: 1, each: 1, pot: 1, sachet: 1, ml: 1 / 500 }, aliases: ['stock cube', 'stock', 'chicken stock', 'beef stock', 'vegetable stock', 'veg stock', 'fish stock', 'lamb stock', 'stock pot', 'bouillon', 'vegetable bouillon', 'chicken stock cube', 'beef stock cube', 'vegetable stock cube', 'chicken stock pot', 'beef stock pot', 'vegetable stock pot', 'hot chicken stock', 'hot vegetable stock', 'hot beef stock'] },
+  'gdb-136': stock(['stock cube', 'stock', 'stock pot', 'vegetable stock', 'veg stock', 'vegetable stock cube', 'vegetable stock pot', 'hot vegetable stock', 'bouillon', 'vegetable bouillon', 'vegetable broth']),
   'gdb-137': weighed(null, ['frozen pea', 'pea', 'garden pea', 'petit pois'], { cup: 150, handful: 40 }),
   'gdb-138': weighed(null, ['frozen chip', 'oven chip', 'chip']),
   'gdb-139': { base: 'each', per: { each: 1 }, aliases: ['frozen pizza', 'pizza'] },
@@ -207,7 +209,15 @@ export const PRODUCT_SPECS: Record<string, ProductSpec> = {
   'gdb-142': weighed(null, ['frozen berry', 'mixed berry', 'frozen fruit', 'frozen mixed berry']),
   'gdb-150': liquid(['orange juice', 'fresh orange juice'], { carton: 1000 }),
   'gdb-151': liquid(['apple juice'], { carton: 1000 }),
-  'gdb-155': liquid(['wine', 'red wine', 'white wine', 'dry white wine', 'dry red wine'], { bottle: 750 }),
+  'gdb-155': liquid(['wine', 'red wine', 'dry red wine', 'red cooking wine'], { bottle: 750 }),
+  // UK names; the old ones are kept as other names so lists and recipes still find them.
+  'gdb-153': { base: 'each', per: { bottle: 1, can: 1, each: 1 }, aliases: ['soda', 'fizzy drink', 'soft drink', 'cola', 'lemonade', 'pop'] },
+  'gdb-156': { base: 'each', per: { pack: 1, each: 1 }, aliases: ['toilet paper', 'toilet roll', 'loo roll'] },
+  'gdb-158': { base: 'each', per: { bottle: 1, each: 1 }, aliases: ['dish soap', 'washing up liquid', 'dishwashing liquid'] },
+  'gdb-160': { base: 'each', per: { bottle: 1, pack: 1, each: 1 }, aliases: ['laundry detergent', 'washing liquid', 'laundry liquid', 'washing powder', 'laundry powder', 'washing capsule', 'laundry capsule'] },
+  'gdb-161': { base: 'each', per: { bottle: 1, each: 1 }, aliases: ['fabric softener', 'fabric conditioner'] },
+  'gdb-165': { base: 'each', per: { bottle: 1, each: 1 }, aliases: ['body wash', 'shower gel'] },
+  'gdb-167': { base: 'each', per: { can: 1, each: 1 }, aliases: ['deodorant', 'antiperspirant', 'deodorant spray'] },
   'gdb-168': { base: 'g', sameAs: 'gdb-137' },
 };
 
@@ -222,6 +232,16 @@ const spice = (id: string, name: string, aliases: string[], grams = 40): ExtraPr
 const extra = (id: string, name: string, unit: string, increment: number, category: string, spec: ProductSpec): ExtraProduct => ({
   item: { id, name, unit, increment, category }, spec,
 });
+// The Shop's aisle names (src/shopping/aisles.ts), for products added since.
+const PRODUCE = 'Fresh Produce';
+const BAKERY = 'Bakery & Bread';
+const MEAT = 'Meat & Seafood';
+const DAIRY = 'Dairy, Chilled & Eggs';
+const GRAINS = 'Pasta, Rice & Grains';
+const CANNED = 'Canned & Jarred Goods';
+const PANTRY = 'Pantry, Oils & Spices';
+const FROZEN = 'Frozen Foods';
+const HOUSEHOLD = 'Household & Other';
 
 export const EXTRA_PRODUCTS: ExtraProduct[] = [
   spice('gdb-x-ground-cumin', 'Ground Cumin', ['cumin', 'cumin powder', 'ground cumin']),
@@ -289,29 +309,181 @@ export const EXTRA_PRODUCTS: ExtraProduct[] = [
   extra('gdb-x-dill', 'Dill', 'pack', 1, 'Produce', herb(['dill', 'fresh dill'])),
   extra('gdb-x-pine-nuts', 'Pine Nuts', 'pack', 1, 'Pantry', { base: 'g', per: { pack: 100, each: 100, tbsp: 9 }, aliases: ['pine nut', 'toasted pine nut'] }),
   extra('gdb-x-coconut-cream', 'Coconut Cream', 'carton', 1, 'Canned', { base: 'ml', per: { carton: 200, can: 400 }, aliases: ['coconut cream', 'creamed coconut'] }),
+
+  // Catalogue version 4: things that were one product but you buy separately...
+  extra('gdb-x-self-raising-flour', 'Self-Raising Flour', 'kg', 1.5, PANTRY, { base: 'g', density: 0.55, cupboard: true, per: { cup: 125 }, aliases: ['self raising flour', 'self rising flour', 'sr flour'] }),
+  extra('gdb-x-strong-flour', 'Strong White Bread Flour', 'kg', 1.5, PANTRY, { base: 'g', density: 0.55, cupboard: true, per: { cup: 125 }, aliases: ['strong white bread flour', 'strong bread flour', 'bread flour', 'strong white flour', 'strong flour'] }),
+  extra('gdb-x-wholemeal-flour', 'Wholemeal Flour', 'kg', 1.5, PANTRY, { base: 'g', density: 0.55, cupboard: true, per: { cup: 125 }, aliases: ['wholemeal flour', 'wholemeal bread flour', 'whole wheat flour', 'wholewheat flour'] }),
+  extra('gdb-x-caster-sugar', 'Caster Sugar', 'kg', 1, PANTRY, { base: 'g', density: 0.85, cupboard: true, per: { cup: 200 }, aliases: ['caster sugar', 'golden caster sugar', 'superfine sugar'] }),
+  extra('gdb-x-icing-sugar', 'Icing Sugar', 'g', 500, PANTRY, { base: 'g', density: 0.56, cupboard: true, per: { cup: 120 }, aliases: ['icing sugar', 'powdered sugar', 'confectioners sugar'] }),
+  extra('gdb-x-chicken-stock', 'Chicken Stock Cubes', 'pack', 1, PANTRY, stock(['chicken stock', 'chicken stock cube', 'chicken stock pot', 'hot chicken stock', 'chicken broth', 'chicken bouillon'])),
+  extra('gdb-x-beef-stock', 'Beef Stock Cubes', 'pack', 1, PANTRY, stock(['beef stock', 'beef stock cube', 'beef stock pot', 'hot beef stock', 'beef broth'])),
+  extra('gdb-x-lamb-stock', 'Lamb Stock Cubes', 'pack', 1, PANTRY, stock(['lamb stock', 'lamb stock cube', 'lamb stock pot', 'hot lamb stock'])),
+  extra('gdb-x-fish-stock', 'Fish Stock Cubes', 'pack', 1, PANTRY, stock(['fish stock', 'fish stock cube', 'fish stock pot', 'hot fish stock'])),
+  extra('gdb-x-white-wine', 'White Wine', 'bottle', 1, PANTRY, liquid(['white wine', 'dry white wine', 'white cooking wine'], { bottle: 750 })),
+  extra('gdb-x-tikka-paste', 'Tikka Masala Paste', 'jar', 1, CANNED, { base: 'g', per: { jar: 283, each: 283, tbsp: 15, tsp: 5 }, aliases: ['tikka paste', 'tikka masala paste', 'tikka curry paste'] }),
+  extra('gdb-x-korma-paste', 'Korma Paste', 'jar', 1, CANNED, { base: 'g', per: { jar: 290, each: 290, tbsp: 15, tsp: 5 }, aliases: ['korma paste', 'korma curry paste'] }),
+  extra('gdb-x-thai-green-paste', 'Thai Green Curry Paste', 'jar', 1, CANNED, { base: 'g', per: { jar: 190, each: 190, tbsp: 15, tsp: 5 }, aliases: ['thai green curry paste', 'green curry paste', 'green thai curry paste'] }),
+  extra('gdb-x-thai-red-paste', 'Thai Red Curry Paste', 'jar', 1, CANNED, { base: 'g', per: { jar: 190, each: 190, tbsp: 15, tsp: 5 }, aliases: ['thai red curry paste', 'red curry paste', 'red thai curry paste'] }),
+
+  // ...and UK staples that were missing. Fresh produce:
+  extra('gdb-x-baby-potatoes', 'Baby Potatoes', 'kg', 1, PRODUCE, weighed(40, ['baby potato', 'new potato', 'charlotte potato', 'salad potato', 'jersey royal'])),
+  extra('gdb-x-parsnips', 'Parsnips', 'g', 500, PRODUCE, weighed(150, ['parsnip'])),
+  extra('gdb-x-swede', 'Swede', 'whole', 1, PRODUCE, weighed(800, ['swede', 'rutabaga'])),
+  extra('gdb-x-sprouts', 'Brussels Sprouts', 'g', 500, PRODUCE, weighed(15, ['brussels sprout', 'sprout'])),
+  extra('gdb-x-beetroot', 'Cooked Beetroot', 'pack', 1, PRODUCE, { base: 'g', per: { pack: 250, each: 60 }, aliases: ['beetroot', 'cooked beetroot', 'beet'] }),
+  extra('gdb-x-mangetout', 'Mangetout', 'pack', 1, PRODUCE, { base: 'g', per: { pack: 150, handful: 40 }, aliases: ['mangetout', 'mange tout', 'snow pea'] }),
+  extra('gdb-x-sugar-snaps', 'Sugar Snap Peas', 'pack', 1, PRODUCE, { base: 'g', per: { pack: 150, handful: 40 }, aliases: ['sugar snap pea', 'sugar snap', 'sugarsnap pea'] }),
+  extra('gdb-x-red-cabbage', 'Red Cabbage', 'head', 1, PRODUCE, weighed(900, ['red cabbage'], { head: 900 })),
+  extra('gdb-x-baby-corn', 'Baby Corn', 'pack', 1, PRODUCE, { base: 'g', per: { pack: 125, each: 10 }, aliases: ['baby corn', 'baby sweetcorn'] }),
+  extra('gdb-x-bean-sprouts', 'Bean Sprouts', 'bag', 1, PRODUCE, { base: 'g', per: { bag: 300, pack: 300, handful: 40 }, aliases: ['bean sprout', 'beansprout'] }),
+  // Meat and fish:
+  extra('gdb-x-gammon', 'Gammon Steaks', 'pack', 1, MEAT, { base: 'each', per: { pack: 2, steak: 1, each: 1, g: 1 / 150 }, aliases: ['gammon', 'gammon steak'] }),
+  extra('gdb-x-ham', 'Sliced Ham', 'pack', 1, MEAT, { base: 'g', per: { pack: 125, slice: 15, each: 15 }, aliases: ['ham', 'sliced ham', 'cooked ham', 'ham slice', 'wafer thin ham', 'honey roast ham'] }),
+  extra('gdb-x-drumsticks', 'Chicken Drumsticks', 'kg', 1, MEAT, weighed(110, ['chicken drumstick', 'drumstick'], { drumstick: 110 })),
+  extra('gdb-x-wings', 'Chicken Wings', 'kg', 1, MEAT, weighed(90, ['chicken wing'], { wing: 90 })),
+  extra('gdb-x-lamb-chops', 'Lamb Chops', 'chop', 1, MEAT, each(100, ['lamb chop', 'lamb cutlet', 'lamb loin chop'], { chop: 1 })),
+  extra('gdb-x-lamb-joint', 'Lamb Joint', 'whole', 1, MEAT, each(1500, ['lamb joint', 'leg of lamb', 'lamb leg', 'lamb shoulder', 'shoulder of lamb'])),
+  extra('gdb-x-beef-joint', 'Beef Roasting Joint', 'whole', 1, MEAT, each(1000, ['beef joint', 'beef roasting joint', 'roast beef joint', 'topside', 'topside of beef', 'silverside'])),
+  extra('gdb-x-pork-joint', 'Pork Joint', 'whole', 1, MEAT, each(1000, ['pork joint', 'pork shoulder', 'pork loin joint', 'pork belly', 'pork leg joint'])),
+  extra('gdb-x-burgers', 'Beef Burgers', 'pack', 1, MEAT, { base: 'each', per: { pack: 4, burger: 1, each: 1, g: 1 / 113 }, aliases: ['beef burger', 'quarter pounder', 'burger patty'] }),
+  extra('gdb-x-meatballs', 'Beef Meatballs', 'pack', 1, MEAT, { base: 'each', per: { pack: 12, meatball: 1, each: 1, g: 1 / 28 }, aliases: ['meatball', 'beef meatball'] }),
+  extra('gdb-x-fish-fingers', 'Fish Fingers', 'pack', 1, FROZEN, { base: 'each', per: { pack: 10, finger: 1, each: 1 }, aliases: ['fish finger'] }),
+  // Dairy and chilled:
+  extra('gdb-x-grated-mozzarella', 'Grated Mozzarella', 'g', 250, DAIRY, { base: 'g', per: { bag: 250, pack: 250, handful: 30, cup: 100 }, aliases: ['grated mozzarella', 'shredded mozzarella', 'pizza mozzarella', 'pizza cheese'] }),
+  extra('gdb-x-cottage-cheese', 'Cottage Cheese', 'tub', 1, DAIRY, { base: 'g', per: { tub: 300, pot: 300, each: 300, tbsp: 15 }, aliases: ['cottage cheese'] }),
+  extra('gdb-x-goats-cheese', "Goat's Cheese", 'pack', 1, DAIRY, { base: 'g', per: { pack: 125, log: 125, each: 125 }, aliases: ['goats cheese', 'goat cheese', 'soft goats cheese', 'chevre'] }),
+  extra('gdb-x-paneer', 'Paneer', 'pack', 1, DAIRY, { base: 'g', per: { pack: 226, block: 226, each: 226 }, aliases: ['paneer'] }),
+  extra('gdb-x-custard', 'Fresh Custard', 'pot', 1, DAIRY, { base: 'ml', per: { pot: 500, carton: 500, each: 500 }, aliases: ['custard', 'fresh custard', 'ready made custard'] }),
+  // Bakery:
+  extra('gdb-x-crumpets', 'Crumpets', 'pack', 1, BAKERY, { base: 'each', per: { pack: 6, each: 1 }, aliases: ['crumpet'] }),
+  extra('gdb-x-english-muffins', 'English Muffins', 'pack', 1, BAKERY, { base: 'each', per: { pack: 4, each: 1 }, aliases: ['english muffin', 'breakfast muffin'] }),
+  extra('gdb-x-baguette', 'Baguette', 'whole', 1, BAKERY, { base: 'each', per: { each: 1, g: 1 / 250 }, aliases: ['baguette', 'french stick', 'french bread'] }),
+  extra('gdb-x-ciabatta', 'Ciabatta', 'whole', 1, BAKERY, { base: 'each', per: { each: 1, loaf: 1, g: 1 / 270 }, aliases: ['ciabatta'] }),
+  extra('gdb-x-brioche-buns', 'Brioche Buns', 'pack', 1, BAKERY, { base: 'each', per: { pack: 4, bun: 1, each: 1 }, aliases: ['brioche bun', 'brioche burger bun', 'brioche roll'] }),
+  // Store cupboard:
+  extra('gdb-x-marmite', 'Marmite', 'jar', 1, PANTRY, jar(250, ['marmite', 'yeast extract'])),
+  extra('gdb-x-brown-sauce', 'Brown Sauce', 'bottle', 1, PANTRY, liquid(['brown sauce', 'hp sauce'], { bottle: 450 }, true)),
+  extra('gdb-x-mint-sauce', 'Mint Sauce', 'jar', 1, PANTRY, jar(165, ['mint sauce'])),
+  extra('gdb-x-salad-cream', 'Salad Cream', 'bottle', 1, PANTRY, liquid(['salad cream'], { bottle: 425 }, true)),
+  extra('gdb-x-pickle', 'Pickle', 'jar', 1, CANNED, jar(360, ['pickle', 'branston', 'branston pickle', 'sweet pickle', 'ploughmans pickle'])),
+  extra('gdb-x-mango-chutney', 'Mango Chutney', 'jar', 1, CANNED, jar(340, ['mango chutney'])),
+  extra('gdb-x-golden-syrup', 'Golden Syrup', 'bottle', 1, PANTRY, { base: 'g', density: 1.4, cupboard: true, per: { bottle: 600, tin: 454, each: 600, tbsp: 21, tsp: 7 }, aliases: ['golden syrup'] }),
+  extra('gdb-x-cannellini', 'Cannellini Beans', 'can', 1, CANNED, { base: 'g', per: { can: 400 }, aliases: ['cannellini bean', 'white bean'] }),
+  extra('gdb-x-butter-beans', 'Butter Beans', 'can', 1, CANNED, { base: 'g', per: { can: 400 }, aliases: ['butter bean', 'lima bean'] }),
+  extra('gdb-x-olives', 'Olives', 'jar', 1, CANNED, { base: 'g', per: { jar: 160, each: 4 }, aliases: ['olive', 'black olive', 'green olive', 'kalamata olive', 'pitted olive'] }),
+  extra('gdb-x-risotto-rice', 'Risotto Rice', 'g', 500, GRAINS, { base: 'g', cupboard: true, per: { cup: 200 }, aliases: ['risotto rice', 'arborio rice', 'arborio', 'carnaroli rice', 'carnaroli'] }),
+  extra('gdb-x-rice-pouch', 'Microwave Rice', 'pack', 1, GRAINS, { base: 'g', per: { pack: 250, pouch: 250, each: 250 }, aliases: ['microwave rice', 'rice pouch', 'ready rice', 'express rice', 'microwaveable rice'] }),
+  extra('gdb-x-soup', 'Tinned Soup', 'can', 1, CANNED, { base: 'g', per: { can: 400 }, aliases: ['tinned soup', 'canned soup', 'tomato soup', 'soup'] }),
+  extra('gdb-x-squash-drink', 'Fruit Squash', 'bottle', 1, PANTRY, liquid(['fruit squash', 'orange squash', 'blackcurrant squash', 'diluting juice', 'cordial'], { bottle: 1000 })),
+  extra('gdb-x-instant-coffee', 'Instant Coffee', 'jar', 1, PANTRY, { base: 'g', per: { jar: 100, each: 100, tsp: 2 }, aliases: ['instant coffee', 'coffee granule'] }),
+  extra('gdb-x-tortilla-chips', 'Tortilla Chips', 'bag', 1, PANTRY, { base: 'g', per: { bag: 200, pack: 200, handful: 30 }, aliases: ['tortilla chip', 'nacho', 'nacho chip'] }),
+  extra('gdb-x-sultanas', 'Sultanas', 'g', 500, PANTRY, { base: 'g', cupboard: true, per: { cup: 150, handful: 30, tbsp: 10 }, aliases: ['sultana', 'raisin', 'dried fruit', 'mixed dried fruit', 'currant'] }),
+  extra('gdb-x-ground-almonds', 'Ground Almonds', 'g', 200, PANTRY, { base: 'g', cupboard: true, per: { cup: 100, tbsp: 7 }, aliases: ['ground almond', 'almond flour', 'almond meal'] }),
+  extra('gdb-x-cocoa', 'Cocoa Powder', 'tub', 1, PANTRY, { base: 'g', density: 0.5, cupboard: true, per: { tub: 250, each: 250, tbsp: 6, tsp: 2 }, aliases: ['cocoa', 'cocoa powder', 'cacao powder'] }),
+  extra('gdb-x-yeast', 'Fast Action Yeast', 'pack', 1, PANTRY, { base: 'g', cupboard: true, per: { pack: 56, sachet: 7, each: 7, tsp: 3 }, aliases: ['yeast', 'dried yeast', 'fast action yeast', 'fast action dried yeast', 'easy bake yeast', 'instant yeast'] }),
+  extra('gdb-x-filo', 'Filo Pastry', 'pack', 1, BAKERY, { base: 'each', per: { pack: 1, each: 1, sheet: 1 / 7, g: 1 / 270 }, aliases: ['filo', 'filo pastry', 'phyllo', 'phyllo pastry'] }),
+  // Frozen:
+  extra('gdb-x-yorkshire', 'Yorkshire Puddings', 'pack', 1, FROZEN, { base: 'each', per: { pack: 12, each: 1 }, aliases: ['yorkshire pudding', 'yorkshire pud', 'yorkshire'] }),
+  extra('gdb-x-roast-potatoes', 'Frozen Roast Potatoes', 'bag', 1, FROZEN, { base: 'g', per: { bag: 700, pack: 700 }, aliases: ['frozen roast potato', 'frozen roastie'] }),
+  extra('gdb-x-hash-browns', 'Hash Browns', 'pack', 1, FROZEN, { base: 'each', per: { pack: 15, each: 1 }, aliases: ['hash brown'] }),
+  // Household:
+  extra('gdb-x-cling-film', 'Cling Film', 'roll', 1, HOUSEHOLD, { base: 'each', per: { roll: 1, each: 1 }, aliases: ['cling film', 'clingfilm', 'food wrap'] }),
+  extra('gdb-x-foil', 'Kitchen Foil', 'roll', 1, HOUSEHOLD, { base: 'each', per: { roll: 1, each: 1 }, aliases: ['foil', 'tin foil', 'kitchen foil', 'aluminium foil'] }),
+  extra('gdb-x-baking-paper', 'Baking Paper', 'roll', 1, HOUSEHOLD, { base: 'each', per: { roll: 1, each: 1 }, aliases: ['baking paper', 'greaseproof paper', 'parchment paper', 'baking parchment'] }),
+  extra('gdb-x-freezer-bags', 'Freezer Bags', 'pack', 1, HOUSEHOLD, { base: 'each', per: { pack: 1, each: 1 }, aliases: ['freezer bag', 'food bag', 'sandwich bag'] }),
+  extra('gdb-x-hand-wash', 'Hand Wash', 'bottle', 1, HOUSEHOLD, { base: 'each', per: { bottle: 1, each: 1 }, aliases: ['hand wash', 'hand soap', 'liquid soap', 'soap'] }),
 ];
 
 /** Bumped when EXTRA_PRODUCTS changes; the store adds new products to the shared grocery list once per version. */
-export const CATALOG_VERSION = 3;
+export const CATALOG_VERSION = 4;
 
 /**
- * Built-in products whose default way of buying changed in a later version.
- * Applied only if the product still has the old default (your own edits win).
+ * Built-in products whose defaults changed in a later version. Applied once to your list, and
+ * only to products that still have the old default (your own edits win). A value in `from` can
+ * be a list of old values (e.g. an aisle written the old way or the new way).
+ * `lists`: also rename staples and favourites with exactly the old name.
  */
-const DEFAULT_CHANGES: { id: string; from: Partial<GroceryItem>; to: Partial<GroceryItem> }[] = [
+interface DefaultChange { id: string; from: Record<string, unknown>; to: Partial<GroceryItem>; lists?: boolean }
+const sized = (ids: string[], from: Partial<GroceryItem>, to: Partial<GroceryItem>): DefaultChange[] => ids.map((id) => ({ id, from, to }));
+const renamed = (id: string, from: string, to: string, lists = true): DefaultChange => ({ id, from: { name: from }, to: { name: to }, lists });
+const OLD_PANTRY = ['Pantry', 'Pantry, Oils & Spices'];
+const DEFAULT_CHANGES: DefaultChange[] = [
   // v3: milk is sold in pints in the UK (1, 2, 4 pints), not 500 ml steps
   { id: 'gdb-79', from: { unit: 'ml', increment: 500 }, to: { unit: 'pint', increment: 1 } },
+  // v4: UK pack sizes
+  ...sized(['gdb-51'], { unit: 'g', increment: 250 }, { increment: 300 }),            // chicken breasts: 300 g (2 fillets), 650 g
+  ...sized(['gdb-52'], { unit: 'g', increment: 250 }, { increment: 600 }),            // chicken thigh fillets: 600 g
+  ...sized(['gdb-61', 'gdb-62'], { unit: 'g', increment: 250 }, { increment: 400 }),  // diced beef, diced chicken: 400 g
+  ...sized(['gdb-54', 'gdb-55', 'gdb-60'], { unit: 'g', increment: 250 }, { increment: 500 }), // pork, lamb, turkey mince: 500 g
+  ...sized(['gdb-9'], { unit: 'g', increment: 200 }, { unit: 'kg', increment: 1 }),   // carrots: 1 kg bag
+  ...sized(['gdb-5'], { unit: 'g', increment: 250 }, { unit: 'kg', increment: 2.5 }), // potatoes: 2.5 kg bag
+  ...sized(['gdb-11'], { unit: 'g', increment: 150 }, { unit: 'whole', increment: 1 }), // tomatoes: loose
+  ...sized(['gdb-6'], { unit: 'g', increment: 250 }, { unit: 'whole', increment: 1 }),  // sweet potatoes: loose
+  ...sized(['gdb-16'], { unit: 'g', increment: 150 }, { increment: 300 }),             // mushrooms: 300 g
+  ...sized(['gdb-26'], { unit: 'g', increment: 150 }, { increment: 200 }),             // fine beans: 200 g
+  ...sized(['gdb-70'], { unit: 'g', increment: 200 }, { increment: 400 }),             // cheddar: 400 g block
+  ...sized(['gdb-137', 'gdb-141'], { unit: 'g', increment: 250 }, { unit: 'kg', increment: 1 }), // frozen peas, mixed veg: 1 kg
+  ...sized(['gdb-138'], { unit: 'g', increment: 500 }, { unit: 'kg', increment: 1 }), // oven chips: 1 kg
+  ...sized(['gdb-142'], { unit: 'g', increment: 250 }, { increment: 500 }),            // frozen berries: 500 g
+  ...sized(['gdb-92', 'gdb-93', 'gdb-94', 'gdb-95'], { unit: 'g', increment: 200 }, { increment: 500 }), // dried pasta: 500 g
+  ...sized(['gdb-98', 'gdb-99', 'gdb-100'], { unit: 'g', increment: 200 }, { unit: 'kg', increment: 1 }), // rice: 1 kg
+  ...sized(['gdb-101'], { unit: 'g', increment: 200 }, { increment: 300 }),            // quinoa: 300 g
+  ...sized(['gdb-102'], { unit: 'g', increment: 200 }, { increment: 500 }),            // couscous: 500 g
+  ...sized(['gdb-133'], { unit: 'g', increment: 500 }, { unit: 'kg', increment: 1.5 }), // flour: 1.5 kg
+  ...sized(['gdb-134'], { unit: 'g', increment: 500 }, { unit: 'kg', increment: 1 }),   // sugar: 1 kg
+  ...sized(['gdb-122', 'gdb-123'], { unit: 'ml', increment: 500 }, { unit: 'l', increment: 1 }), // vegetable, sunflower oil: 1 litre
+  ...sized(['gdb-126'], { unit: 'ml', increment: 250 }, { increment: 350 }),           // white wine vinegar: 350 ml
+  // v4: rice and grains live in the Pasta, Rice & Grains aisle
+  ...['gdb-98', 'gdb-99', 'gdb-100', 'gdb-101', 'gdb-102', 'gdb-103'].map((id) => ({ id, from: { category: OLD_PANTRY }, to: { category: 'Pasta, Rice & Grains' } })),
+  // v4: one product became several (the rest are new products)
+  renamed('gdb-133', 'Flour', 'Plain Flour', false),
+  renamed('gdb-134', 'Sugar', 'Granulated Sugar', false),
+  renamed('gdb-136', 'Stock Cubes', 'Vegetable Stock Cubes', false),
+  renamed('gdb-155', 'Wine', 'Red Wine', false),
+  // v4: UK names
+  renamed('gdb-8', 'Bell Peppers', 'Peppers'),
+  renamed('gdb-29', 'Chilli Peppers', 'Chillies'),
+  renamed('gdb-75', 'Cream Cheese', 'Soft Cheese'),
+  renamed('gdb-78', 'Sour Cream', 'Soured Cream'),
+  renamed('gdb-88', 'Pita Bread', 'Pitta Bread'),
+  renamed('gdb-66', 'Canned Tuna', 'Tinned Tuna'),
+  renamed('gdb-15', 'Salad Mix', 'Mixed Salad Leaves'),
+  renamed('gdb-153', 'Soda', 'Fizzy Drinks'),
+  renamed('gdb-156', 'Toilet Paper', 'Toilet Roll'),
+  renamed('gdb-158', 'Dish Soap', 'Washing-up Liquid'),
+  renamed('gdb-160', 'Laundry Detergent', 'Washing Liquid'),
+  renamed('gdb-161', 'Fabric Softener', 'Fabric Conditioner'),
+  renamed('gdb-165', 'Body Wash', 'Shower Gel'),
 ];
+
+const matchesOld = (item: GroceryItem, from: Record<string, unknown>) =>
+  Object.entries(from).every(([k, v]) => (Array.isArray(v) ? v.includes((item as any)[k]) : (item as any)[k] === v));
+
+/** A built-in product with every newer default it still qualifies for, or null if none apply. */
+export function applyDefaultChanges(item: GroceryItem): GroceryItem | null {
+  let out: GroceryItem | null = null;
+  for (const change of DEFAULT_CHANGES) {
+    if (change.id !== item.id) continue;
+    const cur: GroceryItem = out ?? item;
+    if (matchesOld(cur, change.from)) out = { ...cur, ...change.to };
+  }
+  return out;
+}
+
+/** Staples and favourites to rename when a built-in product gets its UK name: old name -> new name (lower-case keys). */
+export function listRenames(): Map<string, string> {
+  return new Map(DEFAULT_CHANGES.filter((c) => c.lists && c.to.name).map((c) => [String(c.from.name).toLowerCase(), c.to.name as string]));
+}
 
 /** Grocery items that still have an old built-in default, updated to the new one. */
 export function outdatedDefaults(groceryDatabase: GroceryItem[] | undefined | null): GroceryItem[] {
   const list = Array.isArray(groceryDatabase) ? groceryDatabase : [];
   const out: GroceryItem[] = [];
-  for (const change of DEFAULT_CHANGES) {
-    const item = list.find((i) => i.id === change.id);
-    if (!item) continue;
-    const unchanged = Object.entries(change.from).every(([k, v]) => (item as any)[k] === v);
-    if (unchanged) out.push({ ...item, ...change.to });
+  for (const item of list) {
+    if (item.removed) continue;
+    const next = applyDefaultChanges(item);
+    if (next) out.push(next);
   }
   return out;
 }
@@ -330,7 +502,7 @@ export function builtInSameAs(id: string): string | undefined {
 
 /** A built-in product's latest way of buying (milk in pints), if it still has an old default. */
 export function updatedDefault(item: GroceryItem): GroceryItem | null {
-  return outdatedDefaults([item])[0] ?? null;
+  return applyDefaultChanges(item);
 }
 
 let builtIns: GroceryItem[] | null = null;
@@ -603,7 +775,7 @@ export function matchProductDetailed(
     const end = start + entry.words.length;
     const after = words.slice(end);
     // "garlic powder" isn't garlic, but "penne pasta" is penne and "basmati rice" is rice.
-    const ownWords = new Set([...entry.product.name.toLowerCase().split(/\s+/).map((w) => w.replace(/s$/, '')), ...(entry.product.aisle === 'grains_pasta' ? ['pasta'] : [])]);
+    const ownWords = new Set([...entry.product.name.toLowerCase().split(/\s+/).map((w) => w.replace(/s$/, '')), ...(isPastaProduct(entry.product) ? ['pasta'] : [])]);
     if (after.some((w) => IDENTITY_AFTER.has(w) && !ownWords.has(w))) continue;
     if (start > 0 && IDENTITY_BEFORE.has(words[start - 1])) continue;
     // A broad word ("oil", "pasta", "steak") only counts if everything before it is just description.
@@ -619,6 +791,10 @@ export function matchProductDetailed(
   return product ? { product: disambiguate(catalog, product, best.key, key, opts), how: 'partial' } : null;
 }
 
+/** Kinds of pasta ("penne pasta" is penne): the built-in pastas, and your own products in the pasta aisle. */
+const PASTA_IDS = new Set(['gdb-92', 'gdb-93', 'gdb-94', 'gdb-95', 'gdb-96', 'gdb-97', 'gdb-x-pasta', 'gdb-x-gnocchi']);
+const isPastaProduct = (p: Product) => PASTA_IDS.has(p.id) || (!isBuiltInProduct(p.id) && p.aisle === 'grains_pasta');
+
 /** "Pepper": a counted pepper is a bell pepper; a pinch or teaspoon is black pepper. */
 function disambiguate(catalog: Catalog, found: Product, foundKey: string, key: string, opts: { unit?: string; amount?: number }): Product {
   if (foundKey !== 'pepper') return found;
@@ -627,7 +803,8 @@ function disambiguate(catalog: Catalog, found: Product, foundKey: string, key: s
   const toTaste = words.includes('taste') || words.includes('season') || words.includes('seasoning');
   const counted = u === 'each' && !SMALL_MEASURES.has(u) && typeof opts.amount === 'number' && opts.amount >= 1 && !toTaste;
   const bell = resolve(catalog, catalog.byId.get('gdb-8'));
-  return counted && bell ? bell : found;
+  const black = resolve(catalog, catalog.byId.get('gdb-132'));
+  return counted ? (bell ?? found) : (black ?? found);
 }
 
 /** The product an ingredient refers to (see matchProductDetailed), or null. */
