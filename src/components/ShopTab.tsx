@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { 
   Plus, 
   Minus, 
@@ -43,7 +43,7 @@ import {
 import { ShoppingListItem, Recipe, MealPlan, DayPlan, ShopRoute, ShopRecord } from '../types';
 import { useJustTicked } from '../hooks/useJustTicked';
 import { aggregateIngredients } from '../utils/aggregation';
-import { matchProduct, groupingKey, canonicalUnit, formatUnit, largeUnitQuantity, formatAmount as formatShopAmount, unitInfo } from '../shopping';
+import { matchProduct, groupingKey, canonicalUnit, formatUnit, largeUnitQuantity, formatAmount as formatShopAmount, unitInfo, formatCookingAmount } from '../shopping';
 import ShopAisleGroup from './ShopAisleGroup';
 import CatalogDrawer from './CatalogDrawer';
 import ShopRow from './shop/ShopRow';
@@ -114,6 +114,8 @@ export interface MealRequirementDetail {
 
 export interface PlannedRequirement {
   requiredAmount: number;
+  /** What the meals actually use, when less than you buy ("100 g"). */
+  neededText?: string;
   recipes: string[];
   nights: string[];
   breakdown: MealRequirementDetail[];
@@ -436,6 +438,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
 
       map.set(normItemName, {
         requiredAmount: target.amount,
+        neededText: target.neededText,
         recipes: Array.from(recipeSet),
         nights: sortedNights,
         breakdown
@@ -649,7 +652,8 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
           ...existing,
           amount: nextAmount,
           unit: nextUnit,
-          recipeNames: target.recipeNames
+          recipeNames: target.recipeNames,
+          neededText: target.neededText,
         });
       } else {
         // We do NOT check dismissedItemIds here because we just cleared it!
@@ -1006,7 +1010,12 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   }, [currentWeekItems, sortBy, statusFilter, sourceFilter, aisleOrder]);
 
   // ---------- One row per product (the same rows and counts as shopping mode) ----------
-  const rows = useMemo(() => aggregateShoppingItems(buyingItems), [buyingItems]);
+  /** What the meals use for a meal line, worked out from the week as it is now. */
+  const neededOf = useCallback(
+    (part: ShoppingListItem) => (plannedRequirementsByName.size ? plannedRequirementsByName.get(part.name.toLowerCase().trim())?.neededText ?? '' : undefined),
+    [plannedRequirementsByName],
+  );
+  const rows = useMemo(() => aggregateShoppingItems(buyingItems, neededOf), [buyingItems, neededOf]);
   const byName = (a: AggregatedShoppingListItem, b: AggregatedShoppingListItem) => a.name.localeCompare(b.name);
   // Just ticked: counts straight away, but stays in its place (crossed out, with Undo) for a few
   // seconds before moving down to Bought, so a mis-tap is easy to put right.
@@ -1032,7 +1041,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         { id: 'batch', title: 'Extra recipes', test: i => !!i.isBatch },
       ];
       return sources
-        .map(src => ({ id: src.id, title: src.title, rows: aggregateShoppingItems(buyingItems.filter(src.test)).filter(r => (!r.checked && !r.outOfStock) || justTicked[r.key]).sort(byName) }))
+        .map(src => ({ id: src.id, title: src.title, rows: aggregateShoppingItems(buyingItems.filter(src.test), neededOf).filter(r => (!r.checked && !r.outOfStock) || justTicked[r.key]).sort(byName) }))
         .filter(g => g.rows.length > 0);
     }
     return orderedAisles(aisleOrder)
@@ -1135,7 +1144,10 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     const seen = new Set<string>();
     const bits: string[] = [];
     for (const b of req.breakdown) {
-      const t = `${b.recipeName} (${b.night.slice(0, 3)})`;
+      const n = Number(b.amount);
+      const label = formatUnit(b.unit || '', n);
+      const amount = n > 0 ? `: ${formatCookingAmount(n, b.unit)}${label ? ` ${label}` : ''}` : '';
+      const t = `${b.recipeName} (${b.night.slice(0, 3)})${amount}`;
       if (!seen.has(t)) { seen.add(t); bits.push(t); }
     }
     return `For ${bits.join(', ')}`;
@@ -1320,6 +1332,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       <>
       <ShoppingModeView
         items={buyingItems}
+        neededOf={neededOf}
         activePlan={activePlan}
         onToggle={handleToggleItem}
         onExit={() => setIsShoppingMode(false)}
@@ -1869,6 +1882,8 @@ function BelowThresholdWarningModal({ data, onClose, onKeepRequired, onConfirmRe
 }
 
 interface ShoppingModeViewProps {
+  /** What the meals use for a meal line (see aggregateShoppingItems). */
+  neededOf?: (part: ShoppingListItem) => string | undefined;
   items: ShoppingListItem[];
   activePlan: MealPlan | null;
   onToggle: (idOrIds: string | string[], forceState?: boolean) => void;
@@ -1944,6 +1959,7 @@ function useScreenAwake() {
 
 function ShoppingModeView({
   items,
+  neededOf,
   activePlan,
   onToggle: parentOnToggle,
   onExit,
@@ -1989,7 +2005,7 @@ function ShoppingModeView({
   };
 
   // One row per product, exactly as on the Shop list (so the counts match).
-  const aggregatedItems = useMemo(() => aggregateShoppingItems(items), [items]);
+  const aggregatedItems = useMemo(() => aggregateShoppingItems(items, neededOf), [items, neededOf]);
   const weekTitle = activePlan ? (activePlan.startDate === currentMondayStr ? 'This week' : activePlan.startDate === nextMondayStr ? 'Next week' : formatWeekSpan(activePlan.startDate)) : 'This week';
 
   // Out of stock doesn't count against you: the % is of what the shop actually had.
@@ -2749,8 +2765,11 @@ function ShoppingModeItemRow({
         ) : out ? (
           <OutOfStockPill />
         ) : (
-          <span className={`shrink-0 text-base font-bold tabular-nums ${item.checked ? 'text-zinc-400' : 'text-emerald-700'}`}>
-            {shopQuantityText(item)}
+          <span className="shrink-0 flex flex-col items-end leading-tight">
+            <span className={`text-base font-bold tabular-nums ${item.checked ? 'text-zinc-400' : 'text-emerald-700'}`}>
+              {shopQuantityText(item)}
+            </span>
+            {item.neededText && !item.checked && <span className="text-[11px] text-zinc-500 tabular-nums" data-row-need>need {item.neededText}</span>}
           </span>
         )}
       </div>
@@ -2790,6 +2809,9 @@ function ShoppingModeItemRow({
           }`}>
             {shopQuantityText(item)}
           </span>
+          {item.neededText && !item.checked && (
+            <span className="text-xs text-zinc-600 tabular-nums" data-row-need>(meals use {item.neededText})</span>
+          )}
 
           {/* for meal in small print */}
           {item.description && (

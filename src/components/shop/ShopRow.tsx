@@ -78,8 +78,13 @@ export default function ShopRow({
           )}
         </span>
         {!justTicked && (
-          <span className={`shrink-0 text-sm font-semibold tabular-nums ${row.checked ? 'text-zinc-400' : 'text-zinc-700'}`} data-item-qty>
-            {shopQuantityText(row)}
+          <span className="shrink-0 flex flex-col items-end leading-tight">
+            <span className={`text-sm font-semibold tabular-nums ${row.checked ? 'text-zinc-400' : 'text-zinc-700'}`} data-item-qty>
+              {shopQuantityText(row)}
+            </span>
+            {row.neededText && !row.checked && (
+              <span className="text-[11px] text-zinc-500 tabular-nums" data-item-need title="What your meals use">need {row.neededText}</span>
+            )}
           </span>
         )}
       </button>

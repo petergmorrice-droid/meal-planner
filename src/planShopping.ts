@@ -52,7 +52,7 @@ export function sendWeekToShoppingList(store: any, plan: MealPlan) {
     const existing = existingMealItems.find((e) => e.name.toLowerCase().trim() === key);
     if (existing) {
       const keep = existing.userAdjusted;
-      syncedMealItems.push({ ...existing, amount: keep ? existing.amount : target.amount, unit: keep ? existing.unit : target.unit, recipeNames: target.recipeNames });
+      syncedMealItems.push({ ...existing, amount: keep ? existing.amount : target.amount, unit: keep ? existing.unit : target.unit, recipeNames: target.recipeNames, neededText: target.neededText });
     } else if (!dismissedItemIds.includes(target.id)) {
       syncedMealItems.push(target);
     }

@@ -115,6 +115,9 @@ When a week is finalised the app:
    **check amount** with a note, instead of being added in.
 5. **Store-cupboard items** (oils, salt, spices, flour, rice, pasta, stock)
    are marked **check cupboard**, so you can skip them if you have some.
+6. **Says what the meals actually use** when it's less than you buy: "300 g ·
+   need 100 g" for chicken breasts, "1 bulb · need 3 cloves" for garlic. The
+   item panel shows each recipe's amount ("Chilli con carne (Wed): 2").
 
 Recipes keep their own wording for cooking; only the shopping list uses the
 standard names.

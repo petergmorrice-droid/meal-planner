@@ -578,5 +578,16 @@ test('reset to built-in: the app\'s own products as they come, yours taken off a
   assert.equal(r.recipes[0].ingredients[0].groceryId, undefined, 'link to your own product taken off');
 });
 
+test('the list says what your meals actually use when you buy more', () => {
+  const uk = buildCatalog(null, null);
+  const line = (inputs) => { const [l] = buildShoppingLines(inputs, uk); return `${l.amount}${l.unit ? ' ' + l.unit : ''}${l.needed ? ' / ' + l.needed : ''}`; };
+  assert.equal(line([{ name: 'chicken breast', amount: 100, unit: 'g' }]), '300 g / 100 g');
+  assert.equal(line([{ name: 'chicken breasts', amount: 2, unit: '' }]), '300 g', 'buying what you need: nothing extra said');
+  assert.equal(line([{ name: 'garlic', amount: 3, unit: 'cloves' }]), '1 bulb / 3 cloves', "in the recipe's own words");
+  assert.equal(line([{ name: 'onion', amount: 0.5, unit: '' }]), '1 / ½');
+  assert.equal(line([{ name: 'potatoes', amount: 800, unit: 'g' }, { name: 'potatoes', amount: 700, unit: 'g' }]), '2.5 kg / 1.5 kg', 'added up across recipes');
+  assert.equal(line([{ name: 'spinach', amount: 2, unit: 'handful' }]), '100 g / about 60 g', 'rough measures say "about"');
+});
+
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
 process.exit(failures ? 1 : 0);

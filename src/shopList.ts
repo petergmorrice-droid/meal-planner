@@ -29,6 +29,8 @@ export interface AggregatedShoppingListItem {
   checkCupboard?: boolean;
   needsCheck?: boolean;
   quantityNote?: string;
+  /** What your meals actually use, when it's less than you buy ("100 g" of a 300 g pack). */
+  neededText?: string;
   /** Marked "out of stock" at the shop (and not ticked). */
   outOfStock?: boolean;
   /** Who ticked it. */
@@ -43,8 +45,11 @@ export function productKey(item: { name: string; groceryId?: string }): string {
 
 const isPlanned = (i: ShoppingListItem) => !i.isAdhoc && !i.isBatch && !i.isRecurring;
 
-/** Add up the list's lines into one row per product. */
-export function aggregateShoppingItems(items: ShoppingListItem[]): AggregatedShoppingListItem[] {
+/**
+ * Add up the list's lines into one row per product. `neededOf` gives what the meals use for a
+ * meal line, worked out fresh from the week (otherwise the amount saved when the list was made).
+ */
+export function aggregateShoppingItems(items: ShoppingListItem[], neededOf?: (part: ShoppingListItem) => string | undefined): AggregatedShoppingListItem[] {
   const groups = new Map<string, ShoppingListItem[]>();
   for (const item of items) {
     const key = productKey(item);
@@ -77,6 +82,7 @@ export function aggregateShoppingItems(items: ShoppingListItem[]): AggregatedSho
     if (extraAmount > 0 && desc.length) desc.push('some added by you');
 
     const notes = Array.from(new Set(groupItems.map((i) => (i.note || '').trim()).filter(Boolean)));
+    const needs = groupItems.filter(isPlanned).map((i) => (neededOf ? neededOf(i) : undefined) ?? i.neededText).filter((t): t is string => Boolean(t));
     result.push({
       key,
       id: canonical.id,
@@ -100,6 +106,7 @@ export function aggregateShoppingItems(items: ShoppingListItem[]): AggregatedSho
       checkCupboard: groupItems.every((i) => i.checkCupboard && i.cupboard !== 'need'),
       needsCheck: groupItems.some((i) => i.needsCheck),
       quantityNote: groupItems.map((i) => i.quantityNote).filter(Boolean).join('; ') || undefined,
+      neededText: needs.join(' + ') || undefined,
     });
   }
   return result;

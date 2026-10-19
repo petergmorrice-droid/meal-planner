@@ -149,6 +149,8 @@ export interface ShoppingListItem {
   groceryId?: string;
   /** Store-cupboard staple: check you have it before buying. */
   checkCupboard?: boolean;
+  /** What the recipes actually use, when it's less than you buy: "100 g" of a 300 g pack. */
+  neededText?: string;
   /** Part of the amount couldn't be worked out from the recipe; see quantityNote. */
   needsCheck?: boolean;
   quantityNote?: string;

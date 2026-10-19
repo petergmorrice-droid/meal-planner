@@ -154,6 +154,7 @@ export default function ItemSheet({
               <h3 className="text-lg font-semibold text-zinc-900 truncate">{row.name}</h3>
             )}
             <p className="text-sm text-zinc-500 tabular-nums">{shopQuantityText(row)} on the list{row.checked ? ' · bought' : ''}</p>
+            {row.neededText && <p className="text-sm text-zinc-700 tabular-nums" data-item-sheet-need>Your meals use {row.neededText}</p>}
           </div>
           <button type="button" onClick={saveAndClose} className="p-1.5 -mr-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer" aria-label="Close">
             <X className="w-5 h-5" />

@@ -8,7 +8,7 @@
  */
 import { buildCatalog, matchProduct, sizeOfUnit, type Catalog, type Product } from './catalog';
 import { groupingKey, displayName, matchKey } from './names';
-import { canonicalUnit, unitInfo, vagueUnit, formatUnit, formatAmount, parseAmount } from './units';
+import { canonicalUnit, unitInfo, vagueUnit, formatUnit, formatAmount, parseAmount, formatCookingAmount, largeUnitQuantity } from './units';
 
 export interface IngredientInput {
   name: string;
@@ -35,6 +35,8 @@ export interface ShoppingLine {
   /** Part of the amount couldn't be worked out; see note. */
   needsCheck: boolean;
   note?: string;
+  /** What the recipes actually use, when it's less than you buy ("100 g" of a 300 g pack, "3 cloves" of a bulb). */
+  needed?: string;
   sources: string[];
 }
 
@@ -118,6 +120,35 @@ export function buildShoppingLines(inputs: IngredientInput[], catalog: Catalog):
   return lines;
 }
 
+/** An amount as a recipe would say it: "100 g", "1.5 kg", "3 cloves", "½", "2 tbsp". */
+function neededAmountText(amount: number, unit: string): string {
+  const u = canonicalUnit(unit);
+  const big = largeUnitQuantity(amount, u);
+  if (big) return `${formatAmount(big.amount)} ${big.unit}`;
+  const n = formatCookingAmount(amount, u) || formatAmount(amount);
+  const label = formatUnit(u, amount);
+  return label ? `${n} ${label}` : n;
+}
+
+/**
+ * What the recipes use, in their own unit if they all use the same one ("3 cloves"), otherwise in
+ * the product's measure ("240 g"). Only when it's noticeably less than what you buy.
+ */
+function neededText(product: Product, parts: Part[], total: number, boughtBase: number | null): string | undefined {
+  if (!boughtBase || total <= 0 || total >= boughtBase * (1 - ROUND_TOLERANCE)) return undefined;
+  const used = parts.filter((p) => p.valid && toBase(product, p.amount, p.unit) !== null);
+  if (!used.length) return undefined;
+  const units = new Set(used.map((p) => canonicalUnit(p.unit)));
+  const vague = used.some((p) => vagueUnit(canonicalUnit(p.unit)));
+  if (units.size === 1 && !vague) {
+    const [u] = [...units];
+    return neededAmountText(round2(used.reduce((sum, p) => sum + p.amount, 0)), u);
+  }
+  const baseUnit = product.base === 'each' ? 'each' : product.base;
+  const amount = product.base === 'each' ? round2(total) : Math.round(total);
+  return `${vague ? 'about ' : ''}${neededAmountText(amount, baseUnit)}`;
+}
+
 function productLine(key: string, product: Product, parts: Part[], sources: string[]): ShoppingLine {
   let total = 0;
   let converted = 0;
@@ -153,9 +184,10 @@ function productLine(key: string, product: Product, parts: Part[], sources: stri
     : undefined;
 
   const step = bought ? product.step : 1;
+  const needed = bought && product.buySize ? neededText(product, parts, total, bought.amount * product.buySize) : undefined;
   return {
     key, name: product.name, amount, unit, category: product.category, productId: product.id,
-    step, cupboard: product.cupboard, needsCheck, note, sources,
+    step, cupboard: product.cupboard, needsCheck, note, sources, ...(needed ? { needed } : {}),
   };
 }
 

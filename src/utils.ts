@@ -195,6 +195,7 @@ export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], c
     if (line.cupboard) item.checkCupboard = true;
     if (line.needsCheck) item.needsCheck = true;
     if (line.note) item.quantityNote = line.note;
+    if (line.needed) item.neededText = line.needed;
     return item;
   });
 }
