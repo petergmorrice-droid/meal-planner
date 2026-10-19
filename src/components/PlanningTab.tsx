@@ -54,8 +54,10 @@ import {
   MAX_FORWARD_WEEKS,
   getRecipeEmojis,
   getEmojiLabel,
-  syncRecurringStaplesForPlan
+  syncRecurringStaplesForPlan,
+  GROCERY_AISLES,
 } from '../utils';
+import { catalogForState, matchProduct, productMatchesSearch } from '../shopping';
 
 import { RecipeModal } from './CookBookTab';
 import { DayListRow, WeekDayCard, WeekGlance, DaySheet, isLeftoverMeal } from './planner/DayListRow';
@@ -2689,27 +2691,31 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
   
   // Triage state
   const [triageSideName, setTriageSideName] = useState<string | null>(null);
-  const [triageCategory, setTriageCategory] = useState('Produce');
+  const [triageCategory, setTriageCategory] = useState(GROCERY_AISLES.produce.name);
   const [triageUnit, setTriageUnit] = useState('g');
   const [triageIncrement, setTriageIncrement] = useState(100);
 
   const POPULAR_SIDES = [
-    { name: 'Peas', category: 'Produce', unit: 'g', amount: 150, increment: 100 },
-    { name: 'Garlic Bread', category: 'Bakery', unit: 'pack', amount: 1, increment: 1 },
-    { name: 'Broccoli', category: 'Produce', unit: 'head', amount: 1, increment: 1 },
-    { name: 'Mixed Salad', category: 'Produce', unit: 'bag', amount: 1, increment: 1 },
-    { name: 'Frozen Chips', category: 'Frozen', unit: 'g', amount: 300, increment: 250 },
-    { name: 'Basmati Rice', category: 'Pantry', unit: 'g', amount: 150, increment: 100 }
+    { name: 'Peas', category: GROCERY_AISLES.frozen.name, unit: 'g', amount: 150, increment: 100 },
+    { name: 'Garlic Bread', category: GROCERY_AISLES.bakery.name, unit: 'pack', amount: 1, increment: 1 },
+    { name: 'Broccoli', category: GROCERY_AISLES.produce.name, unit: 'head', amount: 1, increment: 1 },
+    { name: 'Mixed Salad', category: GROCERY_AISLES.produce.name, unit: 'bag', amount: 1, increment: 1 },
+    { name: 'Frozen Chips', category: GROCERY_AISLES.frozen.name, unit: 'g', amount: 300, increment: 250 },
+    { name: 'Basmati Rice', category: GROCERY_AISLES.grains_pasta.name, unit: 'g', amount: 150, increment: 100 }
   ];
 
+  // The shared product list (built-in products and yours, not ones you've taken off).
+  const catalog = catalogForState(store.state);
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase().trim();
-    const db = store.state.groceryDatabase || [];
-    return db.filter((item: any) => 
-      item.name.toLowerCase().includes(q)
-    ).slice(0, 5);
-  }, [searchQuery, store.state.groceryDatabase]);
+    const starts = (p: any) => (p.name.toLowerCase().startsWith(q) ? 0 : 1);
+    return catalog.products
+      .filter((p) => productMatchesSearch(p, q))
+      .sort((a, b) => starts(a) - starts(b) || a.name.localeCompare(b.name))
+      .slice(0, 5)
+      .map((p) => p.item);
+  }, [searchQuery, catalog]);
 
   const handleAddSide = (sideItem: { name: string; category?: string; unit?: string; increment?: number; amount?: number }) => {
     const existing = chosenSides.find(s => s.name.toLowerCase() === sideItem.name.toLowerCase());
@@ -2719,7 +2725,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
         : s
       ));
     } else {
-      const dbMatch = (store.state.groceryDatabase || []).find((g: any) => g.name.toLowerCase() === sideItem.name.toLowerCase());
+      const dbMatch = matchProduct(catalog, sideItem.name)?.item;
       const cat = sideItem.category || dbMatch?.category || 'Pantry';
       const unit = sideItem.unit || dbMatch?.unit || 'item';
       const amt = sideItem.amount || dbMatch?.increment || sideItem.increment || 1;
@@ -2745,7 +2751,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
     setChosenSides(chosenSides.map(s => {
       if (s.id !== id) return s;
       
-      const dbMatch = (store.state.groceryDatabase || []).find((g: any) => g.id === s.id);
+      const dbMatch = catalog.byId.get(s.id)?.item;
       const step = dbMatch?.increment || 1;
       const nextAmount = Math.max(step, s.amount + (delta * step));
       return { ...s, amount: nextAmount };
@@ -2762,10 +2768,10 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
       category: triageCategory,
       unit: triageUnit,
       increment: triageIncrement,
-      aliases: [triageSideName]
     };
     
-    store.updateGroceryOverride(newId, newItem);
+ if (store.saveProduct) store.saveProduct(newItem);
+    else store.updateGroceryOverride(newId, newItem);
     
     const newSide: PlannedMealSide = {
       id: newId,
@@ -2966,12 +2972,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                     onChange={e => setTriageCategory(e.target.value)}
                     className="w-full p-1.5 border border-indigo-200/80 rounded-lg bg-white"
                   >
-                    <option value="Produce">Produce</option>
-                    <option value="Bakery">Bakery</option>
-                    <option value="Dairy">Dairy</option>
-                    <option value="Frozen">Frozen</option>
-                    <option value="Pantry">Pantry</option>
-                    <option value="Other">Other</option>
+                    {Object.values(GROCERY_AISLES).sort((a, b) => a.order - b.order).map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>

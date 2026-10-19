@@ -403,5 +403,134 @@ test('property: converting a list quantity again gives the same quantity (safe t
   }
 });
 
+// ---------------------------------------------------------------------------
+// One product list: old data folded in, aisles, removals, merges, other names
+// ---------------------------------------------------------------------------
+const oldStyle = () => ({
+  recipes: [{ id: 'r1', name: 'Pesto pasta', ingredients: [
+    { id: 'i1', name: 'zucchini', amount: 2, unit: '', groceryId: 'gdb-custom-zuc' },
+    { id: 'i2', name: 'pine nuts', amount: 30, unit: 'g', groceryId: 'gdb-x-pine-nuts' },
+  ] }],
+  mealPlans: [], batches: [],
+  shoppingList: [
+    { id: 'l1', name: 'Zucchini', amount: 2, unit: 'whole', groceryId: 'gdb-custom-zuc', planId: 'plan-x', checked: false, isAdhoc: true },
+    { id: 'l2', name: 'Courgette', amount: 1, unit: 'whole', groceryId: 'gdb-17', planId: 'plan-x', checked: false, isAdhoc: true },
+  ],
+  preferences: { recurringItems: [{ id: 's1', name: 'Zucchini', amount: 1, unit: 'whole' }], favouriteItems: [{ name: 'Zucchini' }, { name: 'Courgette' }] },
+  groceryDatabase: [
+    ...INITIAL_GROCERY_DATABASE.map((i) => ({ ...i, lastModifiedAt: 1000 })),
+    { id: 'gdb-x-pine-nuts', name: 'Pine Nuts', unit: 'pack', increment: 1, category: 'Pantry', lastModifiedAt: 1000 },
+    { id: 'gdb-custom-zuc', name: 'Zucchini', unit: 'whole', increment: 1, category: 'Veg', lastModifiedAt: 1000 },
+  ],
+  groceryOverrides: { 'gdb-2': { increment: 2 }, 'gdb-custom-nduja': { id: 'gdb-custom-nduja', name: 'Nduja', unit: 'jar', increment: 1, category: 'Meat' }, 'gdb-x-cumin-seeds': { category: 'Spices' } },
+  syncMeta: { tombstones: { 'groceryDatabase:gdb-x-paprika': 1500 }, overridesModifiedAt: { 'gdb-2': 2000, 'gdb-custom-nduja': 3000 } },
+});
+const byId = (st, id) => (st.groceryDatabase || []).find((g) => g.id === id);
+
+test('aisles: each Shop aisle name maps back to itself; old groups map sensibly', () => {
+  for (const [id, a] of Object.entries(S.GROCERY_AISLES)) assert.equal(S.getGroceryAisle({ name: 'x', category: a.name }), id, a.name);
+  assert.equal(S.aisleCategory({ name: 'Garlic', category: 'Produce' }), 'Fresh Produce');
+  assert.equal(S.aisleCategory({ name: 'Cod', category: 'Fish' }), 'Meat & Seafood');
+  assert.equal(S.aisleCategory({ name: 'Shampoo', category: 'Hygiene' }), 'Household & Other');
+  assert.equal(S.aisleCategory({ name: 'Orange Juice', category: 'Beverages' }), 'Dairy, Chilled & Eggs');
+  assert.equal(S.aisleCategory({ name: 'Mystery Mix', category: '' }), '');
+});
+
+test('built-in products: every one has an aisle, and none look like duplicates of each other', () => {
+  const builtIns = S.builtInProducts();
+  assert.ok(builtIns.length > INITIAL_GROCERY_DATABASE.length, 'extras included');
+  assert.deepEqual(builtIns.filter((i) => !i.removed && !S.isAisleName(i.category)).map((i) => i.name), []);
+  assert.deepEqual(S.likelyDuplicates(buildCatalog(null, null)).map(([a, b]) => `${a.name}/${b.name}`), []);
+  assert.equal(builtIns.find((i) => i.id === 'gdb-18').mergedInto, 'gdb-17', 'Zucchini is part of Courgette');
+});
+
+test('old data folds into one list: separate changes, deleted built-ins, aisles; doing it again changes nothing', () => {
+  const st = oldStyle();
+  const n = S.normaliseProducts(st, 9000);
+  assert.deepEqual(n.groceryOverrides, {});
+  assert.equal(byId(n, 'gdb-2').increment, 2);
+  assert.equal(byId(n, 'gdb-2').category, 'Fresh Produce');
+  assert.ok(byId(n, 'gdb-2').lastModifiedAt > 2000, 'newer than the change it folded in');
+  assert.equal(byId(n, 'gdb-custom-nduja').category, 'Meat & Seafood');
+  assert.equal(byId(n, 'gdb-x-cumin-seeds').category, 'Pantry, Oils & Spices');
+  assert.equal(byId(n, 'gdb-x-paprika').removed, true, 'deleted built-in kept off');
+  assert.ok(byId(n, 'gdb-x-paprika').lastModifiedAt > 1500, 'the marker outlives the deletion record');
+  assert.equal(byId(n, 'gdb-custom-zuc').category, 'Fresh Produce');
+  assert.ok(n.syncMeta.tombstones['groceryOverrides:gdb-custom-nduja'] >= 3000, 'separate changes marked as folded');
+  assert.equal(S.normaliseProducts(n, 9500), n, 'nothing more to do');
+  const cat2 = buildCatalog(n.groceryDatabase, n.groceryOverrides);
+  assert.equal(matchProduct(cat2, 'paprika')?.name ?? null, null, 'Paprika stays off');
+  assert.equal(matchProduct(cat2, 'something', { groceryId: 'gdb-18' }).name, 'Courgette', 'a link to a merged built-in leads to its product');
+});
+
+test('a built-in product that is just a default stays a default when tidied (never beats real data)', () => {
+  const st = { ...oldStyle(), groceryOverrides: {}, syncMeta: { tombstones: {} } };
+  st.groceryDatabase = st.groceryDatabase.map((i) => ({ ...i, lastModifiedAt: -1 }));
+  const n = S.normaliseProducts(st, 9000);
+  assert.ok(byId(n, 'gdb-1').lastModifiedAt < 0);
+});
+
+test('merge "Same as…": names, recipes, list lines, staples and favourites move to the one kept', () => {
+  const st = S.normaliseProducts(oldStyle(), 9000);
+  const c = S.catalogForState(st);
+  const m = S.mergeProductsIn(st, c, 'gdb-17', 'gdb-custom-zuc');
+  assert.equal(byId(m, 'gdb-custom-zuc').removed, true);
+  assert.equal(byId(m, 'gdb-custom-zuc').mergedInto, 'gdb-17');
+  assert.equal(m.recipes[0].ingredients[0].groceryId, 'gdb-17');
+  assert.equal(m.shoppingList.length, 1, 'two lines for the same week become one');
+  assert.equal(m.shoppingList[0].amount, 3);
+  assert.equal(m.preferences.recurringItems[0].name, 'Courgette');
+  assert.deepEqual(m.preferences.favouriteItems.map((f) => f.name), ['Courgette'], 'favourites: no duplicates');
+  const after = S.catalogForState(m);
+  assert.equal(matchProduct(after, 'zucchini').id, 'gdb-17');
+  assert.equal(after.byId.get('gdb-custom-zuc') && matchProduct(after, 'x', { groceryId: 'gdb-custom-zuc' }).id, 'gdb-17', 'old links lead to the kept product');
+});
+
+test('remove: kept as removed, links taken off; Undo puts them back', () => {
+  const st = S.normaliseProducts(oldStyle(), 9000);
+  const r = S.removeProductIn(st, 'gdb-x-pine-nuts');
+  assert.equal(byId(r.next, 'gdb-x-pine-nuts').removed, true);
+  assert.equal(r.next.recipes[0].ingredients[1].groceryId, undefined);
+  assert.equal(r.next.shoppingList, st.shoppingList, 'untouched lists keep their identity');
+  assert.ok(!S.catalogForState(r.next).products.some((p) => p.id === 'gdb-x-pine-nuts'));
+  assert.equal(S.normaliseProducts(r.next, 9900).groceryDatabase.filter((g) => g.id === 'gdb-x-pine-nuts').length, 1, 'not added back');
+  const back = S.restoreProductIn(r.next, r.undo);
+  assert.ok(!byId(back, 'gdb-x-pine-nuts').removed);
+  assert.equal(back.recipes[0].ingredients[1].groceryId, 'gdb-x-pine-nuts');
+});
+
+test('also called: built-in names can be taken off and your own added', () => {
+  const garlic = S.builtInProducts().find((i) => i.id === 'gdb-2');
+  assert.ok(S.alsoCalled(garlic).includes('garlic paste'));
+  const edited = S.withAlsoCalled(garlic, [...S.alsoCalled(garlic).filter((a) => a !== 'garlic paste'), 'ajo']);
+  assert.deepEqual(edited.aliases, ['ajo']);
+  assert.deepEqual(edited.hiddenAliases, ['garlic paste']);
+  const c = buildCatalog(S.builtInProducts().map((i) => (i.id === 'gdb-2' ? edited : i)), null);
+  assert.equal(matchProduct(c, 'ajo').name, 'Garlic');
+  assert.notEqual(matchProduct(c, 'garlic paste')?.id, 'gdb-2');
+  assert.ok(S.productMatchesSearch(c.byId.get('gdb-17'), 'courgettes'), 'search finds plurals');
+});
+
+test('tidy-up: likely duplicates, no aisle; "not the same" is remembered', () => {
+  const st = S.normaliseProducts(oldStyle(), 9000);
+  st.groceryDatabase.push({ id: 'gdb-custom-basil', name: 'Fresh Basil', unit: 'bunch', increment: 1, category: 'Fresh Produce' }, { id: 'gdb-custom-m', name: 'Mystery Mix', unit: 'pack', increment: 1, category: '' });
+  const c = S.catalogForState(st);
+  const pairs = S.likelyDuplicates(c).map(([a, b]) => [a.name, b.name].sort().join('/'));
+  assert.ok(pairs.includes('Basil/Fresh Basil'), pairs.join(', '));
+  assert.ok(pairs.includes('Courgette/Zucchini'), pairs.join(', '));
+  assert.deepEqual(c.products.filter(S.hasNoAisle).map((p) => p.name), ['Mystery Mix']);
+  const apart = S.markDifferentIn(st, 'gdb-custom-basil', 'gdb-32');
+  assert.ok(!S.likelyDuplicates(S.catalogForState(apart)).some(([a, b]) => [a.id, b.id].includes('gdb-custom-basil')));
+});
+
+test('reset to built-in: the app\'s own products as they come, yours taken off and unlinked', () => {
+  const st = S.normaliseProducts(oldStyle(), 9000);
+  const r = S.resetProductsIn(st);
+  assert.equal(byId(r, 'gdb-2').increment, 1);
+  assert.equal(byId(r, 'gdb-custom-nduja').removed, true);
+  assert.equal(byId(r, 'gdb-x-paprika').removed, undefined, 'built-ins you took off come back');
+  assert.equal(r.recipes[0].ingredients[0].groceryId, undefined, 'link to your own product taken off');
+});
+
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
 process.exit(failures ? 1 : 0);

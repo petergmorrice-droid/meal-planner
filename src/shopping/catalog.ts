@@ -14,6 +14,7 @@ import type { GroceryItem } from '../types';
 import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
 import { matchKey, nameWords, IDENTITY_AFTER, IDENTITY_BEFORE, GENERIC_HEADS, DESCRIPTORS } from './names';
 import { canonicalUnit, unitInfo, vagueUnit } from './units';
+import { aisleCategory, guessAisle, type FoodAisle } from './aisles';
 
 export type Base = 'g' | 'ml' | 'each';
 
@@ -35,6 +36,8 @@ export interface Product {
   id: string;
   name: string;
   category: string;
+  /** The Shop aisle it's in (null if nothing says). */
+  aisle: FoodAisle | null;
   /** Canonical unit you buy it in ('g', 'can', 'bulb', 'each', ...). */
   buyUnit: string;
   /** How many buy units per step (e.g. 250 g packs, 6 eggs, 1 can). */
@@ -315,6 +318,42 @@ export function outdatedDefaults(groceryDatabase: GroceryItem[] | undefined | nu
 
 const EXTRA_BY_ID = new Map(EXTRA_PRODUCTS.map((p) => [p.item.id, p]));
 
+/** Built-in other names for a product (from the app's own knowledge), e.g. Courgette: zucchini. */
+export function builtInAliases(id: string): string[] {
+  return (PRODUCT_SPECS[id] ?? EXTRA_BY_ID.get(id)?.spec)?.aliases ?? [];
+}
+
+/** The built-in product a merged duplicate belongs to (Zucchini is Courgette), if any. */
+export function builtInSameAs(id: string): string | undefined {
+  return PRODUCT_SPECS[id]?.sameAs;
+}
+
+/** A built-in product's latest way of buying (milk in pints), if it still has an old default. */
+export function updatedDefault(item: GroceryItem): GroceryItem | null {
+  return outdatedDefaults([item])[0] ?? null;
+}
+
+let builtIns: GroceryItem[] | null = null;
+/**
+ * The app's own product list: the original products and those added since, with their aisles,
+ * and built-in duplicates (Zucchini, Eggplant...) merged into the product they're the same as.
+ */
+export function builtInProducts(): GroceryItem[] {
+  if (builtIns) return builtIns;
+  const list = [...INITIAL_GROCERY_DATABASE, ...EXTRA_PRODUCTS.map((e) => e.item)].map((i) => {
+    let item: GroceryItem = { ...i, category: aisleCategory(i) };
+    item = updatedDefault(item) ?? item;
+    const same = builtInSameAs(item.id);
+    return same ? { ...item, removed: true, mergedInto: same } : item;
+  });
+  builtIns = list;
+  return list;
+}
+
+const BUILT_IN_IDS = new Set([...INITIAL_GROCERY_DATABASE.map((i) => i.id), ...EXTRA_PRODUCTS.map((e) => e.item.id)]);
+/** True for products that come with the app. */
+export const isBuiltInProduct = (id: string) => BUILT_IN_IDS.has(id);
+
 // ---------------------------------------------------------------------------
 // Building and matching
 // ---------------------------------------------------------------------------
@@ -363,12 +402,16 @@ function toProduct(item: GroceryItem, specOverride?: ProductSpec): Product {
   const buyUnit = canonicalUnit(item.unit);
   const step = typeof item.increment === 'number' && item.increment > 0 ? item.increment : 1;
   const buySize = sizeOfUnit(buyUnit, base, per, spec.density);
-  const names = [item.name, ...(item.aliases ?? []), ...(spec.aliases ?? [])];
-  const keys = [...new Set(names.map(matchKey).filter((k) => k.length > 0))];
+  const nameKey = matchKey(item.name);
+  const ownKeys = (item.aliases ?? []).map(matchKey);
+  const hidden = new Set((item.hiddenAliases ?? []).map(matchKey));
+  const builtInKeys = (spec.aliases ?? []).map(matchKey).filter((k) => !hidden.has(k));
+  const keys = [...new Set([nameKey, ...ownKeys, ...builtInKeys].filter((k) => k.length > 0))];
   return {
     id: item.id,
     name: item.name,
     category: item.category || 'Other',
+    aisle: guessAisle({ name: item.name, category: item.category }),
     buyUnit,
     step,
     buySize,
@@ -376,56 +419,127 @@ function toProduct(item: GroceryItem, specOverride?: ProductSpec): Product {
     per,
     density: spec.density,
     cupboard: Boolean(spec.cupboard),
-    sameAs: spec.sameAs,
+    sameAs: item.mergedInto || spec.sameAs,
     keys,
     item,
   };
 }
 
+/** How strongly a key belongs to a product: its own name beats a name you added, which beats a built-in one. */
+function keyRank(p: Product, key: string): number {
+  if (matchKey(p.name) === key) return 3;
+  if ((p.item.aliases ?? []).some((a) => matchKey(a) === key)) return 2;
+  return 1;
+}
+
+/** Does a product match what's typed in a search box? (Its name or any other name, plurals too: "courgettes" finds Courgette.) */
+export function productMatchesSearch(p: Product, query: string): boolean {
+  const t = String(query ?? '').trim().toLowerCase();
+  if (!t) return true;
+  if (p.name.toLowerCase().includes(t) || p.keys.some((k) => k.includes(t))) return true;
+  const k = matchKey(t);
+  return !!k && p.keys.some((x) => x.includes(k));
+}
+
+/** The other names a product goes by (yours and the built-in ones you haven't taken off), for showing. */
+export function alsoCalled(item: GroceryItem): string[] {
+  const spec = PRODUCT_SPECS[item.id] ?? EXTRA_BY_ID.get(item.id)?.spec;
+  const hidden = new Set((item.hiddenAliases ?? []).map(matchKey));
+  const seen = new Set([matchKey(item.name)]);
+  const out: string[] = [];
+  for (const a of [...(item.aliases ?? []), ...(spec?.aliases ?? []).filter((x) => !hidden.has(matchKey(x)))]) {
+    const k = matchKey(a);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(a);
+  }
+  return out;
+}
+
+/** Set a product's other names: built-in ones left out are remembered as taken off, new ones kept as yours. */
+export function withAlsoCalled(item: GroceryItem, names: string[]): GroceryItem {
+  const spec = PRODUCT_SPECS[item.id] ?? EXTRA_BY_ID.get(item.id)?.spec;
+  const builtIn = new Map((spec?.aliases ?? []).map((a) => [matchKey(a), a]));
+  const wanted = new Map<string, string>();
+  for (const n of names) {
+    const clean = String(n ?? '').trim();
+    const k = matchKey(clean);
+    if (k && k !== matchKey(item.name) && !wanted.has(k)) wanted.set(k, clean);
+  }
+  const aliases = [...wanted].filter(([k]) => !builtIn.has(k)).map(([, v]) => v);
+  const hiddenAliases = [...builtIn].filter(([k]) => !wanted.has(k) && k !== matchKey(item.name)).map(([, v]) => v);
+  const { aliases: _a, hiddenAliases: _h, ...rest } = item;
+  return { ...rest, ...(aliases.length ? { aliases } : {}), ...(hiddenAliases.length ? { hiddenAliases } : {}) };
+}
+
 export interface Catalog {
   products: Product[];
   byId: Map<string, Product>;
-  /** match key -> product (user's own items take priority over built-in extras). */
+  /** match key -> product (a product's own name wins over another's alternative name). */
   byKey: Map<string, Product>;
   entries: { key: string; words: string[]; product: Product }[];
 }
 
+/** Products that were merged into another ("Same as…"): only reachable by id, leading to the one kept. */
+function mergedShadow(item: GroceryItem): Product {
+  return { ...toProduct(item), keys: [], sameAs: item.mergedInto };
+}
+
 /**
- * Build the catalogue from the user's grocery list (+ per-item overrides and
- * custom items). Products added in later catalogue versions are included even
- * if the user's saved list predates them.
+ * Build the catalogue from the shared product list. Products taken off the list are left out;
+ * ones merged into another lead to it. (Older copies of the data also had per-product changes
+ * kept separately and built-in products missing from the list: both still work.)
  */
 export function buildCatalog(
   groceryDatabase?: GroceryItem[] | null,
   overrides?: Record<string, Partial<GroceryItem>> | null
 ): Catalog {
-  const baseList = Array.isArray(groceryDatabase) && groceryDatabase.length > 0 ? groceryDatabase : INITIAL_GROCERY_DATABASE;
+  const baseList = Array.isArray(groceryDatabase) && groceryDatabase.length > 0 ? groceryDatabase : builtInProducts();
   const ov = overrides || {};
   const items: GroceryItem[] = baseList
     .filter((i) => i && typeof i.name === 'string' && i.name.trim())
-    .map((i) => ({ ...i, ...(ov[i.id] || {}) }) as GroceryItem);
+    .map((i) => (ov[i.id] ? ({ ...i, ...ov[i.id], id: i.id }) as GroceryItem : i));
   const ids = new Set(items.map((i) => i.id));
-  for (const o of Object.values(ov)) {
-    if (o && o.id && o.name && !ids.has(o.id)) { items.push(o as GroceryItem); ids.add(o.id); }
+  for (const [k, o] of Object.entries(ov)) {
+    if (o && o.name && !ids.has(k)) { items.push({ ...(o as GroceryItem), id: k }); ids.add(k); }
   }
-  const userCount = items.length;
   for (const extra of EXTRA_PRODUCTS) {
     if (!ids.has(extra.item.id)) { items.push(extra.item); ids.add(extra.item.id); }
   }
 
-  const products = items.map((i) => toProduct(i));
+  const live = items.filter((i) => !i.removed);
+  const products = live.map((i) => toProduct(i));
   const byId = new Map(products.map((p) => [p.id, p]));
+  for (const i of items) {
+    if (i.removed && i.mergedInto && !byId.has(i.id)) byId.set(i.id, mergedShadow(i));
+  }
   const byKey = new Map<string, Product>();
+  const rank = new Map<Product, Map<string, number>>();
   const entries: Catalog['entries'] = [];
-  products.forEach((p, idx) => {
+  for (const p of products) {
+    const ranks = new Map(p.keys.map((k) => [k, keyRank(p, k)]));
+    rank.set(p, ranks);
     for (const key of p.keys) {
       const existing = byKey.get(key);
-      // The user's own items win over built-in extras; otherwise first one wins.
-      if (!existing || (idx < userCount && products.indexOf(existing) >= userCount)) byKey.set(key, p);
+      if (!existing || ranks.get(key)! > rank.get(existing)!.get(key)!) byKey.set(key, p);
       entries.push({ key, words: key.split(' '), product: p });
     }
-  });
+  }
   return { products, byId, byKey, entries };
+}
+
+let cacheDb: unknown;
+let cacheOv: unknown;
+let cacheCat: Catalog | null = null;
+/** The catalogue for the app's data (rebuilt only when the product list changes). */
+export function catalogForState(state: { groceryDatabase?: GroceryItem[] | null; groceryOverrides?: Record<string, Partial<GroceryItem>> | null } | null | undefined): Catalog {
+  const db = state?.groceryDatabase ?? null;
+  const ov = state?.groceryOverrides ?? null;
+  if (cacheCat && db === cacheDb && ov === cacheOv) return cacheCat;
+  cacheCat = buildCatalog(db, ov);
+  cacheDb = db;
+  cacheOv = ov;
+  return cacheCat;
 }
 
 function resolve(catalog: Catalog, product: Product | undefined | null): Product | null {
@@ -435,7 +549,8 @@ function resolve(catalog: Catalog, product: Product | undefined | null): Product
     if (!target) break;
     p = target;
   }
-  return p;
+  // A merged product whose product has itself gone leads nowhere.
+  return p && p.item.removed ? null : p;
 }
 
 function findSpan(words: string[], keyWords: string[]): number {
@@ -488,7 +603,7 @@ export function matchProductDetailed(
     const end = start + entry.words.length;
     const after = words.slice(end);
     // "garlic powder" isn't garlic, but "penne pasta" is penne and "basmati rice" is rice.
-    const ownWords = new Set([...entry.product.name.toLowerCase().split(/\s+/).map((w) => w.replace(/s$/, '')), ...entry.product.category.toLowerCase().split(/\W+/).map((w) => w.replace(/s$/, ''))]);
+    const ownWords = new Set([...entry.product.name.toLowerCase().split(/\s+/).map((w) => w.replace(/s$/, '')), ...(entry.product.aisle === 'grains_pasta' ? ['pasta'] : [])]);
     if (after.some((w) => IDENTITY_AFTER.has(w) && !ownWords.has(w))) continue;
     if (start > 0 && IDENTITY_BEFORE.has(words[start - 1])) continue;
     // A broad word ("oil", "pasta", "steak") only counts if everything before it is just description.

@@ -13,7 +13,7 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 | **Shop** | The week's list: meal ingredients, weekly staples and anything you add, one row per product, aisle by aisle in the order you walk your shop (*Arrange aisles…*; shared by both phones). ‹ › switch weeks; it opens on the week you're most likely shopping for. Type to add ("2 pints milk", "6 eggs", "bin bags"), or *Browse*; *Add a recipe's ingredients…* for a batch cook or anything not on the plan. Tick the circle (it stays in place, crossed out with *Undo*, for a few seconds before moving down, here and in shopping mode); tap the rest of a row for its panel: amount, note ("semi-skimmed"), aisle (remembered), which meals it's for, favourite, move to the following week, remove (with Undo). A *cupboard check* takes off the oils, spices, rice and stock you already have. Share copies the list as text. *Go shopping* is full screen with % done (milestones at 25/50/75%, a buzz on Android, a party at 100%): finished aisles fold away, *Undo* for the last tick stays in the bottom bar, press and hold for *out of stock* (doesn't count against the %), ticks from the other phone show within seconds ("✓ Rachel"), the screen stays on, and it reopens mid-shop if the phone locks. *Done shopping* moves, keeps or removes anything you didn't get (out-of-stock things only move if you ask), saves the shop to *Past shops* (best and average time) and learns your route round the shop: the aisles and items follow the order you usually pick things up, unless you've arranged the aisles yourself. |
 | **Cook** | The week Monday to Sunday as compact cards, opening at today's. Each card has the date down the left, the meal, one line about it (Freezer / Leftovers from Wed / Takeaway, people or "Cook for 4 (2 for Fri)", minutes, sides), the note, a tick on the right, and small *Swap*, *Recipe* and *Note* buttons (the recipe has *Start cooking*). Past days just show the tick. Today's card has more: "Start by 4:45pm to eat at 6pm" (your usual time is in *Settings → Household*, 6pm unless you change it; tap the time to change it just for tonight), anything to do tonight for tomorrow ("Take the chilli out of the freezer tonight", or a marinate/soak/overnight step) and a *Start cooking* button. *Swap* moves the meal to a free day or swaps it with another (Undo). Tapping a meal opens the same panel as Planning. Ticking a freezer meal takes its portions out of the Freezer; ticking a "freeze 4" batch cook asks how many went in; unticking (or Undo) puts it right. Cooking mode: one column starting with *Get everything out* (a checklist with amounts), each step showing what it uses and a *Start N min timer* button; named timers, several at once, +1 min, they ring and buzz until stopped and keep going on every tab; *Voice* (hands-free: say "next", "back", "repeat", "go to step 3", "start the timer", "set a timer for 10 minutes", "how long left", "stop", "what do I need", or "question, …" to ask anything; it reads each step out as you move and only acts on short commands, so kitchen chatter doesn't move the steps; it uses the browser's own speech recognition, so it needs Chrome or Safari and internet), *Ask* (type a question; Gemini answers from the recipe as you're cooking it: your amounts, people, appliance and step; needs the Gemini key), *Big steps* (one step at a time, the text as big as fits on the screen, a normal-sized Next) and *Read* (reads each step aloud as you move to it, with *Read it again*; it uses the phone's own voice, which works in Chrome and Safari and the home-screen app but not inside some other apps' browsers, and says so there); Oven/Hob or Ninja. *Finished* says what goes in the fridge for later leftovers, adds portions to the freezer, asks "Have it again" or "Not for us" (shown on the recipe) and saves a note for next time to the recipe's notes. |
 | **Freezer** | What's in the freezer by dish (two chilli batches are one line), oldest first, in **portions** (one person's helping, the same as everywhere else in the app) with "enough for 3 meals for 2". Each shows how long it's been frozen ("Use soon" after 3 months), what the plan already wants from it ("Planned Thu (2) · 5 spare", or a warning if there isn't enough) and *Have it on…* to plan it (nothing to buy). Tap one for its panel: portions, the date it was frozen, a note ("garage freezer, blue tub"), the recipe, and Remove with Undo. *Add* picks from your recipes or takes any name, with portions, date and note. |
-| **Settings** | One page. *This phone*: who's using it, and the Gemini key with *Test it*. *Household*: how many you usually cook for, when you usually eat, your usual appliance. *Sync between phones*: "Synced 2 min ago" or what's wrong in plain words, *Sync now*, the sync code to copy; or simple setup steps. *Shopping*: shortcuts to Arrange aisles, Weekly staples, Past shops, and *Products* (how each product is sold and which aisle; search, edit, add, Gemini tidy). *History*: past weeks with what you ate, ticks and verdicts; *Copy to a week…* and *Copy as text*. *Backup & reset*: download (remembers when), restore (shows what's in the file first), products file, reset settings (keeps staples, aisle order and past shops). *About this app*: the version and *Check for updates*; a banner says when newer files have been uploaded. |
+| **Settings** | One page. *This phone*: who's using it, and the Gemini key with *Test it*. *Household*: how many you usually cook for, when you usually eat, your usual appliance. *Sync between phones*: "Synced 2 min ago" or what's wrong in plain words, *Sync now*, the sync code to copy; or simple setup steps. *Shopping*: shortcuts to Arrange aisles, Weekly staples, Past shops, and *Products* (every product the Shop knows, with how it's sold, its aisle and what uses it: *Used in 3 recipes*; edit, add, other names it goes by, *Same as…* to merge two, remove with a warning and Undo, and tidy-up checks for likely duplicates, products with no aisle and ones not used yet). *History*: past weeks with what you ate, ticks and verdicts; *Copy to a week…* and *Copy as text*. *Backup & reset*: download (remembers when), restore (shows what's in the file first), products file, reset products to the built-in list, reset settings (keeps staples, aisle order and past shops). *About this app*: the version and *Check for updates*; a banner says when newer files have been uploaded. |
 
 ## Where the data lives
 
@@ -23,6 +23,9 @@ AI Studio (export dated 5 October 2026) and now maintained here.
   sync code) is entered in *Settings → Sync between phones*, the whole app
   state is synced to one private GitHub Gist (`family-meal-planner.json`).
   The "sync code" is the Gist ID.
+- **Products:** one shared list (*Settings → Products*) holds every product,
+  the app's own and yours, and is synced like everything else. Products you
+  take off are kept as "removed" so they stay off on both phones.
 - **AI recipe parsing and questions:** use your own Gemini API key, entered in
   *Settings → This phone*. It is stored only on that phone.
 
@@ -86,9 +89,14 @@ own files; your data is never sent anywhere new.
 
 ## How shopping quantities work
 
-Every product you buy has one **master record** in the grocery list
-(*Settings → Products*): its name, aisle, the unit you buy it in and
-the step it's sold in (e.g. Beef Mince: 250 g steps; Chopped Tomatoes: 1 can).
+Every product you buy has one **master record** in the shared product list
+(*Settings → Products*): its name, aisle (one of the Shop's aisles), the unit
+you buy it in, the step it's sold in (e.g. Beef Mince: 250 g steps; Chopped
+Tomatoes: 1 can) and the other names it goes by ("zucchini" is Courgette).
+Built-in products and yours are in the same list, and every screen (the Shop,
+staples, Planning sides, recipe import) reads it. Merging two products with
+*Same as…* moves recipes, staples, favourites and shopping-list lines over to
+the one you keep.
 The app also knows how recipe amounts relate to it (a can is 400 g, a garlic
 clove is 5 g, an onion is about 150 g, a tablespoon is 15 ml…).
 
@@ -151,8 +159,10 @@ and `tests/recipeImport.test.mjs`.
   online. These checks use GitHub's "has it changed?" request, which is free
   and doesn't count towards GitHub's limits.
 - **Changes are combined item by item**, and settings one setting at a time.
-  If you both change different things, both are kept. If you both change the
-  same thing, the later change wins.
+  A week's plan is combined **day by day** (you planning Tuesday while the
+  other phone ticks Monday keeps both), and staples, favourites and past shops
+  **item by item**. If you both change different things, both are kept. If you
+  both change the same thing, the later change wins.
 - **A new phone never overwrites your data.** The default settings and
   built-in grocery list a phone starts with always give way to the real
   shared data when it first connects.
@@ -160,6 +170,13 @@ and `tests/recipeImport.test.mjs`.
   dated marker, so the other phone's older copy can't bring it back. Removed
   staples and recipe ingredients stay removed on both phones until you tap
   "Restore removed recipe ingredients". Markers are kept for 90 days.
+- **A phone away for over 90 days** (no successful sync) starts from the
+  shared copy and adds only what was changed on it since, so things deleted
+  meanwhile don't come back. Settings says when this has happened.
+- **Keep both phones on the same version.** When a banner says a newer
+  version has been uploaded, tap it on both phones. An older copy still syncs
+  safely, but it doesn't know about newer things (it would still show
+  products you've removed, for example).
 - **Works offline.** Edits are saved on the phone straight away and uploaded
   when the connection returns, even if the app was closed in between.
 - **No size ceiling in practice.** GitHub only lets the app read Gist files up
@@ -208,7 +225,9 @@ Main files:
 - `src/store.ts` — all app state, saving, and the background sync loop
 - `src/services/syncMerge.ts` — how two phones' data is combined
 - `src/services/gistStorage.ts` — GitHub Gist read/write (incl. splitting large data)
-- `src/shopping/` — standard units, product matching and shopping quantities
+- `src/shopping/` — standard units, product matching and shopping quantities;
+  `aisles.ts` (the one set of aisles), `productList.ts` (keeping the product
+  list in one piece; remove, merge, other names, tidy-up checks)
 - `src/utils/initialGroceryDb.ts` — the built-in grocery list (pack sizes are in `src/shopping/catalog.ts`)
 - `src/services/geminiService.ts` — Gemini calls (copying a recipe, suggesting products)
 - `src/components/*Tab.tsx` — one file per tab
@@ -391,3 +410,14 @@ Main files:
   staples, aisle order and shop history; the build stamps a version into
   index.html and sw.js (`appVersion.ts`) so Settings shows it and a banner
   offers new uploads.
+- `One product list, safer syncing` — products were in three places (the
+  synced list, separate per-product changes, and newer built-in products kept
+  only in the code), and screens read different ones. Now there is one synced
+  list: older data is folded in automatically (`normaliseProducts`), every
+  product's category is one of the Shop's aisles, removals are kept as markers
+  so they stick (built-in ones too), and merges point old links at the product
+  kept. The Products page shows everything the Shop uses with what uses it,
+  *Same as…*, other names, and tidy-up checks. Syncing combines weeks day by
+  day and staples, favourites and past shops item by item (always the same
+  answer whatever order the phones sync in, tested with random edits), and a
+  phone away for over 90 days takes the shared copy first.

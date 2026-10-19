@@ -57,7 +57,7 @@ import {
 } from '../shopList';
 import ShopHistorySheet from './shop/ShopHistorySheet';
 import { preferredWeekStart } from '../planning';
-import { buildCatalog, matchProductDetailed } from '../shopping';
+import { matchProductDetailed, catalogForState, aisleCategory, productMatchesSearch } from '../shopping';
 import BatchMealModal from './BatchMealModal';
 import { IngredientTriageModal } from './IngredientTriageModal';
 import { changedDaysSinceList } from '../planning';
@@ -84,12 +84,10 @@ import {
   convertToShoppingQuantity,
   quantityForAddedItem,
   getCatalog,
-  findGroceryDatabaseMatch,
   parseQtyAndUnit,
   syncRecurringStaplesForPlan,
   syncRecurringStaplesForAllPlans
 } from '../utils';
-import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
 
 interface ShopTabProps {
   store: any;
@@ -1116,14 +1114,14 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   const setRowAisle = (row: AggregatedShoppingListItem, aisle: FoodAisle) => {
     const category = GROCERY_AISLES[aisle].name;
     // Remember it for the product, so it's in this aisle next time too (both phones).
-    const found = matchProductDetailed(getCatalog(), row.name, { groceryId: row.parts[0]?.groceryId });
+    const found = matchProductDetailed(catalogForState(store.getState?.() || store.state), row.name, { groceryId: row.parts[0]?.groceryId });
     let groceryId: string | undefined = found?.product.id;
     if (found && found.how !== 'partial') {
       store.updateGroceryOverride?.(found.product.id, { category });
     } else {
       groceryId = `gdb-custom-${crypto.randomUUID()}`;
       store.updateGroceryOverride?.(groceryId, {
-        id: groceryId, name: row.name, category, unit: row.parts[0]?.unit || 'item', increment: 1, cost: 0, aliases: [row.name],
+        id: groceryId, name: row.name, category, unit: row.parts[0]?.unit || 'item', increment: 1,
       });
     }
     updateParts(row.underlyingIds, i => ({ ...i, category, ...(groceryId ? { groceryId } : {}) }));
@@ -1199,7 +1197,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       out.push({ name, aisle: GROCERY_AISLES[getGroceryAisle({ name, category })].name, favourite });
     };
     favourites.forEach(f => push(f.name, f.category, true));
-    buildCatalog(store.state.groceryDatabase, store.state.groceryOverrides).products
+    catalogForState(store.state).products
       .filter((p: any) => !p.sameAs)
       .forEach((p: any) => push(p.name, p.category));
     (store.state.shoppingList || []).forEach((i: ShoppingListItem) => push(i.name, i.category));
@@ -3057,7 +3055,9 @@ function AisleOrderSheet({
 function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: () => void }) {
   const prefs = store.state.preferences || { recurringItems: [] };
   const recurringItems = prefs.recurringItems || [];
-  const groceryDatabase = store.state.groceryDatabase || INITIAL_GROCERY_DATABASE || [];
+  // The shared product list (what the Shop knows how to buy).
+  const catalog = catalogForState(store.state);
+  const aisleNames = Object.values(GROCERY_AISLES).sort((a, b) => a.order - b.order).map((a) => a.name);
 
   const [newItemName, setNewItemName] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -3067,43 +3067,34 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
   const [editingStapleName, setEditingStapleName] = useState('');
   const [editingStapleAmount, setEditingStapleAmount] = useState<number>(1);
   const [editingStapleUnit, setEditingStapleUnit] = useState('item');
-  const [editingStapleCategory, setEditingStapleCategory] = useState('Dairy & Eggs');
+  const [editingStapleCategory, setEditingStapleCategory] = useState(GROCERY_AISLES.dairy_eggs.name);
 
   const stapleSuggestions = useMemo(() => {
     if (!newItemName.trim()) return [];
-    const query = newItemName.toLowerCase();
-    return groceryDatabase
-      .filter((g: any) => g.name.toLowerCase().includes(query))
-      .slice(0, 5);
-  }, [newItemName, groceryDatabase]);
+    const query = newItemName.toLowerCase().trim();
+    const starts = (p: any) => (p.name.toLowerCase().startsWith(query) ? 0 : 1);
+    return catalog.products
+      .filter((p) => productMatchesSearch(p, query))
+      .sort((a, b) => starts(a) - starts(b) || a.name.localeCompare(b.name))
+      .slice(0, 5)
+      .map((p) => p.item);
+  }, [newItemName, catalog]);
 
   const handleQuickAddStaple = (name: string) => {
     if (!name.trim()) return;
 
-    const matched = findGroceryDatabaseMatch(name, groceryDatabase);
+    const matched = matchProduct(catalog, name)?.item;
 
     let finalName = name.trim();
     let finalUnit = 'item';
-    let finalCategory = 'Dairy & Eggs';
+    let finalCategory = GROCERY_AISLES.pantry_spices.name;
 
     if (matched) {
       finalName = matched.name;
       finalUnit = matched.unit || finalUnit;
-      finalCategory = matched.category || finalCategory;
+      finalCategory = aisleCategory(matched) || finalCategory;
     } else {
-      const aisle = getGroceryAisle({ name: finalName });
-      const catMap: Record<string, string> = {
-        produce: 'Produce',
-        meat_seafood: 'Meat & Seafood',
-        dairy_eggs: 'Dairy & Eggs',
-        grains_pasta: 'Grains & Pasta',
-        canned_jars: 'Canned & Jars',
-        bakery: 'Bakery',
-        frozen: 'Frozen',
-        pantry_spices: 'Pantry & Spices',
-        household_other: 'Household & Other'
-      };
-      finalCategory = catMap[aisle] || 'Pantry & Spices';
+      finalCategory = GROCERY_AISLES[getGroceryAisle({ name: finalName })].name;
     }
 
     const newRecItem = {
@@ -3149,7 +3140,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
   };
 
   const getStapleStep = (name: string): number => {
-    const matched = findGroceryDatabaseMatch(name, groceryDatabase);
+    const matched = matchProduct(catalog, name)?.item;
     return matched?.increment || 1;
   };
 
@@ -3316,7 +3307,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                           setEditingStapleName(item.name);
                           setEditingStapleAmount(item.amount);
                           setEditingStapleUnit(item.unit);
-                          setEditingStapleCategory(item.category || 'Dairy & Eggs');
+                          setEditingStapleCategory(aisleCategory({ name: item.name, category: item.category }) || GROCERY_AISLES[getGroceryAisle({ name: item.name, category: item.category })].name);
                         }}
                         className="p-1 text-zinc-400 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer"
                         title="Edit Details"
@@ -3411,15 +3402,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                   onChange={(e) => setEditingStapleCategory(e.target.value)}
                   className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all font-semibold text-zinc-700 cursor-pointer shadow-3xs"
                 >
-                  <option value="Dairy & Eggs">Dairy & Eggs</option>
-                  <option value="Produce">Produce</option>
-                  <option value="Bakery">Bakery</option>
-                  <option value="Meat & Seafood">Meat & Seafood</option>
-                  <option value="Grains & Pasta">Grains & Pasta</option>
-                  <option value="Canned & Jars">Canned & Jars</option>
-                  <option value="Frozen">Frozen</option>
-                  <option value="Pantry & Spices">Pantry & Spices</option>
-                  <option value="Household & Other">Household & Other</option>
+                  {aisleNames.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
 

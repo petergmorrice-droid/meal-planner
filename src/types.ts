@@ -107,6 +107,10 @@ export interface MealPlan {
   status: 'not_started' | 'draft' | 'finalized';
   isCurrent: boolean;
   lastFinalizedSnapshot?: string; // Serialized state of days when finalized
+  /** When each day was last changed, so two phones editing different days both keep their changes. */
+  dayModifiedAt?: Record<string, number>;
+  /** When the week's own details (status, sent to the list) last changed. */
+  headModifiedAt?: number;
 }
 
 export interface BatchItem {
@@ -237,14 +241,30 @@ export interface ShopRecord {
   by?: string;
 }
 
+/**
+ * A product: one thing you buy. Everything the Shop knows about products is in the one shared
+ * list (AppState.groceryDatabase), built-in products included.
+ */
 export interface GroceryItem {
   id: string;
   name: string;
+  /** The unit you buy it in ('g', 'can', 'bunch'...). */
   unit: string;
+  /** The step it's sold in (250 g packs: 250). */
   increment: number;
+  /** Its aisle's name ("Fresh Produce"), or '' if it hasn't got one. */
   category: string;
+  /** Other names you've added. */
   aliases?: string[];
+  /** Built-in other names you've taken off. */
+  hiddenAliases?: string[];
   cost?: number;
+  /** Taken off the list. Kept (rather than deleted) so it stays off on both phones. */
+  removed?: boolean;
+  /** Merged into this product ("Same as…"): anything still linked here leads there. */
+  mergedInto?: string;
+  /** Products you've said aren't the same as this one (so the tidy-up check stops asking). */
+  notSameAs?: string[];
   lastModifiedAt?: number;
 }
 
@@ -277,6 +297,8 @@ export interface SyncMeta {
   /** Time each individual setting was last changed. */
   preferencesFieldModifiedAt?: Record<string, number>;
   overridesModifiedAt?: Record<string, number>;
+  /** Time each staple, favourite and past shop was last changed ("recurringItems:<id>"). */
+  prefItemModifiedAt?: Record<string, number>;
 }
 
 export interface AppState {

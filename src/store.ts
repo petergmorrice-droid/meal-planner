@@ -8,7 +8,6 @@ import {
   getMonday, formatDateISO, isPastWeek, isWeekBeyondForwardLimit,
   cleanDays, DAYS_OF_WEEK
 } from './utils';
-import { INITIAL_GROCERY_DATABASE } from './utils/initialGroceryDb';
 import { createEmptyPlan } from './utils';
 import { useDeviceIdentity } from './hooks/useDeviceIdentity';
 import {
@@ -16,9 +15,14 @@ import {
   fetchGist, saveGist, createPrivateGist, GistConfig
 } from './services/gistStorage';
 import {
-  mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, addTombstones, dropDefaultsMissingFrom
+  mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, addTombstones, dropDefaultsMissingFrom,
+  keepOnlyChangesSince, LONG_ABSENCE_MS
 } from './services/syncMerge';
-import { CATALOG_VERSION, missingExtraProducts, outdatedDefaults } from './shopping';
+import {
+  CATALOG_VERSION, missingExtraProducts, outdatedDefaults, builtInProducts, catalogForState,
+  normaliseProducts, saveProductIn, updateProductIn, removeProductIn, restoreProductIn, mergeProductsIn,
+  markDifferentIn, resetProductsIn, replaceProductsIn, type RemovedProduct,
+} from './shopping';
 
 /** How often to check GitHub for the other phone's changes while the app is open. */
 export const SYNC_POLL_SECONDS = 20;
@@ -28,6 +32,12 @@ export const FAST_SYNC_SECONDS = 6;
 const PUSH_DELAY_MS = 800;
 
 const LS_PENDING = 'mealPlannerSyncPending';
+/** When this phone last synced successfully (per phone). */
+const LS_LAST_SYNC_OK = 'last_sync_ok_at';
+const readLastSyncOk = (): number | null => {
+  try { const v = Number(localStorage.getItem(LS_LAST_SYNC_OK)); return v > 0 ? v : null; } catch { return null; }
+};
+const writeLastSyncOk = (t: number) => { try { localStorage.setItem(LS_LAST_SYNC_OK, String(t)); } catch { /* fine */ } };
 const LS_LEGACY_DISMISSED = 'mealPlannerDismissedShoppingItems';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -93,7 +103,7 @@ const normalizeState = (s: Partial<AppState> | null | undefined): AppState => ({
   batches: s?.batches || [],
   shoppingList: s?.shoppingList || [],
   preferences: s?.preferences || { ...DEFAULT_PREFERENCES },
-  groceryDatabase: s?.groceryDatabase || asDefaults(INITIAL_GROCERY_DATABASE),
+  groceryDatabase: s?.groceryDatabase || asDefaults(builtInProducts()),
   groceryOverrides: s?.groceryOverrides || {},
 });
 
@@ -147,7 +157,7 @@ const getInitialState = (): AppState => {
   } catch (e) {}
 
   // Fallback to legacy local storage structures if they exist
-  let legacyDb = asDefaults(INITIAL_GROCERY_DATABASE);
+  let legacyDb = asDefaults(builtInProducts());
   let legacyOverrides = {};
   let hasLegacyData = false;
   try {
@@ -185,6 +195,7 @@ const friendlyError = (err: any, fallback: string) => (err && err.message) || fa
 
 export function useStore() {
   const [state, setStateRaw] = useState<AppState>(getInitialState);
+  const stateRaw = state;
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const currentUser = useDeviceIdentity();
 
@@ -197,6 +208,8 @@ export function useStore() {
   // Shopping mode asks for quicker checks, so two people shopping see each other's ticks.
   const [fastSync, setFastSync] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  /** Something worth saying about the last sync (e.g. this phone had been away a long time). */
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   // ---- Sync engine (refs so background work always sees the latest data) ----
   const stateRef = useRef<AppState>(state);
@@ -273,11 +286,24 @@ export function useStore() {
 
         let merged = stateRef.current;
         if (remote) {
-          merged = mergeAppStates(dropDefaultsMissingFrom(stateRef.current, remote), remote);
+          // Away longer than deletions are remembered: start from the shared copy and add only what
+          // was changed on this phone since it last synced, so things deleted meanwhile stay deleted.
+          const lastOk = readLastSyncOk();
+          const away = lastOk !== null && Date.now() - lastOk > LONG_ABSENCE_MS;
+          const local = away ? keepOnlyChangesSince(stateRef.current, lastOk!) : dropDefaultsMissingFrom(stateRef.current, remote);
+          merged = mergeAppStates(local, remote);
+          if (away) setSyncNotice("This phone hadn't synced for over 3 months, so it took the shared copy and kept only the changes made on it since.");
           if (!statesEqual(merged, stateRef.current)) {
             replaceState(normalizeState(merged));
             merged = stateRef.current;
           }
+        }
+        // Keep the product list in one piece (folds in anything an older version of the app wrote).
+        const tidied = normaliseProducts(stateRef.current, Date.now());
+        if (tidied !== stateRef.current) {
+          replaceState(normalizeState(tidied));
+          merged = stateRef.current;
+          setPending(true);
         }
 
         const gistIsBehind = remote ? !statesEqual(merged, remote) : false;
@@ -295,6 +321,7 @@ export function useStore() {
           }
         }
 
+        writeLastSyncOk(Date.now());
         setSyncStatus('synced');
         setSyncError(null);
         // Quiet checks that found nothing new don't need to refresh the screen.
@@ -337,6 +364,15 @@ export function useStore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [githubConfig?.gistId, githubConfig?.pat, fastSync]);
 
+  // Phones that don't sync: keep the product list in one piece on open (syncing phones do it after each sync).
+  useEffect(() => {
+    if (getGistConfig()) return;
+    const current = stateRef.current;
+    const tidied = normaliseProducts(current, Date.now());
+    if (tidied !== current) replaceState(normalizeState(tidied));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // One-off: add products from newer versions of the built-in product list (spices, herbs...)
   // and update built-in defaults that changed (milk in pints) to the shared grocery list. Runs once per data set; the other phone gets them via sync.
   useEffect(() => {
@@ -347,7 +383,7 @@ export function useStore() {
     commit(current, {
       ...current,
       groceryDatabase: [
-        ...(current.groceryDatabase || INITIAL_GROCERY_DATABASE).map((i) => updated.get(i.id) || i),
+        ...(current.groceryDatabase || builtInProducts()).map((i) => updated.get(i.id) || i),
         ...additions,
       ],
       preferences: { ...(current.preferences || DEFAULT_PREFERENCES), catalogVersion: CATALOG_VERSION },
@@ -380,6 +416,11 @@ export function useStore() {
   };
 
   const updateMealPlan = async (plan: MealPlan) => {
+    // Weeks are merged day by day, so the change is worked out against the copy the caller
+    // started from: the latest one if that's what it read (an Undo, say), otherwise this screen's.
+    const latest = stateRef.current;
+    const readLatest = latest.mealPlans.find((p) => p.startDate === plan.startDate)?.lastModifiedAt === plan.lastModifiedAt;
+    const state = readLatest ? latest : stateRaw;
     const currentMondayStr = formatDateISO(getMonday(new Date()));
     const expectedId = `plan-${plan.startDate}`;
     let processedPlan = {
@@ -534,112 +575,66 @@ export function useStore() {
     commit(state, { ...state, groceryDatabase: dbDb });
   };
 
+  // ---- Products: everything is in the one shared list ----
+  /** Apply a change to the latest data (so two quick changes in one tap both count). */
+  const editLatest = (change: (s: AppState) => AppState | null) => {
+    const s = stateRef.current;
+    const next = change(s);
+    if (next && next !== s) commit(s, next);
+  };
+
+  /** Add a product or save changes to one. */
+  const saveProduct = (item: GroceryItem) => editLatest((s) => saveProductIn(s, item));
+
+  /** Change some details of a product (older screens call this; it writes to the shared list). */
+  const updateGroceryOverride = async (id: string, updates: Partial<GroceryItem>) => {
+    editLatest((s) => updateProductIn(s, id, updates));
+  };
+
+  /** Take a product off the list; returns what Undo needs. */
+  const removeProduct = (id: string): RemovedProduct | null => {
+    const s = stateRef.current;
+    const r = removeProductIn(s, id);
+    if (!r) return null;
+    commit(s, r.next);
+    return r.undo;
+  };
+  const restoreProduct = (undo: RemovedProduct) => editLatest((s) => restoreProductIn(s, undo));
+
+  /** "Same as…": merge one product into another. */
+  const mergeProducts = (keepId: string, goneId: string) => editLatest((s) => mergeProductsIn(s, catalogForState(s), keepId, goneId));
+  /** "Not the same": the tidy-up check stops pairing these two. */
+  const markProductsDifferent = (aId: string, bId: string) => editLatest((s) => markDifferentIn(s, aId, bId));
+  /** Back to the app's own products. */
+  const resetProducts = () => editLatest(resetProductsIn);
+  /** Products loaded from a file. */
+  const replaceProducts = (items: GroceryItem[]) => editLatest((s) => replaceProductsIn(s, items));
+
+  /** Gemini's tidy-up suggestions: merges, renames and new aisles. */
   const applyGroceryCleanActions = async (actions: DatabaseCleanAction[]) => {
     if (!Array.isArray(actions) || actions.length === 0) return;
-
-    const baseDb = state.groceryDatabase && state.groceryDatabase.length > 0
-      ? state.groceryDatabase
-      : INITIAL_GROCERY_DATABASE;
-    const overrides = state.groceryOverrides || {};
-
-    const itemMap = new Map<string, GroceryItem>();
-    baseDb.forEach(item => {
-      itemMap.set(item.id, {
-        ...item,
-        ...(overrides[item.id] || {})
-      });
-    });
-
-    const deletedIds = new Set<string>();
-
-    for (const action of actions) {
-      if (action.actionType === 'merge') {
-        const primary = itemMap.get(action.primaryItemId);
-        const secondary = action.secondaryItemId ? itemMap.get(action.secondaryItemId) : undefined;
-
-        if (primary && secondary) {
-          const existingAliases = Array.isArray(primary.aliases) ? [...primary.aliases] : [];
-          const aliasesSet = new Set(existingAliases.map(a => a.toLowerCase().trim()));
-
-          const secName = secondary.name.toLowerCase().trim();
-          if (secName && secName !== primary.name.toLowerCase().trim()) {
-            aliasesSet.add(secName);
-          }
-
-          if (Array.isArray(secondary.aliases)) {
-            secondary.aliases.forEach(a => {
-              const norm = (a || '').toLowerCase().trim();
-              if (norm && norm !== primary.name.toLowerCase().trim()) {
-                aliasesSet.add(norm);
-              }
-            });
-          }
-
-          primary.aliases = Array.from(aliasesSet);
-
-          if (action.newName) {
-            primary.name = action.newName.trim();
-          }
-          if (action.newAisle) {
-            primary.category = action.newAisle.trim();
-          }
-
-          deletedIds.add(secondary.id);
+    editLatest((start) => {
+      let s = start;
+      for (const action of actions) {
+        const product = catalogForState(s).byId.get(action.primaryItemId)?.item;
+        if (!product) continue;
+        if (action.actionType === 'merge' && action.secondaryItemId) {
+          s = mergeProductsIn(s, catalogForState(s), action.primaryItemId, action.secondaryItemId) || s;
         }
-      } else if (action.actionType === 'rename') {
-        const primary = itemMap.get(action.primaryItemId);
-        if (primary && action.newName) {
-          const oldName = primary.name.toLowerCase().trim();
-          const existingAliases = Array.isArray(primary.aliases) ? [...primary.aliases] : [];
-          const aliasesSet = new Set(existingAliases.map(a => a.toLowerCase().trim()));
-          if (oldName && oldName !== action.newName.toLowerCase().trim()) {
-            aliasesSet.add(oldName);
-          }
-          primary.aliases = Array.from(aliasesSet);
-          primary.name = action.newName.trim();
+        const changes: Partial<GroceryItem> = {};
+        if (action.newName && action.newName.trim() && action.newName.trim() !== product.name) {
+          changes.name = action.newName.trim();
+          const current = (s.groceryDatabase || []).find((g) => g.id === product.id) || product;
+          changes.aliases = [...new Set([...(current.aliases || []), product.name])];
         }
-      } else if (action.actionType === 'recategorize') {
-        const primary = itemMap.get(action.primaryItemId);
-        if (primary && action.newAisle) {
-          primary.category = action.newAisle.trim();
-        }
+        if (action.newAisle && action.newAisle.trim()) changes.category = action.newAisle.trim();
+        if (Object.keys(changes).length) s = updateProductIn(s, product.id, changes);
       }
-    }
-
-    const updatedItems = Array.from(itemMap.values()).filter(item => !deletedIds.has(item.id));
-
-    const updatedOverrides = { ...overrides };
-    deletedIds.forEach(id => {
-      if (updatedOverrides[id]) {
-        delete updatedOverrides[id];
-      }
-    });
-
-    commit(state, {
-      ...state,
-      groceryDatabase: updatedItems,
-      groceryOverrides: updatedOverrides
+      return s;
     });
   };
 
-  const updateGroceryOverride = async (id: string, updates: Partial<GroceryItem>) => {
-    const currentOverrides = state.groceryOverrides || {};
-    const newOverrides = { ...currentOverrides, [id]: { ...(currentOverrides[id] || {}), ...updates } };
-    commit(state, { ...state, groceryOverrides: newOverrides });
-  };
-
-  const getHydratedGroceryItem = (id: string): GroceryItem | undefined => {
-    const baseItem = INITIAL_GROCERY_DATABASE.find(item => item.id === id);
-    const override = state.groceryOverrides?.[id] || {};
-
-    if (!baseItem && !override.name) return undefined;
-
-    if (!baseItem) {
-       return override as GroceryItem;
-    }
-
-    return { ...baseItem, ...override };
-  };
+  const getHydratedGroceryItem = (id: string): GroceryItem | undefined => catalogForState(stateRef.current).byId.get(id)?.item;
 
   const updatePreferences = async (prefs: Partial<AppState['preferences']>) => {
     const newPrefs = { ...(state.preferences || DEFAULT_PREFERENCES), ...prefs };
@@ -662,7 +657,9 @@ export function useStore() {
     try {
       const parsed = JSON.parse(jsonString);
       if (parsed && typeof parsed === 'object') {
-        commit(state, normalizeState(parsed));
+        const s = stateRef.current;
+        const next = normalizeState(parsed);
+        commit(s, normaliseProducts(next, Date.now()));
         return true;
       }
     } catch (e) {
@@ -701,6 +698,7 @@ export function useStore() {
         gistFilesRef.current = saved.files;
       }
       setPending(false);
+      writeLastSyncOk(Date.now());
       setGithubConfigState(config);
       setSyncStatus('synced');
       setLastSynced(new Date());
@@ -721,6 +719,7 @@ export function useStore() {
       gistFilesRef.current = created.files;
       saveGistConfig(pat, created.id);
       setPending(false);
+      writeLastSyncOk(Date.now());
       setGithubConfigState({ pat: pat.trim(), gistId: created.id });
       setSyncStatus('synced');
       setLastSynced(new Date());
@@ -769,6 +768,13 @@ export function useStore() {
     updateGroceryOverride,
     applyGroceryCleanActions,
     getHydratedGroceryItem,
+    saveProduct,
+    removeProduct,
+    restoreProduct,
+    mergeProducts,
+    markProductsDifferent,
+    resetProducts,
+    replaceProducts,
     updatePreferences,
     resetPreferences,
     exportAllData,
@@ -779,6 +785,8 @@ export function useStore() {
     syncStatus,
     lastSynced,
     syncError,
+    syncNotice,
+    clearSyncNotice: () => setSyncNotice(null),
     syncPollSeconds: fastSync ? FAST_SYNC_SECONDS : SYNC_POLL_SECONDS,
     setFastSync,
     /** Who is using this phone ('P' or 'R'). */
