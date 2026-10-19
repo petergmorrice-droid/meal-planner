@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Minus, Plus, X, Heart, Trash2, ArrowRight, StickyNote, RotateCcw } from 'lucide-react';
+import { Minus, Plus, X, Heart, Trash2, ArrowRight, StickyNote, RotateCcw, PackagePlus } from 'lucide-react';
 import { ShoppingListItem } from '../../types';
 import { AggregatedShoppingListItem, shopQuantityText, partLabel } from '../../shopList';
 import { FoodAisle, GROCERY_AISLES, parseQtyAndUnit } from '../../utils';
@@ -97,6 +97,7 @@ export default function ItemSheet({
   onRemove,
   onManageStaples,
   onBackInStock,
+  onSaveAsProduct,
   onClose,
 }: {
   row: AggregatedShoppingListItem;
@@ -117,6 +118,8 @@ export default function ItemSheet({
   onManageStaples: () => void;
   /** Clear "out of stock". */
   onBackInStock?: () => void;
+  /** Something added by hand that isn't a product yet: save it as one. */
+  onSaveAsProduct?: () => void;
   onClose: () => void;
 }) {
   const [note, setNote] = useState(row.note || '');
@@ -183,6 +186,16 @@ export default function ItemSheet({
               </button>
             )}
           </section>
+
+          {onSaveAsProduct && (
+            <button type="button" onClick={onSaveAsProduct} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-left cursor-pointer" data-item-save-product>
+              <PackagePlus className="w-5 h-5 shrink-0 text-emerald-700" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-emerald-950">Save as a product for next time</span>
+                <span className="block text-xs text-emerald-900/80">So it goes straight into the right aisle</span>
+              </span>
+            </button>
+          )}
 
           <label className="block">
             <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 mb-1"><StickyNote className="w-3.5 h-3.5" /> Note</span>

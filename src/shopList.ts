@@ -112,6 +112,26 @@ export function aggregateShoppingItems(items: ShoppingListItem[], neededOf?: (pa
   return result;
 }
 
+/**
+ * Things you added by hand that aren't saved products yet (so the Shop can offer to save them):
+ * one per name, not ones you've said aren't products.
+ */
+export function notYetProducts(items: ShoppingListItem[], declined?: string[] | null): ShoppingListItem[] {
+  const no = new Set((declined || []).map((n) => n.trim().toLowerCase()));
+  const seen = new Set<string>();
+  const out: ShoppingListItem[] = [];
+  const catalog = getCatalog();
+  for (const i of items) {
+    if (!i || !i.isAdhoc || i.isRecurring || i.isBatch || i.groceryId) continue;
+    const k = String(i.name || '').trim().toLowerCase();
+    if (!k || seen.has(k) || no.has(k)) continue;
+    seen.add(k);
+    if (matchProductDetailed(catalog, i.name)?.how === 'exact') continue;
+    out.push(i);
+  }
+  return out;
+}
+
 const COUNT_UNITS = ['', 'whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', 'each'];
 
 /** How much to buy, as it reads in the shop: "1 kg", "2 cans", "6". */

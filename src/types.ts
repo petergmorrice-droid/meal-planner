@@ -218,6 +218,8 @@ export interface UserPreferences {
   eatAt?: string;
   /** A different time just for one evening, set on the Cook tab. */
   eatAtTonight?: { date: string; time: string };
+  /** Things added to the list that you said aren't products (lower case): the Shop stops offering to save them. */
+  notProducts?: string[];
 }
 
 export interface ShopRoute {

@@ -7,7 +7,7 @@ import {
   recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
-  learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy,
+  learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy, notYetProducts,
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
   addMinute, timerText, eatAtFor, DEFAULT_EAT_AT, speechChunks, forSpeech, parseVoiceCommand, parseAlternatives,
@@ -313,6 +313,16 @@ test('shop: opens on the week you are likely shopping for, if it has things to b
   assert.equal(defaultShopWeek(plans, [li('c', 'Bread', 1, 'loaf', { planId: 'p3' })], '2026-10-26', '2026-10-19'), 'p3', 'unsent weeks only count as the likely week');
   assert.equal(formatWeekSpan('2026-10-19'), '19–25 Oct');
   assert.equal(formatWeekSpan('2026-10-26'), '26 Oct – 1 Nov');
+});
+
+test('shop: things added by hand that are not products yet are offered once each', () => {
+  const line = (id, name, extra = {}) => ({ id, name, amount: 1, unit: '', checked: false, isAdhoc: true, planId: 'p', ...extra });
+  const items = [
+    line('a', 'Birthday candles'), line('b', 'birthday candles'), line('c', 'Milk'), line('d', 'Za\'atar'),
+    line('e', 'Custom thing', { groceryId: 'gdb-custom-1' }), line('f', 'Oat Milk', { isRecurring: true }), line('g', 'Party poppers'),
+  ];
+  assert.deepEqual(notYetProducts(items).map((i) => i.name), ['Birthday candles', "Za'atar", 'Party poppers'], 'once each; known products and saved ones left out');
+  assert.deepEqual(notYetProducts(items, ['party poppers']).map((i) => i.name), ['Birthday candles', "Za'atar"], 'not asked again after "not a product"');
 });
 
 test('shop: typing into the add box', () => {

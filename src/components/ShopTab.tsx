@@ -30,6 +30,7 @@ import {
   ArrowDown,
   ListOrdered,
   PackageCheck,
+  PackagePlus,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
@@ -53,9 +54,10 @@ import DoneShoppingSheet, { DoneChoice } from './shop/DoneShoppingSheet';
 import {
   AggregatedShoppingListItem, aggregateShoppingItems, shopQuantityText, partLabel, defaultShopWeek, formatWeekSpan, weekStartShort,
   parseQuickAdd, quickAddLine, listAsText, carryItemsToWeek, shopDurationText, productKey,
-  learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, BIG_SHOP,
+  learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, BIG_SHOP, notYetProducts,
 } from '../shopList';
 import ShopHistorySheet from './shop/ShopHistorySheet';
+import SaveProductSheet, { NewProductDetails } from './shop/SaveProductSheet';
 import { preferredWeekStart } from '../planning';
 import { matchProductDetailed, catalogForState, aisleCategory, productMatchesSearch } from '../shopping';
 import BatchMealModal from './BatchMealModal';
@@ -226,6 +228,8 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   };
   // The item panel follows one of the row's lines, so it stays open while you change its aisle or name.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
+  /** Something added by hand that you're saving as a product. */
+  const [saveAsProduct, setSaveAsProduct] = useState<{ name: string; amount?: number; unit?: string; category?: string } | null>(null);
   const [showBought, setShowBought] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('food_type');
@@ -1016,6 +1020,45 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     [plannedRequirementsByName],
   );
   const rows = useMemo(() => aggregateShoppingItems(buyingItems, neededOf), [buyingItems, neededOf]);
+
+  // ---------- Things added by hand that aren't products yet: offer to save them ----------
+  const declinedProducts = store.state.preferences?.notProducts;
+  const newItems = useMemo(
+    () => notYetProducts(currentWeekItems, declinedProducts),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentWeekItems, declinedProducts, store.state.groceryDatabase],
+  );
+  const isNewItem = (name: string) => newItems.some((i) => i.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const saveNewProduct = (from: { name: string }, d: NewProductDetails) => {
+    const id = `gdb-custom-${crypto.randomUUID()}`;
+    const category = GROCERY_AISLES[d.aisle].name;
+    const product = { id, name: d.name, unit: d.unit, increment: d.increment, category };
+    if (store.saveProduct) store.saveProduct(product);
+    else store.updateGroceryOverride?.(id, product);
+    // This week's line(s) become that product too.
+    const key = from.name.trim().toLowerCase();
+    const latest: ShoppingListItem[] = (store.getState?.() || store.state).shoppingList || [];
+    store.updateShoppingList(latest.map((i) => (i.isAdhoc && !i.groceryId && i.name.trim().toLowerCase() === key ? { ...i, name: d.name, groceryId: id, category } : i)));
+    setSaveAsProduct(null);
+    setToastMessage(`Saved ${d.name}: next time it goes straight to ${category}`);
+  };
+  const declineNewProduct = (from: { name: string }) => {
+    const key = from.name.trim().toLowerCase();
+    const current = store.state.preferences?.notProducts || [];
+    if (!current.includes(key)) store.updatePreferences({ notProducts: [...current, key] });
+    setSaveAsProduct(null);
+    setToastMessage(`OK, won't ask about ${from.name} again`);
+  };
+  const saveProductSheet = saveAsProduct && (
+    <SaveProductSheet
+      key={saveAsProduct.name}
+      item={saveAsProduct}
+      aisleOrder={aisleOrder}
+      onSave={(d) => saveNewProduct(saveAsProduct, d)}
+      onDecline={() => declineNewProduct(saveAsProduct)}
+      onClose={() => setSaveAsProduct(null)}
+    />
+  );
   const byName = (a: AggregatedShoppingListItem, b: AggregatedShoppingListItem) => a.name.localeCompare(b.name);
   // Just ticked: counts straight away, but stays in its place (crossed out, with Undo) for a few
   // seconds before moving down to Bought, so a mis-tap is easy to put right.
@@ -1196,6 +1239,12 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     const [id] = addLines([line]);
     const key = productKey(line);
     const already = rows.some(r => r.key === key && !r.checked);
+    const declined = (store.state.preferences?.notProducts || []).includes(line.name.trim().toLowerCase());
+    if (!line.groceryId && !declined) {
+      // Not a product yet: offer to save it, so next time it goes in the right aisle.
+      setToastMessage(`Added ${line.name}. Save it as a product for next time?`, { label: 'Save…', run: () => setSaveAsProduct(line) });
+      return;
+    }
     setToastMessage(already ? `${line.name}: added ${shopQuantityText(line)} more` : `Added ${line.name} · ${shopQuantityText(line)}`, id ? { label: 'Edit', run: () => setOpenRowId(id) } : undefined);
   };
 
@@ -1381,6 +1430,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         />
       )}
       {showHistory && <ShopHistorySheet history={history} onClose={() => setShowHistory(false)} />}
+      {saveProductSheet}
       {toast && <ShopToast toast={toast} onClose={() => setToast(null)} />}
       </>
     );
@@ -1577,6 +1627,27 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
           )}
 
           {/* Cupboard check: before you go, take off what you've already got */}
+          {newItems.length > 0 && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-3" data-new-products>
+              <div className="flex items-start gap-2.5">
+                <PackagePlus className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-emerald-950">Save for next time?</p>
+                  <p className="text-xs text-emerald-900/80">
+                    {newItems.length === 1 ? "This isn't a saved product yet" : "These aren't saved products yet"}. Save {newItems.length === 1 ? 'it' : 'them'} and next time {newItems.length === 1 ? 'it goes' : 'they go'} straight into the right aisle.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {newItems.map((i) => (
+                      <button key={i.id} type="button" onClick={() => setSaveAsProduct(i)} className="h-8 px-3 rounded-full bg-white border border-emerald-300 text-sm font-semibold text-emerald-900 cursor-pointer" data-save-product={i.name}>
+                        {i.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {cupboardToCheck.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-3 flex items-center justify-between gap-3">
               <div className="flex items-start gap-2.5 min-w-0">
@@ -1770,9 +1841,11 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
           onRemove={() => removeRowParts(openRow)}
           onManageStaples={() => { setOpenRowId(null); setShowEditStaplesModal(true); }}
           onBackInStock={() => handleOutOfStock(openRow.underlyingIds, false)}
+          onSaveAsProduct={isNewItem(openRow.name) ? () => { const part = openRow.parts.find((p) => p.isAdhoc && !p.groceryId) || openRow.parts[0]; setOpenRowId(null); setSaveAsProduct(part); } : undefined}
           onClose={() => setOpenRowId(null)}
         />
       )}
+      {saveProductSheet}
 
       {/* MODAL: Threshold Warning Modal */}
       {thresholdWarning && (

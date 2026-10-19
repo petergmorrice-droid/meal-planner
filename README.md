@@ -119,6 +119,12 @@ When a week is finalised the app:
    need 100 g" for chicken breasts, "1 bulb · need 3 cloves" for garlic. The
    item panel shows each recipe's amount ("Chilli con carne (Wed): 2").
 
+Something you add to the list that isn't a product yet ("party poppers") gets
+**"Save it as a product for next time?"**, in the message after adding it, a
+card at the top of the list and its panel. Saving asks for the aisle and how
+it's sold (1 pack, 500 g…); next time it goes straight into that aisle. "Not a
+product" stops it asking about that item, on both phones.
+
 Recipes keep their own wording for cooking; only the shopping list uses the
 standard names.
 
