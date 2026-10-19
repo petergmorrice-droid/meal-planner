@@ -79,6 +79,33 @@ function PartAmount({
   );
 }
 
+/** Added by hand (not for a meal, an extra recipe or a weekly staple). */
+const isHandAdded = (p: ShoppingListItem) => p.isAdhoc && !p.isRecurring && !p.isBatch;
+/** Meals first, then extra recipes, weekly staple, and what you added last. */
+const partOrder = (p: ShoppingListItem) => (isHandAdded(p) ? 3 : p.isRecurring ? 2 : p.isBatch ? 1 : 0);
+
+/** "Added by you: 0  +" when you haven't added any yourself, so you can always add one more on top. */
+function AddExtra({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="flex items-center gap-3" data-part-extra>
+      <span className="flex-1 min-w-0 text-sm text-zinc-600 leading-snug">Added by you</span>
+      <div className="flex items-center bg-zinc-50 border border-zinc-200 rounded-xl shrink-0">
+        <span className="w-10 h-10 flex items-center justify-center text-zinc-300" aria-hidden="true"><Minus className="w-4 h-4" /></span>
+        <span className="w-20 text-center text-sm font-semibold text-zinc-400" data-amount>0</span>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="w-10 h-10 flex items-center justify-center text-zinc-600 hover:text-zinc-900 cursor-pointer"
+          aria-label="Add one more yourself"
+          data-more
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** One panel for a product on the list: amount, note, aisle, what it's for, favourite, move, remove. */
 export default function ItemSheet({
   row,
@@ -98,6 +125,7 @@ export default function ItemSheet({
   onManageStaples,
   onBackInStock,
   onSaveAsProduct,
+  onAddExtra,
   onClose,
 }: {
   row: AggregatedShoppingListItem;
@@ -120,6 +148,8 @@ export default function ItemSheet({
   onBackInStock?: () => void;
   /** Something added by hand that isn't a product yet: save it as one. */
   onSaveAsProduct?: () => void;
+  /** Add one more yourself, on top of what the meals or staples need. */
+  onAddExtra?: () => void;
   onClose: () => void;
 }) {
   const [note, setNote] = useState(row.note || '');
@@ -176,9 +206,10 @@ export default function ItemSheet({
             </div>
           )}
           <section className="space-y-3">
-            {row.parts.map((part) => (
+            {[...row.parts].sort((a, b) => partOrder(a) - partOrder(b)).map((part) => (
               <PartAmount key={part.id} part={part} label={partDetail(part)} onStep={onStep} onSet={onSetAmount} />
             ))}
+            {onAddExtra && !row.parts.some(isHandAdded) && <AddExtra onAdd={onAddExtra} />}
             {row.quantityNote && <p className={`text-xs ${row.needsCheck ? 'text-rose-700' : 'text-zinc-500'}`}>{row.quantityNote}</p>}
             {hasStaple && (
               <button type="button" onClick={onManageStaples} className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-700 hover:text-indigo-900 cursor-pointer" data-manage-staples>

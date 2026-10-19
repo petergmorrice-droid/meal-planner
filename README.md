@@ -459,3 +459,7 @@ Main files:
   in the unit it's sold in ("1" becomes "1 pack"), so adding another makes
   "2 packs", not "1 + 1 pack". Lines saved that way before this are fixed when
   the Shop opens (`fitHandAddedToProducts` in `src/shopList.ts`).
+- `Added by you, always` — every item's panel has an "Added by you" amount,
+  at 0 when you haven't added any, so + adds one of your own on top of what
+  the meals or staples need (1 can of chickpeas); − at its smallest takes it
+  off again.

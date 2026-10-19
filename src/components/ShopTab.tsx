@@ -1302,6 +1302,33 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   };
 
   /** Returns false when it opened the "Save it as a product?" question (so the add box lets go of the keyboard). */
+  /** "Added by you" + in the item panel: one more of it on top of what the meals or staples need. */
+  const addExtraToRow = (row: AggregatedShoppingListItem) => {
+    const first = row.parts[0];
+    const product = matchProduct(catalogForState(store.getState?.() || store.state), row.name, { groceryId: row.parts.find(p => p.groceryId)?.groceryId });
+    let line: { name: string; amount: number; unit: string; category?: string; groceryId?: string };
+    if (product) {
+      const q = quickAddLine({ name: product.name, packs: 1 });
+      line = { ...q, groceryId: q.groceryId || product.id, category: q.category || first?.category };
+    } else {
+      const step = first ? getIngredientStep(first) : 1;
+      line = { name: row.name, amount: step, unit: first ? formatUnit(canonicalUnit(first.unit), step) : '', category: first?.category };
+    }
+    addLines([line]);
+  };
+  /** − on a line you added: at its smallest it comes off (back to "Added by you: 0"), if the row has other lines. */
+  const stepPart = (row: AggregatedShoppingListItem, id: string, dir: 1 | -1) => {
+    const part = row.parts.find(p => p.id === id);
+    const handAdded = !!part && part.isAdhoc && !part.isRecurring && !part.isBatch;
+    if (dir < 0 && part && handAdded && row.parts.length > 1 && (part.amount || 0) <= getIngredientStep(part) + 1e-9) {
+      const keep = row.parts.find(p => p.id !== id);
+      if (keep && openRowId === id) setOpenRowId(keep.id);
+      store.updateShoppingList((store.state.shoppingList || []).filter((i: ShoppingListItem) => i.id !== id));
+      return;
+    }
+    handleUpdateQuantity(id, dir);
+  };
+
   const handleQuickAdd = (text: string, asName?: string): boolean => {
     const parsed = parseQuickAdd(text);
     if (asName) parsed.name = asName;
@@ -1905,8 +1932,9 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
           partDetail={partDetail}
           isFavourite={favourites.some(f => f.name.toLowerCase() === openRow.name.toLowerCase())}
           nextWeekLabel={followingShort}
-          onStep={(id, dir) => handleUpdateQuantity(id, dir)}
+          onStep={(id, dir) => stepPart(openRow, id, dir)}
           onSetAmount={handleUpdateQtyAndUnit}
+          onAddExtra={activePlan ? () => addExtraToRow(openRow) : undefined}
           onSaveNote={note => updateParts(openRow.underlyingIds, i => { const { note: _old, ...rest } = i; return note ? { ...rest, note } : rest; })}
           onRename={name => updateParts(openRow.underlyingIds, i => { const { groceryId: _g, ...rest } = i; return { ...rest, name }; })}
           onAisle={a => setRowAisle(openRow, a)}
