@@ -8,6 +8,7 @@ import {
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy, notYetProducts,
+  packsOnLine, stapleQuantity, stapleTakesOver,
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
   addMinute, timerText, eatAtFor, DEFAULT_EAT_AT, speechChunks, forSpeech, parseVoiceCommand, parseAlternatives,
@@ -323,6 +324,37 @@ test('shop: things added by hand that are not products yet are offered once each
   ];
   assert.deepEqual(notYetProducts(items).map((i) => i.name), ['Birthday candles', "Za'atar", 'Party poppers'], 'once each; known products and saved ones left out');
   assert.deepEqual(notYetProducts(items, ['party poppers']).map((i) => i.name), ['Birthday candles', "Za'atar"], 'not asked again after "not a product"');
+});
+
+test('shop: a new product can be a weekly staple straight away', () => {
+  // How many packs this week's line is
+  assert.equal(packsOnLine({ amount: 2, unit: '' }, 'jar', 1), 2, '"2" of something sold by the jar = 2 jars');
+  assert.equal(packsOnLine({ amount: 1, unit: 'kg' }, 'g', 500), 2, '1 kg of a 500 g bag = 2 bags');
+  assert.equal(packsOnLine({ amount: 3, unit: 'packs' }, 'pack', 1), 3);
+  assert.equal(packsOnLine({ amount: 1, unit: 'item' }, 'each', 1), 1);
+  assert.equal(packsOnLine({ amount: 500, unit: 'ml' }, 'jar', 1), 1, "can't tell: 1");
+  assert.equal(packsOnLine({ amount: 0, unit: '' }, 'pack', 1), 1);
+  // What the staple comes to each week
+  assert.deepEqual(stapleQuantity('jar', 1, 2), { amount: 2, unit: 'jars' });
+  assert.deepEqual(stapleQuantity('each', 1, 1), { amount: 1, unit: 'item' });
+  assert.deepEqual(stapleQuantity('each', 1, 3), { amount: 3, unit: 'items' });
+  assert.deepEqual(stapleQuantity('g', 500, 2), { amount: 1000, unit: 'g' });
+  assert.deepEqual(stapleQuantity('can', 1, 1), { amount: 1, unit: 'can' });
+  // The staple's own line takes over from the one added by hand (in weeks that have it)
+  const line = (id, extra = {}) => ({ id, name: 'Sparklers', amount: 1, unit: 'pack', checked: false, isAdhoc: true, groceryId: 'gdb-custom-s', ...extra });
+  const staple = (planId, extra = {}) => ({ id: `recurring-${planId}-r1`, name: 'Sparklers', amount: 1, unit: 'pack', checked: false, isAdhoc: false, isRecurring: true, planId, ...extra });
+  const list = [
+    line('a', { planId: 'p1', note: 'big box' }), staple('p1'),
+    line('b', { planId: 'p2', checked: true, checkedBy: 'R' }), staple('p2'),
+    line('c', { planId: 'old' }),
+    { id: 'm', name: 'Milk', amount: 1, unit: 'pint', checked: false, isAdhoc: true, planId: 'p1' },
+  ];
+  const out = stapleTakesOver(list, 'r1', (i) => i.groceryId === 'gdb-custom-s');
+  assert.deepEqual(out.map((i) => i.id), ['recurring-p1-r1', 'recurring-p2-r1', 'c', 'm'], 'not on the list twice; a week without the staple line keeps its own');
+  assert.equal(out.find((i) => i.id === 'recurring-p1-r1').note, 'big box', 'the note comes too');
+  const p2 = out.find((i) => i.id === 'recurring-p2-r1');
+  assert.ok(p2.checked && p2.checkedBy === 'R', 'already bought that week: stays bought');
+  assert.equal(stapleTakesOver(list, 'zz', () => true), list, 'no staple lines: unchanged');
 });
 
 test('shop: typing into the add box', () => {

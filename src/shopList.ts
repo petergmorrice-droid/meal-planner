@@ -2,7 +2,7 @@
 // "2 pints milk" typed into the add box, the list as text, and carrying items to another week.
 import { MealPlan, ShoppingListItem, ShopRoute, ShopRecord } from './types';
 import { aggregateIngredients } from './utils/aggregation';
-import { matchProduct, matchProductDetailed, groupingKey, largeUnitQuantity, formatAmount, canonicalUnit, formatUnit } from './shopping';
+import { matchProduct, matchProductDetailed, groupingKey, largeUnitQuantity, formatAmount, canonicalUnit, formatUnit, unitInfo } from './shopping';
 import { getCatalog, convertToShoppingQuantity, quantityForAddedItem } from './utils/shoppingConversion';
 
 /** One row on the list: every line for the same product, added up. */
@@ -132,7 +132,66 @@ export function notYetProducts(items: ShoppingListItem[], declined?: string[] | 
   return out;
 }
 
-const COUNT_UNITS = ['', 'whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', 'each'];
+/**
+ * How many packs a line on the list comes to, for something sold `step` × `unit` at a time
+ * ("2" of a jar = 2 jars, "1 kg" of a 500 g bag = 2 bags). At least 1, at most 99.
+ */
+export function packsOnLine(item: { amount?: number | string; unit?: string }, unit: string, step: number): number {
+  const a = Number(item.amount) || 0;
+  if (!(a > 0) || !(step > 0)) return 1;
+  const have = unitInfo(canonicalUnit(item.unit));
+  const want = unitInfo(canonicalUnit(unit));
+  let packs = 1;
+  if (have.unit === want.unit) packs = a / step;
+  else if (have.dimension !== 'count' && have.dimension === want.dimension) packs = (a * have.factor) / (step * want.factor);
+  else if (have.unit === 'each' && want.dimension === 'count') packs = a;
+  return Math.min(99, Math.max(1, Math.round(packs)));
+}
+
+/** A weekly staple of `packs` × the pack it's sold in: "2 jars", "1000 g", "3 items". */
+export function stapleQuantity(unit: string, step: number, packs: number): { amount: number; unit: string } {
+  const amount = Math.round(Math.max(1, packs) * (step > 0 ? step : 1) * 100) / 100;
+  const u = canonicalUnit(unit);
+  return { amount, unit: u === 'each' ? (amount === 1 ? 'item' : 'items') : formatUnit(u, amount) };
+}
+
+/**
+ * Something you'd added by hand has just become a weekly staple: in each week that now has the
+ * staple's own line, that line takes over from the one you added (so it isn't on the list twice).
+ * If you'd already ticked it that week, the staple's line is ticked too; a note comes with it.
+ */
+export function stapleTakesOver(list: ShoppingListItem[], recurringId: string, isSame: (i: ShoppingListItem) => boolean): ShoppingListItem[] {
+  const byWeek = new Map<string, ShoppingListItem[]>();
+  for (const i of list) {
+    if (!i.isAdhoc || i.isRecurring || i.isBatch || !i.planId || !isSame(i)) continue;
+    byWeek.set(i.planId, [...(byWeek.get(i.planId) || []), i]);
+  }
+  if (!byWeek.size) return list;
+  const drop = new Set<string>();
+  const carry = new Map<string, ShoppingListItem[]>();
+  for (const [planId, added] of byWeek) {
+    const stapleId = `recurring-${planId}-${recurringId}`;
+    if (!list.some((i) => i.id === stapleId)) continue;
+    added.forEach((i) => drop.add(i.id));
+    carry.set(stapleId, added);
+  }
+  if (!drop.size) return list;
+  return list
+    .filter((i) => !drop.has(i.id))
+    .map((i) => {
+      const added = carry.get(i.id);
+      if (!added) return i;
+      const ticked = added.every((a) => a.checked);
+      const note = i.note || added.find((a) => a.note)?.note;
+      return {
+        ...i,
+        ...(ticked && !i.checked ? { checked: true, ...(added[0].checkedBy ? { checkedBy: added[0].checkedBy } : {}) } : {}),
+        ...(note ? { note } : {}),
+      };
+    });
+}
+
+const COUNT_UNITS =['', 'whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', 'each'];
 
 /** How much to buy, as it reads in the shop: "1 kg", "2 cans", "6". */
 export function shopQuantityText(item: { amount: number | string; unit?: string; displayQuantity?: string }): string {

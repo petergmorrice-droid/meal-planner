@@ -17,8 +17,9 @@ export default function QuickAdd({
 }: {
   suggestions: QuickAddSuggestion[];
   onTheList: (name: string) => string | null;
-  /** text as typed; `asName` when a suggestion was picked (keeps any amount typed before it). */
-  onAdd: (text: string, asName?: string) => void;
+  /** text as typed; `asName` when a suggestion was picked (keeps any amount typed before it).
+   *  Return false when adding opened a question, so the box lets go of the keyboard. */
+  onAdd: (text: string, asName?: string) => void | boolean;
   onBrowse?: () => void;
   compact?: boolean;
 }) {
@@ -44,10 +45,11 @@ export default function QuickAdd({
   const add = (asName?: string) => {
     if (!text.trim()) return;
     const exact = !asName && matches.find((m) => m.name.toLowerCase() === typedName.trim());
-    onAdd(text, asName || (exact ? exact.name : undefined));
+    const keepTyping = onAdd(text, asName || (exact ? exact.name : undefined)) !== false;
     setText('');
     setOpen(false);
-    inputRef.current?.focus();
+    if (keepTyping) inputRef.current?.focus();
+    else inputRef.current?.blur();
   };
 
   return (

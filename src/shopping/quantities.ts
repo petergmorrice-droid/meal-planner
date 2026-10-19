@@ -126,7 +126,8 @@ function neededAmountText(amount: number, unit: string): string {
   const big = largeUnitQuantity(amount, u);
   if (big) return `${formatAmount(big.amount)} ${big.unit}`;
   const n = formatCookingAmount(amount, u) || formatAmount(amount);
-  const label = formatUnit(u, amount);
+  // Less than one reads singular: "½ bunch", "¾ can".
+  const label = formatUnit(u, amount < 1 ? 1 : amount);
   return label ? `${n} ${label}` : n;
 }
 

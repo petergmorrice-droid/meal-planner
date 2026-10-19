@@ -587,6 +587,7 @@ test('the list says what your meals actually use when you buy more', () => {
   assert.equal(line([{ name: 'onion', amount: 0.5, unit: '' }]), '1 / ½');
   assert.equal(line([{ name: 'potatoes', amount: 800, unit: 'g' }, { name: 'potatoes', amount: 700, unit: 'g' }]), '2.5 kg / 1.5 kg', 'added up across recipes');
   assert.equal(line([{ name: 'spinach', amount: 2, unit: 'handful' }]), '100 g / about 60 g', 'rough measures say "about"');
+  assert.equal(line([{ name: 'chopped tomatoes', amount: 0.5, unit: 'can' }]), '1 can / ½ can', 'less than one reads singular');
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
