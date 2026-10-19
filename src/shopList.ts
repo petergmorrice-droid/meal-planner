@@ -144,8 +144,52 @@ export function packsOnLine(item: { amount?: number | string; unit?: string }, u
   let packs = 1;
   if (have.unit === want.unit) packs = a / step;
   else if (have.dimension !== 'count' && have.dimension === want.dimension) packs = (a * have.factor) / (step * want.factor);
-  else if (have.unit === 'each' && want.dimension === 'count') packs = a;
+  else if (have.unit === 'each') packs = a; // a bare number is how many you buy
   return Math.min(99, Math.max(1, Math.round(packs)));
+}
+
+/**
+ * A line added by hand, in the unit its product is sold in: "1" of something sold by the pack is
+ * "1 pack", "2" of something sold in 500 g bags is "1000 g", 1 kg of it stays 1000 g. null when
+ * it's already in that unit or can't sensibly be said in it (500 ml of something sold by the jar).
+ */
+export function inProductUnit(line: { amount?: number | string; unit?: string }, unit: string, step: number): { amount: number; unit: string } | null {
+  const have = unitInfo(canonicalUnit(line.unit));
+  const want = unitInfo(canonicalUnit(unit));
+  const a = Number(line.amount) || 0;
+  if (have.unit === want.unit || !(a > 0)) return null;
+  let amount: number;
+  if (have.unit === 'each') {
+    // "1" of something sold by the gram can't mean 1 g
+    if (want.dimension !== 'count' && (step > 0 ? step : 1) * want.factor < 10) return null;
+    amount = packsOnLine(line, unit, step) * (step > 0 ? step : 1);
+  }
+  else if (have.dimension !== 'count' && have.dimension === want.dimension) amount = (a * have.factor) / want.factor;
+  else return null;
+  amount = Math.round(amount * 100) / 100;
+  return { amount, unit: formatUnit(want.unit, amount) };
+}
+
+/**
+ * Lines added by hand as a bare number before they were products ("1" Belvita breakfast biscuits),
+ * put in the unit the product is sold in ("1 pack"), so adding another makes "2 packs", not
+ * "1 + 1 pack". Returns the same list if nothing needed changing.
+ */
+export function fitHandAddedToProducts(
+  list: ShoppingListItem[],
+  productOf: (i: ShoppingListItem) => { buyUnit: string; step: number } | null,
+): ShoppingListItem[] {
+  let changed = false;
+  const out = list.map((i) => {
+    if (!i.isAdhoc || i.isRecurring || i.isBatch || !i.groceryId || canonicalUnit(i.unit) !== 'each') return i;
+    const p = productOf(i);
+    if (!p) return i;
+    const q = inProductUnit(i, p.buyUnit, p.step);
+    if (!q) return i;
+    changed = true;
+    return { ...i, amount: q.amount, unit: q.unit };
+  });
+  return changed ? out : list;
 }
 
 /** A weekly staple of `packs` × the pack it's sold in: "2 jars", "1000 g", "3 items". */

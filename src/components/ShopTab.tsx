@@ -56,7 +56,7 @@ import {
   AggregatedShoppingListItem, aggregateShoppingItems, shopQuantityText, partLabel, defaultShopWeek, formatWeekSpan, weekStartShort,
   parseQuickAdd, quickAddLine, listAsText, carryItemsToWeek, shopDurationText, productKey,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, BIG_SHOP, notYetProducts,
-  stapleQuantity, stapleTakesOver,
+  stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts,
 } from '../shopList';
 import ShopHistorySheet from './shop/ShopHistorySheet';
 import SaveProductSheet, { NewProductDetails } from './shop/SaveProductSheet';
@@ -506,6 +506,20 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       store.updateShoppingList(syncedList);
     }
   }, [activePlan?.id, store.state.preferences?.recurringItems, dismissedItemIds]);
+
+  // Things added as a bare number before they were saved as products ("1" Belvita) are put in the
+  // unit the product is sold in ("1 pack"), so they add up with the next one ("2 packs", not "1 + 1 pack").
+  useEffect(() => {
+    const now = store.getState?.() || store.state;
+    const list: ShoppingListItem[] = now.shoppingList || [];
+    const catalog = catalogForState(now);
+    const fitted = fitHandAddedToProducts(list, (i) => {
+      const p = matchProduct(catalog, i.name, { groceryId: i.groceryId });
+      return p && p.id === i.groceryId ? p : null;
+    });
+    if (fitted !== list) store.updateShoppingList(fitted);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.state.shoppingList, store.state.groceryDatabase]);
 
   const handlePlanFollowingWeek = (fromStartDate?: string) => {
     const baseDateStr = fromStartDate || activePlan?.startDate || allPlans[allPlans.length - 1]?.startDate;
@@ -1046,7 +1060,11 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     // This week's line(s) become that product too.
     const key = from.name.trim().toLowerCase();
     const now = store.getState?.() || store.state;
-    let list: ShoppingListItem[] = (now.shoppingList || []).map((i: ShoppingListItem) => (i.isAdhoc && !i.groceryId && i.name.trim().toLowerCase() === key ? { ...i, name: d.name, groceryId: id, category } : i));
+    // ...in the unit it's sold in ("1" becomes "1 pack"), so adding another one adds up.
+    let list: ShoppingListItem[] = (now.shoppingList || []).map((i: ShoppingListItem) =>
+      i.isAdhoc && !i.groceryId && i.name.trim().toLowerCase() === key
+        ? { ...i, name: d.name, groceryId: id, category, ...(inProductUnit(i, d.unit, d.increment) || {}) }
+        : i);
     const isThis = (n: string) => sameName(n, from.name) || sameName(n, d.name);
     const prefPatch: Record<string, unknown> = {};
     const also: string[] = [];
@@ -1251,6 +1269,12 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     for (const line of lines) {
       const key = productKey(line);
       const idx = list.findIndex(i => i.planId === activePlan.id && i.isAdhoc && !i.isRecurring && !i.checked && productKey(i) === key);
+      // Added before as a bare number ("1") and now as the product ("1 pack"): same thing, so say it the product's way.
+      if (idx > -1 && line.groceryId && canonicalUnit(list[idx].unit) !== canonicalUnit(line.unit)) {
+        const product = matchProduct(catalogForState(store.getState?.() || store.state), line.name, { groceryId: line.groceryId });
+        const fitted = product ? inProductUnit(list[idx], line.unit, product.buyUnit === canonicalUnit(line.unit) ? product.step : 1) : null;
+        if (fitted) list[idx] = { ...list[idx], ...fitted, groceryId: line.groceryId };
+      }
       if (idx > -1 && canonicalUnit(list[idx].unit) === canonicalUnit(line.unit)) {
         ids.push(list[idx].id);
         const amount = Math.round((list[idx].amount + line.amount) * 100) / 100;

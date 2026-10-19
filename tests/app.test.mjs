@@ -8,7 +8,7 @@ import {
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy, notYetProducts,
-  packsOnLine, stapleQuantity, stapleTakesOver,
+  packsOnLine, stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts,
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
   addMinute, timerText, eatAtFor, DEFAULT_EAT_AT, speechChunks, forSpeech, parseVoiceCommand, parseAlternatives,
@@ -355,6 +355,24 @@ test('shop: a new product can be a weekly staple straight away', () => {
   const p2 = out.find((i) => i.id === 'recurring-p2-r1');
   assert.ok(p2.checked && p2.checkedBy === 'R', 'already bought that week: stays bought');
   assert.equal(stapleTakesOver(list, 'zz', () => true), list, 'no staple lines: unchanged');
+});
+
+test('shop: something added by hand and then saved as a product adds up with the next one', () => {
+  assert.deepEqual(inProductUnit({ amount: 1, unit: '' }, 'pack', 1), { amount: 1, unit: 'pack' }, '"1" of something sold by the pack = 1 pack');
+  assert.deepEqual(inProductUnit({ amount: 2, unit: 'items' }, 'jar', 1), { amount: 2, unit: 'jars' });
+  assert.deepEqual(inProductUnit({ amount: 2, unit: '' }, 'g', 500), { amount: 1000, unit: 'g' }, '"2" of a 500 g bag = 1000 g');
+  assert.deepEqual(inProductUnit({ amount: 1, unit: 'kg' }, 'g', 500), { amount: 1000, unit: 'g' }, 'weights convert exactly');
+  assert.equal(inProductUnit({ amount: 1, unit: '' }, 'g', 1), null, '"1" of something sold by the gram is not 1 g');
+  assert.equal(inProductUnit({ amount: 500, unit: 'ml' }, 'jar', 1), null, "can't tell: left alone");
+  assert.equal(inProductUnit({ amount: 1, unit: 'pack' }, 'pack', 1), null, 'already right');
+  const line = (id, extra = {}) => ({ id, name: 'Belvita Breakfast Biscuits', amount: 1, unit: '', checked: false, isAdhoc: true, planId: 'p', ...extra });
+  const list = [line('a', { groceryId: 'gdb-custom-b' }), line('b'), line('c', { groceryId: 'gdb-custom-b', isRecurring: true }), line('d', { groceryId: 'gdb-custom-b', unit: 'pack' })];
+  const out = fitHandAddedToProducts(list, (i) => (i.groceryId === 'gdb-custom-b' ? { buyUnit: 'pack', step: 1 } : null));
+  assert.deepEqual(out.map((i) => `${i.id}:${i.amount} ${i.unit}`), ['a:1 pack', 'b:1 ', 'c:1 ', 'd:1 pack'], 'only lines added by hand for that product, as a bare number');
+  assert.equal(fitHandAddedToProducts(out, () => ({ buyUnit: 'pack', step: 1 })), out, 'nothing to change: the same list');
+  const rows = aggregateShoppingItems([out[0], out[3]]);
+  assert.equal(rows.length, 1);
+  assert.equal(shopQuantityText(rows[0]), '2 packs', '"2 packs", not "1 + 1 pack"');
 });
 
 test('shop: typing into the add box', () => {

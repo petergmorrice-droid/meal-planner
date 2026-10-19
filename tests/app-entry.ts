@@ -9,7 +9,7 @@ export {
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy, notYetProducts,
-  packsOnLine, stapleQuantity, stapleTakesOver,
+  packsOnLine, stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts,
 } from '../src/shopList';
 export {
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,

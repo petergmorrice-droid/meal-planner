@@ -455,3 +455,7 @@ Main files:
   (`src/components/shop/SaveProductSheet.tsx`) with weekly staple and
   favourite options; the add box lets go of the keyboard so the whole
   question shows. Amounts under one now read singular ("need ½ can").
+- `New products add up` — saving something as a product puts this week's line
+  in the unit it's sold in ("1" becomes "1 pack"), so adding another makes
+  "2 packs", not "1 + 1 pack". Lines saved that way before this are fixed when
+  the Shop opens (`fitHandAddedToProducts` in `src/shopList.ts`).
