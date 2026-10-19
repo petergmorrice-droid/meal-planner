@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Notice from './Notice';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -965,22 +966,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   return (
     <div className="h-full flex flex-col bg-zinc-50/60 relative overflow-hidden">
       {/* Toast notification */}
-      {toastMessage && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] w-[min(520px,calc(100%-24px))] bg-zinc-900 text-white text-sm font-medium pl-4 pr-2 py-2 rounded-2xl shadow-lg animate-in fade-in slide-in-from-top-2 flex items-center gap-2" role="status" data-toast>
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="flex-1 min-w-0">{toastMessage}</span>
-          {toastAction && (
-            <button
-              type="button"
-              onClick={() => { const run = toastAction.run; setToastMessage(null); run(); }}
-              className="h-9 px-3 rounded-xl bg-white/15 hover:bg-white/25 text-white font-semibold shrink-0 cursor-pointer"
-              data-toast-action
-            >
-              {toastAction.label}
-            </button>
-          )}
-        </div>
-      )}
+      {toastMessage && <Notice text={toastMessage} action={toastAction || undefined} onDone={() => setToastMessage(null)} />}
 
       {/* TOP SECTION: ALL MEALS (VISUALLY PRIORITIZED) */}
       <div className={`${planningView === 'list' ? 'shrink-0' : 'flex-1 min-h-0'} flex flex-col relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>

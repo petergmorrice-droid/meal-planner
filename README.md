@@ -441,3 +441,8 @@ Main files:
   potatoes, gammon, crumpets, Marmite, Yorkshire puddings, cling film…). The
   new defaults are applied once (`CATALOG_VERSION` 4, `DEFAULT_CHANGES` in
   `src/shopping/catalog.ts`), only to products you haven't changed yourselves.
+- `No dark pop-ups` — every short message ("Note saved", "Removed Milk ·
+  Undo") is now one light notice (`src/components/Notice.tsx`) at the bottom,
+  just above the tabs, so it never covers the add box. In shopping mode it
+  sits above the Done shopping bar. The "can't read aloud here" note in
+  cooking mode is a light note too.

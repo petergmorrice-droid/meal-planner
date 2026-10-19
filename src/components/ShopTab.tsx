@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import Notice from './Notice';
 import { 
   Plus, 
   Minus, 
@@ -1239,13 +1240,9 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     const [id] = addLines([line]);
     const key = productKey(line);
     const already = rows.some(r => r.key === key && !r.checked);
-    const declined = (store.state.preferences?.notProducts || []).includes(line.name.trim().toLowerCase());
-    if (!line.groceryId && !declined) {
-      // Not a product yet: offer to save it, so next time it goes in the right aisle.
-      setToastMessage(`Added ${line.name}. Save it as a product for next time?`, { label: 'Save…', run: () => setSaveAsProduct(line) });
-      return;
-    }
-    setToastMessage(already ? `${line.name}: added ${shopQuantityText(line)} more` : `Added ${line.name} · ${shopQuantityText(line)}`, id ? { label: 'Edit', run: () => setOpenRowId(id) } : undefined);
+    // Not a product yet? The "Save for next time?" card at the top of the list offers to save it.
+    const qty = shopQuantityText(line);
+    setToastMessage(already ? `${line.name}: added ${qty} more` : `Added ${line.name}${qty === '1' ? '' : ` · ${qty}`}`, id ? { label: 'Edit', run: () => setOpenRowId(id) } : undefined);
   };
 
   const quickAddSuggestions = useMemo(() => {
@@ -1431,7 +1428,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       )}
       {showHistory && <ShopHistorySheet history={history} onClose={() => setShowHistory(false)} />}
       {saveProductSheet}
-      {toast && <ShopToast toast={toast} onClose={() => setToast(null)} />}
+      {toast && <ShopToast toast={toast} onClose={() => setToast(null)} shoppingMode />}
       </>
     );
   }
@@ -1914,24 +1911,9 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   );
 }
 
-/** Message at the top of the Shop tab, sometimes with a button (Undo, Edit). */
-function ShopToast({ toast, onClose }: { toast: { message: string; action?: { label: string; run: () => void } }; onClose: () => void }) {
-  return (
-    <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white text-sm font-medium pl-4 pr-2 py-2 rounded-xl shadow-lg flex items-center gap-3 max-w-[92vw] animate-in fade-in slide-in-from-top-2" role="status" data-shop-toast>
-      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-      <span className="min-w-0">{toast.message}</span>
-      {toast.action ? (
-        <button
-          type="button"
-          onClick={() => { const run = toast.action!.run; onClose(); run(); }}
-          className="shrink-0 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 font-semibold cursor-pointer"
-          data-toast-action
-        >
-          {toast.action.label}
-        </button>
-      ) : <span className="w-1" />}
-    </div>
-  );
+/** The Shop's short message (Undo, Edit…): the app's light notice, above shopping mode's bottom bar when that's open. */
+function ShopToast({ toast, onClose, shoppingMode = false }: { toast: { message: string; action?: { label: string; run: () => void } }; onClose: () => void; shoppingMode?: boolean }) {
+  return <Notice text={toast.message} action={toast.action} onDone={onClose} shop placement={shoppingMode ? 'screen' : 'tab'} lift={shoppingMode ? 84 : 12} />;
 }
 
 function BelowThresholdWarningModal({ data, onClose, onKeepRequired, onConfirmReduce }: { data: any, onClose: () => void, onKeepRequired: () => void, onConfirmReduce: (amount: number) => void }) {

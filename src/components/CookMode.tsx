@@ -500,7 +500,7 @@ export default function CookMode({
       </header>
 
       {readNote && (
-        <div className="shrink-0 bg-zinc-900 text-white px-4 py-2 text-sm" role="status" data-read-note>
+        <div className="shrink-0 bg-amber-50 border-b border-amber-200 text-amber-950 px-4 py-2 text-sm" role="status" data-read-note>
           <div className="max-w-2xl mx-auto flex items-start gap-2"><VolumeX className="w-4 h-4 shrink-0 mt-0.5" /><span>{readNote}</span></div>
         </div>
       )}

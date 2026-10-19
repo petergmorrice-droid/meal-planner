@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Notice from './Notice';
 import {
   ChevronLeft, ChevronRight, ChefHat, Check, Clock, Snowflake, Moon, Minus, Plus, Pencil,
   ArrowLeftRight, RotateCcw, ShoppingBag, Utensils, X, FileText, BookOpen,
@@ -423,16 +424,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
         </div>
       </div>
 
-      {toast && (
-        <div className="absolute left-3 right-3 bottom-3 z-30 flex justify-center pointer-events-none">
-          <div className="pointer-events-auto max-w-md w-full bg-zinc-900 text-white rounded-xl shadow-lg px-4 py-3 flex items-center gap-3" role="status" data-toast>
-            <span className="flex-1 text-sm">{toast.text}</span>
-            {toast.undo && (
-              <button type="button" onClick={() => { const u = toast.undo!; setToast(null); u(); }} className="shrink-0 text-sm font-bold text-emerald-300 cursor-pointer" data-toast-undo>Undo</button>
-            )}
-          </div>
-        </div>
-      )}
+      {toast && <Notice text={toast.text} action={toast.undo ? { label: 'Undo', run: toast.undo } : undefined} onDone={() => setToast(null)} />}
 
       {moving && plan.days[moving]?.meals?.[0] && (
         <MoveSheet
