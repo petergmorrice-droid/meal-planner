@@ -339,7 +339,7 @@ export default function CookMode({
       <div className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col items-center justify-center p-6 text-center">
         <ChefHat className="w-8 h-8 text-zinc-400 mb-3" />
         <h3 className="font-semibold text-zinc-900">Couldn't find this recipe</h3>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-zinc-900 text-white text-sm font-semibold rounded-xl">Close</button>
+        <button onClick={onClose} className="mt-4 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl">Close</button>
       </div>
     );
   }
@@ -481,7 +481,7 @@ export default function CookMode({
               { key: 'ask', label: 'Ask', on: asking, icon: <MessageCircleQuestionMark className="w-4 h-4" />, onClick: () => setAsking(true), attrs: { 'data-cook-ask': true, 'aria-label': 'Ask a question about this recipe' } },
             ] as const).map((b: any) => (
               <button key={b.key} type="button" onClick={b.onClick} aria-pressed={b.on} {...b.attrs}
-                className={`w-11 h-11 rounded-xl border flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold leading-none cursor-pointer ${b.on ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'} ${b.dim ? 'opacity-60' : ''}`}>
+                className={`w-11 h-11 rounded-xl border flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold leading-none cursor-pointer ${b.on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-200'} ${b.dim ? 'opacity-60' : ''}`}>
                 {b.icon}{b.label}
               </button>
             ))}
@@ -491,7 +491,7 @@ export default function CookMode({
           <div className="max-w-2xl mx-auto flex items-center gap-1.5 mt-2 overflow-x-auto">
             {meals.map((m) => (
               <button key={m.id} type="button" onClick={() => setActiveMealId(m.id)}
-                className={`px-3 py-1.5 text-sm font-semibold rounded-lg border shrink-0 cursor-pointer ${m.id === activeMealId ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white border-zinc-200 text-zinc-700'}`}>
+                className={`px-3 py-1.5 text-sm font-semibold rounded-lg border shrink-0 cursor-pointer ${m.id === activeMealId ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-zinc-200 text-zinc-700'}`}>
                 {m.name.replace(/^(Leftovers?|Batch):\s*/i, '')}
               </button>
             ))}
@@ -522,18 +522,18 @@ export default function CookMode({
         </div>
       )}
       {answer && (
-        <div className="shrink-0 bg-sky-50 border-b border-sky-200 px-4 py-2" data-answer>
+        <div className="shrink-0 bg-blue-50 border-b border-blue-200 px-4 py-2" data-answer>
           <div className="max-w-2xl mx-auto flex items-start gap-2">
-            <MessageCircleQuestionMark className="w-4 h-4 shrink-0 mt-0.5 text-sky-700" />
+            <MessageCircleQuestionMark className="w-4 h-4 shrink-0 mt-0.5 text-blue-700" />
             <div className="flex-1 min-w-0 max-h-36 overflow-y-auto">
-              <p className="text-[13px] font-semibold text-sky-950" data-answer-q>{answer.q}</p>
+              <p className="text-[13px] font-semibold text-blue-950" data-answer-q>{answer.q}</p>
               {answer.loading
-                ? <p className="text-sm text-sky-900/80 inline-flex items-center gap-1.5 mt-0.5"><LoaderCircle className="w-3.5 h-3.5 animate-spin" />Asking Gemini…</p>
-                : <p className={`text-sm leading-snug mt-0.5 ${answer.problem ? 'text-rose-800' : 'text-sky-950'}`} data-answer-a>{answer.a}</p>}
+                ? <p className="text-sm text-blue-900/80 inline-flex items-center gap-1.5 mt-0.5"><LoaderCircle className="w-3.5 h-3.5 animate-spin" />Asking Gemini…</p>
+                : <p className={`text-sm leading-snug mt-0.5 ${answer.problem ? 'text-rose-800' : 'text-blue-950'}`} data-answer-a>{answer.a}</p>}
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
-              <button type="button" onClick={() => { askSeq.current++; setAnswer(null); }} className="w-8 h-8 -mr-1 -mt-1 rounded-lg flex items-center justify-center text-sky-800 cursor-pointer" aria-label="Close the answer" data-answer-close><X className="w-4 h-4" /></button>
-              {answer.a && !answer.problem && speechOK && <button type="button" onClick={() => talk(answer.a!)} className="text-xs font-semibold text-sky-800 underline underline-offset-2 cursor-pointer" data-answer-read>Read it</button>}
+              <button type="button" onClick={() => { askSeq.current++; setAnswer(null); }} className="w-8 h-8 -mr-1 -mt-1 rounded-lg flex items-center justify-center text-blue-800 cursor-pointer" aria-label="Close the answer" data-answer-close><X className="w-4 h-4" /></button>
+              {answer.a && !answer.problem && speechOK && <button type="button" onClick={() => talk(answer.a!)} className="text-xs font-semibold text-blue-800 underline underline-offset-2 cursor-pointer" data-answer-read>Read it</button>}
             </div>
           </div>
         </div>
@@ -601,7 +601,7 @@ export default function CookMode({
             <button type="button" onClick={back} disabled={step === 0} className="w-14 h-14 rounded-xl border border-zinc-300 bg-white text-zinc-700 flex items-center justify-center disabled:opacity-30 cursor-pointer shrink-0" aria-label="Back a step" data-big-back>
               <ChevronLeft className="w-6 h-6" />
             </button>
-            <button type="button" onClick={next} className={`flex-1 h-14 rounded-xl text-white text-lg font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99] ${step >= stepCount - 1 ? 'bg-emerald-600' : 'bg-zinc-900'}`} data-big-next>
+            <button type="button" onClick={next} className={`flex-1 h-14 rounded-xl text-white text-lg font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99] ${step >= stepCount - 1 ? 'bg-emerald-600' : 'bg-emerald-600'}`} data-big-next>
               {step >= stepCount - 1 ? 'Finished' : 'Next'} <ChevronRight className="w-6 h-6" />
             </button>
           </div>
@@ -634,7 +634,7 @@ export default function CookMode({
                     className={`rounded-2xl border p-4 cursor-pointer ${active ? 'bg-white border-zinc-900 ring-1 ring-zinc-900' : passed ? 'bg-zinc-50 border-zinc-200 opacity-60' : 'bg-white border-zinc-200'}`}
                   >
                     <div className="flex items-start gap-3">
-                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${active ? 'bg-zinc-900 text-white' : passed ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'}`}>
+                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${active ? 'bg-emerald-600 text-white' : passed ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'}`}>
                         {passed ? <Check className="w-4 h-4" /> : n}
                       </span>
                       <div className="min-w-0 flex-1">
@@ -652,7 +652,7 @@ export default function CookMode({
           <div className="shrink-0 border-t border-zinc-200 bg-white px-3 py-2.5 flex items-center gap-3" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
             <button type="button" onClick={back} disabled={step === 0} className="h-12 px-4 rounded-xl border border-zinc-300 text-zinc-700 font-semibold disabled:opacity-30 cursor-pointer" data-cook-back>Back</button>
             <span className="flex-1 text-center text-sm text-zinc-500 tabular-nums" data-cook-step>{step === 0 ? 'Get everything out' : `Step ${step} of ${stepCount - 1}`}</span>
-            <button type="button" onClick={next} className={`h-12 px-6 rounded-xl text-white font-semibold cursor-pointer ${step >= stepCount - 1 ? 'bg-emerald-600' : 'bg-zinc-900'}`} data-cook-next>
+            <button type="button" onClick={next} className={`h-12 px-6 rounded-xl text-white font-semibold cursor-pointer ${step >= stepCount - 1 ? 'bg-emerald-600' : 'bg-emerald-600'}`} data-cook-next>
               {step >= stepCount - 1 ? 'Finished' : 'Next'}
             </button>
           </div>
@@ -678,7 +678,7 @@ function AskSheet({ recipeName, onAsk, onClose }: { recipeName: string; canDicta
           <textarea value={q} onChange={(e) => setQ(e.target.value)} rows={2} autoFocus placeholder="e.g. Can I use crème fraîche instead of soured cream?"
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (q.trim()) onAsk(q); } }}
             className="flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-base leading-snug outline-none focus:border-emerald-500 resize-none" data-ask-input aria-label="Your question" />
-          <button type="submit" disabled={!q.trim()} className="h-11 w-11 rounded-xl bg-zinc-900 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer shrink-0" aria-label="Ask" data-ask-send><Send className="w-4 h-4" /></button>
+          <button type="submit" disabled={!q.trim()} className="h-11 w-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer shrink-0" aria-label="Ask" data-ask-send><Send className="w-4 h-4" /></button>
         </form>
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {ideas.map((x) => (
@@ -759,9 +759,9 @@ function FinishedScreen({
 
           <div className="mt-6 space-y-3">
             {fridge && (
-              <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3" data-finished-fridge>
-                <Refrigerator className="w-5 h-5 text-sky-700 shrink-0 mt-0.5" />
-                <p className="text-[15px] text-sky-950">
+              <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3" data-finished-fridge>
+                <Refrigerator className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" />
+                <p className="text-[15px] text-blue-950">
                   Put <strong>{fridge.portions} {fridge.portions === 1 ? 'portion' : 'portions'}</strong> in the fridge for {fridge.days.join(' and ')}.
                 </p>
               </div>

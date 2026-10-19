@@ -60,6 +60,10 @@ import {
 } from '../shopList';
 import ShopHistorySheet from './shop/ShopHistorySheet';
 import SaveProductSheet, { NewProductDetails } from './shop/SaveProductSheet';
+import { AISLE_LOOK, AisleIcon } from './AisleLook';
+
+/** A list group that is an aisle (not "Added by you", "A–Z"...). */
+const isAisleId = (id: string): id is FoodAisle => Object.prototype.hasOwnProperty.call(AISLE_LOOK, id);
 import { preferredWeekStart } from '../planning';
 import { matchProductDetailed, catalogForState, aisleCategory, productMatchesSearch } from '../shopping';
 import BatchMealModal from './BatchMealModal';
@@ -1598,7 +1602,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                 id="btn-shop-view-options"
                 onClick={() => setShowViewOptions(!showViewOptions)}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer ${
-                  showViewOptions ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600'
+                  showViewOptions ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600'
                 }`}
                 title="List options"
                 aria-label="View options"
@@ -1789,7 +1793,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                   <button
                     type="button"
                     onClick={() => onNavigateTab('planning', activePlan?.id)}
-                    className="inline-flex items-center gap-1.5 bg-zinc-900 text-white text-sm font-medium px-3 py-2 rounded-xl hover:bg-zinc-800 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 bg-emerald-600 text-white text-sm font-medium px-3 py-2 rounded-xl hover:bg-emerald-700 cursor-pointer"
                   >
                     <Calendar className="w-4 h-4" /> Plan the meals
                   </button>
@@ -1814,11 +1818,14 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
 
               {listGroups.map(group => (
                 <section key={group.id} className="bg-white rounded-xl border border-zinc-200/80 overflow-hidden" data-group={group.id}>
-                  <div className="flex items-center justify-between gap-2 px-3.5 py-1.5 bg-zinc-50/80 border-b border-zinc-100">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-600">{group.title}</h3>
+                  <div className={`flex items-center justify-between gap-2 px-3 py-1.5 border-b ${isAisleId(group.id) ? AISLE_LOOK[group.id].header : 'bg-zinc-50/80 border-zinc-100'}`}>
+                    <h3 className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isAisleId(group.id) ? AISLE_LOOK[group.id].title : 'text-zinc-600'}`}>
+                      {isAisleId(group.id) && <AisleIcon aisle={group.id} />}
+                      {group.title}
+                    </h3>
                     <span className="flex items-center gap-2">
                       {group.id === 'recurring' && (
-                        <button type="button" onClick={() => setShowEditStaplesModal(true)} className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 cursor-pointer">Change</button>
+                        <button type="button" onClick={() => setShowEditStaplesModal(true)} className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer">Change</button>
                       )}
                       <span className="text-xs text-zinc-500 tabular-nums">{group.rows.length}</span>
                     </span>
@@ -1895,7 +1902,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                           <button
                             type="button"
                             onClick={() => handleCupboardAnswer([item.id], 'need')}
-                            className="shrink-0 text-sm font-semibold text-indigo-700 hover:text-indigo-900 px-2 py-1 rounded-lg hover:bg-indigo-50 cursor-pointer"
+                            className="shrink-0 text-sm font-semibold text-emerald-700 hover:text-emerald-900 px-2 py-1 rounded-lg hover:bg-emerald-50 cursor-pointer"
                           >
                             Need it after all
                           </button>
@@ -2036,7 +2043,7 @@ function BelowThresholdWarningModal({ data, onClose, onKeepRequired, onConfirmRe
           {recipes.length ? `${formatListWithAnd(recipes)} need${recipes.length === 1 ? 's' : ''}` : 'Your meals need'} {need} of {data.item?.name}.
         </p>
         <div className="flex flex-col gap-2 mt-5">
-          <button onClick={onKeepRequired} className="w-full px-4 py-3 font-semibold text-white bg-zinc-900 hover:bg-zinc-800 rounded-xl">Keep {need}</button>
+          <button onClick={onKeepRequired} className="w-full px-4 py-3 font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl">Keep {need}</button>
           <button onClick={() => onConfirmReduce(data.targetAmount)} className="w-full px-4 py-3 font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-xl">{data.isRemoval ? 'Remove it anyway' : 'Use less anyway'}</button>
           <button onClick={onClose} className="w-full px-4 py-2 font-medium text-zinc-500 rounded-xl">Cancel</button>
         </div>
@@ -2350,7 +2357,7 @@ function ShoppingModeView({
                           key={f}
                           type="button"
                           onClick={() => { setFilter(f); setShowViewOptions(false); }}
-                          className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${filter === f ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'}`}
+                          className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${filter === f ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'}`}
                           data-filter={f}
                         >
                           {label}
@@ -2476,7 +2483,7 @@ function ShoppingModeView({
             <button
               type="button"
               onClick={onExit}
-              className="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-xl hover:bg-indigo-700 transition-colors cursor-pointer"
+              className="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-xl hover:bg-emerald-700 transition-colors cursor-pointer"
             >
               Back to Shopping Tab
             </button>
@@ -2788,7 +2795,7 @@ function ShoppingModeView({
               type="button"
               onClick={onDone}
               className={`ml-auto shrink-0 px-5 py-2.5 rounded-xl text-[15px] font-semibold cursor-pointer ${
-                pendingCount === 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                pendingCount === 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
               }`}
               data-done-shopping
             >
@@ -2855,7 +2862,7 @@ function UndoTick({ name, onUndo }: { name: string; onUndo: () => void }) {
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onUndo(); }}
-      className="shrink-0 px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-sm font-semibold cursor-pointer active:bg-zinc-700"
+      className="shrink-0 px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 text-sm font-semibold cursor-pointer active:bg-emerald-50"
       aria-label={`Undo: ${name} not bought`}
       data-undo-tick
     >
@@ -3098,7 +3105,7 @@ function CupboardCheckSheet({
                     onClick={() => onAnswer(g.ids, answer === 'have' ? null : 'have')}
                     aria-pressed={answer === 'have'}
                     className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors cursor-pointer ${
-                      answer === 'have' ? 'bg-zinc-800 border-zinc-800 text-white' : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50'
+                      answer === 'have' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50'
                     }`}
                   >
                     Have it
@@ -3122,7 +3129,7 @@ function CupboardCheckSheet({
           <span className="text-sm text-zinc-500 tabular-nums">
             {answered} of {groups.length} checked{haveCount ? ` · ${haveCount} off the list` : ''}
           </span>
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold cursor-pointer">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer">
             Done
           </button>
         </div>
@@ -3183,6 +3190,7 @@ function AisleOrderSheet({
             return (
               <li key={id} className="flex items-center gap-3 px-3 py-2.5" data-aisle={id}>
                 <span className="w-6 text-sm font-semibold text-zinc-400 tabular-nums text-right">{i + 1}</span>
+                <AisleIcon aisle={id} size="md" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-zinc-900">{info.name}</p>
                   <p className="text-xs text-zinc-500 truncate">{info.description}</p>
@@ -3227,7 +3235,7 @@ function AisleOrderSheet({
             <button
               type="button"
               onClick={() => { onSave(isUsual ? null : list); onClose(); }}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer"
             >
               Save order
             </button>
@@ -3495,7 +3503,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                           setEditingStapleUnit(item.unit);
                           setEditingStapleCategory(aisleCategory({ name: item.name, category: item.category }) || GROCERY_AISLES[getGroceryAisle({ name: item.name, category: item.category })].name);
                         }}
-                        className="p-1 text-zinc-400 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer"
+                        className="p-1 text-zinc-400 hover:text-emerald-600 rounded-lg transition-colors cursor-pointer"
                         title="Edit Details"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -3523,7 +3531,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
           >
             Done
           </button>
@@ -3628,7 +3636,7 @@ function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: ()
                     }
                     setEditingStapleId(null);
                   }}
-                  className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
                 >
                   Save Changes
                 </button>

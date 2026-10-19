@@ -141,7 +141,7 @@ export function RecipeEditor({
                   onChange({ ...recipe, cookingMethods: (on ? cur.filter((x) => x !== m) : [...cur, m]) as CookingMethod[] });
                 }}
                 aria-pressed={on}
-                className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${on ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'}`}
+                className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-300'}`}
               >
                 {m === 'ninja' ? <Zap className="w-4 h-4" /> : <Flame className="w-4 h-4" />}{METHOD_LABEL[m]}
               </button>
@@ -493,7 +493,7 @@ export function ShopAsSheet({
               type="button"
               onClick={() => onChoose({ kind: 'new', aisle })}
               data-add-new-product
-              className="w-full h-11 rounded-xl bg-zinc-900 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full h-11 rounded-xl bg-emerald-600 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />Add “{titleCase(ingredient.name)}” to my grocery list
             </button>

@@ -4,6 +4,7 @@ import { ShoppingListItem } from '../../types';
 import { AggregatedShoppingListItem, shopQuantityText, partLabel } from '../../shopList';
 import { FoodAisle, GROCERY_AISLES, parseQtyAndUnit } from '../../utils';
 import { largeUnitQuantity, formatAmount, unitInfo } from '../../shopping';
+import { AisleIcon } from '../AisleLook';
 
 /** "1 kg" rather than "1000 g" in the box; the line keeps its own unit. */
 function boxText(part: ShoppingListItem): string {
@@ -212,7 +213,7 @@ export default function ItemSheet({
             {onAddExtra && !row.parts.some(isHandAdded) && <AddExtra onAdd={onAddExtra} />}
             {row.quantityNote && <p className={`text-xs ${row.needsCheck ? 'text-rose-700' : 'text-zinc-500'}`}>{row.quantityNote}</p>}
             {hasStaple && (
-              <button type="button" onClick={onManageStaples} className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-700 hover:text-indigo-900 cursor-pointer" data-manage-staples>
+              <button type="button" onClick={onManageStaples} className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer" data-manage-staples>
                 <RotateCcw className="w-3.5 h-3.5" /> Change weekly staples…
               </button>
             )}
@@ -243,16 +244,19 @@ export default function ItemSheet({
 
           <label className="block">
             <span className="text-xs font-semibold text-zinc-600 mb-1 block">Aisle</span>
-            <select
-              value={aisle}
-              onChange={(e) => onAisle(e.target.value as FoodAisle)}
-              className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-[15px] bg-white cursor-pointer"
-              data-item-aisle
-            >
-              {aisles.map((a) => (
-                <option key={a} value={a}>{GROCERY_AISLES[a].name}</option>
-              ))}
-            </select>
+            <span className="flex items-center gap-2">
+              <AisleIcon aisle={aisle} size="md" />
+              <select
+                value={aisle}
+                onChange={(e) => onAisle(e.target.value as FoodAisle)}
+                className="flex-1 min-w-0 rounded-xl border border-zinc-200 px-3 py-2.5 text-[15px] bg-white cursor-pointer"
+                data-item-aisle
+              >
+                {aisles.map((a) => (
+                  <option key={a} value={a}>{GROCERY_AISLES[a].name}</option>
+                ))}
+              </select>
+            </span>
             <span className="text-xs text-zinc-500 mt-1 block">Remembered for next time, on both phones.</span>
           </label>
 
@@ -298,7 +302,7 @@ export default function ItemSheet({
           <button
             type="button"
             onClick={saveAndClose}
-            className="ml-auto px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold cursor-pointer"
+            className="ml-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer"
             data-item-done
           >
             Done

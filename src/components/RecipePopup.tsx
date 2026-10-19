@@ -547,7 +547,7 @@ export function RecipeModal({
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="flex-1 h-12 rounded-xl bg-zinc-900 text-white text-base font-semibold cursor-pointer"
+                  className="flex-1 h-12 rounded-xl bg-emerald-600 text-white text-base font-semibold cursor-pointer"
                 >
                   Save recipe
                 </button>

@@ -285,7 +285,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
         <div className="w-14 h-14 rounded-2xl bg-zinc-100 flex items-center justify-center mb-4 text-zinc-400"><ChefHat className="w-7 h-7" /></div>
         <h2 className="text-lg font-semibold text-zinc-900">Nothing planned yet</h2>
         <p className="text-sm text-zinc-600 mt-1 max-w-xs">Plan the week and it'll show here, with what to cook tonight.</p>
-        <button type="button" onClick={() => onNavigateTab?.('planning')} className="mt-4 h-11 px-5 rounded-xl bg-zinc-900 text-white text-sm font-semibold cursor-pointer">Go to Planning</button>
+        <button type="button" onClick={() => onNavigateTab?.('planning')} className="mt-4 h-11 px-5 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer">Go to Planning</button>
       </div>
     );
   }
@@ -479,7 +479,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
                 </button>
               )}
               <button type="button" onClick={() => { setCooked(plan.id, daySheet, sheetMeal.id, !sheetMeal.cooked); setDaySheet(null); }}
-                className={`flex-1 h-12 rounded-xl border font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${sheetMeal.cooked ? 'border-zinc-300 text-zinc-700' : 'border-zinc-900 bg-zinc-900 text-white'}`} data-day-tick>
+                className={`flex-1 h-12 rounded-xl border font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${sheetMeal.cooked ? 'border-zinc-300 text-zinc-700' : 'border-emerald-600 bg-emerald-600 text-white'}`} data-day-tick>
                 <Check className="w-5 h-5" />{sheetMeal.cooked ? 'Untick' : sheetMeal.type === 'recipe' ? 'Tick as cooked' : 'Tick as done'}
               </button>
             </div>
@@ -721,7 +721,7 @@ function MoveSheet({ day, meal, days, onMove, onClose }: {
               className="w-full text-left rounded-xl border border-zinc-200 hover:bg-zinc-50 px-3 py-2.5 flex items-center gap-3 cursor-pointer">
               <span className="w-14 text-sm font-bold text-zinc-700 shrink-0">{x.label}</span>
               <span className={`flex-1 min-w-0 text-[15px] truncate ${x.meal ? 'text-zinc-800' : 'text-zinc-400'}`}>{x.meal ? mealTitle(x.meal) : 'Free'}</span>
-              <span className={`text-xs font-bold shrink-0 rounded-lg px-2 py-1 ${x.meal ? 'bg-zinc-900 text-white' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>{x.meal ? 'Swap' : 'Move here'}</span>
+              <span className={`text-xs font-bold shrink-0 rounded-lg px-2 py-1 ${x.meal ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>{x.meal ? 'Swap' : 'Move here'}</span>
             </button>
           ))}
         </div>
@@ -743,7 +743,7 @@ function NoteSheet({ title, note, onSave, onClose }: { key?: React.Key; title: s
         <div className="mt-3 flex items-center gap-2">
           {note && <button type="button" onClick={() => onSave('')} className="h-12 px-3 rounded-xl text-sm font-semibold text-rose-700 cursor-pointer" data-note-remove>Remove</button>}
           <button type="button" onClick={onClose} className="h-12 px-4 rounded-xl border border-zinc-300 text-sm font-semibold text-zinc-700 cursor-pointer ml-auto">Cancel</button>
-          <button type="button" onClick={() => onSave(text)} className="h-12 px-5 rounded-xl bg-zinc-900 text-white text-sm font-semibold cursor-pointer" data-note-save>Save</button>
+          <button type="button" onClick={() => onSave(text)} className="h-12 px-5 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer" data-note-save>Save</button>
         </div>
       </div>
     </div>

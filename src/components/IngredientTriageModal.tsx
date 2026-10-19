@@ -214,7 +214,7 @@ export function IngredientTriageModal({
       return 'bg-emerald-50 text-emerald-700 border-emerald-200/70';
     }
     if (cat.includes('dairy') || cat.includes('egg')) {
-      return 'bg-sky-50 text-sky-700 border-sky-200/70';
+      return 'bg-blue-50 text-blue-700 border-blue-200/70';
     }
     if (cat.includes('bakery') || cat.includes('bread')) {
       return 'bg-amber-50 text-amber-700 border-amber-200/70';
@@ -263,7 +263,7 @@ export function IngredientTriageModal({
           
           {/* Target Unrecognized Ingredient Card */}
           <div className={`bg-white border rounded-xl p-3.5 shadow-3xs shrink-0 transition-all ${
-            isEditingIngredient ? 'border-indigo-400 ring-2 ring-indigo-500/10 shadow-xs' : 'border-zinc-200/90'
+            isEditingIngredient ? 'border-emerald-400 ring-2 ring-emerald-500/10 shadow-xs' : 'border-zinc-200/90'
           }`}>
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -277,7 +277,7 @@ export function IngredientTriageModal({
                   </span>
                 )}
                 {isEditingIngredient && (
-                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                     Editing Ingredient
                   </span>
                 )}
@@ -295,7 +295,7 @@ export function IngredientTriageModal({
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     placeholder="e.g. Garlic, Chicken Breast, Olive Oil..."
-                    className="w-full text-xs font-bold bg-zinc-50 focus:bg-white border border-indigo-300 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 outline-none transition-all text-zinc-900 placeholder:text-zinc-400"
+                    className="w-full text-xs font-bold bg-zinc-50 focus:bg-white border border-emerald-300 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 outline-none transition-all text-zinc-900 placeholder:text-zinc-400"
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleSaveIngredientEdit();
@@ -315,7 +315,7 @@ export function IngredientTriageModal({
                       value={editAmount}
                       onChange={(e) => setEditAmount(e.target.value)}
                       placeholder="1"
-                      className="w-full text-xs font-bold text-center bg-zinc-50 focus:bg-white border border-zinc-200 focus:border-indigo-400 rounded-lg px-1.5 py-1 outline-none font-mono"
+                      className="w-full text-xs font-bold text-center bg-zinc-50 focus:bg-white border border-zinc-200 focus:border-emerald-400 rounded-lg px-1.5 py-1 outline-none font-mono"
                     />
                   </div>
 
@@ -328,7 +328,7 @@ export function IngredientTriageModal({
                       value={editUnit}
                       onChange={(e) => setEditUnit(e.target.value)}
                       placeholder="g, tbsp, item"
-                      className="w-full text-xs font-semibold text-center bg-zinc-50 focus:bg-white border border-zinc-200 focus:border-indigo-400 rounded-lg px-2 py-1 outline-none"
+                      className="w-full text-xs font-semibold text-center bg-zinc-50 focus:bg-white border border-zinc-200 focus:border-emerald-400 rounded-lg px-2 py-1 outline-none"
                     />
                   </div>
 
@@ -339,7 +339,7 @@ export function IngredientTriageModal({
                     <select
                       value={editAisle}
                       onChange={(e) => setEditAisle(e.target.value)}
-                      className="w-full text-xs font-semibold bg-zinc-50 focus:bg-white border border-zinc-200 focus:border-indigo-400 rounded-lg px-2 py-1 outline-none cursor-pointer"
+                      className="w-full text-xs font-semibold bg-zinc-50 focus:bg-white border border-zinc-200 focus:border-emerald-400 rounded-lg px-2 py-1 outline-none cursor-pointer"
                     >
                       {['Produce', 'Meat & Seafood', 'Dairy', 'Bakery', 'Frozen', 'Pantry', 'Other'].map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
@@ -366,7 +366,7 @@ export function IngredientTriageModal({
                     type="button"
                     onClick={handleSaveIngredientEdit}
                     disabled={!editName.trim()}
-                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-bold rounded-md transition-all shadow-3xs flex items-center gap-1 cursor-pointer"
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold rounded-md transition-all shadow-3xs flex items-center gap-1 cursor-pointer"
                   >
                     <Check className="w-3 h-3 stroke-[2.5]" />
                     <span>Apply Changes</span>
@@ -385,7 +385,7 @@ export function IngredientTriageModal({
                 }}
                 title="Click to change ingredient name or quantities"
               >
-                <span className="text-base font-extrabold text-zinc-900 tracking-tight group-hover:text-indigo-600 transition-colors">
+                <span className="text-base font-extrabold text-zinc-900 tracking-tight group-hover:text-emerald-600 transition-colors">
                   {currentItem.ingredient.name}
                 </span>
                 {(currentItem.ingredient.amount || currentItem.ingredient.unit) && (
@@ -393,7 +393,7 @@ export function IngredientTriageModal({
                     ({currentItem.ingredient.amount} {currentItem.ingredient.unit})
                   </span>
                 )}
-                <span className="text-[11px] text-zinc-400 group-hover:text-indigo-600 font-medium ml-auto flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
+                <span className="text-[11px] text-zinc-400 group-hover:text-emerald-600 font-medium ml-auto flex items-center gap-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
                   <Pencil className="w-2.5 h-2.5" />
                   <span>Click to change</span>
                 </span>
@@ -422,7 +422,7 @@ export function IngredientTriageModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Type to search (e.g. olive oil, cream, onions, pasta)..."
-                className="w-full bg-white border border-zinc-200/90 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 rounded-xl pl-9 pr-8 py-2 text-xs font-medium text-zinc-900 placeholder:text-zinc-400 outline-none transition-all shadow-3xs"
+                className="w-full bg-white border border-zinc-200/90 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 rounded-xl pl-9 pr-8 py-2 text-xs font-medium text-zinc-900 placeholder:text-zinc-400 outline-none transition-all shadow-3xs"
               />
               {searchQuery && (
                 <button
@@ -461,7 +461,7 @@ export function IngredientTriageModal({
                     <button
                       type="button"
                       onClick={() => handleAddNew(searchQuery.trim())}
-                      className="w-full sm:w-auto px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/70 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      className="w-full sm:w-auto px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/70 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Add &quot;{searchQuery.trim()}&quot; as New Item</span>
@@ -593,9 +593,9 @@ export function IngredientTriageModal({
             <button
               type="button"
               onClick={() => handleAddNew()}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer text-xs font-bold"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer text-xs font-bold"
             >
-              <Sparkles className="w-3.5 h-3.5 text-indigo-200" />
+              <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
               <span>Add as New Item (&quot;{currentItem.ingredient.name}&quot;)</span>
             </button>
 

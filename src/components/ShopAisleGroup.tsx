@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { ShoppingListItem } from '../types';
+import { AISLE_LOOK, AisleIcon } from './AisleLook';
+import type { FoodAisle } from '../utils';
 
 interface ShopAisleGroupProps {
   key?: React.Key;
@@ -21,6 +23,7 @@ export default function ShopAisleGroup({ aisle, info, items, renderItem, compact
   const isCollapsed = userOpen === null ? allDone : !userOpen;
   const setIsCollapsed = (collapsed: boolean) => setUserOpen(!collapsed);
   const itemsLeft = items.filter(i => !i.checked && !i.outOfStock).length;
+  const look = AISLE_LOOK[aisle as FoodAisle];
 
   if (compact) {
     // Slim one-line header that stays in view while you scroll its aisle.
@@ -29,13 +32,14 @@ export default function ShopAisleGroup({ aisle, info, items, renderItem, compact
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`sticky top-0 z-10 w-full flex items-center justify-between gap-2 px-3 py-2 backdrop-blur-sm text-left cursor-pointer ${allDone ? 'bg-emerald-50/95' : 'bg-zinc-50/95'} ${isCollapsed ? '' : 'border-b border-zinc-200/70'}`}
+          className={`sticky top-0 z-10 w-full flex items-center justify-between gap-2 px-3 py-2 text-left cursor-pointer ${allDone ? 'bg-emerald-50' : look ? look.header : 'bg-zinc-50'} ${isCollapsed ? '' : 'border-b'}`}
           aria-expanded={!isCollapsed}
           data-aisle-header={info.name}
         >
           <span className="flex items-center gap-1.5 min-w-0">
             <ChevronDown className={`w-4 h-4 text-zinc-500 shrink-0 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-            <span className={`text-xs font-bold uppercase tracking-wider truncate ${allDone ? 'text-emerald-800' : 'text-zinc-700'}`}>{info.name}</span>
+            {look && <AisleIcon aisle={aisle as FoodAisle} />}
+            <span className={`text-xs font-bold uppercase tracking-wider truncate ${allDone ? 'text-emerald-800' : look ? look.title : 'text-zinc-700'}`}>{info.name}</span>
           </span>
           {allDone ? (
             <span className="text-xs font-semibold text-emerald-700 shrink-0 inline-flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> done · {items.length}</span>
@@ -63,6 +67,7 @@ export default function ShopAisleGroup({ aisle, info, items, renderItem, compact
         >
           <div className="flex items-center gap-2">
             <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+            {look && <AisleIcon aisle={aisle as FoodAisle} />}
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${info.colorClass}`}>
               {info.name}
             </span>

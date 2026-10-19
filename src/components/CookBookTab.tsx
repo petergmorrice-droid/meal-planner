@@ -135,7 +135,7 @@ export default function CookBookTab({
             <button
               type="button"
               onClick={() => setShowOptions(!showOptions)}
-              className={`w-10 h-10 rounded-xl border flex items-center justify-center cursor-pointer ${showOptions ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`}
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center cursor-pointer ${showOptions ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-200'}`}
               aria-label="Sort and display options"
               title="Sort and display options"
               aria-expanded={showOptions}
@@ -155,7 +155,7 @@ export default function CookBookTab({
                           type="button"
                           data-sort={o.id}
                           onClick={() => setSort(o.id)}
-                          className={`h-10 px-2 rounded-lg text-sm font-semibold border cursor-pointer ${sort === o.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`}
+                          className={`h-10 px-2 rounded-lg text-sm font-semibold border cursor-pointer ${sort === o.id ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-200'}`}
                         >
                           {o.label}
                         </button>

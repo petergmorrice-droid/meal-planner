@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AisleIcon } from './AisleLook';
 import Notice from './Notice';
 import {
   Check, Copy, Download, Upload, Search, X, Plus, Minus, ChevronRight, ChevronLeft, Sparkles,
@@ -146,7 +147,7 @@ export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: S
             <p className="text-[15px] text-zinc-700 mt-1 whitespace-pre-line">{confirm.body}</p>
             <div className="mt-4 flex gap-2">
               <button type="button" onClick={() => setConfirm(null)} className="flex-1 h-12 rounded-xl border border-zinc-300 font-semibold cursor-pointer" data-confirm-cancel>Cancel</button>
-              <button type="button" onClick={() => { const r = confirm.run; setConfirm(null); r(); }} className={`flex-1 h-12 rounded-xl text-white font-semibold cursor-pointer ${confirm.danger ? 'bg-rose-600' : 'bg-zinc-900'}`} data-confirm-ok>{confirm.action}</button>
+              <button type="button" onClick={() => { const r = confirm.run; setConfirm(null); r(); }} className={`flex-1 h-12 rounded-xl text-white font-semibold cursor-pointer ${confirm.danger ? 'bg-rose-600' : 'bg-emerald-600'}`} data-confirm-ok>{confirm.action}</button>
             </div>
           </div>
         </Sheet>
@@ -677,6 +678,7 @@ function ProductsPage({ store, onBack, onClean, say, setConfirm }: {
     return (
       <div key={p.id} className="flex items-center">
         <button type="button" onClick={() => setEditing(p)} className={`${row} cursor-pointer hover:bg-zinc-50 flex-1 min-w-0`} data-product={p.name}>
+          {!hasNoAisle(p) && p.aisle && <AisleIcon aisle={p.aisle} size="md" />}
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-semibold text-zinc-900 truncate">{p.name}</span>
             <span className="block text-[13px] text-zinc-500 truncate">{aisleText} · sold in {p.item.increment} {p.item.unit || 'item'}</span>
@@ -742,7 +744,7 @@ function ProductsPage({ store, onBack, onClean, say, setConfirm }: {
                     </button>
                   ))}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => askMerge(a, b)} className="h-9 px-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold cursor-pointer" data-dup-keep={a.name}>Same: keep {a.name}</button>
+                    <button type="button" onClick={() => askMerge(a, b)} className="h-9 px-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer" data-dup-keep={a.name}>Same: keep {a.name}</button>
                     <button type="button" onClick={() => askMerge(b, a)} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer" data-dup-keep={b.name}>Keep {b.name}</button>
                     <button type="button" onClick={() => { store.markProductsDifferent?.(a.id, b.id); say(`${a.name} and ${b.name} kept apart`); }} className="h-9 px-3 rounded-xl text-sm font-semibold text-zinc-600 cursor-pointer" data-dup-different>Not the same</button>
                   </div>
@@ -760,7 +762,7 @@ function ProductsPage({ store, onBack, onClean, say, setConfirm }: {
                 {view === 'all' && (
                   <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-3 px-3" data-products-aisles>
                     {['all', ...orderedAisles(prefs.aisleOrder)].map((id) => (
-                      <button key={id} type="button" onClick={() => setAisle(id)} aria-pressed={aisle === id} className={`h-8 px-3 rounded-full text-sm font-semibold whitespace-nowrap border cursor-pointer ${aisle === id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'}`} data-aisle-chip={id}>{id === 'all' ? 'All aisles' : GROCERY_AISLES[id as keyof typeof GROCERY_AISLES].name}</button>
+                      <button key={id} type="button" onClick={() => setAisle(id)} aria-pressed={aisle === id} className={`h-8 px-3 rounded-full text-sm font-semibold whitespace-nowrap border cursor-pointer ${aisle === id ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-200'}`} data-aisle-chip={id}>{id === 'all' ? 'All aisles' : GROCERY_AISLES[id as keyof typeof GROCERY_AISLES].name}</button>
                     ))}
                   </div>
                 )}
@@ -978,7 +980,7 @@ function HistoryPage({ plans, store, onBack, say, setConfirm, onNavigateTab }: {
                 })}
               </ul>
               <div className="px-4 py-3 flex flex-wrap gap-2 border-t border-zinc-100">
-                <button type="button" onClick={() => setCopying(p)} className="h-9 px-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold cursor-pointer" data-history-copy>Copy to a week…</button>
+                <button type="button" onClick={() => setCopying(p)} className="h-9 px-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer" data-history-copy>Copy to a week…</button>
                 <button type="button" onClick={() => copyText(p)} className="h-9 px-3 rounded-xl border border-zinc-300 text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer"><Copy className="w-4 h-4" />Copy as text</button>
               </div>
             </section>

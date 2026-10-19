@@ -254,7 +254,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
         {/* Header */}
         <div className="px-5 py-4 bg-white border-b border-zinc-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
               <BookOpen className="w-4 h-4" />
             </div>
             <div>
@@ -308,7 +308,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-2xs">
                 <div>
                   <h3 className="font-bold text-sm text-zinc-900 flex items-center gap-2">
-                    <Utensils className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <Utensils className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>{selectedRecipe.name}</span>
                   </h3>
                   <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
@@ -352,7 +352,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                         onClick={() => handlePortionChange(p)}
                         className={`text-[11px] font-semibold px-2 py-1 rounded-lg border transition-colors cursor-pointer ${
                           portions === p 
-                            ? 'bg-indigo-600 text-white border-indigo-600' 
+                            ? 'bg-emerald-600 text-white border-emerald-600' 
                             : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
                         }`}
                       >
@@ -375,7 +375,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   <button
                     type="button"
                     onClick={() => toggleSelectAll(true)}
-                    className="text-indigo-600 hover:underline cursor-pointer"
+                    className="text-emerald-600 hover:underline cursor-pointer"
                   >
                     Select all
                   </button>
@@ -414,7 +414,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       type="button"
                       className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
                         item.selected 
-                          ? 'bg-indigo-600 border-indigo-600 text-white' 
+                          ? 'bg-emerald-600 border-emerald-600 text-white' 
                           : 'border-zinc-300 bg-white'
                       }`}
                     >
@@ -474,7 +474,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     type="checkbox"
                     checked={alsoAddToFreezer}
                     onChange={(e) => setAlsoAddToFreezer(e.target.checked)}
-                    className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                    className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
                   />
                   <span>It's for the freezer: add <strong>{portions} portions</strong> to the Freezer tab</span>
                 </label>
@@ -499,7 +499,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   type="button"
                   onClick={handleSubmitRecipeBatch}
                   disabled={selectedCount === 0}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 rounded-xl shadow-xs transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40 rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add {selectedCount} to the list</span>
@@ -518,7 +518,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   onClick={() => setActiveTab('cookbook')}
                   className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
                     activeTab === 'cookbook'
-                      ? 'border-indigo-600 text-indigo-600'
+                      ? 'border-emerald-600 text-emerald-600'
                       : 'border-transparent text-zinc-500 hover:text-zinc-900'
                   }`}
                 >
@@ -530,7 +530,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   onClick={() => setActiveTab('custom')}
                   className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
                     activeTab === 'custom'
-                      ? 'border-indigo-600 text-indigo-600'
+                      ? 'border-emerald-600 text-emerald-600'
                       : 'border-transparent text-zinc-500 hover:text-zinc-900'
                   }`}
                 >
@@ -552,7 +552,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="Search recipes, meals or ingredients..."
-                      className="w-full bg-zinc-100/80 focus:bg-white border border-transparent focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 rounded-xl py-2 pl-9 pr-8 text-xs font-medium transition-all"
+                      className="w-full bg-zinc-100/80 focus:bg-white border border-transparent focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 rounded-xl py-2 pl-9 pr-8 text-xs font-medium transition-all"
                     />
                     {searchTerm && (
                       <button
@@ -572,7 +572,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       onClick={() => setSelectedTag('all')}
                       className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
                         selectedTag === 'all'
-                          ? 'bg-zinc-900 text-white'
+                          ? 'bg-emerald-600 text-white'
                           : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                       }`}
                     >
@@ -583,7 +583,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       onClick={() => setSelectedTag('vegetarian')}
                       className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
                         selectedTag === 'vegetarian'
-                          ? 'bg-zinc-900 text-white'
+                          ? 'bg-emerald-600 text-white'
                           : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                       }`}
                     >
@@ -594,7 +594,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       onClick={() => setSelectedTag('quick')}
                       className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
                         selectedTag === 'quick'
-                          ? 'bg-zinc-900 text-white'
+                          ? 'bg-emerald-600 text-white'
                           : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                       }`}
                     >
@@ -607,7 +607,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                         onClick={() => setSelectedTag(t)}
                         className={`px-2.5 py-1 rounded-lg font-medium capitalize transition-colors cursor-pointer ${
                           selectedTag === t
-                            ? 'bg-zinc-900 text-white'
+                            ? 'bg-emerald-600 text-white'
                             : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                         }`}
                       >
@@ -635,7 +635,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       <button
                         type="button"
                         onClick={() => setActiveTab('custom')}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-xl transition-colors cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Type your own list</span>
@@ -653,11 +653,11 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                             role="button"
                             tabIndex={0}
                             onClick={() => handleSelectRecipe(recipe)}
-                            className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-2xs hover:border-indigo-300 hover:shadow-md transition-all active:scale-[0.99] text-left cursor-pointer flex flex-col justify-between group"
+                            className="bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-2xs hover:border-emerald-300 hover:shadow-md transition-all active:scale-[0.99] text-left cursor-pointer flex flex-col justify-between group"
                           >
                             <div>
                               <div className="flex items-start justify-between gap-2 mb-1">
-                                <h4 className="font-bold text-xs text-zinc-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
+                                <h4 className="font-bold text-xs text-zinc-900 group-hover:text-emerald-600 transition-colors line-clamp-1">
                                   {recipe.name}
                                 </h4>
                                 <span className="text-[11px] font-semibold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded shrink-0">
@@ -687,7 +687,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                                 <span>{recipe.ingredients.length} items</span>
                               </div>
 
-                              <span className="font-semibold text-indigo-600 group-hover:underline flex items-center gap-0.5">
+                              <span className="font-semibold text-emerald-600 group-hover:underline flex items-center gap-0.5">
                                 <span>Choose</span>
                                 <span>→</span>
                               </span>
@@ -716,7 +716,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                         value={customMealName}
                         onChange={(e) => setCustomMealName(e.target.value)}
                         placeholder="e.g. Lasagne for the freezer, birthday cake..."
-                        className="w-full bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 py-2 text-xs font-medium transition-all"
+                        className="w-full bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 rounded-xl px-3 py-2 text-xs font-medium transition-all"
                       />
                     </div>
 
@@ -754,7 +754,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       <button
                         type="button"
                         onClick={handleAddCustomIngredientRow}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 cursor-pointer"
                       >
                         <Plus className="w-3 h-3" />
                         <span>Add Ingredient</span>
@@ -769,7 +769,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                             value={row.name}
                             onChange={(e) => handleUpdateCustomRow(row.id, 'name', e.target.value)}
                             placeholder={`Ingredient ${idx + 1} (e.g. Minced Beef)`}
-                            className="flex-1 bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-indigo-400 rounded-xl px-2.5 py-1.5 text-xs font-medium"
+                            className="flex-1 bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-emerald-400 rounded-xl px-2.5 py-1.5 text-xs font-medium"
                           />
                           <input
                             type="number"
@@ -777,14 +777,14 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                             min={0.1}
                             step={0.5}
                             onChange={(e) => handleUpdateCustomRow(row.id, 'amount', parseFloat(e.target.value) || 1)}
-                            className="w-16 bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-indigo-400 rounded-xl px-2 py-1.5 text-xs font-medium text-center"
+                            className="w-16 bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-emerald-400 rounded-xl px-2 py-1.5 text-xs font-medium text-center"
                           />
                           <input
                             type="text"
                             value={row.unit}
                             onChange={(e) => handleUpdateCustomRow(row.id, 'unit', e.target.value)}
                             placeholder="Unit (g, can, pack)"
-                            className="w-24 bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-indigo-400 rounded-xl px-2 py-1.5 text-xs font-medium"
+                            className="w-24 bg-zinc-50 border border-zinc-200 focus:bg-white focus:border-emerald-400 rounded-xl px-2 py-1.5 text-xs font-medium"
                           />
                           {customIngredientLines.length > 1 && (
                             <button
@@ -803,7 +803,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     <button
                       type="button"
                       onClick={handleAddCustomIngredientRow}
-                      className="w-full py-2 border border-dashed border-zinc-300 rounded-xl text-xs font-medium text-zinc-500 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-2 border border-dashed border-zinc-300 rounded-xl text-xs font-medium text-zinc-500 hover:text-emerald-600 hover:border-emerald-300 hover:bg-emerald-50/50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
                       <span>Add another ingredient</span>
@@ -819,7 +819,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                         type="checkbox"
                         checked={alsoAddToFreezer}
                         onChange={(e) => setAlsoAddToFreezer(e.target.checked)}
-                        className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                        className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
                       />
                       <span>It's for the freezer: add {customPortions} portions to the Freezer tab</span>
                     </label>
@@ -837,7 +837,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       type="button"
                       onClick={handleSubmitCustomBatch}
                       disabled={!customMealName.trim() || customIngredientLines.every(l => !l.name.trim())}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 rounded-xl shadow-xs transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40 rounded-xl shadow-xs transition-colors cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Add to the list</span>

@@ -90,38 +90,44 @@ export default function App() {
           <TabButton
             active={activeTab === 'cookbook'}
             onClick={() => setActiveTab('cookbook')}
-            icon={<BookOpen className="w-4 h-4 stroke-[1.75]" />}
+            icon={<BookOpen className="w-[18px] h-[18px] stroke-[2]" />}
             label="Cookbook"
+            tone="amber"
           />
           <TabButton
             active={activeTab === 'planning'}
             onClick={() => setActiveTab('planning')}
-            icon={<Calendar className="w-4 h-4 stroke-[1.75]" />}
+            icon={<Calendar className="w-[18px] h-[18px] stroke-[2]" />}
             label="Planning"
+            tone="emerald"
           />
           <TabButton
             active={activeTab === 'shop'}
             onClick={() => setActiveTab('shop')}
-            icon={<ShoppingCart className="w-4 h-4 stroke-[1.75]" />}
+            icon={<ShoppingCart className="w-[18px] h-[18px] stroke-[2]" />}
             label="Shop"
+            tone="blue"
           />
           <TabButton
             active={activeTab === 'this_week'}
             onClick={() => setActiveTab('this_week')}
-            icon={<ChefHat className="w-4 h-4 stroke-[1.75]" />}
+            icon={<ChefHat className="w-[18px] h-[18px] stroke-[2]" />}
             label="Cook"
+            tone="orange"
           />
           <TabButton
             active={activeTab === 'batch'}
             onClick={() => setActiveTab('batch')}
-            icon={<Snowflake className="w-4 h-4 stroke-[1.75]" />}
+            icon={<Snowflake className="w-[18px] h-[18px] stroke-[2]" />}
             label="Freezer"
+            tone="cyan"
           />
           <TabButton
             active={activeTab === 'settings'}
             onClick={() => setActiveTab('settings')}
-            icon={<Sliders className="w-4 h-4 stroke-[1.75]" />}
+            icon={<Sliders className="w-[18px] h-[18px] stroke-[2]" />}
             label="Settings"
+            tone="zinc"
           />
         </div>
       </nav>
@@ -129,27 +135,40 @@ export default function App() {
   );
 }
 
+/** Each tab's own colour, so you can tell where you are at a glance. */
+const TAB_TONES = {
+  amber: { on: 'bg-amber-50 text-amber-800', icon: 'text-amber-600' },
+  emerald: { on: 'bg-emerald-50 text-emerald-800', icon: 'text-emerald-600' },
+  blue: { on: 'bg-blue-50 text-blue-800', icon: 'text-blue-600' },
+  orange: { on: 'bg-orange-50 text-orange-800', icon: 'text-orange-600' },
+  cyan: { on: 'bg-cyan-50 text-cyan-800', icon: 'text-cyan-600' },
+  zinc: { on: 'bg-zinc-100 text-zinc-900', icon: 'text-zinc-600' },
+} as const;
+
 function TabButton({
   active,
   onClick,
   icon,
-  label
+  label,
+  tone,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
+  tone: keyof typeof TAB_TONES;
 }) {
+  const t = TAB_TONES[tone];
   return (
     <button
       onClick={onClick}
       className={`flex-1 flex flex-col items-center justify-center py-1 px-1 sm:px-3 rounded-xl transition-all duration-150 min-w-0 ${
-        active
-          ? 'text-zinc-900 font-medium bg-zinc-100/90'
-          : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50'
+        active ? `${t.on} font-semibold` : 'text-zinc-500 hover:bg-zinc-50'
       }`}
+      aria-current={active ? 'page' : undefined}
+      data-tab-tone={tone}
     >
-      <div className="flex items-center justify-center h-5 shrink-0">
+      <div className={`flex items-center justify-center h-5 shrink-0 ${t.icon} ${active ? '' : 'opacity-75'}`}>
         {icon}
       </div>
       <span className="text-[11px] sm:text-[11px] tracking-tight mt-0.5 whitespace-nowrap truncate w-full text-center">{label}</span>

@@ -63,14 +63,14 @@ export const GROCERY_AISLES: Record<FoodAisle, AisleInfo> = {
     name: 'Canned & Jarred Goods',
     order: 6,
     description: 'Tomatoes, beans, pulses & sauces',
-    colorClass: 'bg-yellow-50 text-yellow-800 border-yellow-200/80',
+    colorClass: 'bg-violet-50 text-violet-700 border-violet-200/80',
   },
   pantry_spices: {
     id: 'pantry_spices',
     name: 'Pantry, Oils & Spices',
     order: 7,
     description: 'Oils, seasonings, condiments & flour',
-    colorClass: 'bg-stone-100 text-stone-700 border-stone-200/80',
+    colorClass: 'bg-yellow-50 text-yellow-800 border-yellow-200/80',
   },
   frozen: {
     id: 'frozen',
@@ -84,7 +84,7 @@ export const GROCERY_AISLES: Record<FoodAisle, AisleInfo> = {
     name: 'Household & Other',
     order: 9,
     description: 'Cleaning, paper goods & miscellaneous',
-    colorClass: 'bg-zinc-100 text-zinc-700 border-zinc-200/80',
+    colorClass: 'bg-slate-100 text-slate-700 border-slate-200/80',
   },
 };
 

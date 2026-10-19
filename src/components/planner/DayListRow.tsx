@@ -169,7 +169,7 @@ export function WeekDayCard({
   );
 
   const frame = `rounded-xl border flex flex-col h-full min-h-0 p-2 sm:p-2.5 relative select-none transition-all ${
-    dragActive ? 'ring-2 ring-indigo-500 ring-offset-1 border-indigo-400' : isToday ? 'ring-2 ring-emerald-500 border-emerald-500' : ''
+    dragActive ? 'ring-2 ring-blue-500 ring-offset-1 border-blue-400' : isToday ? 'ring-2 ring-emerald-500 border-emerald-500' : ''
   }`;
 
   if (!meal || !d) {
@@ -419,7 +419,7 @@ export function DaySheet({
             <button type="button" onClick={() => { commit(); onChangeMeal(); }} className="h-12 rounded-xl border border-zinc-300 text-sm font-semibold flex flex-col items-center justify-center cursor-pointer" data-change-meal>
               <RefreshCw className="w-4 h-4 mb-0.5" />Change meal
             </button>
-            <button type="button" onClick={() => setMoving(!moving)} aria-expanded={moving} className={`h-12 rounded-xl border text-sm font-semibold flex flex-col items-center justify-center cursor-pointer ${moving ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-300'}`} data-move-meal>
+            <button type="button" onClick={() => setMoving(!moving)} aria-expanded={moving} className={`h-12 rounded-xl border text-sm font-semibold flex flex-col items-center justify-center cursor-pointer ${moving ? 'bg-emerald-600 text-white border-emerald-600' : 'border-zinc-300'}`} data-move-meal>
               <ArrowLeftRight className="w-4 h-4 mb-0.5" />Move or swap
             </button>
             <button type="button" onClick={() => { onRemove(); }} className="h-12 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-sm font-semibold flex flex-col items-center justify-center cursor-pointer" data-remove-meal>
@@ -449,7 +449,7 @@ export function DaySheet({
           )}
         </div>
         <div className="px-4 py-3 border-t border-zinc-200 shrink-0" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-          <button type="button" onClick={close} className="w-full h-12 rounded-xl bg-zinc-900 text-white text-base font-semibold cursor-pointer inline-flex items-center justify-center gap-2" data-day-done>
+          <button type="button" onClick={close} className="w-full h-12 rounded-xl bg-emerald-600 text-white text-base font-semibold cursor-pointer inline-flex items-center justify-center gap-2" data-day-done>
             Done
           </button>
         </div>

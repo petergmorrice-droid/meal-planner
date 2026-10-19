@@ -1042,7 +1042,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                    onClick={() => setShowViewOptions(!showViewOptions)}
                    className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-2xs ${
                      showViewOptions
-                       ? 'bg-indigo-600 text-white border-indigo-600'
+                       ? 'bg-emerald-600 text-white border-emerald-600'
                        : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600 hover:text-zinc-900'
                    }`}
                   title="View options"
@@ -1123,7 +1123,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                               data-sort={o.id}
                               onClick={() => setRecipeSort(o.id)}
                               className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                                recipeSort === o.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                                recipeSort === o.id ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
                               }`}
                             >
                               {o.label}
@@ -1411,7 +1411,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
               <button
                 type="button"
                 onClick={() => setCopyWeekState('pick')}
-                className="h-8 flex items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 rounded-lg border border-indigo-200 cursor-pointer whitespace-nowrap"
+                className="h-8 flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 rounded-lg border border-emerald-200 cursor-pointer whitespace-nowrap"
                 title="Fill this week with the meals from another week"
               >
                 <Copy className="w-3.5 h-3.5" />
@@ -1535,7 +1535,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                     data-week-chip={weekLabel(p.startDate)}
                     onClick={() => setSelectedPlanId(p.id)}
                     className={`shrink-0 h-9 px-3 rounded-full text-sm font-semibold border cursor-pointer ${
-                      currentPlan?.id === p.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200'
+                      currentPlan?.id === p.id ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-200'
                     }`}
                   >
                     {weekLabel(p.startDate)}
@@ -1917,7 +1917,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                       }}
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                         isSelected 
-                          ? 'bg-indigo-600 text-white shadow-2xs' 
+                          ? 'bg-emerald-600 text-white shadow-2xs' 
                           : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                       }`}
                     >
@@ -1943,7 +1943,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                   }}
                   placeholder="e.g. Prep veggies ahead, double the sauce..."
                   rows={2}
-                  className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/10 focus:border-zinc-400 transition-colors resize-none placeholder:text-zinc-400 text-zinc-800"
+                  className="w-full text-xs p-2.5 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-600/10 focus:border-zinc-400 transition-colors resize-none placeholder:text-zinc-400 text-zinc-800"
                 />
               </div>
 
@@ -1975,7 +1975,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                   );
                   setEditingServingsMeal(null);
                 }}
-                className="flex-1 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors text-center cursor-pointer"
+                className="flex-1 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-center cursor-pointer"
               >
                 Done
               </button>
@@ -2129,7 +2129,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                   }
                   setCustomMealModal(null);
                 }}
-                className="flex-1 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors text-center shadow-2xs cursor-pointer"
+                className="flex-1 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-center shadow-2xs cursor-pointer"
               >
                 {customMealModal.mealId ? 'Save' : 'Add to the week'}
               </button>
@@ -2204,7 +2204,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                   }
                   setAddingNoteToMeal(null);
                 }}
-                className="flex-1 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors text-center shadow-2xs cursor-pointer"
+                className="flex-1 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-center shadow-2xs cursor-pointer"
               >
                 Save Note
               </button>
@@ -2477,7 +2477,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                         key={plan.id}
                         type="button"
                         onClick={() => totalPlannedMeals > 0 ? setCopyWeekState(plan) : handleCopyWeek(plan)}
-                        className="w-full text-left p-3 rounded-xl border border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors cursor-pointer"
+                        className="w-full text-left p-3 rounded-xl border border-zinc-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition-colors cursor-pointer"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-semibold text-zinc-900">{weekLabel(plan.startDate)}</span>
@@ -2512,7 +2512,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                   <button
                     type="button"
                     onClick={() => handleCopyWeek(copyWeekState)}
-                    className="flex-1 py-2.5 text-white font-semibold bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors text-sm cursor-pointer"
+                    className="flex-1 py-2.5 text-white font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm cursor-pointer"
                   >
                     Replace
                   </button>
@@ -2782,7 +2782,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between shrink-0 bg-indigo-50/50">
+        <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between shrink-0 bg-emerald-50/50">
           <div>
             <h3 className="font-bold text-sm text-zinc-900 flex items-center gap-1.5">
               <span>🥗</span>
@@ -2859,7 +2859,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                 onClick={() => setChosenSides([])}
                 className={`text-xs px-2.5 py-1.5 rounded-full border transition-all cursor-pointer font-medium ${
                   chosenSides.length === 0
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs font-semibold'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-semibold'
                     : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
                 }`}
               >
@@ -2875,7 +2875,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                     onClick={() => handleAddSide(pop)}
                     className={`text-xs px-2.5 py-1.5 rounded-full border transition-all cursor-pointer font-medium ${
                       isSelected 
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs font-semibold' 
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-semibold' 
                         : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
                     }`}
                   >
@@ -2896,7 +2896,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                 placeholder="Search sides... (e.g. Peas, Salad)"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
+                className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-white"
               />
             </div>
 
@@ -2920,7 +2920,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                   <button
                     type="button"
                     onClick={() => setTriageSideName(searchQuery.trim())}
-                    className="w-full text-left px-3 py-2.5 text-xs text-indigo-600 hover:bg-indigo-50 flex items-center gap-1.5 transition-colors cursor-pointer font-semibold"
+                    className="w-full text-left px-3 py-2.5 text-xs text-emerald-600 hover:bg-emerald-50 flex items-center gap-1.5 transition-colors cursor-pointer font-semibold"
                   >
                     <Plus className="w-3.5 h-3.5 shrink-0" />
                     <span>Add custom side "{searchQuery.trim()}"...</span>
@@ -2932,19 +2932,19 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
 
           {/* Triage Sub-form if adding a custom/unmapped side */}
           {triageSideName && (
-            <div className="p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-3 animate-in slide-in-from-top-2 duration-150">
+            <div className="p-4 bg-emerald-50/60 border border-emerald-100 rounded-xl space-y-3 animate-in slide-in-from-top-2 duration-150">
               <div className="flex items-start justify-between">
                 <div>
-                  <h5 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                    <Database className="w-3.5 h-3.5 text-indigo-600" />
+                  <h5 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Triage Custom Side</span>
                   </h5>
-                  <p className="text-[11px] text-indigo-800/80 mt-0.5">Pick what you buy for "{triageSideName}" so it lands in the right aisle.</p>
+                  <p className="text-[11px] text-emerald-800/80 mt-0.5">Pick what you buy for "{triageSideName}" so it lands in the right aisle.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setTriageSideName(null)}
-                  className="text-indigo-400 hover:text-indigo-900"
+                  className="text-emerald-400 hover:text-emerald-900"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -2952,30 +2952,30 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <label className="block text-[11px] font-semibold text-indigo-950 mb-1">Aisle / Category</label>
+                  <label className="block text-[11px] font-semibold text-emerald-950 mb-1">Aisle / Category</label>
                   <select
                     value={triageCategory}
                     onChange={e => setTriageCategory(e.target.value)}
-                    className="w-full p-1.5 border border-indigo-200/80 rounded-lg bg-white"
+                    className="w-full p-1.5 border border-emerald-200/80 rounded-lg bg-white"
                   >
                     {Object.values(GROCERY_AISLES).sort((a, b) => a.order - b.order).map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-indigo-950 mb-1">Unit</label>
+                  <label className="block text-[11px] font-semibold text-emerald-950 mb-1">Unit</label>
                   <input
                     type="text"
                     placeholder="g, pack, head..."
                     value={triageUnit}
                     onChange={e => setTriageUnit(e.target.value)}
-                    className="w-full p-1.5 border border-indigo-200/80 rounded-lg bg-white"
+                    className="w-full p-1.5 border border-emerald-200/80 rounded-lg bg-white"
                   />
                 </div>
               </div>
 
               <div className="text-xs">
-                <label className="block text-[11px] font-semibold text-indigo-950 mb-1">Default Amount / Increment</label>
-                <div className="flex items-center gap-1.5 bg-white border border-indigo-200/80 rounded-lg p-0.5 w-fit">
+                <label className="block text-[11px] font-semibold text-emerald-950 mb-1">Default Amount / Increment</label>
+                <div className="flex items-center gap-1.5 bg-white border border-emerald-200/80 rounded-lg p-0.5 w-fit">
                   <button
                     type="button"
                     onClick={() => setTriageIncrement(Math.max(1, triageIncrement - (triageUnit === 'g' ? 50 : 1)))}
@@ -2999,7 +2999,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
               <button
                 type="button"
                 onClick={handleAddCustomSide}
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-1.5"
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center gap-1.5"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Save to Database & Add Side</span>
@@ -3020,7 +3020,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
           <button
             type="button"
             onClick={() => onSave(chosenSides)}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs cursor-pointer transition-all flex items-center gap-1.5"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-2xs cursor-pointer transition-all flex items-center gap-1.5"
           >
             <Check className="w-3.5 h-3.5" />
             <span>Save Sides</span>

@@ -3,6 +3,7 @@ import { X, PackagePlus, CheckCircle2, Repeat, Star, Minus, Plus } from 'lucide-
 import { FoodAisle, GROCERY_AISLES, getGroceryAisle, orderedAisles } from '../../utils';
 import { canonicalUnit, unitInfo, formatUnit } from '../../shopping';
 import { packsOnLine } from '../../shopList';
+import { AisleIcon } from '../AisleLook';
 
 /** Units you'd buy something in, for "Sold as". */
 const BUY_UNITS: { id: string; label: string }[] = [
@@ -121,9 +122,12 @@ export default function SaveProductSheet({ item, aisleOrder, justAdded = false, 
           <input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-11 rounded-xl border border-zinc-300 px-3 text-base" data-new-product-name /></label>
         <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
           <label className="block min-w-0"><span className="text-xs font-semibold text-zinc-600 block mb-1">Aisle</span>
-            <select value={aisle} onChange={(e) => setAisle(e.target.value as FoodAisle)} className="w-full h-11 rounded-xl border border-zinc-300 px-2 text-base bg-white" data-new-product-aisle>
-              {orderedAisles(aisleOrder).map((a) => <option key={a} value={a}>{GROCERY_AISLES[a].name}</option>)}
-            </select></label>
+            <span className="flex items-center gap-1.5">
+              <AisleIcon aisle={aisle} />
+              <select value={aisle} onChange={(e) => setAisle(e.target.value as FoodAisle)} className="flex-1 min-w-0 h-11 rounded-xl border border-zinc-300 px-2 text-base bg-white" data-new-product-aisle>
+                {orderedAisles(aisleOrder).map((a) => <option key={a} value={a}>{GROCERY_AISLES[a].name}</option>)}
+              </select>
+            </span></label>
           <div>
             <span className="text-xs font-semibold text-zinc-600 block mb-1">Sold as</span>
             <div className="flex gap-1.5">

@@ -181,12 +181,12 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
               type="button"
               onClick={onAddRecipe}
               data-add-recipe-ingredients
-              className="w-full mb-3 flex items-center gap-3 p-3 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-left cursor-pointer"
+              className="w-full mb-3 flex items-center gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-left cursor-pointer"
             >
-              <BookOpen className="w-5 h-5 text-indigo-600 shrink-0" />
+              <BookOpen className="w-5 h-5 text-emerald-600 shrink-0" />
               <span className="min-w-0">
-                <span className="block text-sm font-semibold text-indigo-950">Add a recipe's ingredients…</span>
-                <span className="block text-xs text-indigo-900/70">Any recipe, for any number of people: a batch cook, or something not on the plan</span>
+                <span className="block text-sm font-semibold text-emerald-950">Add a recipe's ingredients…</span>
+                <span className="block text-xs text-emerald-900/70">Any recipe, for any number of people: a batch cook, or something not on the plan</span>
               </span>
             </button>
           )}

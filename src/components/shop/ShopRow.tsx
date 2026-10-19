@@ -92,7 +92,7 @@ export default function ShopRow({
         <button
           type="button"
           onClick={() => onTick(row)}
-          className="shrink-0 self-center mr-3 px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-sm font-semibold cursor-pointer active:bg-zinc-700"
+          className="shrink-0 self-center mr-3 px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 text-sm font-semibold cursor-pointer active:bg-emerald-50"
           aria-label={`Undo: ${row.name} not bought`}
           data-undo-tick
         >

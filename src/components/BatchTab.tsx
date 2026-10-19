@@ -265,7 +265,7 @@ function FreezerSheet({ g, todayIso, people, recipe, onPortions, onPatch, onRemo
     <Sheet label={g.name} onClose={onClose} footer={
       <div className="flex gap-2">
         <button type="button" onClick={onPlan} className="flex-1 h-12 rounded-xl border border-zinc-300 font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer" data-sheet-plan><CalendarPlus className="w-4 h-4" />Have it on…</button>
-        <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl bg-zinc-900 text-white font-semibold cursor-pointer" data-sheet-done>Done</button>
+        <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl bg-emerald-600 text-white font-semibold cursor-pointer" data-sheet-done>Done</button>
       </div>
     }>
       <div data-freezer-sheet={g.name} className="contents">
@@ -345,7 +345,7 @@ function HaveItOnSheet({ g, plans, todayIso, people, onPick, onGoPlanning, onClo
                 className="w-full text-left rounded-xl border border-zinc-200 hover:bg-zinc-50 disabled:opacity-60 px-3 py-2.5 flex items-center gap-3 cursor-pointer">
                 <span className="w-24 text-sm font-bold text-zinc-700 shrink-0 capitalize">{whenText(r.date, todayIso)}</span>
                 <span className={`flex-1 min-w-0 text-[15px] truncate ${r.meal ? 'text-zinc-800' : 'text-zinc-400'}`}>{r.meal ? mealTitle(r.meal) : 'Free'}</span>
-                <span className={`text-xs font-bold shrink-0 rounded-lg px-2 py-1 ${already ? 'text-zinc-500' : r.meal ? 'bg-zinc-900 text-white' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>{already ? 'Planned' : r.meal ? 'Replace' : 'Put it here'}</span>
+                <span className={`text-xs font-bold shrink-0 rounded-lg px-2 py-1 ${already ? 'text-zinc-500' : r.meal ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>{already ? 'Planned' : r.meal ? 'Replace' : 'Put it here'}</span>
               </button>
             );
           })}

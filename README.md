@@ -463,3 +463,10 @@ Main files:
   at 0 when you haven't added any, so + adds one of your own on top of what
   the meals or staples need (1 can of chickpeas); − at its smallest takes it
   off again.
+- `Colours` — each aisle has its own colour and icon in the Shop list,
+  shopping mode, the item panel, Arrange aisles and Products
+  (`src/components/AisleLook.tsx`); each tab has its own colour (Cookbook
+  amber, Planning green, Shop blue, Cook orange, Freezer ice-blue, Settings
+  grey); and one meaning per colour everywhere else: green = go/done (all
+  main buttons, no more black ones), amber = check this, red = remove or out
+  of stock, blue = information. The stray purple accents are gone.

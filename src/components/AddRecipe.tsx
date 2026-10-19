@@ -358,7 +358,7 @@ export function AddRecipe({
                       disabled={!!busy}
                       data-appliance={m}
                       className={`h-12 rounded-xl border text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${
-                        appliance === m ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'
+                        appliance === m ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-300'
                       }`}
                     >
                       {m === 'ninja' ? <Zap className="w-4 h-4" /> : <Flame className="w-4 h-4" />}{METHOD_LABEL[m]}
@@ -480,7 +480,7 @@ export function AddRecipe({
                 <p className="text-sm text-zinc-600 mt-1">Replace it with this one (your notes, star and plans stay), or keep both?</p>
               </div>
               <div className="space-y-2">
-                <button type="button" onClick={() => { setDupOf(null); save('replace'); }} className="w-full h-11 rounded-xl bg-zinc-900 text-white text-sm font-semibold cursor-pointer">Replace it</button>
+                <button type="button" onClick={() => { setDupOf(null); save('replace'); }} className="w-full h-11 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer">Replace it</button>
                 <button type="button" onClick={() => { setDupOf(null); save('both'); }} className="w-full h-11 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer">Keep both</button>
                 <button type="button" onClick={() => setDupOf(null)} className="w-full h-11 rounded-xl text-sm font-semibold text-zinc-600 cursor-pointer">Go back</button>
               </div>
