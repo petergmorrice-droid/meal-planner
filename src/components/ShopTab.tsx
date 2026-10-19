@@ -61,6 +61,7 @@ import {
 import ShopHistorySheet from './shop/ShopHistorySheet';
 import SaveProductSheet, { NewProductDetails } from './shop/SaveProductSheet';
 import { AISLE_LOOK, AisleIcon } from './AisleLook';
+import ItemInfoSheet, { ItemInfoLine } from './shop/ItemInfoSheet';
 
 /** A list group that is an aisle (not "Added by you", "A–Z"...). */
 const isAisleId = (id: string): id is FoodAisle => Object.prototype.hasOwnProperty.call(AISLE_LOOK, id);
@@ -1248,21 +1249,77 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     setToastMessage(`${row.name}: ${category}`);
   };
 
-  const partDetail = (part: ShoppingListItem): string => {
-    if (part.isAdhoc || part.isBatch || part.isRecurring) return partLabel(part);
+  /** What each meal uses of a meal line: [{ "Chilli con carne (Wed)", "1 can" }]. */
+  const mealBreakdown = (part: ShoppingListItem): { label: string; amount: string }[] => {
+    if (part.isAdhoc || part.isBatch || part.isRecurring) return [];
     const req = plannedRequirementsByName.get(part.name.toLowerCase().trim());
-    if (!req || !req.breakdown.length) return partLabel(part);
+    if (!req || !req.breakdown.length) return [];
     const seen = new Set<string>();
-    const bits: string[] = [];
+    const out: { label: string; amount: string }[] = [];
     for (const b of req.breakdown) {
       const n = Number(b.amount);
-      const label = formatUnit(b.unit || '', n);
-      const amount = n > 0 ? `: ${formatCookingAmount(n, b.unit)}${label ? ` ${label}` : ''}` : '';
-      const t = `${b.recipeName} (${b.night.slice(0, 3)})${amount}`;
-      if (!seen.has(t)) { seen.add(t); bits.push(t); }
+      // Less than one reads singular: "⅔ can"
+      const label = formatUnit(b.unit || '', n > 0 && n < 1 ? 1 : n);
+      const amount = n > 0 ? `${formatCookingAmount(n, b.unit)}${label ? ` ${label}` : ''}` : '';
+      const name = `${b.recipeName} (${b.night.slice(0, 3)})`;
+      if (!seen.has(name + amount)) { seen.add(name + amount); out.push({ label: name, amount }); }
     }
-    return `For ${bits.join(', ')}`;
+    return out;
   };
+
+  const partDetail = (part: ShoppingListItem): string => {
+    const meals = mealBreakdown(part);
+    if (!meals.length) return partLabel(part);
+    return `For ${meals.map((m) => (m.amount ? `${m.label}: ${m.amount}` : m.label)).join(', ')}`;
+  };
+
+  // ---------- (i): what it's for, what was added and by whom ----------
+  const [infoKey, setInfoKey] = useState<string | null>(null);
+  const whoName = (id?: string) => {
+    const name = personName(id);
+    if (!name) return '';
+    return id === store.currentUser ? `${name} (you)` : name;
+  };
+  const infoLinesFor = (row: AggregatedShoppingListItem): ItemInfoLine[] => {
+    const lines: ItemInfoLine[] = [];
+    const order = (p: ShoppingListItem) => (p.isAdhoc && !p.isRecurring && !p.isBatch ? 3 : p.isRecurring ? 2 : p.isBatch ? 1 : 0);
+    const parts = [...row.parts].sort((a, b) => order(a) - order(b));
+    let sentBy: string | undefined;
+    for (const part of parts) {
+      if (part.isRecurring) lines.push({ kind: 'staple', text: 'Weekly staple', amount: shopQuantityText(part) });
+      else if (part.isBatch) lines.push({ kind: 'extra', text: part.batchRecipeName ? `For ${part.batchRecipeName} (extra recipe)` : 'For an extra recipe', amount: shopQuantityText(part) });
+      else if (part.isAdhoc) {
+        const by = whoName(part.addedBy);
+        lines.push({ kind: 'added', text: by ? `Added by ${by}` : 'Added by hand', amount: shopQuantityText(part) });
+      } else {
+        const meals = mealBreakdown(part);
+        if (meals.length) meals.forEach((m) => lines.push({ kind: 'meal', text: m.label, amount: m.amount || undefined }));
+        else lines.push({ kind: 'meal', text: part.recipeNames?.length ? `For ${part.recipeNames.join(', ')}` : 'For your meals', amount: shopQuantityText(part) });
+        sentBy = sentBy || part.addedBy;
+      }
+    }
+    if (sentBy && whoName(sentBy)) {
+      const firstOther = lines.findIndex((l) => l.kind !== 'meal');
+      const line: ItemInfoLine = { kind: 'added', text: `Meals sent to the list by ${whoName(sentBy)}` };
+      if (firstOther === -1) lines.push(line); else lines.splice(firstOther, 0, line);
+    }
+    if (row.note) lines.push({ kind: 'note', text: row.note });
+    if (row.outOfStock) lines.push({ kind: 'out', text: 'Out of stock at the shop' });
+    if (row.checked) lines.push({ kind: 'bought', text: row.checkedBy && whoName(row.checkedBy) ? `Bought · ticked by ${whoName(row.checkedBy)}` : 'Bought' });
+    return lines;
+  };
+  /** (i): the message at the bottom goes, so it can't cover the answer. */
+  const openInfo = (row: AggregatedShoppingListItem) => { setToast(null); setInfoKey(row.key); };
+  const infoRow = infoKey ? rows.find((r) => r.key === infoKey) || null : null;
+  const infoSheet = infoRow && (
+    <ItemInfoSheet
+      row={infoRow}
+      aisle={getGroceryAisle(infoRow)}
+      lines={infoLinesFor(infoRow)}
+      onEdit={isShoppingMode ? undefined : () => { setInfoKey(null); setOpenRowId(infoRow.id); }}
+      onClose={() => setInfoKey(null)}
+    />
+  );
 
   // ---------- Adding ----------
   /** Lines typed or picked: added to something you already added by hand, or as a new line. */
@@ -1500,6 +1557,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         route={shopRoute}
         currentUser={store.currentUser || 'P'}
         onShowHistory={() => setShowHistory(true)}
+        onInfo={openInfo}
         quickAdd={<QuickAdd suggestions={quickAddSuggestions} onTheList={onTheList} onAdd={handleQuickAdd} compact />}
         onUncheckAll={() => {
           const checkedIds = buyingItems.filter(item => item.checked).map(item => item.id);
@@ -1540,6 +1598,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       )}
       {showHistory && <ShopHistorySheet history={history} onClose={() => setShowHistory(false)} />}
       {saveProductSheet}
+      {infoSheet}
       {toast && <ShopToast toast={toast} onClose={() => setToast(null)} shoppingMode />}
       </>
     );
@@ -1832,7 +1891,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                   </div>
                   <div className="divide-y divide-zinc-100">
                     {group.rows.map(row => (
-                      <ShopRow key={row.key} row={row} justTicked={!!justTicked[row.key]} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
+                      <ShopRow key={row.key} row={row} justTicked={!!justTicked[row.key]} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} onInfo={openInfo} />
                     ))}
                   </div>
                 </section>
@@ -1847,7 +1906,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                   </div>
                   <div className="divide-y divide-zinc-100">
                     {outRows.map(row => (
-                      <ShopRow key={row.key} row={row} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
+                      <ShopRow key={row.key} row={row} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} onInfo={openInfo} />
                     ))}
                   </div>
                 </section>
@@ -1872,7 +1931,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
                   {showBought && (
                     <div className="divide-y divide-zinc-100 border-t border-zinc-100">
                       {boughtRows.map(row => (
-                        <ShopRow key={row.key} row={row} justTicked={!!justTicked[row.key]} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} />
+                        <ShopRow key={row.key} row={row} justTicked={!!justTicked[row.key]} onTick={tickRow} onOpen={r => setOpenRowId(r.id)} onInfo={openInfo} />
                       ))}
                     </div>
                   )}
@@ -1959,6 +2018,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         />
       )}
       {saveProductSheet}
+      {infoSheet}
 
       {/* MODAL: Threshold Warning Modal */}
       {thresholdWarning && (
@@ -2082,6 +2142,8 @@ interface ShoppingModeViewProps {
   /** Who is using this phone ('P' or 'R'). */
   currentUser: string;
   onShowHistory: () => void;
+  /** (i) on a row: what it's for, what was added and by whom. */
+  onInfo?: (row: AggregatedShoppingListItem) => void;
 }
 
 const personName = (id?: string) => (id === 'R' ? 'Rachel' : id === 'P' ? 'Peter' : '');
@@ -2151,6 +2213,7 @@ function ShoppingModeView({
   route,
   currentUser,
   onShowHistory,
+  onInfo,
 }: ShoppingModeViewProps) {
   useScreenAwake();
   const online = useOnline();
@@ -2514,7 +2577,7 @@ function ShoppingModeView({
                   item={item}
                   onToggle={onToggle}
                   justTicked={!!justTicked[item.key]}
-                  onHold={onHoldRow}
+                  onHold={onHoldRow} onInfo={onInfo}
                   tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                   compact={compactRows}
                 />
@@ -2551,7 +2614,7 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow}
+                          onHold={onHoldRow} onInfo={onInfo}
                           tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
@@ -2606,7 +2669,7 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow}
+                          onHold={onHoldRow} onInfo={onInfo}
                           tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
@@ -2645,7 +2708,7 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow}
+                          onHold={onHoldRow} onInfo={onInfo}
                           tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
@@ -2684,7 +2747,7 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow}
+                          onHold={onHoldRow} onInfo={onInfo}
                           tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
@@ -2714,7 +2777,7 @@ function ShoppingModeView({
                       item={item}
                       onToggle={onToggle}
                       justTicked={!!justTicked[item.key]}
-                      onHold={onHoldRow}
+                      onHold={onHoldRow} onInfo={onInfo}
                       tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                       compact={compactRows}
                     />
@@ -2735,7 +2798,7 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow}
+                          onHold={onHoldRow} onInfo={onInfo}
                           tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
@@ -2756,7 +2819,7 @@ function ShoppingModeView({
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow}
+                          onHold={onHoldRow} onInfo={onInfo}
                           tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
                           compact={compactRows}
                         />
@@ -2819,6 +2882,24 @@ interface ShoppingModeItemRowProps {
   /** Ticked on the other phone (their name). */
   tickedBy?: string;
   compact?: boolean;
+  /** (i): what it's for, what was added and by whom. */
+  onInfo?: (item: AggregatedShoppingListItem) => void;
+}
+
+/** The (i) on a shopping-mode row: doesn't tick it or start a press-and-hold. */
+function InfoButton({ item, onInfo }: { item: AggregatedShoppingListItem; onInfo: (item: AggregatedShoppingListItem) => void }) {
+  return (
+    <button
+      type="button"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); onInfo(item); }}
+      className="w-9 h-9 -mr-1 shrink-0 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 cursor-pointer"
+      aria-label={`About ${item.name}: what it's for and who added it`}
+      data-item-info
+    >
+      <Info className="w-[18px] h-[18px]" />
+    </button>
+  );
 }
 
 /** Press and hold (about half a second) without moving: a long-press that works on any phone. */
@@ -2877,7 +2958,8 @@ function ShoppingModeItemRow({
   justTicked = false,
   onHold,
   tickedBy,
-  compact = false
+  compact = false,
+  onInfo,
 }: ShoppingModeItemRowProps) {
   const press = usePressHold(() => onHold?.(item.id));
   const tap = () => { if (!press.wasHeld()) onToggle(item.id); };
@@ -2943,6 +3025,7 @@ function ShoppingModeItemRow({
             {item.neededText && !item.checked && <span className="text-[11px] text-zinc-500 tabular-nums" data-row-need>need {item.neededText}</span>}
           </span>
         )}
+        {onInfo && !justTicked && <InfoButton item={item} onInfo={onInfo} />}
       </div>
     );
   }
@@ -3013,6 +3096,7 @@ function ShoppingModeItemRow({
       {tickedBy && !justTicked && <span className="shrink-0 text-xs font-semibold text-emerald-700" data-ticked-by>✓ {tickedBy}</span>}
       {out && !justTicked && <OutOfStockPill />}
       {justTicked && <UndoTick name={item.name} onUndo={() => onToggle(item.id)} />}
+      {onInfo && !justTicked && <InfoButton item={item} onInfo={onInfo} />}
       {/* Right: Large Tick Box */}
       <button
         type="button"

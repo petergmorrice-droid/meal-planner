@@ -470,3 +470,9 @@ Main files:
   grey); and one meaning per colour everywhere else: green = go/done (all
   main buttons, no more black ones), amber = check this, red = remove or out
   of stock, blue = information. The stray purple accents are gone.
+- `Notes and (i)` — a note on an item shows under the meals it's for, never
+  instead of them. Every row (the list and shopping mode) has an (i): which
+  meals it's for with each day and amount, extra recipes, the weekly staple,
+  what was added by hand and by whom, who sent the meals to the list, the
+  note, and who ticked it (`src/components/shop/ItemInfoSheet.tsx`). It
+  never ticks the row; on the list, *Change it* opens the item panel.
