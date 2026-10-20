@@ -1,6 +1,7 @@
 // Classic view: drag a recipe card onto Sunday (HTML5 drag and drop, as before).
 const { chromium } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
+const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
 (async () => {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
@@ -8,7 +9,7 @@ const { reviewSeed } = require('./review-seed.cjs');
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   await ctx.addInitScript((s) => { if (!localStorage.getItem('seeded')) { localStorage.setItem('mealPlannerAppStateCache', JSON.stringify(s)); localStorage.setItem('seeded', '1'); } }, reviewSeed());
   const page = await ctx.newPage();
-  await page.goto('http://127.0.0.1:4173/'); await page.waitForTimeout(1500);
+  await page.goto(URL); await page.waitForTimeout(1500);
   await page.locator('nav button', { hasText: /^Planning$/ }).first().click().catch(() => {});
   await page.waitForTimeout(600);
   const card = page.locator('[draggable="true"]', { hasText: 'Cheese omelette' }).first();

@@ -16,7 +16,10 @@ export {
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
   addMinute, timerText, eatAtFor, DEFAULT_EAT_AT,
 } from '../src/cookInfo';
-export { moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart } from '../src/planning';
+export {
+  moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
+  isLeftoverOf, orphanedLeftoverDays, mealOnDay, changeDayMeal, describeMealChange, earlierDaysWithRecipe, copyWeekMeals,
+} from '../src/planning';
 export { speechChunks, forSpeech } from '../src/speech';
 export { parseVoiceCommand, parseAlternatives } from '../src/voiceCommands';
 export { frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText, USE_SOON_DAYS } from '../src/freezer';
@@ -24,3 +27,7 @@ export { versionInServiceWorker, builtText } from '../src/appVersion';
 export { agoText, syncProblemText, backupSummary } from '../src/settingsInfo';
 export { stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes, handAddedBy, noteAuthor } from '../src/whoChanged';
 export { ratingsFor, averageStars, averagesById, withRating } from '../src/ratings';
+export {
+  patchLines, removeLines, tickLines, markOutOfStock, answerCupboard, setLineAmount, setLineAmountAndUnit, stepLine,
+  addHandLines, addCatalogItems, addRecipeIngredients, restoreRemoved,
+} from '../src/shopListEdits';

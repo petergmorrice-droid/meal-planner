@@ -244,7 +244,13 @@ Main files:
   list in one piece; remove, merge, other names, tidy-up checks)
 - `src/utils/initialGroceryDb.ts` — the built-in grocery list (pack sizes are in `src/shopping/catalog.ts`)
 - `src/services/geminiService.ts` — Gemini calls (copying a recipe, suggesting products)
-- `src/components/*Tab.tsx` — one file per tab
+- `src/components/*Tab.tsx` — one file per tab. The two biggest are split up:
+  the Shop's pieces are in `src/components/shop/` (shopping mode, the sheets,
+  and hooks such as `useShopWeek`, `useNewProducts`, `useShoppingTrip`), and
+  Planning's are in `src/components/planner/` (the windows, and hooks such as
+  `usePlanningWeek`, `useWeekEditor`). Changes to the shopping list are plain
+  functions in `src/shopListEdits.ts`; changes to a week's meals are in
+  `src/planning.ts`. Both have unit tests.
 - `src/types.ts` — data shapes (Recipe, MealPlan, ShoppingListItem, …)
 - `public/` — `sw.js` (opening without signal), the manifest and icons
   (`scripts/make-icons.py` draws the icons)
@@ -532,3 +538,12 @@ Main files:
   the other tabs keep working. The product list is kept in memory for the
   Shop's matching (`src/shopping/current.ts`) instead of being re-read from
   storage each time.
+- `Smaller screens` — the Shop and Planning screens were one file each (about
+  3,800 and 3,000 lines). They're now split into small files: the windows
+  (shopping mode, the staples editor, cupboard check, aisle order, Send to
+  list, Select meal, Copy a week, the leftover questions…) and hooks for the
+  logic, with the list and week changes as plain functions that are unit
+  tested (`src/shopListEdits.ts`, `src/planning.ts`). Code that could never
+  run (old filters, windows nothing opened) was removed. Nothing looks or
+  works differently: the page is identical, step by step, before and after,
+  and a new browser test (`screen-pieces`) opens every moved window.

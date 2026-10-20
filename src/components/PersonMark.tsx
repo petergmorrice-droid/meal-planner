@@ -34,6 +34,9 @@ export function personLook(id?: string | null) {
   return id === 'P' || id === 'R' ? PEOPLE[id] : null;
 }
 
+/** "Peter", "Rachel", or '' when it isn't known who. */
+export const personName = (id?: string | null) => personLook(id)?.name ?? '';
+
 /** Note colours: the writer's colour, or the usual amber when nobody's known. */
 export function noteLook(id?: string | null): { text: string; icon: string; box: string; bg: string } {
   return personLook(id) || { text: 'text-amber-800', icon: 'text-amber-600', box: 'bg-amber-50/70 border-amber-200', bg: 'bg-amber-50' };

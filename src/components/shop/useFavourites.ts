@@ -1,0 +1,48 @@
+/** Your favourites (shared between phones): quick to add from the add box and the products list. */
+import { useMemo } from 'react';
+
+export interface Favourite { name: string; category: string }
+
+const DEFAULT_FAVOURITES: Favourite[] = [
+  { name: 'Milk', category: 'Dairy' },
+  { name: 'Eggs', category: 'Dairy' },
+  { name: 'Bread', category: 'Bakery' },
+  { name: 'Butter', category: 'Dairy' },
+  { name: 'Coffee', category: 'Pantry' },
+  { name: 'Tea', category: 'Pantry' },
+  { name: 'Toilet Paper', category: 'Household' },
+  { name: 'Olive Oil', category: 'Pantry' },
+];
+
+/** The phone's own copy (older versions kept favourites only on the phone). */
+export const FAVOURITES_KEY = 'mealPlannerCustomFavouritesObj';
+
+export function useFavourites(store: any) {
+  const favourites = useMemo<Favourite[]>(() => {
+    if (store?.state?.preferences?.favouriteItems && store.state.preferences.favouriteItems.length > 0) {
+      return store.state.preferences.favouriteItems;
+    }
+    try {
+      const stored = localStorage.getItem(FAVOURITES_KEY);
+      if (stored) return JSON.parse(stored);
+      const legacy = localStorage.getItem('mealPlannerCustomFavourites');
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed)) return parsed.map((p: string) => ({ name: p, category: 'Staples' }));
+      }
+    } catch { /* fall back to the usual ones */ }
+    return DEFAULT_FAVOURITES;
+  }, [store?.state?.preferences?.favouriteItems]);
+
+  /** Add it to your favourites, or take it off if it's there. */
+  const toggleFavourite = (name: string, category: string = 'Staples') => {
+    const exists = favourites.some((f) => f.name.toLowerCase() === name.toLowerCase());
+    const nextFavs = exists
+      ? favourites.filter((f) => f.name.toLowerCase() !== name.toLowerCase())
+      : [...favourites, { name, category }];
+    try { localStorage.setItem(FAVOURITES_KEY, JSON.stringify(nextFavs)); } catch { /* the synced copy is the one that matters */ }
+    if (store?.updatePreferences) store.updatePreferences({ favouriteItems: nextFavs });
+  };
+
+  return { favourites, toggleFavourite };
+}

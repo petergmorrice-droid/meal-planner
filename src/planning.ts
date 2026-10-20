@@ -107,3 +107,120 @@ export function preferredWeekStart(now: Date, thisMonday: string, nextMonday: st
   const dow = now.getDay(); // 0 Sun … 6 Sat
   return dow === 0 || dow >= 5 ? nextMonday : thisMonday;
 }
+
+// ---------- Changing the meals on a week (Planning) ----------
+
+/** Is `candidate` a leftovers meal of `main` (same recipe, freezer batch, or name)? */
+export function isLeftoverOf(main: PlannedMeal, candidate: PlannedMeal): boolean {
+  if (main.id === candidate.id) return false;
+  // A leftovers meal doesn't have leftovers of its own.
+  if (main.type === 'leftover' || /^leftovers?:\s*/i.test(main.name || '')) return false;
+  if (!(candidate.type === 'leftover' || /^leftovers?:\s*/i.test(candidate.name || ''))) return false;
+  if (main.recipeId && candidate.recipeId && main.recipeId === candidate.recipeId) return true;
+  if (main.batchId && candidate.batchId && main.batchId === candidate.batchId) return true;
+  // By name (ignoring "Leftovers: ").
+  const cleanMain = (main.name || '').toLowerCase().replace(/^leftovers?:\s*/i, '').trim();
+  const cleanCandidate = (candidate.name || '').toLowerCase().replace(/^leftovers?:\s*/i, '').trim();
+  if (cleanMain && cleanCandidate) {
+    if (cleanMain === cleanCandidate) return true;
+    if (cleanCandidate.includes(cleanMain) || cleanMain.includes(cleanCandidate)) return true;
+  }
+  return false;
+}
+
+/** Days whose leftovers come from this meal (and no other earlier cook of it): they'd go if it went. */
+export function orphanedLeftoverDays(days: Record<string, DayPlan>, targetDayName: string, mealToRemove: PlannedMeal): string[] {
+  if (!days || !mealToRemove) return [];
+  const leftoverDays: string[] = [];
+  WEEK_DAYS.forEach((dName, dIndex) => {
+    const dayPlan = days[dName];
+    if (!dayPlan || !dayPlan.meals) return;
+    if (!dayPlan.meals.some((m) => isLeftoverOf(mealToRemove, m))) return;
+    // Another fresh cook of it before this day (not the day being changed) keeps the leftovers.
+    let hasAlternativeCook = false;
+    for (let i = 0; i < dIndex; i++) {
+      const prevDayName = WEEK_DAYS[i];
+      if (prevDayName === targetDayName) continue;
+      const prevMeals = days[prevDayName]?.meals || [];
+      const hasFreshCook = prevMeals.some((m) =>
+        (m.type === 'recipe' || m.type === 'batch') &&
+        !isLeftoverOf(mealToRemove, m) &&
+        ((mealToRemove.recipeId && m.recipeId === mealToRemove.recipeId) ||
+         ((m.name || '').toLowerCase().trim() === (mealToRemove.name || '').toLowerCase().trim())));
+      if (hasFreshCook) { hasAlternativeCook = true; break; }
+    }
+    if (!hasAlternativeCook) leftoverDays.push(dName);
+  });
+  return leftoverDays;
+}
+
+/** The day's meal (one per day), or null. */
+export function mealOnDay(days: Record<string, DayPlan>, day: string): PlannedMeal | null {
+  const dayPlan = days[day];
+  return dayPlan && dayPlan.meals.length > 0 ? dayPlan.meals[0] : null;
+}
+
+/**
+ * Put a meal on a day (replacing what's there) or take one off. Leftovers that depended on the
+ * meal taken away go too (orphanedDays says which, so you can be asked first).
+ */
+export function changeDayMeal(
+  days: Record<string, DayPlan>, dayName: string, mealToRemove: PlannedMeal | null, newMeal: PlannedMeal | null,
+): { days: Record<string, DayPlan>; orphanedDays: string[] } {
+  const orphanedDays = mealToRemove ? orphanedLeftoverDays(days, dayName, mealToRemove) : [];
+  const nextDays: Record<string, DayPlan> = {};
+  WEEK_DAYS.forEach((d) => {
+    const dayPlan = days[d] || { date: '', meals: [] };
+    let meals = [...dayPlan.meals];
+    if (d === dayName) {
+      if (newMeal) meals = [newMeal];
+      else if (mealToRemove) meals = meals.filter((m) => m.id !== mealToRemove.id);
+    } else if (orphanedDays.includes(d) && mealToRemove) {
+      meals = meals.filter((m) => !isLeftoverOf(mealToRemove, m));
+    }
+    nextDays[d] = { ...dayPlan, meals };
+  });
+  return { days: nextDays, orphanedDays };
+}
+
+/** "Replaced X with Y (leftovers) on Tuesday", "Removed X from Tuesday", "Added X to Tuesday for 4". */
+export function describeMealChange(dayName: string, removed: PlannedMeal | null, added: PlannedMeal | null): string {
+  const plain = (m: PlannedMeal) => (m.name || '').replace(/^(leftovers?|batch):\s*/i, '');
+  const how = (m: PlannedMeal) => (m.type === 'batch' ? ' from the freezer' : m.type === 'leftover' ? ' (leftovers)' : '');
+  if (removed && added) return `Replaced ${plain(removed)} with ${plain(added)}${how(added)} on ${dayName}`;
+  if (removed) return `Removed ${plain(removed)} from ${dayName}`;
+  if (added) return `Added ${plain(added)}${how(added)} to ${dayName}${added.servings ? ` for ${added.servings}` : ''}`;
+  return '';
+}
+
+/** Earlier days this week with this recipe on (cooked, or as leftovers): it could be leftovers from them. */
+export function earlierDaysWithRecipe(days: Record<string, DayPlan>, dayName: string, recipe: { id: string; name: string }): string[] {
+  const existingDays: string[] = [];
+  const targetDayIndex = WEEK_DAYS.indexOf(dayName);
+  Object.entries(days).forEach(([dName, dayPlan]) => {
+    const dIndex = WEEK_DAYS.indexOf(dName);
+    if (dName !== dayName && dIndex < targetDayIndex) {
+      const hasRecipe = dayPlan.meals.some((m) =>
+        (m.type === 'recipe' || m.type === 'leftover') &&
+        (m.recipeId === recipe.id || (m.name && recipe.name && m.name.toLowerCase().includes(recipe.name.toLowerCase()))));
+      if (hasRecipe) existingDays.push(dName);
+    }
+  });
+  return existingDays;
+}
+
+/** Another week's meals, day by day, as new meals (not marked cooked) on this week's days. */
+export function copyWeekMeals(days: Record<string, DayPlan>, source: MealPlan): { days: Record<string, DayPlan>; copied: number } {
+  let copied = 0;
+  const nextDays: Record<string, DayPlan> = {};
+  WEEK_DAYS.forEach((d) => {
+    const target = days[d] || { date: '', meals: [] };
+    const meals = (source.days?.[d]?.meals || []).map((m) => {
+      const { cooked: _cooked, ...rest } = m;
+      copied++;
+      return { ...rest, id: crypto.randomUUID() };
+    });
+    nextDays[d] = { ...target, meals };
+  });
+  return { days: nextDays, copied };
+}

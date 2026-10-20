@@ -16,7 +16,10 @@ import {
   frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText,
   versionInServiceWorker, builtText, agoText, syncProblemText, backupSummary,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
+  isLeftoverOf, orphanedLeftoverDays, mealOnDay, changeDayMeal, describeMealChange, earlierDaysWithRecipe, copyWeekMeals,
   stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes, handAddedBy, noteAuthor,
+  patchLines, removeLines, tickLines, markOutOfStock, answerCupboard, setLineAmount, setLineAmountAndUnit, stepLine,
+  addHandLines, addCatalogItems, addRecipeIngredients, restoreRemoved,
 } from '../.test-build/app.mjs';
 
 let failures = 0, passes = 0;
@@ -808,6 +811,129 @@ test('Planning opens on this week Monday–Thursday, next week Friday–Sunday',
   assert.equal(preferredWeekStart(at('2026-10-15'), 'this', 'next'), 'this'); // Thursday
   assert.equal(preferredWeekStart(at('2026-10-16'), 'this', 'next'), 'next'); // Friday
   assert.equal(preferredWeekStart(at('2026-10-18'), 'this', 'next'), 'next'); // Sunday
+});
+
+// ---------- Changes to the shopping list (src/shopListEdits.ts) ----------
+const line = (id, extra = {}) => ({ id, name: id, amount: 1, unit: 'item', category: '', checked: false, isAdhoc: true, isBatch: false, planId: 'p1', ...extra });
+const plan1 = { id: 'p1', startDate: '2026-10-19', days: {}, status: 'draft', isCurrent: false };
+
+test('list edits: ticking says who, unticking clears it, and out of stock goes', () => {
+  const list = [line('a', { outOfStock: true }), line('b')];
+  const ticked = tickLines(list, ['a'], undefined, 'R');
+  assert.equal(ticked[0].checked, true);
+  assert.equal(ticked[0].checkedBy, 'R');
+  assert.equal(ticked[0].outOfStock, undefined, 'it was there after all');
+  assert.equal(ticked[1], list[1], 'other lines untouched');
+  const unticked = tickLines(ticked, ['a'], false, 'P');
+  assert.equal(unticked[0].checked, false);
+  assert.equal(unticked[0].checkedBy, undefined);
+});
+
+test('list edits: out of stock unticks; back in stock just clears it', () => {
+  const list = [line('a', { checked: true, checkedBy: 'P' })];
+  const out = markOutOfStock(list, ['a'], true);
+  assert.deepEqual([out[0].checked, out[0].outOfStock, out[0].checkedBy], [false, true, undefined]);
+  const back = markOutOfStock(out, ['a'], false);
+  assert.equal(back[0].outOfStock, undefined);
+  assert.equal(back[0].checked, false);
+});
+
+test('list edits: cupboard answers, and asking again', () => {
+  const list = [line('a'), line('b')];
+  const have = answerCupboard(list, ['a'], 'have');
+  assert.equal(have[0].cupboard, 'have');
+  assert.equal(have[1].cupboard, undefined);
+  assert.equal(answerCupboard(have, ['a'], 'need')[0].cupboard, 'need');
+  assert.ok(!('cupboard' in answerCupboard(have, ['a'], null)[0]));
+});
+
+test('list edits: + and − keep the unit, singular or plural, never below one step', () => {
+  const list = [line('beans', { unit: 'can' }), line('apples', { unit: 'items', amount: 2 })];
+  const up = stepLine(list, 'beans', 1, 1);
+  assert.deepEqual([up[0].amount, up[0].unit, up[0].userAdjusted], [2, 'cans', true]);
+  assert.deepEqual([stepLine(up, 'beans', 1, -1)[0].amount, stepLine(up, 'beans', 1, -1)[0].unit], [1, 'can']);
+  assert.equal(stepLine(list, 'beans', 1, -1)[0].amount, 1, 'not below one step');
+  const fewer = stepLine(list, 'apples', 1, -1);
+  assert.deepEqual([fewer[1].amount, fewer[1].unit], [1, 'item']);
+  assert.equal(setLineAmount(list, 'beans', 3, false)[0].userAdjusted, false);
+  assert.deepEqual(setLineAmountAndUnit(list, 'beans', 0, 'g')[0].amount, 0.01, 'never nothing');
+});
+
+test('list edits: typed lines add up with what you added by hand, else a new line', () => {
+  const list = [line('Milk', { unit: 'pints', amount: 2 }), line('Bread', { checked: true })];
+  const res = addHandLines(list, plan1, [{ name: 'Milk', amount: 2, unit: 'pints' }, { name: 'Bread', amount: 1, unit: 'item' }], () => null);
+  assert.equal(res.list.length, 3, 'bought bread is not added to: a new line');
+  assert.equal(res.list[0].amount, 4);
+  assert.equal(res.ids[0], 'Milk');
+  const fresh = res.list.find((i) => i.id === res.ids[1]);
+  assert.deepEqual([fresh.name, fresh.isAdhoc, fresh.planId, fresh.weekLabel.startsWith('Week of')], ['Bread', true, 'p1', true]);
+  assert.equal(list.length, 2, 'the old list is left as it was');
+});
+
+test('list edits: take off, change, and add from the products list', () => {
+  const list = [line('a'), line('b'), line('c')];
+  assert.deepEqual(removeLines(list, ['a', 'c']).map((i) => i.id), ['b']);
+  assert.equal(patchLines(list, ['b'], (i) => ({ ...i, note: 'big one' }))[1].note, 'big one');
+  const added = addCatalogItems([], plan1, [{ name: 'Teabags', amount: 1 }, { name: 'Teabags', amount: 1 }]);
+  assert.equal(added.list.length, 1, 'the same thing twice is one line');
+  assert.equal(added.total, 2);
+});
+
+test('list edits: an extra recipe\'s ingredients go on as its own lines', () => {
+  const res = addRecipeIngredients([], plan1, 'Flapjacks', [{ name: 'oats', amount: 300, unit: 'g' }, { name: 'golden syrup', amount: 4, unit: 'tbsp' }]);
+  assert.equal(res.count, 2);
+  assert.ok(res.list.every((i) => i.isBatch && i.batchRecipeName === 'Flapjacks' && i.planId === 'p1'));
+  const again = addRecipeIngredients(res.list, plan1, 'Flapjacks', [{ name: 'oats', amount: 300, unit: 'g' }]);
+  assert.equal(again.list.length, 2, 'more of the same adds up');
+});
+
+test('list edits: bringing back removed things (staples always, meals once sent)', () => {
+  const staples = [{ id: 's1', name: 'Milk', amount: 2, unit: 'pints', category: 'Dairy' }];
+  const back = restoreRemoved([], plan1, [], staples);
+  assert.ok(back.some((i) => i.isRecurring && i.name === 'Milk'), 'the staple is back');
+});
+
+// ---------- Changing the meals on a week (src/planning.ts) ----------
+test('week changes: a meal onto a day replaces what was there; leftovers that depended on it go too', () => {
+  const days = week({ Monday: cook('a', 'chilli', 4), Wednesday: lefto('b', 'chilli'), Thursday: cook('c', 'curry') });
+  assert.equal(mealOnDay(days, 'Monday').id, 'a');
+  assert.equal(mealOnDay(days, 'Tuesday'), null);
+  const added = changeDayMeal(days, 'Tuesday', null, cook('n', 'fajitas'));
+  assert.deepEqual(names(added.days), ['Mon:chilli', 'Tue:fajitas', 'Wed:L-chilli', 'Thu:curry']);
+  assert.deepEqual(added.orphanedDays, []);
+  const replaced = changeDayMeal(days, 'Monday', days.Monday.meals[0], cook('n', 'fajitas'));
+  assert.deepEqual(replaced.orphanedDays, ['Wednesday'], 'Wednesday was leftovers of Monday');
+  assert.deepEqual(names(replaced.days), ['Mon:fajitas', 'Thu:curry']);
+  assert.equal(replaced.days.Monday.date, days.Monday.date, 'dates stay with the days');
+});
+
+test('week changes: leftovers stay when another earlier day cooks it too', () => {
+  const days = week({ Monday: cook('a', 'chilli'), Tuesday: cook('b', 'chilli'), Wednesday: lefto('c', 'chilli') });
+  assert.deepEqual(orphanedLeftoverDays(days, 'Monday', days.Monday.meals[0]), []);
+  assert.deepEqual(orphanedLeftoverDays(days, 'Tuesday', days.Tuesday.meals[0]), []);
+  assert.equal(isLeftoverOf(days.Monday.meals[0], days.Wednesday.meals[0]), true);
+  assert.equal(isLeftoverOf(days.Wednesday.meals[0], days.Monday.meals[0]), false, 'a leftovers meal has no leftovers of its own');
+});
+
+test('week changes: what it says, and what could be leftovers', () => {
+  const chilli = cook('a', 'Chilli', 4);
+  assert.equal(describeMealChange('Tuesday', null, chilli), 'Added Chilli to Tuesday for 4');
+  assert.equal(describeMealChange('Tuesday', chilli, { ...lefto('b', 'x'), name: 'Leftovers: Curry' }), 'Replaced Chilli with Curry (leftovers) on Tuesday');
+  assert.equal(describeMealChange('Tuesday', chilli, null), 'Removed Chilli from Tuesday');
+  assert.equal(describeMealChange('Friday', null, { id: 'f', type: 'batch', name: 'Batch: Soup', servings: 2 }), 'Added Soup from the freezer to Friday for 2');
+  const days = week({ Monday: cook('a', 'r-chilli', 2, { name: 'Chilli' }), Thursday: cook('b', 'r-chilli', 2, { name: 'Chilli' }) });
+  assert.deepEqual(earlierDaysWithRecipe(days, 'Wednesday', { id: 'r-chilli', name: 'Chilli' }), ['Monday'], 'only earlier days');
+  assert.deepEqual(earlierDaysWithRecipe(days, 'Monday', { id: 'r-chilli', name: 'Chilli' }), []);
+});
+
+test('week changes: copying a week gives new meals, not marked cooked', () => {
+  const source = { id: 's', startDate: '2026-10-12', status: 'finalized', isCurrent: false, days: week({ Monday: cook('a', 'chilli', 2, { cooked: true }), Friday: cook('b', 'pizza') }) };
+  const target = week({ Tuesday: cook('t', 'curry') });
+  const r = copyWeekMeals(target, source);
+  assert.equal(r.copied, 2);
+  assert.deepEqual(names(r.days), ['Mon:chilli', 'Fri:pizza'], "this week's meals are replaced");
+  assert.ok(r.days.Monday.meals[0].id !== 'a' && !('cooked' in r.days.Monday.meals[0]), 'a new meal, not cooked yet');
+  assert.equal(r.days.Monday.date, target.Monday.date, 'this week keeps its own dates');
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
