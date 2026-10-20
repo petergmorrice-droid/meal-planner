@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import PersonMark, { noteLook } from './PersonMark';
 import Notice from './Notice';
 import {
   ChevronLeft, ChevronRight, ChefHat, Check, Clock, Snowflake, Moon, Minus, Plus, Pencil,
@@ -396,6 +397,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
                   key={day}
                   day={day}
                   iso={iso}
+                  updatedBy={meal ? plan.days[day]?.updatedBy : undefined}
                   meal={meal}
                   recipe={recipe}
                   isToday={isToday}
@@ -554,11 +556,13 @@ const TYPE_LABEL: Record<string, string> = { leftover: 'Leftovers', batch: 'Free
  * Today's card adds when to start, what to do tonight for tomorrow and a Start cooking button.
  */
 function DayCard({
-  day, meal, iso, recipe, isToday, isTomorrow, isPast, fromDay, after, prep, cook,
+  day, meal, iso, recipe, isToday, isTomorrow, isPast, fromDay, after, prep, cook, updatedBy,
   onOpen, onTick, onMove, onCook, onRecipe, onNote, onPlan, todayPanel,
 }: {
   key?: React.Key;
   day: string;
+  /** Who last changed this day's meal: a blue (Peter) / pink (Rachel) mark. */
+  updatedBy?: string;
   iso: string;
   meal: PlannedMeal | null;
   recipe: Recipe | null;
@@ -626,7 +630,7 @@ function DayCard({
             </div>
           ) : (
             <button type="button" onClick={onOpen} className="block w-full text-left cursor-pointer" data-cook-open>
-              <span className={`block font-semibold leading-snug break-words ${isToday ? 'text-[17px]' : 'text-[15px]'} ${cooked ? 'text-zinc-400 line-through decoration-zinc-300' : 'text-zinc-900'}`}>{title}</span>
+              <span className={`block font-semibold leading-snug break-words ${isToday ? 'text-[17px]' : 'text-[15px]'} ${cooked ? 'text-zinc-400 line-through decoration-zinc-300' : 'text-zinc-900'}`}>{title}{updatedBy && <PersonMark who={updatedBy} what="Last changed" className="ml-1.5 align-[2px] no-underline" />}</span>
               {(showChip || facts.length > 0) && (
                 <span className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500 min-w-0 whitespace-nowrap" data-cook-people>
                   {showChip && (
@@ -655,8 +659,8 @@ function DayCard({
       {meal && (
         <div className="pl-[46px]">
           {note && (
-            <button type="button" onClick={onNote} className="mt-1 w-full flex items-start gap-1.5 text-left text-[13px] text-amber-900 cursor-pointer" data-cook-note={day}>
-              <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
+            <button type="button" onClick={onNote} className={`mt-1 w-full flex items-start gap-1.5 text-left text-[13px] cursor-pointer ${meal.noteBy ? noteLook(meal.noteBy).text : 'text-amber-900'}`} data-cook-note={day} data-note-by={meal.noteBy || undefined}>
+              <FileText className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${noteLook(meal.noteBy).icon}`} />
               <span className="min-w-0 flex-1 line-clamp-2 break-words">{note}</span>
             </button>
           )}

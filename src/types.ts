@@ -53,6 +53,8 @@ export interface Recipe {
   sourceUrl?: string;
   /** Your own notes on it ("we use half the chilli"), separate from the recipe's intro. */
   notes?: string;
+  /** Who last wrote the notes ('P' or 'R'). */
+  notesBy?: string;
   /** What you said after cooking it: have it again, or not for us. */
   verdict?: 'again' | 'not_for_us';
   /** Starred in the Cookbook. */
@@ -85,6 +87,8 @@ export interface PlannedMeal {
   name: string; // Used for takeout/eating_out or overrides
   servings?: number; // Number of people cooking for (default 2)
   note?: string; // Optional note for takeout, eating out, or no meal needed
+  /** Who wrote the note ('P' or 'R'). */
+  noteBy?: string;
   cooked?: boolean; // Flag when meal has been marked as cooked
   sides?: PlannedMealSide[];
   /** Portions put in the freezer when this was cooked (so unticking can take them back out). */
@@ -96,6 +100,8 @@ export interface PlannedMeal {
 export interface DayPlan {
   date: string; // ISO date string (YYYY-MM-DD)
   meals: PlannedMeal[];
+  /** Who last changed this day's meal ('P' or 'R'). */
+  updatedBy?: string;
 }
 
 export interface MealPlan {
@@ -124,6 +130,10 @@ export interface BatchItem {
   /** "Garage freezer, blue tub". */
   note?: string;
   lastModifiedAt?: number;
+  /** Who put it in the freezer, who last changed it, who wrote the note ('P' or 'R'). */
+  addedBy?: string;
+  lastModifiedBy?: string;
+  noteBy?: string;
 }
 
 export interface ShoppingListItem {
@@ -162,6 +172,10 @@ export interface ShoppingListItem {
   outOfStock?: boolean;
   /** Who ticked it ('P' or 'R'), so the other phone can see. */
   checkedBy?: string;
+  /** Who added it or last changed its amount, name or note ('P' or 'R'); ticking doesn't count. */
+  editedBy?: string;
+  /** Who wrote the note ('P' or 'R'). */
+  noteBy?: string;
 }
 
 export interface RecurringItem {

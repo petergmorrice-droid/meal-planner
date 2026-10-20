@@ -3,6 +3,7 @@ import { X, UtensilsCrossed, ChefHat, Repeat, UserRound, StickyNote, CheckCircle
 import { AggregatedShoppingListItem, shopQuantityText } from '../../shopList';
 import { AisleIcon } from '../AisleLook';
 import type { FoodAisle } from '../../utils';
+import { personLook } from '../PersonMark';
 
 /** One line of "what's this for": a meal, an extra recipe, the weekly staple, what someone added, the note. */
 export interface ItemInfoLine {
@@ -10,6 +11,8 @@ export interface ItemInfoLine {
   text: string;
   /** "1 can" */
   amount?: string;
+  /** Who (added it, wrote the note, ticked it): Peter blue, Rachel pink. */
+  who?: string;
 }
 
 const ICONS: Record<ItemInfoLine['kind'], { Icon: React.ComponentType<{ className?: string }>; tone: string }> = {
@@ -54,11 +57,13 @@ export default function ItemInfoSheet({ row, aisle, lines, onEdit, onClose }: {
         </div>
         <ul className="overflow-y-auto px-4 py-2 divide-y divide-zinc-100" data-item-info-lines>
           {lines.map((l, i) => {
-            const { Icon, tone } = ICONS[l.kind];
+            const { Icon } = ICONS[l.kind];
+            const person = personLook(l.who);
+            const tone = person ? person.tile : ICONS[l.kind].tone;
             return (
               <li key={i} className="flex items-center gap-3 py-2.5" data-info-line={l.kind}>
                 <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tone}`}><Icon className="w-4 h-4" /></span>
-                <span className={`flex-1 min-w-0 text-[15px] leading-snug ${l.kind === 'note' ? 'text-amber-900' : 'text-zinc-800'}`}>{l.text}</span>
+                <span className={`flex-1 min-w-0 text-[15px] leading-snug ${l.kind === 'note' ? (person ? person.text : 'text-amber-900') : 'text-zinc-800'}`} data-info-who={l.who || undefined}>{l.text}</span>
                 {l.amount && <span className="shrink-0 text-sm font-semibold text-zinc-900 tabular-nums">{l.amount}</span>}
               </li>
             );

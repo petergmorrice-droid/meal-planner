@@ -22,3 +22,4 @@ export { parseVoiceCommand, parseAlternatives } from '../src/voiceCommands';
 export { frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText, USE_SOON_DAYS } from '../src/freezer';
 export { versionInServiceWorker, builtText } from '../src/appVersion';
 export { agoText, syncProblemText, backupSummary } from '../src/settingsInfo';
+export { stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes, handAddedBy, noteAuthor } from '../src/whoChanged';

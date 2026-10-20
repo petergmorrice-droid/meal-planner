@@ -61,6 +61,8 @@ import {
 import ShopHistorySheet from './shop/ShopHistorySheet';
 import SaveProductSheet, { NewProductDetails } from './shop/SaveProductSheet';
 import { AISLE_LOOK, AisleIcon } from './AisleLook';
+import PersonMark, { noteLook, personLook } from './PersonMark';
+import { handAddedBy, noteAuthor } from '../whoChanged';
 import ItemInfoSheet, { ItemInfoLine } from './shop/ItemInfoSheet';
 
 /** A list group that is an aisle (not "Added by you", "A–Z"...). */
@@ -1289,8 +1291,9 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       if (part.isRecurring) lines.push({ kind: 'staple', text: 'Weekly staple', amount: shopQuantityText(part) });
       else if (part.isBatch) lines.push({ kind: 'extra', text: part.batchRecipeName ? `For ${part.batchRecipeName} (extra recipe)` : 'For an extra recipe', amount: shopQuantityText(part) });
       else if (part.isAdhoc) {
-        const by = whoName(part.addedBy);
-        lines.push({ kind: 'added', text: by ? `Added by ${by}` : 'Added by hand', amount: shopQuantityText(part) });
+        const who = part.editedBy || part.addedBy;
+        const by = whoName(who);
+        lines.push({ kind: 'added', text: by ? `Added by ${by}` : 'Added by hand', amount: shopQuantityText(part), who });
       } else {
         const meals = mealBreakdown(part);
         if (meals.length) meals.forEach((m) => lines.push({ kind: 'meal', text: m.label, amount: m.amount || undefined }));
@@ -1300,12 +1303,12 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     }
     if (sentBy && whoName(sentBy)) {
       const firstOther = lines.findIndex((l) => l.kind !== 'meal');
-      const line: ItemInfoLine = { kind: 'added', text: `Meals sent to the list by ${whoName(sentBy)}` };
+      const line: ItemInfoLine = { kind: 'added', text: `Meals sent to the list by ${whoName(sentBy)}`, who: sentBy };
       if (firstOther === -1) lines.push(line); else lines.splice(firstOther, 0, line);
     }
-    if (row.note) lines.push({ kind: 'note', text: row.note });
+    if (row.note) { const by = noteAuthor(row.parts); lines.push({ kind: 'note', text: whoName(by) ? `${row.note} (${personName(by)})` : row.note, who: by }); }
     if (row.outOfStock) lines.push({ kind: 'out', text: 'Out of stock at the shop' });
-    if (row.checked) lines.push({ kind: 'bought', text: row.checkedBy && whoName(row.checkedBy) ? `Bought · ticked by ${whoName(row.checkedBy)}` : 'Bought' });
+    if (row.checked) lines.push({ kind: 'bought', text: row.checkedBy && whoName(row.checkedBy) ? `Bought · ticked by ${whoName(row.checkedBy)}` : 'Bought', who: row.checkedBy });
     return lines;
   };
   /** (i): the message at the bottom goes, so it can't cover the answer. */
@@ -2961,6 +2964,10 @@ function ShoppingModeItemRow({
   compact = false,
   onInfo,
 }: ShoppingModeItemRowProps) {
+  // Blue (Peter) / pink (Rachel): who added or changed it by hand, who wrote the note, who ticked it.
+  const addedBy = handAddedBy(item.parts || []);
+  const note = noteLook(noteAuthor(item.parts || []));
+  const tickerLook = personLook(item.checkedBy);
   const press = usePressHold(() => onHold?.(item.id));
   const tap = () => { if (!press.wasHeld()) onToggle(item.id); };
   const out = !!item.outOfStock;
@@ -3004,13 +3011,14 @@ function ShoppingModeItemRow({
               check
             </span>
           )}
+          {addedBy && !item.checked && <PersonMark who={addedBy} what="Added or changed" />}
           {item.note && (
-            <span className="min-w-0 truncate text-xs text-amber-800 inline-flex items-center gap-0.5" data-row-note>
-              <StickyNote className="w-3 h-3 shrink-0" />{item.note}
+            <span className={`min-w-0 truncate text-xs inline-flex items-center gap-0.5 ${note.text}`} data-row-note>
+              <StickyNote className={`w-3 h-3 shrink-0 ${note.icon}`} />{item.note}
             </span>
           )}
           {tickedBy && !justTicked && (
-            <span className="shrink-0 text-xs font-semibold text-emerald-700" data-ticked-by>✓ {tickedBy}</span>
+            <span className={`shrink-0 text-xs font-semibold px-1.5 py-px rounded-full ring-1 ring-inset ${tickerLook ? tickerLook.mark : 'text-emerald-700 ring-emerald-200'}`} data-ticked-by>✓ {tickedBy}</span>
           )}
         </div>
         {justTicked ? (
@@ -3050,10 +3058,11 @@ function ShoppingModeItemRow({
       {/* Left: Item name & Quantity with for meal in small print */}
       <div className="flex-1 min-w-0 pr-2">
         {/* Large item name */}
-        <p className={`text-base sm:text-lg font-bold text-zinc-900 leading-snug tracking-tight ${
+        <p className={`text-base sm:text-lg font-bold text-zinc-900 leading-snug tracking-tight flex items-center gap-1.5 ${
           item.checked ? 'line-through text-zinc-400 font-medium' : ''
         }`}>
-          {item.name}
+          <span className="min-w-0">{item.name}</span>
+          {addedBy && !item.checked && <PersonMark who={addedBy} what="Added or changed" />}
         </p>
 
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -3086,14 +3095,14 @@ function ShoppingModeItemRow({
           )}
         </div>
         {item.note && (
-          <p className="text-sm mt-1 text-amber-800 flex items-center gap-1" data-row-note><StickyNote className="w-3.5 h-3.5 shrink-0" />{item.note}</p>
+          <p className={`text-sm mt-1 flex items-center gap-1 ${note.text}`} data-row-note><StickyNote className={`w-3.5 h-3.5 shrink-0 ${note.icon}`} />{item.note}</p>
         )}
         {item.quantityNote && !item.checked && (
           <p className={`text-xs mt-1 ${item.needsCheck ? 'text-rose-600' : 'text-zinc-500'}`}>{item.quantityNote}</p>
         )}
       </div>
 
-      {tickedBy && !justTicked && <span className="shrink-0 text-xs font-semibold text-emerald-700" data-ticked-by>✓ {tickedBy}</span>}
+      {tickedBy && !justTicked && <span className={`shrink-0 text-xs font-semibold px-1.5 py-px rounded-full ring-1 ring-inset ${tickerLook ? tickerLook.mark : 'text-emerald-700 ring-emerald-200'}`} data-ticked-by>✓ {tickedBy}</span>}
       {out && !justTicked && <OutOfStockPill />}
       {justTicked && <UndoTick name={item.name} onUndo={() => onToggle(item.id)} />}
       {onInfo && !justTicked && <InfoButton item={item} onInfo={onInfo} />}

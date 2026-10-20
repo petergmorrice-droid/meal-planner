@@ -15,6 +15,7 @@ import {
   frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText,
   versionInServiceWorker, builtText, agoText, syncProblemText, backupSummary,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
+  stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes, handAddedBy, noteAuthor,
 } from '../.test-build/app.mjs';
 
 let failures = 0, passes = 0;
@@ -373,6 +374,55 @@ test('shop: something added by hand and then saved as a product adds up with the
   const rows = aggregateShoppingItems([out[0], out[3]]);
   assert.equal(rows.length, 1);
   assert.equal(shopQuantityText(rows[0]), '2 packs', '"2 packs", not "1 + 1 pack"');
+});
+
+test('who changed it: Peter blue, Rachel pink', () => {
+  // Shopping lines: adding or changing the amount/note counts; ticking doesn't
+  const milk = { id: 'm', name: 'Milk', amount: 1, unit: 'pint', checked: false, isAdhoc: true, planId: 'p', lastModifiedAt: 1 };
+  const added = stampShoppingItem(milk, undefined, 'P');
+  assert.equal(added.editedBy, 'P');
+  const ticked = stampShoppingItem({ ...added, checked: true, checkedBy: 'R' }, added, 'R');
+  assert.equal(ticked.editedBy, 'P', 'Rachel ticking it: still Peter who added it');
+  const more = stampShoppingItem({ ...added, amount: 2 }, added, 'R');
+  assert.equal(more.editedBy, 'R', 'Rachel adding more: hers now');
+  const noted = stampShoppingItem({ ...more, note: 'semi-skimmed' }, more, 'P');
+  assert.ok(noted.noteBy === 'P' && noted.editedBy === 'P');
+  const same = stampShoppingItem({ ...noted, checked: true }, noted, 'R');
+  assert.ok(same.noteBy === 'P' && same.editedBy === 'P', 'ticking keeps both');
+  const cleared = stampShoppingItem({ ...noted, note: undefined }, noted, 'R');
+  assert.equal(cleared.noteBy, undefined, 'note gone: no note writer');
+  assert.equal(stampShoppingItem({ ...milk, note: 'big one' }, undefined, 'R').noteBy, 'R');
+  // Rows: who last added or changed what was added by hand; who wrote the note
+  const parts = [
+    { id: 'a', name: 'Milk', isAdhoc: false, editedBy: 'P', lastModifiedAt: 9 },
+    { id: 'b', name: 'Milk', isAdhoc: true, editedBy: 'P', lastModifiedAt: 3 },
+    { id: 'c', name: 'Milk', isAdhoc: true, addedBy: 'R', lastModifiedAt: 5, note: 'organic', noteBy: 'R' },
+  ];
+  assert.equal(handAddedBy(parts), 'R', 'the most recent line added by hand');
+  assert.equal(handAddedBy([parts[0]]), undefined, 'nothing added by hand: no mark');
+  assert.equal(noteAuthor(parts), 'R');
+  assert.equal(noteAuthor([{ id: 'x', name: 'x', note: 'old note' }]), undefined, 'a note from before: nobody known');
+  // Meals: changed days get updatedBy; a changed note gets noteBy
+  const before = {
+    Monday: { date: '2026-10-19', meals: [{ id: 'm1', type: 'recipe', name: 'Chilli', note: 'double it', noteBy: 'R' }], updatedBy: 'R' },
+    Tuesday: { date: '2026-10-20', meals: [{ id: 'm2', type: 'recipe', name: 'Curry' }] },
+    Wednesday: { date: '2026-10-21', meals: [] },
+  };
+  const edited = { ...before, Tuesday: { ...before.Tuesday, meals: [{ ...before.Tuesday.meals[0], note: 'no coriander' }] }, Wednesday: { date: '2026-10-21', meals: [{ id: 'm3', type: 'takeout', name: 'Takeaway' }] } };
+  const days = stampPlanDays(edited, before, 'P');
+  assert.equal(days.Monday, before.Monday, 'unchanged day: left as it was (still Rachel)');
+  assert.ok(days.Tuesday.updatedBy === 'P' && days.Tuesday.meals[0].noteBy === 'P', 'Peter wrote the Tuesday note');
+  assert.equal(days.Wednesday.updatedBy, 'P', 'a new meal: Peter');
+  const servings = stampPlanDays({ ...before, Monday: { ...before.Monday, meals: [{ ...before.Monday.meals[0], servings: 4 }] } }, before, 'P');
+  assert.ok(servings.Monday.updatedBy === 'P' && servings.Monday.meals[0].noteBy === 'R', "Peter changed the people; the note is still Rachel's");
+  // Freezer and recipes
+  const b = stampBatch({ id: 'b1', portions: 4, dateAdded: '2026-10-01', note: 'garage' }, undefined, 'R');
+  assert.ok(b.addedBy === 'R' && b.lastModifiedBy === 'R' && b.noteBy === 'R');
+  const b2 = stampBatch({ ...b, portions: 2 }, b, 'P');
+  assert.ok(b2.addedBy === 'R' && b2.lastModifiedBy === 'P' && b2.noteBy === 'R', 'Peter took some out: the note is still Rachel\'s');
+  const r = stampRecipeNotes({ id: 'r', name: 'Chilli', notes: 'less chilli' }, { id: 'r', name: 'Chilli' }, 'R');
+  assert.equal(r.notesBy, 'R');
+  assert.equal(stampRecipeNotes({ ...r, name: 'Chilli con carne' }, r, 'P').notesBy, 'R', 'renaming it: notes still Rachel\'s');
 });
 
 test('shop: typing into the add box', () => {

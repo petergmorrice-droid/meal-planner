@@ -5,6 +5,8 @@ import { AggregatedShoppingListItem, shopQuantityText, partLabel } from '../../s
 import { FoodAisle, GROCERY_AISLES, parseQtyAndUnit } from '../../utils';
 import { largeUnitQuantity, formatAmount, unitInfo } from '../../shopping';
 import { AisleIcon } from '../AisleLook';
+import PersonMark from '../PersonMark';
+import { noteAuthor } from '../../whoChanged';
 
 /** "1 kg" rather than "1000 g" in the box; the line keeps its own unit. */
 function boxText(part: ShoppingListItem): string {
@@ -17,12 +19,15 @@ function boxText(part: ShoppingListItem): string {
 function PartAmount({
   part,
   label,
+  by,
   onStep,
   onSet,
 }: {
   key?: React.Key;
   part: ShoppingListItem;
   label: string;
+  /** Who added it or last changed it (lines added by hand): a blue / pink mark. */
+  by?: string;
   onStep: (id: string, dir: 1 | -1) => void;
   onSet: (id: string, amount: number, unit: string) => void;
 }) {
@@ -45,7 +50,10 @@ function PartAmount({
 
   return (
     <div className="flex items-center gap-3" data-part={part.id}>
-      <span className="flex-1 min-w-0 text-sm text-zinc-600 leading-snug">{label}</span>
+      <span className="flex-1 min-w-0 text-sm text-zinc-600 leading-snug">
+        {label}
+        {by && <PersonMark who={by} what="Added or changed" className="ml-1.5 align-[1px]" />}
+      </span>
       <div className="flex items-center bg-zinc-50 border border-zinc-200 rounded-xl shrink-0">
         <button
           type="button"
@@ -208,7 +216,7 @@ export default function ItemSheet({
           )}
           <section className="space-y-3">
             {[...row.parts].sort((a, b) => partOrder(a) - partOrder(b)).map((part) => (
-              <PartAmount key={part.id} part={part} label={partDetail(part)} onStep={onStep} onSet={onSetAmount} />
+              <PartAmount key={part.id} part={part} label={partDetail(part)} by={isHandAdded(part) ? part.editedBy || part.addedBy : undefined} onStep={onStep} onSet={onSetAmount} />
             ))}
             {onAddExtra && !row.parts.some(isHandAdded) && <AddExtra onAdd={onAddExtra} />}
             {row.quantityNote && <p className={`text-xs ${row.needsCheck ? 'text-rose-700' : 'text-zinc-500'}`}>{row.quantityNote}</p>}
@@ -230,7 +238,7 @@ export default function ItemSheet({
           )}
 
           <label className="block">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 mb-1"><StickyNote className="w-3.5 h-3.5" /> Note</span>
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 mb-1"><StickyNote className="w-3.5 h-3.5" /> Note{row.note && <PersonMark who={noteAuthor(row.parts)} what="Note written" />}</span>
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}

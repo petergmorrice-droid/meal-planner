@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import PersonMark, { noteLook } from './PersonMark';
+
 import {
   X, Pencil, Sparkles, Minus, Plus, Check, Clock, Users, Flame, Zap, Leaf, Snowflake, CalendarCheck,
   CalendarPlus, ChefHat, ExternalLink, History, Star, Share2, ThumbsUp, ThumbsDown,
@@ -511,8 +513,8 @@ export function RecipeModal({
 
                 {(edited.notes || '').trim() && (
                   <section data-recipe-notes>
-                    <h3 className={`${sectionTitle} mb-2`}>Our notes</h3>
-                    <p className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3 text-[15px] text-zinc-800 leading-relaxed whitespace-pre-line">{edited.notes}</p>
+                    <h3 className={`${sectionTitle} mb-2 flex items-center gap-1.5`}>Our notes<PersonMark who={edited.notesBy} what="Notes written" /></h3>
+                    <p className={`border rounded-2xl p-3 text-[15px] text-zinc-800 leading-relaxed whitespace-pre-line ${noteLook(edited.notesBy).box}`} data-notes-by={edited.notesBy || undefined}>{edited.notes}</p>
                   </section>
                 )}
 

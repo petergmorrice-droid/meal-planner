@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes } from './whoChanged';
 import {
   Recipe, MealPlan, PlannedMeal, BatchItem,
   ShoppingListItem, UserPreferences, GroceryItem, AppState, DayPlan,
@@ -393,13 +394,13 @@ export function useStore() {
   );
 
   const addRecipe = async (recipe: Recipe) => {
-    const toSave = { ...recipe, addedBy: currentUser };
+    const toSave = stampRecipeNotes({ ...recipe, addedBy: currentUser }, state.recipes.find(r => r.id === recipe.id), currentUser);
     const nextRecipes = [...state.recipes.filter(r => r.id !== toSave.id), toSave];
     commit(state, { ...state, recipes: nextRecipes });
   };
 
   const updateRecipe = async (recipe: Recipe) => {
-    const toSave = { ...recipe, lastModifiedBy: currentUser };
+    const toSave = stampRecipeNotes({ ...recipe, lastModifiedBy: currentUser }, state.recipes.find(r => r.id === recipe.id), currentUser);
     const nextRecipes = state.recipes.map(r => r.id === toSave.id ? toSave : r);
     commit(state, { ...state, recipes: nextRecipes });
   };
@@ -437,6 +438,9 @@ export function useStore() {
 
     processedPlan.lastModifiedAt = Date.now();
     processedPlan.lastModifiedBy = currentUser;
+    // Who changed which day (and wrote which note), for the blue / pink marks.
+    const beforePlan = state.mealPlans.find(p => p.id === expectedId || p.startDate === processedPlan.startDate);
+    processedPlan.days = stampPlanDays(processedPlan.days, beforePlan?.days, currentUser);
 
     const existingIdx = state.mealPlans.findIndex(p => p.id === expectedId || p.startDate === processedPlan.startDate);
     let nextMealPlans: MealPlan[] = [...state.mealPlans];
@@ -504,12 +508,13 @@ export function useStore() {
   };
 
   const addBatch = async (batch: BatchItem) => {
-    const nextBatches = [...state.batches.filter(b => b.id !== batch.id), batch];
+    const stamped = stampBatch(batch, state.batches.find(b => b.id === batch.id), currentUser);
+    const nextBatches = [...state.batches.filter(b => b.id !== batch.id), stamped];
     commit(state, { ...state, batches: nextBatches });
   };
 
   const updateBatch = async (batch: BatchItem) => {
-    const nextBatches = state.batches.map(b => b.id === batch.id ? batch : b);
+    const nextBatches = state.batches.map(b => b.id === batch.id ? stampBatch(batch, b, currentUser) : b);
     commit(state, { ...state, batches: nextBatches });
   };
 
@@ -543,7 +548,7 @@ export function useStore() {
       const existingItem = state.shoppingList.find(i => i.id === item.id);
       if (!existingItem) {
         return {
-          ...item,
+          ...stampShoppingItem(item, undefined, currentUser),
           addedBy: item.addedBy || currentUser,
           lastModifiedBy: item.lastModifiedBy || currentUser,
           lastModifiedAt: item.lastModifiedAt || Date.now()
@@ -555,7 +560,7 @@ export function useStore() {
         return existingItem;
       }
       return {
-        ...item,
+        ...stampShoppingItem(item, existingItem, currentUser),
         addedBy: existingItem.addedBy || item.addedBy || currentUser,
         lastModifiedBy: currentUser,
         lastModifiedAt: Date.now()

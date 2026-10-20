@@ -484,3 +484,13 @@ Main files:
   page, top bars and tab bar and, for Warm and Sage, retints the greys).
   Green for go/done, amber, red and the aisle colours are the same in every
   theme.
+- `Who changed it: Peter blue, Rachel pink` — a small blue P or pink R tick
+  shows who last added or changed something: on the shopping list for what
+  was added by hand (list, shopping mode, item panel, (i)), on each planned
+  day (Planning, Cook) and on freezer meals; "✓ Rachel" for who ticked it is
+  in her colour too. Notes (shopping items, meals, freezer meals, a recipe's
+  "Our notes") are in their writer's colour; notes written before this was
+  recorded stay amber. Recorded on the phone when something is saved
+  (`src/whoChanged.ts`: `editedBy`, `noteBy`, a day's `updatedBy`, a freezer
+  meal's `addedBy`/`lastModifiedBy`, a recipe's `notesBy`) and synced with
+  it; ticking something doesn't count as changing it.

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { DayPlan, PlannedMeal } from '../../types';
 import { cleanMealName, isLeftoverMeal, WEEK_DAYS } from '../../planning';
+import PersonMark, { noteLook } from '../PersonMark';
 
 export { cleanMealName, isLeftoverMeal };
 
@@ -100,11 +101,12 @@ export function DayListRow({
             <span className="flex items-center gap-1.5 mt-0.5 flex-wrap">
               {d.label && d.label.text && <LabelChip label={d.label} />}
               {meal.cooked && <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-800"><Check className="w-3.5 h-3.5" />Cooked</span>}
-              {d.note && <span className="text-xs text-zinc-600 truncate max-w-[180px]">{d.note}</span>}
+              {d.note && <span className={`text-xs truncate max-w-[180px] ${meal.noteBy ? noteLook(meal.noteBy).text : 'text-zinc-600'}`} data-meal-note-by={meal.noteBy || undefined}>{d.note}</span>}
               {!d.note && cooksFor && <span className="text-xs text-zinc-600">{cooksFor}</span>}
               {meal.sides && meal.sides.length > 0 && (
                 <span className="text-xs text-zinc-600 truncate">+ {meal.sides.map((s) => s.name).join(', ')}</span>
               )}
+              <PersonMark who={dayPlan?.updatedBy} what="Last changed" />
             </span>
           </span>
           {meal.type !== 'no_meal' && (
@@ -164,7 +166,10 @@ export function WeekDayCard({
         <span className={`block text-xs font-bold tracking-wide ${isPast ? 'text-zinc-400' : 'text-zinc-900'}`}>{day}</span>
         <span className={`block text-[11px] ${isPast ? 'text-zinc-400' : 'text-zinc-500'}`}>{dateText}</span>
       </div>
-      {isToday && <span className="text-[11px] font-bold uppercase tracking-wide text-white bg-emerald-600 rounded px-1.5 py-px shrink-0">Today</span>}
+      <span className="flex items-center gap-1 shrink-0">
+        {meal && <PersonMark who={dayPlan?.updatedBy} what="Last changed" />}
+        {isToday && <span className="text-[11px] font-bold uppercase tracking-wide text-white bg-emerald-600 rounded px-1.5 py-px shrink-0">Today</span>}
+      </span>
     </div>
   );
 
@@ -219,7 +224,7 @@ export function WeekDayCard({
         <span className="mt-1 flex flex-col items-start gap-1 min-h-0 overflow-hidden">
           {d.label && d.label.text && <LabelChip label={d.label} />}
           {!d.note && cooksFor && <span className="text-[11px] font-medium text-zinc-700 leading-tight">{cooksFor}</span>}
-          {d.note && <span className="text-[11px] italic text-zinc-600 line-clamp-1">{d.note}</span>}
+          {d.note && <span className={`text-[11px] italic line-clamp-1 ${meal.noteBy ? noteLook(meal.noteBy).text : 'text-zinc-600'}`} data-meal-note-by={meal.noteBy || undefined}>{d.note}</span>}
           {meal.sides && meal.sides.length > 0 && (
             <span className="text-[11px] text-zinc-600 line-clamp-1">+ {meal.sides.map((s) => s.name).join(', ')}</span>
           )}
@@ -358,6 +363,7 @@ export function DaySheet({
               {d.label && d.label.text && <LabelChip label={d.label} />}
               {meal.cooked && <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-800"><Check className="w-3.5 h-3.5" />Cooked</span>}
               {cooksFor && <span className="text-sm text-zinc-700">{cooksFor}</span>}
+              {dayPlan?.updatedBy && <span className="inline-flex items-center gap-1 text-xs text-zinc-500">Last changed by <PersonMark who={dayPlan.updatedBy} what="Last changed" /></span>}
             </div>
           </div>
           <button type="button" onClick={close} className="w-10 h-10 rounded-full border border-zinc-200 flex items-center justify-center shrink-0 cursor-pointer" aria-label="Close">
@@ -404,7 +410,7 @@ export function DaySheet({
           )}
 
           <label className="block">
-            <span className="text-base font-semibold text-zinc-900 block mb-1">Notes</span>
+            <span className="text-base font-semibold text-zinc-900 flex items-center gap-1.5 mb-1">Notes{meal.note && <PersonMark who={meal.noteBy} what="Note written" />}</span>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}

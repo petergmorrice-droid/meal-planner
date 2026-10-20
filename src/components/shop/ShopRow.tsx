@@ -1,6 +1,8 @@
 import React from 'react';
 import { Check, StickyNote, Info } from 'lucide-react';
 import { AggregatedShoppingListItem, shopQuantityText } from '../../shopList';
+import { handAddedBy, noteAuthor } from '../../whoChanged';
+import PersonMark, { noteLook } from '../PersonMark';
 
 /**
  * One product on the Shop list: the circle ticks it; the rest of the row opens its panel
@@ -24,6 +26,9 @@ export default function ShopRow({
 }) {
   // Which meals it's for, and your note under it (the note never hides the meals).
   const meals = row.description || row.quantityNote;
+  // Blue (Peter) / pink (Rachel): who last added or changed what was added by hand, and who wrote the note.
+  const addedBy = handAddedBy(row.parts);
+  const note = noteLook(noteAuthor(row.parts));
   return (
     <div
       className={`flex items-stretch min-h-[56px] ${justTicked ? 'bg-emerald-50/70' : row.checked ? 'bg-zinc-50/60' : 'bg-white'}`}
@@ -58,6 +63,7 @@ export default function ShopRow({
             <span className={`text-[15px] font-semibold truncate ${row.checked ? 'line-through text-zinc-400 font-medium' : 'text-zinc-900'}`}>
               {row.name}
             </span>
+            {addedBy && <PersonMark who={addedBy} what="Added or changed" />}
             {row.checkCupboard && !row.checked && (
               <span className="shrink-0 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-px" title="Store-cupboard item: check you have it">
                 check cupboard
@@ -78,8 +84,8 @@ export default function ShopRow({
             <span className="block min-w-0" data-item-sub>
               {meals && <span className="block text-xs text-zinc-500 truncate" data-item-meals>{meals}</span>}
               {row.note && (
-                <span className="flex items-center gap-1 text-xs text-amber-800 min-w-0" data-item-note-line>
-                  <StickyNote className="w-3 h-3 shrink-0" />
+                <span className={`flex items-center gap-1 text-xs min-w-0 ${note.text}`} data-item-note-line>
+                  <StickyNote className={`w-3 h-3 shrink-0 ${note.icon}`} />
                   <span className="truncate">{row.note}</span>
                 </span>
               )}

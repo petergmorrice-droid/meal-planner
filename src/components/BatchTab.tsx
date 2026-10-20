@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import PersonMark, { noteLook } from './PersonMark';
 import Notice from './Notice';
-import { Snowflake, Plus, Minus, X, Check, CalendarPlus, BookOpen, Trash2, ChevronRight, Search } from 'lucide-react';
+import { Snowflake, Plus, Minus, X, Check, CalendarPlus, BookOpen, Trash2, ChevronRight, Search, StickyNote } from 'lucide-react';
 import { BatchItem, MealPlan, Recipe } from '../types';
 import { DAYS_OF_WEEK, formatDateISO, isWeekWithinForwardLimit } from '../utils';
 import { freezerGroups, frozenAgo, mealsFor, planDayDate, planFreezerMeal, whenText, FreezerGroup } from '../freezer';
@@ -169,12 +170,17 @@ export default function BatchTab({ store, onNavigateTab }: { store: any; onNavig
 /** One dish: portions, how long it's been frozen, what's planned from it. */
 function FreezerCard({ g, todayIso, people, onOpen, onPlan }: { key?: React.Key; g: FreezerGroup; todayIso: string; people: number; onOpen: () => void; onPlan: () => void }) {
   const short = g.plannedPortions > g.portions;
+  // Blue (Peter) / pink (Rachel): who last put in or changed this, and who wrote each note.
+  const latest = [...g.batches].sort((a, b) => (b.lastModifiedAt || 0) - (a.lastModifiedAt || 0))[0];
+  const changedBy = latest?.lastModifiedBy || latest?.addedBy;
+  const notes = g.batches.filter((b) => (b.note || '').trim());
   return (
     <section className={`rounded-xl bg-white border px-3 py-2.5 ${g.useSoon ? 'border-amber-300' : 'border-zinc-200'}`} data-freezer-item={g.name}>
       <button type="button" onClick={onOpen} className="w-full flex items-start gap-3 text-left cursor-pointer" data-freezer-open>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[15px] font-semibold text-zinc-900 leading-snug break-words">{g.name}</span>
+            <PersonMark who={changedBy} what="Last changed" />
             {g.useSoon && <span className="text-[11px] font-bold uppercase tracking-wide rounded bg-amber-100 text-amber-800 px-1.5 py-px" data-use-soon>Use soon</span>}
           </span>
           <span className="block text-xs text-zinc-500 mt-0.5" data-freezer-age>
@@ -187,6 +193,12 @@ function FreezerCard({ g, todayIso, people, onOpen, onPlan }: { key?: React.Key;
                 : `Planned ${g.planned.map((p) => `${whenText(p.date, todayIso)} (${p.portions})`).join(', ')} · ${g.spare} spare`}
             </span>
           )}
+          {notes.map((b) => (
+            <span key={b.id} className={`mt-0.5 flex items-center gap-1 text-xs min-w-0 ${noteLook(b.noteBy).text}`} data-freezer-note={b.noteBy || ''}>
+              <StickyNote className={`w-3 h-3 shrink-0 ${noteLook(b.noteBy).icon}`} />
+              <span className="truncate">{b.note}</span>
+            </span>
+          ))}
           {g.batches.length > 1 && (
             <span className="mt-1 flex flex-wrap gap-1" data-freezer-batches>
               {g.batches.map((b) => (
@@ -280,7 +292,7 @@ function FreezerSheet({ g, todayIso, people, recipe, onPortions, onPatch, onRemo
             <div key={b.id} className="rounded-xl border border-zinc-200 p-3 space-y-2.5" data-sheet-batch={i}>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="text-sm font-semibold text-zinc-900 block">{g.batches.length > 1 ? `Batch ${i + 1}` : 'Portions'}</span>
+                  <span className="text-sm font-semibold text-zinc-900 flex items-center gap-1.5">{g.batches.length > 1 ? `Batch ${i + 1}` : 'Portions'}<PersonMark who={b.lastModifiedBy || b.addedBy} what="Last changed" /></span>
                   <span className="text-xs text-zinc-500">frozen {frozenAgo(b.dateAdded, todayIso)}</span>
                 </div>
                 <Stepper value={b.portions} onChange={(n) => onPortions(b.id, n)} label="portion" />
@@ -299,7 +311,7 @@ function FreezerSheet({ g, todayIso, people, recipe, onPortions, onPatch, onRemo
                 </div>
               </div>
               <label className="block">
-                <span className="text-xs font-semibold text-zinc-600 block mb-1">Note</span>
+                <span className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5 mb-1">Note{b.note && <PersonMark who={b.noteBy} what="Note written" />}</span>
                 <input type="text" defaultValue={b.note || ''} placeholder="e.g. garage freezer, blue tub"
                   onBlur={(e) => { const v = e.target.value.trim(); if (v !== (b.note || '')) onPatch(b.id, { note: v || undefined }); }}
                   className="w-full h-10 rounded-lg border border-zinc-300 px-2.5 text-sm" data-sheet-note />

@@ -61,6 +61,7 @@ import {
 import { catalogForState, matchProduct, productMatchesSearch } from '../shopping';
 
 import { RecipeModal } from './CookBookTab';
+import { noteLook } from './PersonMark';
 import { DayListRow, WeekDayCard, WeekGlance, DaySheet, isLeftoverMeal } from './planner/DayListRow';
 import { changedDaysSinceList, listSnapshot, moveMeal, cooksForText as weekCooksForText, preferredWeekStart, leftoverSourceDay } from '../planning';
 import { sendWeekToShoppingList } from '../planShopping';
@@ -2344,7 +2345,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                                     </span>
                                   )}
                                   {meal.note && (
-                                    <span className="text-amber-800 bg-amber-50 px-1 rounded truncate max-w-[140px]" title={meal.note}>
+                                    <span className={`px-1 rounded truncate max-w-[140px] ${noteLook(meal.noteBy).text} ${noteLook(meal.noteBy).bg}`} title={meal.note}>
                                       {meal.note}
                                     </span>
                                   )}
