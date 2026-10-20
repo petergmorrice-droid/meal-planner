@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ratingsFor, averagesById } from '../ratings';
 import Notice from './Notice';
 import { 
   ChevronRight, 
@@ -862,7 +863,8 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   const setRecipeSort = (sort: RecipeSort) => { setRecipeSortState(sort); saveRecipeSort(sort); };
   const [favFirst, setFavFirstState] = useState<boolean>(readFavouritesFirst);
   const setFavFirst = (on: boolean) => { setFavFirstState(on); saveFavouritesFirst(on); };
-  const sortedRecipes = useMemo(() => sortRecipes(filteredRecipes, recipeSort, recipeHistory, favFirst), [filteredRecipes, recipeSort, recipeHistory, favFirst]);
+  const ratingAverages = useMemo(() => averagesById(store.state.preferences?.ratings), [store.state.preferences?.ratings]);
+  const sortedRecipes = useMemo(() => sortRecipes(filteredRecipes, recipeSort, recipeHistory, favFirst, ratingAverages), [filteredRecipes, recipeSort, recipeHistory, favFirst, ratingAverages]);
   // "This week: Tue" on cards for the week on screen.
   const daysInWeek = useMemo(() => {
     const m = new Map<string, string[]>();
@@ -1191,6 +1193,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
                     fields={cardFields}
                     history={recipeHistory.get(recipe.id)}
                     freezer={freezerPortions(recipe, store.state.batches)}
+                ratings={ratingsFor(store.state.preferences?.ratings, recipe.id)}
                     today={today}
                     inWeek={daysInWeek.get(recipe.id)}
                     wide={mealRowsLayout === 1}

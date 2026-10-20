@@ -642,7 +642,7 @@ export function useStore() {
 
   /** Settings back to how they started; keeps your staples, favourites, aisle order and shop history. */
   const resetPreferences = async () => {
-    const keep = ['recurringItems', 'favouriteItems', 'aisleOrder', 'shopRoute', 'shopHistory', 'catalogVersion'] as const;
+    const keep = ['recurringItems', 'favouriteItems', 'aisleOrder', 'shopRoute', 'shopHistory', 'catalogVersion', 'ratings', 'notStaples', 'notProducts'] as const;
     const kept: Partial<UserPreferences> = {};
     for (const k of keep) if ((state.preferences as any)?.[k] !== undefined) (kept as any)[k] = (state.preferences as any)[k];
     commit(state, { ...state, preferences: { ...DEFAULT_PREFERENCES, ...kept } });

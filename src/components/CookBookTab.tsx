@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ratingsFor, averagesById } from '../ratings';
 import { Search, Plus, X, SlidersHorizontal, BookOpen, Star, Clock, Leaf, Zap, Snowflake, History } from 'lucide-react';
 import { Recipe } from '../types';
 import CookMode from './CookMode';
@@ -76,8 +77,8 @@ export default function CookBookTab({
       recipeMatchesSearch(r, search) &&
       matchesQuickFilters(r, filters, { history: history.get(r.id), freezer: freezerPortions(r, store.state.batches), today }),
     );
-    return sortRecipes(list, sort, history, favFirst);
-  }, [recipes, search, filters, history, store.state.batches, today, sort, favFirst]);
+    return sortRecipes(list, sort, history, favFirst, averagesById(store.state.preferences?.ratings));
+  }, [recipes, search, filters, history, store.state.batches, today, sort, favFirst, store.state.preferences?.ratings]);
 
   const cardFields = cardFieldsFromPrefs(prefs);
   const filtering = search.trim() !== '' || filters.length > 0;
@@ -248,6 +249,7 @@ export default function CookBookTab({
                 fields={cardFields}
                 history={history.get(recipe.id)}
                 freezer={freezerPortions(recipe, store.state.batches)}
+                ratings={ratingsFor(store.state.preferences?.ratings, recipe.id)}
                 today={today}
                 onOpen={() => setSelectedRecipe(recipe)}
               />

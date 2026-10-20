@@ -9,7 +9,7 @@ export {
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy, notYetProducts,
-  packsOnLine, stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts,
+  packsOnLine, stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts, suggestedStaples,
 } from '../src/shopList';
 export {
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
@@ -23,3 +23,4 @@ export { frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText, USE_SOON
 export { versionInServiceWorker, builtText } from '../src/appVersion';
 export { agoText, syncProblemText, backupSummary } from '../src/settingsInfo';
 export { stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes, handAddedBy, noteAuthor } from '../src/whoChanged';
+export { ratingsFor, averageStars, averagesById, withRating } from '../src/ratings';

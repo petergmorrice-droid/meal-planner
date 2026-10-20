@@ -507,3 +507,15 @@ Main files:
   (`dayTone` in `src/components/planner/DayListRow.tsx`). *Send to list*
   shows every day in full: meal, kind, people, who it cooks for, sides, the
   day's note and the recipe's notes, with Edit opening that day.
+- `Ratings` — you and Rachel each give a recipe 1 to 5 stars: "How was it?"
+  at the end of cooking, *Rate it* on a cooked day in Cook, and *Our
+  ratings* in the recipe pop-up (tap yours; the other person's shows in their
+  colour). Cards show "★ 4 5" (blue, pink), Cookbook and Planning can sort by
+  *Best rated*, and History shows them. Kept as one rating per recipe per
+  person (`preferences.ratings`, `src/ratings.ts`), synced one at a time so
+  you can both rate at once. They replace the old thumbs up/down.
+- `Suggested staples` — anything added by hand in 3 of the last 6 weeks gets
+  "Add every week?" on the Shop list (`suggestedStaples` in
+  `src/shopList.ts`). Choose how much each week and it becomes a weekly
+  staple (this week's line becomes the staple's line); *Not a staple* stops
+  suggesting it on both phones (`preferences.notStaples`).

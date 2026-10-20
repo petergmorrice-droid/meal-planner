@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Notice from './Notice';
 import { 
+  Repeat,
   Plus, 
   Minus, 
   Check, 
@@ -56,8 +57,9 @@ import {
   AggregatedShoppingListItem, aggregateShoppingItems, shopQuantityText, partLabel, defaultShopWeek, formatWeekSpan, weekStartShort,
   parseQuickAdd, quickAddLine, listAsText, carryItemsToWeek, shopDurationText, productKey,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, BIG_SHOP, notYetProducts,
-  stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts,
+  stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts, suggestedStaples, StapleSuggestion,
 } from '../shopList';
+import StapleSuggestSheet from './shop/StapleSuggestSheet';
 import ShopHistorySheet from './shop/ShopHistorySheet';
 import SaveProductSheet, { NewProductDetails } from './shop/SaveProductSheet';
 import { AISLE_LOOK, AisleIcon } from './AisleLook';
@@ -1055,6 +1057,46 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     [currentWeekItems, declinedProducts, store.state.groceryDatabase],
   );
   const isNewItem = (name: string) => newItems.some((i) => i.name.trim().toLowerCase() === name.trim().toLowerCase());
+  // ---------- Things you add by hand most weeks: suggest making them weekly staples ----------
+  const declinedStaples = store.state.preferences?.notStaples;
+  const stapleSuggestions = useMemo(
+    () => (activePlan ? suggestedStaples(store.state.shoppingList || [], { thisWeek: activePlan.startDate, staples: store.state.preferences?.recurringItems || [], declined: declinedStaples }) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store.state.shoppingList, activePlan?.startDate, store.state.preferences?.recurringItems, declinedStaples, store.state.groceryDatabase],
+  );
+  const [stapleOffer, setStapleOffer] = useState<StapleSuggestion | null>(null);
+  const acceptStaple = (s: StapleSuggestion, amount: number) => {
+    const now = store.getState?.() || store.state;
+    const recurring: RecurringItem[] = now.preferences?.recurringItems || [];
+    const u = canonicalUnit(s.unit);
+    const unit = u === 'each' ? (amount === 1 ? 'item' : 'items') : formatUnit(u, amount);
+    const rec: RecurringItem = { id: crypto.randomUUID(), name: s.name, amount, unit, category: s.category || GROCERY_AISLES[getGroceryAisle({ name: s.name })].name };
+    const next = [...recurring, rec];
+    store.updatePreferences({ recurringItems: next });
+    // This week's (and later weeks') line you added by hand becomes the staple's line.
+    store.updateShoppingList(stapleTakesOver(syncRecurringStaplesForAllPlans(now.mealPlans || [], now.shoppingList || [], next, dismissedItemIds), rec.id, (i) => productKey(i) === s.key));
+    setStapleOffer(null);
+    setToastMessage(`${s.name} is now a weekly staple: ${shopQuantityText({ amount, unit })} every week`);
+  };
+  const declineStaple = (s: StapleSuggestion) => {
+    const now = store.getState?.() || store.state;
+    const cur: string[] = now.preferences?.notStaples || [];
+    const key = s.name.trim().toLowerCase();
+    if (!cur.includes(key)) store.updatePreferences({ notStaples: [...cur, key] });
+    setStapleOffer(null);
+    setToastMessage(`OK, won't suggest ${s.name} as a staple again`);
+  };
+  const stapleSheet = stapleOffer && (
+    <StapleSuggestSheet
+      key={stapleOffer.key}
+      suggestion={stapleOffer}
+      step={getIngredientStep({ name: stapleOffer.name, unit: stapleOffer.unit, groceryId: stapleOffer.groceryId })}
+      onAdd={(amount) => acceptStaple(stapleOffer, amount)}
+      onDecline={() => declineStaple(stapleOffer)}
+      onClose={() => setStapleOffer(null)}
+    />
+  );
+
   const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
   const isStapleName = (name: string) => (store.state.preferences?.recurringItems || []).some((r: RecurringItem) => sameName(r.name, name));
   const isFavouriteName = (name: string) => favourites.some((f) => sameName(f.name, name));
@@ -1819,6 +1861,25 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
             </div>
           )}
 
+          {stapleSuggestions.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-3.5 py-3" data-staple-suggestions>
+              <div className="flex items-start gap-2.5">
+                <Repeat className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-blue-950">Add every week?</p>
+                  <p className="text-xs text-blue-900/80">You add {stapleSuggestions.length === 1 ? 'this' : 'these'} yourself most weeks. As a weekly staple, {stapleSuggestions.length === 1 ? 'it goes' : 'they go'} on the list by {stapleSuggestions.length === 1 ? 'itself' : 'themselves'}.</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {stapleSuggestions.slice(0, 6).map((s) => (
+                      <button key={s.key} type="button" onClick={() => setStapleOffer(s)} className="h-8 px-3 rounded-full bg-white border border-blue-300 text-sm font-semibold text-blue-900 cursor-pointer" data-suggest-staple={s.name}>
+                        {s.name} <span className="font-normal text-blue-800/70">· {s.weeks} of {s.of} weeks</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {cupboardToCheck.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-3 flex items-center justify-between gap-3">
               <div className="flex items-start gap-2.5 min-w-0">
@@ -2022,6 +2083,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       )}
       {saveProductSheet}
       {infoSheet}
+      {stapleSheet}
 
       {/* MODAL: Threshold Warning Modal */}
       {thresholdWarning && (

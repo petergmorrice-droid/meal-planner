@@ -243,6 +243,10 @@ export const PREF_LISTS: Record<string, PrefListSpec> = {
   },
   /** Favourites: A to Z. */
   favouriteItems: { key: (x) => (x?.name ? lower(x) : undefined), sort: (a, b) => cmp(lower(a), lower(b)) },
+  /** Star ratings, one per recipe per person: in id order. */
+  ratings: { key: (x) => (x?.id ? String(x.id) : undefined), sort: (a, b) => cmp(String(a?.id ?? ''), String(b?.id ?? '')) },
+  /** Things that aren't weekly staples: A to Z. */
+  notStaples: { key: (x) => (typeof x === 'string' && x ? x : undefined), sort: (a, b) => cmp(String(a), String(b)) },
   /** Past shops: newest first. */
   shopHistory: {
     key: (x) => (x?.id ? String(x.id) : undefined),

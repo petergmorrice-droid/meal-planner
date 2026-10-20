@@ -121,10 +121,11 @@ export function freezerPortions(recipe: Recipe, batches: BatchItem[] | undefined
   return freezerBatchesFor(recipe, batches).reduce((sum, b) => sum + Math.max(0, Number(b.portions) || 0), 0);
 }
 
-export type RecipeSort = 'az' | 'not_lately' | 'newest' | 'added';
+export type RecipeSort = 'az' | 'not_lately' | 'newest' | 'added' | 'rated';
 export const RECIPE_SORTS: { id: RecipeSort; label: string }[] = [
   { id: 'az', label: 'A–Z' },
   { id: 'not_lately', label: 'Not had lately' },
+  { id: 'rated', label: 'Best rated' },
   { id: 'newest', label: 'Newest first' },
   { id: 'added', label: 'Oldest first' },
 ];
@@ -143,15 +144,17 @@ export function saveRecipeSort(sort: RecipeSort) {
  * Recipes in the chosen order. "Not had lately": never had first, then the longest since you
  * last had it; anything already planned from today on goes to the end.
  */
-export function sortRecipes(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>, favouritesFirst = false): Recipe[] {
-  const sorted = sortRecipesBy(recipes, sort, histories);
+export function sortRecipes(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>, favouritesFirst = false, ratings?: Map<string, number>): Recipe[] {
+  const sorted = sortRecipesBy(recipes, sort, histories, ratings);
   if (!favouritesFirst) return sorted;
   return [...sorted.filter((r) => r.favourite), ...sorted.filter((r) => !r.favourite)];
 }
 
-function sortRecipesBy(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>): Recipe[] {
+function sortRecipesBy(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>, ratings?: Map<string, number>): Recipe[] {
   const byName = (a: Recipe, b: Recipe) => (a.name || '').localeCompare(b.name || '', 'en-GB', { sensitivity: 'base' });
   const list = [...recipes];
+  // Best rated: highest average first; ones nobody's rated yet go last, A–Z.
+  if (sort === 'rated') return list.sort((a, b) => (ratings?.get(b.id) ?? -1) - (ratings?.get(a.id) ?? -1) || byName(a, b));
   if (sort === 'added') return list;
   if (sort === 'newest') return list.reverse();
   if (sort === 'az') return list.sort(byName);

@@ -6,6 +6,8 @@ import {
   RecipeHistory, recipeMethods, totalMinutes, formatMinutes, isVegetarianRecipe, isVeganRecipe,
   formatAgo, formatPlannedDay, METHOD_LABEL,
 } from '../recipeInfo';
+import { RatingChip } from './Stars';
+import type { PersonRatings } from '../ratings';
 
 /** Which details the cards show (View options → Fields; saved for the household). */
 export interface CardFields {
@@ -50,6 +52,7 @@ export function RecipeCard({
   today,
   inWeek,
   wide = false,
+  ratings,
   onOpen,
   dragProps,
 }: {
@@ -62,6 +65,8 @@ export function RecipeCard({
   inWeek?: string[];
   /** Full-width row ("Rows of 1") rather than a grid tile. */
   wide?: boolean;
+  /** Peter's and Rachel's stars. */
+  ratings?: PersonRatings;
   onOpen: () => void;
   dragProps?: Pick<React.HTMLAttributes<HTMLDivElement>, 'onDragStart' | 'onDragEnd'> & { draggable?: boolean };
 }) {
@@ -132,7 +137,7 @@ export function RecipeCard({
         )}
       </h3>
       {facts}
-      {(status || frozen) && <div className="flex flex-wrap items-center gap-1.5 mt-0.5">{status}{frozen}</div>}
+      {(status || frozen || (ratings && (ratings.P || ratings.R))) && <div className="flex flex-wrap items-center gap-1.5 mt-0.5">{ratings && <RatingChip ratings={ratings} />}{status}{frozen}</div>}
     </div>
   );
 }

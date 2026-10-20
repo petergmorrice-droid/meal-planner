@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { RatingRows, RatingChip } from './Stars';
+import { ratingsFor, withRating, PersonRatings } from '../ratings';
 import PersonMark, { noteLook } from './PersonMark';
 import Notice from './Notice';
 import {
   ChevronLeft, ChevronRight, ChefHat, Check, Clock, Snowflake, Moon, Minus, Plus, Pencil,
   ArrowLeftRight, RotateCcw, ShoppingBag, Utensils, X, FileText, BookOpen,
+  Star,
 } from 'lucide-react';
 import { MealPlan, PlannedMeal, Recipe, BatchItem, DayPlan } from '../types';
 import { DAYS_OF_WEEK, formatDateISO, getMonday, getNextMonday, isWeekWithinForwardLimit } from '../utils';
@@ -112,6 +115,12 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
 
   // ---------- Panels, toasts ----------
   const [daySheet, setDaySheet] = useState<string | null>(null);
+  // "Rate it": both of your stars for a recipe you've cooked.
+  const [rating, setRating] = useState<{ recipeId: string; name: string } | null>(null);
+  const rateRecipe = (recipeId: string, stars: number) => {
+    const list = (store.getState?.() || store.state)?.preferences?.ratings;
+    store.updatePreferences?.({ ratings: withRating(list, recipeId, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) });
+  };
   const [moving, setMoving] = useState<string | null>(null);
   const [noting, setNoting] = useState<string | null>(null);
   const [cooking, setCooking] = useState<{ planId: string; day: string; meal: PlannedMeal; servings?: number } | null>(null);
@@ -398,6 +407,9 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
                   day={day}
                   iso={iso}
                   updatedBy={meal ? plan.days[day]?.updatedBy : undefined}
+                  ratings={recipe ? ratingsFor(store.state.preferences?.ratings, recipe.id) : undefined}
+                  me={store.currentUser || 'P'}
+                  onRate={recipe ? () => setRating({ recipeId: recipe.id, name: recipe.name }) : undefined}
                   meal={meal}
                   recipe={recipe}
                   isToday={isToday}
@@ -450,6 +462,19 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
           />
         );
       })()}
+
+      {rating && (
+        <div className="fixed inset-0 z-[60] bg-zinc-900/30 flex items-end sm:items-center justify-center sm:p-4" onClick={() => setRating(null)}>
+          <div role="dialog" aria-label={`Rate ${rating.name}`} className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl p-4 space-y-3" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }} onClick={(e) => e.stopPropagation()} data-rate-sheet={rating.name}>
+            <div>
+              <p className="text-sm font-semibold text-zinc-500">How was it?</p>
+              <h3 className="text-lg font-bold text-zinc-900 leading-snug">{rating.name}</h3>
+            </div>
+            <RatingRows ratings={ratingsFor(store.state.preferences?.ratings, rating.recipeId)} me={store.currentUser || 'P'} onRate={(n) => rateRecipe(rating.recipeId, n)} size="lg" />
+            <button type="button" onClick={() => setRating(null)} className="w-full h-12 rounded-xl bg-emerald-600 text-white font-semibold cursor-pointer" data-rate-done>Done</button>
+          </div>
+        </div>
+      )}
 
       {freezePrompt && <FreezePrompt key={freezePrompt.mealId} name={freezePrompt.name} portions={freezePrompt.portions} onChoose={confirmFreeze} />}
 
@@ -556,11 +581,15 @@ const TYPE_LABEL: Record<string, string> = { leftover: 'Leftovers', batch: 'Free
  * Today's card adds when to start, what to do tonight for tomorrow and a Start cooking button.
  */
 function DayCard({
-  day, meal, iso, recipe, isToday, isTomorrow, isPast, fromDay, after, prep, cook, updatedBy,
+  day, meal, iso, recipe, isToday, isTomorrow, isPast, fromDay, after, prep, cook, updatedBy, ratings, me, onRate,
   onOpen, onTick, onMove, onCook, onRecipe, onNote, onPlan, todayPanel,
 }: {
   key?: React.Key;
   day: string;
+  /** Peter's and Rachel's stars for the recipe, who's using this phone, and "Rate it". */
+  ratings?: PersonRatings;
+  me?: string;
+  onRate?: () => void;
   /** Who last changed this day's meal: a blue (Peter) / pink (Rachel) mark. */
   updatedBy?: string;
   iso: string;
@@ -665,6 +694,15 @@ function DayCard({
             <button type="button" onClick={onNote} className={`mt-1 w-full flex items-start gap-1.5 text-left text-[13px] cursor-pointer ${meal.noteBy ? noteLook(meal.noteBy).text : 'text-amber-900'}`} data-cook-note={day} data-note-by={meal.noteBy || undefined}>
               <FileText className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${noteLook(meal.noteBy).icon}`} />
               <span className="min-w-0 flex-1 line-clamp-2 break-words">{note}</span>
+            </button>
+          )}
+
+          {cooked && recipe && onRate && meal.type === 'recipe' && (
+            <button type="button" onClick={onRate} className="mt-1 inline-flex items-center gap-1.5 cursor-pointer" data-cook-rate={day}>
+              {ratings && (ratings.P || ratings.R) ? <RatingChip ratings={ratings} /> : null}
+              {!(ratings && me && (ratings as any)[me]) && (
+                <span className="h-7 px-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold inline-flex items-center gap-1"><Star className="w-3.5 h-3.5" />Rate it</span>
+              )}
             </button>
           )}
 

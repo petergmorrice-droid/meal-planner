@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { THEMES, ThemeId, applyTheme, savedTheme } from '../theme';
+import { RatingChip } from './Stars';
+import { ratingsFor } from '../ratings';
 import { AisleIcon } from './AisleLook';
 import Notice from './Notice';
 import {
@@ -1019,8 +1021,9 @@ function HistoryPage({ plans, store, onBack, say, setConfirm, onNavigateTab }: {
                         {m ? mealTitle(m) : 'Nothing planned'}
                         {label && label.toLowerCase() !== (m ? mealTitle(m).toLowerCase() : '') && <span className="text-zinc-500"> · {label}</span>}
                       </span>
-                      {recipe?.verdict === 'again' && <ThumbsUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-label="Have it again" />}
-                      {recipe?.verdict === 'not_for_us' && <ThumbsDown className="w-3.5 h-3.5 text-rose-600 shrink-0" aria-label="Not for us" />}
+                      {recipe && <RatingChip ratings={ratingsFor(store.state.preferences?.ratings, recipe.id)} />}
+                      {recipe?.verdict === 'again' && !ratingsFor(store.state.preferences?.ratings, recipe.id).P && !ratingsFor(store.state.preferences?.ratings, recipe.id).R && <ThumbsUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-label="Have it again" />}
+                      {recipe?.verdict === 'not_for_us' && !ratingsFor(store.state.preferences?.ratings, recipe.id).P && !ratingsFor(store.state.preferences?.ratings, recipe.id).R && <ThumbsDown className="w-3.5 h-3.5 text-rose-600 shrink-0" aria-label="Not for us" />}
                       {m?.cooked && <Check className="w-4 h-4 text-emerald-600 shrink-0" aria-label="Cooked" />}
                     </li>
                   );

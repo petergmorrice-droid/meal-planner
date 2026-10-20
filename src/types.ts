@@ -234,6 +234,22 @@ export interface UserPreferences {
   eatAtTonight?: { date: string; time: string };
   /** Things added to the list that you said aren't products (lower case): the Shop stops offering to save them. */
   notProducts?: string[];
+  /** Each person's star rating of each recipe (synced one rating at a time, so you can both rate at once). */
+  ratings?: RecipeRating[];
+  /** Things you said aren't weekly staples (lower case): the Shop stops suggesting them. */
+  notStaples?: string[];
+}
+
+/** One person's rating of one recipe: 1 to 5 stars. */
+export interface RecipeRating {
+  /** `${recipeId}:${who}` */
+  id: string;
+  recipeId: string;
+  /** 'P' (Peter) or 'R' (Rachel) */
+  who: string;
+  stars: number;
+  /** When it was rated (ISO date). */
+  at?: string;
 }
 
 export interface ShopRoute {

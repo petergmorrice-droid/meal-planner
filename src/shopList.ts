@@ -235,6 +235,72 @@ export function stapleTakesOver(list: ShoppingListItem[], recurringId: string, i
     });
 }
 
+/** Something you keep adding by hand that could be a weekly staple. */
+export interface StapleSuggestion {
+  key: string;
+  name: string;
+  /** How many of the recent weeks it was added in. */
+  weeks: number;
+  /** Out of how many weeks looked at. */
+  of: number;
+  /** What it usually is each week (the most recent week's amount). */
+  amount: number;
+  unit: string;
+  category?: string;
+  groceryId?: string;
+}
+
+const weekOfLine = (i: ShoppingListItem): string | null => {
+  const m = String(i.planId || '').match(/(\d{4}-\d{2}-\d{2})$/);
+  return m ? m[1] : null;
+};
+
+/**
+ * Things added by hand in at least `minWeeks` of the last `lookBack` weeks (up to and including
+ * `thisWeek`, a Monday "YYYY-MM-DD"), that aren't weekly staples already and that you haven't
+ * said aren't staples. Most-often first.
+ */
+export function suggestedStaples(
+  list: ShoppingListItem[],
+  opts: { thisWeek: string; staples?: { name: string }[]; declined?: string[]; lookBack?: number; minWeeks?: number },
+): StapleSuggestion[] {
+  const lookBack = opts.lookBack ?? 6;
+  const minWeeks = opts.minWeeks ?? 3;
+  const weeks = new Set<string>();
+  const d = new Date(opts.thisWeek + 'T12:00:00');
+  for (let n = 0; n < lookBack; n++) {
+    const w = new Date(d);
+    w.setDate(d.getDate() - 7 * n);
+    weeks.add(`${w.getFullYear()}-${String(w.getMonth() + 1).padStart(2, '0')}-${String(w.getDate()).padStart(2, '0')}`);
+  }
+  const declined = new Set((opts.declined || []).map((x) => x.trim().toLowerCase()));
+  const stapleKeys = new Set((opts.staples || []).flatMap((r) => [productKey({ name: r.name }), `name:${r.name.trim().toLowerCase()}`]));
+  const found = new Map<string, { weeks: Set<string>; latestWeek: string; lines: ShoppingListItem[] }>();
+  for (const i of list || []) {
+    if (!i || !i.isAdhoc || i.isRecurring || i.isBatch) continue;
+    const week = weekOfLine(i);
+    if (!week || !weeks.has(week)) continue;
+    const key = productKey(i);
+    let f = found.get(key);
+    if (!f) { f = { weeks: new Set(), latestWeek: '', lines: [] }; found.set(key, f); }
+    f.weeks.add(week);
+    if (week > f.latestWeek) { f.latestWeek = week; f.lines = [i]; }
+    else if (week === f.latestWeek) f.lines.push(i);
+  }
+  const out: StapleSuggestion[] = [];
+  for (const [key, f] of found) {
+    if (f.weeks.size < minWeeks) continue;
+    const latest = [...f.lines].sort((a, b) => (b.lastModifiedAt || 0) - (a.lastModifiedAt || 0))[0];
+    const name = latest.name;
+    if (stapleKeys.has(key) || stapleKeys.has(`name:${name.trim().toLowerCase()}`)) continue;
+    if (declined.has(name.trim().toLowerCase()) || declined.has(key)) continue;
+    const unit = canonicalUnit(latest.unit);
+    const amount = Math.round(f.lines.filter((l) => canonicalUnit(l.unit) === unit).reduce((sum, l) => sum + (Number(l.amount) || 0), 0) * 100) / 100 || 1;
+    out.push({ key, name, weeks: f.weeks.size, of: lookBack, amount, unit: latest.unit || '', category: latest.category, groceryId: latest.groceryId });
+  }
+  return out.sort((a, b) => b.weeks - a.weeks || a.name.localeCompare(b.name));
+}
+
 const COUNT_UNITS =['', 'whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', 'each'];
 
 /** How much to buy, as it reads in the shop: "1 kg", "2 cans", "6". */

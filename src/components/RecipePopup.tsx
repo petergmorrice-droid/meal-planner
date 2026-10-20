@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { RatingRows } from './Stars';
+import { ratingsFor, withRating } from '../ratings';
 import PersonMark, { noteLook } from './PersonMark';
 
 import {
@@ -112,6 +114,13 @@ export function RecipeModal({
     try { await nav?.clipboard?.writeText(text); setShareNote('Copied: paste it into a message.'); }
     catch { setShareNote("Sharing isn't available here."); }
     setTimeout(() => setShareNote(''), 3500);
+  };
+
+  // Both of your star ratings; tapping yours saves it straight away (synced one rating at a time).
+  const myRatings = ratingsFor(store?.state?.preferences?.ratings, recipe.id);
+  const rate = (stars: number) => {
+    const list = (store?.getState?.() || store?.state)?.preferences?.ratings;
+    store?.updatePreferences?.({ ratings: withRating(list, recipe.id, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) });
   };
 
   // "Our notes", changed right here without editing the whole recipe.
@@ -298,7 +307,7 @@ export function RecipeModal({
                     {edited.favourite ? 'Favourite' : 'Add to favourites'}
                   </button>
                 )}
-                {edited.verdict && (
+                {edited.verdict && !myRatings.P && !myRatings.R && (
                   <button
                     type="button"
                     onClick={() => {
@@ -410,6 +419,16 @@ export function RecipeModal({
                     <p className="text-sm text-zinc-500">No notes yet.</p>
                   )}
                 </section>
+
+                {/* Our ratings: one row each, you can tap yours */}
+                {store?.updatePreferences && (
+                  <section data-recipe-ratings>
+                    <h3 className={`${sectionTitle} mb-2`}>Our ratings</h3>
+                    <div className="bg-white rounded-2xl border border-zinc-200 px-3 py-2">
+                      <RatingRows ratings={myRatings} me={store.currentUser || 'P'} onRate={rate} />
+                    </div>
+                  </section>
+                )}
 
                 {/* People */}
                 <section className="bg-white rounded-2xl border border-zinc-200 p-3 flex items-center justify-between gap-3" data-recipe-people>

@@ -8,7 +8,8 @@ import {
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy, notYetProducts,
-  packsOnLine, stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts,
+  packsOnLine, stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts, suggestedStaples,
+  ratingsFor, averageStars, averagesById, withRating,
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
   addMinute, timerText, eatAtFor, DEFAULT_EAT_AT, speechChunks, forSpeech, parseVoiceCommand, parseAlternatives,
@@ -423,6 +424,41 @@ test('who changed it: Peter blue, Rachel pink', () => {
   const r = stampRecipeNotes({ id: 'r', name: 'Chilli', notes: 'less chilli' }, { id: 'r', name: 'Chilli' }, 'R');
   assert.equal(r.notesBy, 'R');
   assert.equal(stampRecipeNotes({ ...r, name: 'Chilli con carne' }, r, 'P').notesBy, 'R', 'renaming it: notes still Rachel\'s');
+});
+
+test('shop: things added by hand most weeks are suggested as weekly staples', () => {
+  const line = (id, name, week, extra = {}) => ({ id, name, amount: 1, unit: '', checked: true, isAdhoc: true, planId: `plan-${week}`, lastModifiedAt: 1, ...extra });
+  const list = [
+    line('a1', 'Bin bags', '2026-10-19', { amount: 1, unit: 'pack', checked: false }),
+    line('a2', 'Bin bags', '2026-10-05', { unit: 'pack' }),
+    line('a3', 'Bin bags', '2026-09-21', { unit: 'pack' }),
+    line('b1', 'Hummus', '2026-10-12', { amount: 2 }), line('b2', 'Hummus', '2026-10-05'), line('b3', 'hummus', '2026-09-28'), line('b4', 'Hummus', '2026-09-28'),
+    line('c1', 'Candles', '2026-10-19'), line('c2', 'Candles', '2026-10-12'),
+    line('d1', 'Old thing', '2026-08-03'), line('d2', 'Old thing', '2026-08-10'), line('d3', 'Old thing', '2026-08-17'),
+    line('e1', 'Milk', '2026-10-19'), line('e2', 'Milk', '2026-10-12'), line('e3', 'Milk', '2026-10-05'),
+    line('f1', 'Rice', '2026-10-19', { isAdhoc: false }), line('f2', 'Rice', '2026-10-12', { isAdhoc: false }), line('f3', 'Rice', '2026-10-05', { isAdhoc: false }),
+    line('g1', 'Kitchen roll', '2026-10-19'), line('g2', 'Kitchen roll', '2026-10-12'), line('g3', 'Kitchen roll', '2026-10-05'),
+  ];
+  const s = suggestedStaples(list, { thisWeek: '2026-10-19', staples: [{ name: 'Milk' }], declined: ['kitchen roll'] });
+  assert.deepEqual(s.map((x) => `${x.name} ${x.weeks}/${x.of}`), ['Bin bags 3/6', 'Hummus 3/6'], 'in 3 of the last 6 weeks; not staples already, not declined, not meal ingredients, not long ago');
+  assert.ok(s[0].amount === 1 && /pack/.test(s[0].unit), 'Bin bags: 1 pack, as last added');
+  assert.equal(s[1].amount, 2, "Hummus: the most recent week's amount");
+  assert.ok(suggestedStaples(list, { thisWeek: '2026-10-19', minWeeks: 2 }).map((x) => x.name).includes('Candles'), 'two weeks counts when asked');
+});
+
+test('ratings: Peter and Rachel each rate a recipe', () => {
+  let list = withRating(undefined, 'r1', 'P', 4, '2026-10-20');
+  list = withRating(list, 'r1', 'R', 5);
+  list = withRating(list, 'r2', 'R', 2);
+  assert.deepEqual(ratingsFor(list, 'r1'), { P: 4, R: 5 });
+  assert.equal(averageStars(ratingsFor(list, 'r1')), 4.5);
+  list = withRating(list, 'r1', 'P', 3);
+  assert.deepEqual(ratingsFor(list, 'r1'), { P: 3, R: 5 }, 'changing yours replaces it');
+  assert.equal(list.filter((r) => r.recipeId === 'r1').length, 2, 'one each');
+  list = withRating(list, 'r1', 'R', 0);
+  assert.deepEqual(ratingsFor(list, 'r1'), { P: 3 }, '0 takes it off');
+  assert.deepEqual([...averagesById(list)].sort(), [['r1', 3], ['r2', 2]]);
+  assert.equal(averageStars({}), null);
 });
 
 test('shop: typing into the add box', () => {

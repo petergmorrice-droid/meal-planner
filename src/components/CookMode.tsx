@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { RatingRows } from './Stars';
+import { ratingsFor, withRating } from '../ratings';
 import PersonMark, { noteLook } from './PersonMark';
 import { formatCookingAmount } from '../shopping';
 import {
@@ -764,8 +766,13 @@ function FinishedScreen({
 }) {
   const fromNote = freezePortionsFromNote(meal.note) ?? 0;
   const [freeze, setFreeze] = useState<number>(fromNote);
-  const [verdict, setVerdict] = useState<Recipe['verdict']>(recipe.verdict);
   const [note, setNote] = useState('');
+  // Your stars (saved straight away; the other person's are shown as they left them).
+  const ratings = ratingsFor(store.state?.preferences?.ratings, recipe.id);
+  const rate = (stars: number) => {
+    const list = (store.getState?.() || store.state)?.preferences?.ratings;
+    store.updatePreferences?.({ ratings: withRating(list, recipe.id, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) });
+  };
   const isCook = meal.type === 'recipe';
 
   const finish = (markCooked: boolean) => {
@@ -776,10 +783,10 @@ function FinishedScreen({
       froze = { batchId, portions: freeze };
     }
     const trimmed = note.trim();
-    if ((verdict && verdict !== recipe.verdict) || trimmed) {
+    if (trimmed) {
       const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
       const notes = trimmed ? [recipe.notes?.trim(), `${date}: ${trimmed}`].filter(Boolean).join('\n') : recipe.notes;
-      store.updateRecipe?.({ ...recipe, ...(verdict ? { verdict } : {}), notes });
+      store.updateRecipe?.({ ...recipe, notes });
     }
     onDone({ markCooked, froze });
   };
@@ -819,18 +826,9 @@ function FinishedScreen({
               </div>
             )}
 
-            <div className="rounded-2xl border border-zinc-200 px-4 py-3" data-finished-verdict>
-              <p className="text-[15px] font-semibold text-zinc-900 mb-2">How was it?</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setVerdict(verdict === 'again' ? undefined : 'again')} aria-pressed={verdict === 'again'}
-                  className={`h-12 rounded-xl border text-[15px] font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${verdict === 'again' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-zinc-300 text-zinc-800'}`} data-verdict="again">
-                  <ThumbsUp className="w-4 h-4" /> Have it again
-                </button>
-                <button type="button" onClick={() => setVerdict(verdict === 'not_for_us' ? undefined : 'not_for_us')} aria-pressed={verdict === 'not_for_us'}
-                  className={`h-12 rounded-xl border text-[15px] font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${verdict === 'not_for_us' ? 'bg-rose-600 border-rose-600 text-white' : 'bg-white border-zinc-300 text-zinc-800'}`} data-verdict="not_for_us">
-                  <ThumbsDown className="w-4 h-4" /> Not for us
-                </button>
-              </div>
+            <div className="rounded-2xl border border-zinc-200 px-4 py-3" data-finished-rating>
+              <p className="text-[15px] font-semibold text-zinc-900 mb-1">How was it?</p>
+              <RatingRows ratings={ratings} me={store.currentUser || 'P'} onRate={rate} size="lg" />
             </div>
 
             <label className="block rounded-2xl border border-zinc-200 px-4 py-3">
