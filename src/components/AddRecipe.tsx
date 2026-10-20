@@ -1,15 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, ClipboardPaste, Camera, Flame, Zap, Link2, Sparkles, ChevronDown, ArrowLeft } from 'lucide-react';
-import { Recipe, CookingMethod } from '../types';
+import { Recipe, CookingMethod, TabName } from '../types';
 import { buildCatalog, namesNeedingSuggestion, linkIngredients } from '../shopping';
 import {
-  parseRecipeApi, suggestGroceryProductsApi, generateRecipeApi, editRecipeApi, generateAlternativeInstructionsApi,
-  readRecipePageApi, readRecipePhotoApi,
+  parseRecipeApi,
+  suggestGroceryProductsApi,
+  generateRecipeApi,
+  editRecipeApi,
+  generateAlternativeInstructionsApi,
+  readRecipePageApi,
+  readRecipePhotoApi,
 } from '../services/geminiService';
 import { RecipeEditor } from './RecipeEditor';
 import { firstUrl, isJustAUrl, findDuplicate, siteName, recipeMethods, METHOD_LABEL } from '../recipeInfo';
+import type  { AppStore } from '../store';
 
-type TabName = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 type Busy = null | 'page' | 'photo' | 'copy' | 'match' | 'write';
 
 const APPLIANCE_KEY = 'add_recipe_appliance';
@@ -57,7 +62,7 @@ export function AddRecipe({
   onNavigateTab,
   initialText,
 }: {
-  store: any;
+  store: AppStore;
   onClose: () => void;
   onSaved: (recipe: Recipe) => void;
   onNavigateTab?: (tab: TabName) => void;
@@ -78,7 +83,7 @@ export function AddRecipe({
   const [writing, setWriting] = useState<CookingMethod | null>(null);
   const [dupOf, setDupOf] = useState<Recipe | null>(null);
   const photoRef = useRef<HTMLInputElement>(null);
-  const canPaste = typeof navigator !== 'undefined' && !!(navigator as any).clipboard?.readText;
+  const canPaste = typeof navigator !== 'undefined' && !!navigator.clipboard?.readText;
   const linkOnly = mode === 'paste' && isJustAUrl(text);
 
   const setAppliance = (m: CookingMethod) => {
@@ -102,10 +107,10 @@ export function AddRecipe({
   const toDraft = async (data: any, sourceUrl?: string): Promise<Recipe> => {
     setBusy('match');
     const catalog = buildCatalog(store.state.groceryDatabase, store.state.groceryOverrides);
-    const allItems = catalog.products.filter((p: any) => !p.sameAs).map((p: any) => p.item) as any[];
+    const allItems = catalog.products.filter((p) => !p.sameAs).map((p) => p.item);
     const ingredientsIn: any[] = Array.isArray(data?.ingredients) ? data.ingredients : [];
     const pending = namesNeedingSuggestion(ingredientsIn, catalog);
-    const suggestions = pending.length > 0 ? await suggestGroceryProductsApi(pending, allItems.map((i: any) => i.name)) : {};
+    const suggestions = pending.length > 0 ? await suggestGroceryProductsApi(pending, allItems.map((i) => i.name)) : {};
     const linked = linkIngredients(ingredientsIn, catalog, suggestions);
     return {
       ...data,
@@ -175,7 +180,7 @@ export function AddRecipe({
   const handlePaste = async () => {
     setError('');
     try {
-      const t = await (navigator as any).clipboard.readText();
+      const t = await navigator.clipboard.readText();
       if (t && t.trim()) setText(t);
       else setError('There was nothing to paste. Copy the recipe (or its link) first.');
     } catch {

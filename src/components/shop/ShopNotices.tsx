@@ -1,5 +1,4 @@
 /** The cards at the top of the Shop list: things to sort out before you go. */
-import React from 'react';
 import { Info, PackageCheck, PackagePlus, RefreshCw, Repeat } from 'lucide-react';
 import { MealPlan, ShoppingListItem } from '../../types';
 import { StapleSuggestion } from '../../shopList';
@@ -13,7 +12,7 @@ export function UnsentNotice({ plan, onPlanning }: { plan: MealPlan; onPlanning?
       <div className="flex items-center gap-2 min-w-0">
         <Info className="w-4 h-4 text-amber-600 shrink-0" />
         <span className="text-sm">
-          {Object.values(plan.days).some((day: any) => day.meals && day.meals.length > 0)
+          {Object.values(plan.days).some((day) => day.meals && day.meals.length > 0)
             ? "This week's meals aren't on the list yet"
             : 'No meals planned for this week yet'}
         </span>

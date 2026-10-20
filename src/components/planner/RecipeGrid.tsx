@@ -1,5 +1,4 @@
 /** The meals to drag onto the week (Classic view): cards in rows of 2 (or 1), filtered and sorted. */
-import React from 'react';
 import { ChefHat } from 'lucide-react';
 import { BatchItem, Recipe, RecipeRating } from '../../types';
 import { ratingsFor } from '../../ratings';
@@ -60,7 +59,6 @@ export default function RecipeGrid({
               ratings={ratingsFor(ratings, recipe.id)}
               today={today}
               inWeek={daysInWeek.get(recipe.id)}
-              wide={mealRowsLayout === 1}
               onOpen={() => onOpen(recipe)}
               dragProps={{
                 draggable: true,

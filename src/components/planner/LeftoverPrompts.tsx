@@ -1,6 +1,5 @@
 /** The two leftover questions: "How are you having it?" and "Remove Leftovers?". */
-import React from 'react';
-import type { HowPrompt, RemoveLeftoversPrompt } from './useWeekEditor';
+import type  { HowPrompt, RemoveLeftoversPrompt } from './useWeekEditor';
 
 /** Cooked earlier in the week or in the freezer: leftovers, from the freezer, or cook it fresh? */
 export function HowAreYouHavingIt({ prompt, defaultServings, onChoose, onCancel }: {

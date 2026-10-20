@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, Trophy, Clock } from 'lucide-react';
 import { ShopRecord } from '../../types';
 import { shopStats, BIG_SHOP } from '../../shopList';

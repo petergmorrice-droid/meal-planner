@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, ArrowUp, ArrowDown } from 'lucide-react';
 import { AisleIcon } from '../AisleLook';
 import { FoodAisle, GROCERY_AISLES, orderedAisles } from '../../utils';

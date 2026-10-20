@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Plus, LayoutGrid } from 'lucide-react';
 import { parseQuickAdd } from '../../shopList';
 

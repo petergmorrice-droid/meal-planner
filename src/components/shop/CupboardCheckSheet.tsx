@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import { ShoppingListItem } from '../../types';
 import { aggregateIngredients } from '../../utils/aggregation';
@@ -62,7 +62,7 @@ export function CupboardCheckSheet({
           {groups.map(g => {
             const answer = answerOf(g.ids);
             const agg = aggregateIngredients(g.list);
-            const amount = agg.displayQuantity || shopQuantityText({ ...(g.first as any), amount: agg.amount, unit: agg.unit, underlyingIds: g.ids, description: '' });
+            const amount = agg.displayQuantity || shopQuantityText({ amount: agg.amount, unit: agg.unit });
             const forRecipes = Array.from(new Set(g.list.flatMap(i => i.recipeNames || [])));
             return (
               <li key={g.key} className="flex items-center gap-3 px-3 py-3" data-cupboard-row={g.first.name}>

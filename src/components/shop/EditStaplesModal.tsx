@@ -1,12 +1,13 @@
 /** Edit the weekly staples: what goes on every week's list, how many, and in which aisle. */
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Minus, Trash2, X, RotateCcw, Search, Edit3 } from 'lucide-react';
 import { matchProduct, catalogForState, aisleCategory, productMatchesSearch } from '../../shopping';
 import { GROCERY_AISLES, getGroceryAisle } from '../../utils';
 import { productKey } from '../../shopList';
 import { addStaple, changeStaple, currentStaples, removeStaple, saveStaples, stapleFor, stepStaple } from '../../staples';
+import type  { AppStore } from '../../store';
 
-export function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: () => void }) {
+export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore; onClose: () => void }) {
   const prefs = store.state.preferences || { recurringItems: [] };
   const recurringItems = prefs.recurringItems || [];
   // The shared product list (what the Shop knows how to buy).
@@ -26,7 +27,7 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
   const stapleSuggestions = useMemo(() => {
     if (!newItemName.trim()) return [];
     const query = newItemName.toLowerCase().trim();
-    const starts = (p: any) => (p.name.toLowerCase().startsWith(query) ? 0 : 1);
+    const starts = (p: { name: string }) => (p.name.toLowerCase().startsWith(query) ? 0 : 1);
     return catalog.products
       .filter((p) => productMatchesSearch(p, query))
       .sort((a, b) => starts(a) - starts(b) || a.name.localeCompare(b.name))
@@ -123,7 +124,7 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
               <>
                 <div className="fixed inset-0 z-45" onClick={() => setShowSuggestions(false)} />
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-zinc-200/90 shadow-lg rounded-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                  {stapleSuggestions.map((suggestion: any, idx) => (
+                  {stapleSuggestions.map((suggestion, idx) => (
                     <button
                       key={idx}
                       type="button"
@@ -148,7 +149,7 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
             </div>
           ) : (
             <div className="space-y-2">
-              {recurringItems.map((item: any) => {
+              {recurringItems.map((item) => {
                 const aisle = getGroceryAisle(item);
                 const aisleInfo = GROCERY_AISLES[aisle];
                 return (

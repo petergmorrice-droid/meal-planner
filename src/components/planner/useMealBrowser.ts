@@ -3,7 +3,7 @@
  * cards show. Also which view this phone uses: Classic (drag meals onto the week) or List.
  */
 import { useMemo, useState } from 'react';
-import { MealPlan, Recipe } from '../../types';
+import { MealPlan, Recipe, UserPreferences } from '../../types';
 import { DAYS_OF_WEEK } from '../../utils';
 import { averagesById } from '../../ratings';
 import { cardFieldsFromPrefs } from '../RecipeCard';
@@ -11,11 +11,12 @@ import {
   recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, todayISO, freezerPortions,
   recipeMatchesSearch, readFavouritesFirst, saveFavouritesFirst, matchesQuickFilters, QuickFilter,
 } from '../../recipeInfo';
+import type { AppStore } from '../../store';
 
 export type PlanningView = 'classic' | 'list';
 
 /** Classic or List, and the cards' layout and fields (the view is this phone's; the rest is shared). */
-export function usePlanningLayout(store: any) {
+export function usePlanningLayout(store: AppStore) {
   const [planningView, setPlanningViewState] = useState<PlanningView>(() => {
     try { return localStorage.getItem('planning_view') === 'list' ? 'list' : 'classic'; } catch { return 'classic'; }
   });
@@ -24,7 +25,7 @@ export function usePlanningLayout(store: any) {
     try { localStorage.setItem('planning_view', view); } catch { /* per-phone convenience only */ }
   };
 
-  const prefs = store.state.preferences || {
+  const prefs: Partial<UserPreferences> = store.state.preferences || {
     showPrepTime: true,
     showCookTime: true,
     showTotalTime: true,
@@ -40,7 +41,7 @@ export function usePlanningLayout(store: any) {
   return { planningView, setPlanningView, prefs, mealRowsLayout, setMealRowsLayout, cardFields };
 }
 
-export function useMealBrowser(store: any, currentPlan: MealPlan | undefined) {
+export function useMealBrowser(store: AppStore, currentPlan: MealPlan | undefined) {
   const [recipeSearch, setRecipeSearch] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 

@@ -4,10 +4,10 @@
  * The pieces live in ./planner: the hooks hold the logic (which week, the meals panel, the day
  * picker, changing the week), and src/planning.ts has the week changes as plain functions.
  */
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Copy } from 'lucide-react';
 import Notice from './Notice';
-import { Recipe, MealPlan, PlannedMeal } from '../types';
+import { Recipe, MealPlan, PlannedMeal, TabName } from '../types';
 import { DAYS_OF_WEEK, canPlanFollowingWeek } from '../utils';
 import { changedDaysSinceList, cooksForText, leftoverSourceDay } from '../planning';
 import { todayISO } from '../recipeInfo';
@@ -29,10 +29,11 @@ import { usePlanningWeek } from './planner/usePlanningWeek';
 import { usePlanningLayout, useMealBrowser } from './planner/useMealBrowser';
 import { useDayPicker } from './planner/useDayPicker';
 import { useWeekEditor } from './planner/useWeekEditor';
+import type  { AppStore } from '../store';
 
 interface PlanningTabProps {
-  store: any;
-  onNavigateTab?: (tab: 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings', planId?: string) => void;
+  store: AppStore;
+  onNavigateTab?: (tab: TabName, planId?: string) => void;
   targetPlanId?: string | null;
   /** A recipe to plan, sent from the Cookbook's "Add to a day…". */
   pendingAddRecipeId?: string | null;
@@ -112,7 +113,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   // Weeks you could copy the meals from (most recent first).
   const copyCandidates: MealPlan[] = useMemo(() => {
     return (store.state.mealPlans || [])
-      .filter((p: MealPlan) => p.id !== currentPlan?.id && Object.values(p.days || {}).some((d: any) => d?.meals?.length))
+      .filter((p: MealPlan) => p.id !== currentPlan?.id && Object.values(p.days || {}).some((d) => d?.meals?.length))
       .sort((a: MealPlan, b: MealPlan) => b.startDate.localeCompare(a.startDate))
       .slice(0, 12);
   }, [store.state.mealPlans, currentPlan?.id]);
@@ -166,7 +167,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
           favFirst={meals.favFirst}
           onFavFirst={meals.setFavFirst}
           prefs={prefs}
-          onCardPref={(pref) => store.updatePreferences({ [pref]: (prefs as any)[pref] === false })}
+          onCardPref={(pref) => store.updatePreferences({ [pref]: prefs[pref] === false })}
         />
 
         {planningView === 'classic' && (

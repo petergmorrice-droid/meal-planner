@@ -1,6 +1,6 @@
 /** One row in shopping mode: tap to tick, press and hold for out of stock, (i) for what it's for. */
 import React, { useRef, useEffect } from 'react';
-import { Check, Store, Info, StickyNote } from 'lucide-react';
+import { Check, Info, StickyNote } from 'lucide-react';
 import { AggregatedShoppingListItem, shopQuantityText } from '../../shopList';
 import PersonMark, { noteLook, personLook } from '../PersonMark';
 import { handAddedBy, noteAuthor } from '../../whoChanged';

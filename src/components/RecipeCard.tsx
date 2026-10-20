@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock, Flame, Zap, Leaf, Snowflake, CalendarCheck, Star } from 'lucide-react';
-import { Recipe } from '../types';
+import { Recipe, UserPreferences } from '../types';
 import { getRecipeEmojis, getEmojiLabel } from '../utils';
 import {
   RecipeHistory, recipeMethods, totalMinutes, formatMinutes, isVegetarianRecipe, isVeganRecipe,
@@ -19,7 +19,9 @@ export interface CardFields {
   emojis: boolean;
 }
 
-export const CARD_FIELD_OPTIONS: { pref: string; label: string; field: keyof CardFields }[] = [
+/** The card fields you can turn on and off, and the preference that holds each. */
+export type CardPref = 'showTotalTime' | 'showMethod' | 'showVegetarian' | 'showLastHad' | 'showFreezer' | 'showEmojis';
+export const CARD_FIELD_OPTIONS: { pref: CardPref; label: string; field: keyof CardFields }[] = [
   { pref: 'showTotalTime', label: 'Time', field: 'time' },
   { pref: 'showMethod', label: 'Oven/Hob or Ninja', field: 'method' },
   { pref: 'showVegetarian', label: 'Vegetarian / vegan', field: 'veg' },
@@ -28,8 +30,8 @@ export const CARD_FIELD_OPTIONS: { pref: string; label: string; field: keyof Car
   { pref: 'showEmojis', label: 'Emojis', field: 'emojis' },
 ];
 
-export function cardFieldsFromPrefs(prefs: any): CardFields {
-  const on = (k: string) => prefs?.[k] !== false;
+export function cardFieldsFromPrefs(prefs: Partial<UserPreferences> | undefined): CardFields {
+  const on = (k: CardPref) => prefs?.[k] !== false;
   return {
     time: on('showTotalTime'),
     method: on('showMethod'),
@@ -51,7 +53,6 @@ export function RecipeCard({
   freezer,
   today,
   inWeek,
-  wide = false,
   ratings,
   onOpen,
   dragProps,
@@ -64,7 +65,6 @@ export function RecipeCard({
   /** On Planning: the days this recipe is on in the week on screen ("This week: Tue"). */
   inWeek?: string[];
   /** Full-width row ("Rows of 1") rather than a grid tile. */
-  wide?: boolean;
   /** Peter's and Rachel's stars. */
   ratings?: PersonRatings;
   onOpen: () => void;

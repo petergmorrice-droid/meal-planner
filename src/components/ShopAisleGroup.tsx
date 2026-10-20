@@ -1,22 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, CheckCircle2 } from 'lucide-react';
-import { ShoppingListItem } from '../types';
 import { AISLE_LOOK, AisleIcon } from './AisleLook';
-import type { FoodAisle } from '../utils';
+import type  { FoodAisle } from '../utils';
 
-interface ShopAisleGroupProps {
+/** What a row needs for the aisle's "left" count. */
+type Countable = { checked?: boolean; outOfStock?: boolean };
+
+interface ShopAisleGroupProps<T extends Countable> {
   key?: React.Key;
   aisle: string;
   info: { name: string; colorClass: string; order: number };
-  items: any[];
-  renderItem: (item: any) => React.ReactNode;
+  items: T[];
+  renderItem: (item: T) => React.ReactNode;
   /** One-line rows separated by dividers instead of spaced cards. */
   compact?: boolean;
   /** Everything here is ticked (or out of stock): fold the aisle away. */
   allDone?: boolean;
 }
 
-export default function ShopAisleGroup({ aisle, info, items, renderItem, compact = false, allDone = false }: ShopAisleGroupProps) {
+export default function ShopAisleGroup<T extends Countable>({ aisle, info, items, renderItem, compact = false, allDone = false }: ShopAisleGroupProps<T>) {
   // Folded when finished, unless you open it again; your own choice wins until it's finished.
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   useEffect(() => { if (allDone) setUserOpen(null); }, [allDone]);

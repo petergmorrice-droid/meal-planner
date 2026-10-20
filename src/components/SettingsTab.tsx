@@ -9,7 +9,7 @@ import {
   RefreshCw, ListOrdered, RotateCcw, Trophy, Package, History, ThumbsUp, ThumbsDown, Trash2, Combine,
 } from 'lucide-react';
 import { parseClock, DEFAULT_EAT_AT } from '../cookInfo';
-import { AppState, MealPlan, Recipe, UserPreferences, GroceryItem, DatabaseCleanAction } from '../types';
+import { AppState, MealPlan, Recipe, UserPreferences, GroceryItem, DatabaseCleanAction, TabName } from '../types';
 import { isPastWeek, formatDateISO, getMonday, DAYS_OF_WEEK, GROCERY_AISLES, orderedAisles } from '../utils';
 import {
   catalogForState, productUsage, likelyDuplicates, hasNoAisle, isUnused, usageText, alsoCalled, withAlsoCalled,
@@ -24,8 +24,10 @@ import { testGeminiKeyApi, getGeminiApiKey, saveGeminiApiKey, clearGeminiApiKey 
 import { runningVersion, checkForUpdate, updateNow, builtText, UpdateCheck } from '../appVersion';
 import { agoText, syncProblemText, backupSummary } from '../settingsInfo';
 
-type TabName = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 type ShopPanel = 'aisles' | 'staples' | 'history';
+
+/** "Are you sure?" before something that can't easily be undone. */
+type Confirm = { title: string; body: string; action: string; danger?: boolean; run: () => void };
 
 interface SettingsTabProps {
   store: {
@@ -79,7 +81,7 @@ export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: S
   const prefs: UserPreferences = (store.state.preferences || {}) as UserPreferences;
   const [view, setView] = useState<'main' | 'products' | 'history'>('main');
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
-  const [confirm, setConfirm] = useState<{ title: string; body: string; action: string; danger?: boolean; run: () => void } | null>(null);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [cleaning, setCleaning] = useState(false);
   useEffect(() => {
     if (!toast) return;
@@ -162,7 +164,7 @@ export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: S
         groceryItems={catalog}
         onApplyChanges={applyClean}
         showToast={(m: string) => say(m)}
-        onNavigateTab={onNavigateTab as any}
+        onNavigateTab={onNavigateTab}
       />
     </div>
   );
@@ -359,7 +361,7 @@ function Household({ prefs, store }: { prefs: UserPreferences; store: SettingsTa
 
 // ---------- Sync ----------
 
-function SyncSection({ store, say, setConfirm }: { store: SettingsTabProps['store']; say: (t: string) => void; setConfirm: (c: any) => void }) {
+function SyncSection({ store, say, setConfirm }: { store: SettingsTabProps['store']; say: (t: string) => void; setConfirm: (c: Confirm) => void }) {
   const cfg = store.githubConfig;
   const [, tick] = useState(0);
   useEffect(() => { const iv = setInterval(() => tick((n) => n + 1), 30_000); return () => clearInterval(iv); }, []);
@@ -455,7 +457,7 @@ function SyncSection({ store, say, setConfirm }: { store: SettingsTabProps['stor
 
 // ---------- Backup ----------
 
-function BackupSection({ store, catalog, say, setConfirm }: { store: SettingsTabProps['store']; catalog: GroceryItem[]; say: (t: string) => void; setConfirm: (c: any) => void }) {
+function BackupSection({ store, catalog, say, setConfirm }: { store: SettingsTabProps['store']; catalog: GroceryItem[]; say: (t: string) => void; setConfirm: (c: Confirm) => void }) {
   const [last, setLast] = useState<string | null>(() => { try { return localStorage.getItem(LAST_BACKUP_KEY); } catch { return null; } });
   const [restore, setRestore] = useState<{ name: string; text: string; parts: string[] } | null>(null);
   const [badFile, setBadFile] = useState('');
@@ -609,7 +611,7 @@ function ProductsPage({ store, onBack, onClean, say, setConfirm }: {
   onBack: () => void;
   onClean: () => void;
   say: (t: string, undo?: () => void) => void;
-  setConfirm: (c: any) => void;
+  setConfirm: (c: Confirm) => void;
 }) {
   const storeRef = useRef(store);
   storeRef.current = store;
@@ -977,7 +979,7 @@ function HistoryPage({ plans, store, onBack, say, setConfirm, onNavigateTab }: {
   store: SettingsTabProps['store'];
   onBack: () => void;
   say: (t: string) => void;
-  setConfirm: (c: any) => void;
+  setConfirm: (c: Confirm) => void;
   onNavigateTab?: (tab: TabName) => void;
 }) {
   const [q, setQ] = useState('');

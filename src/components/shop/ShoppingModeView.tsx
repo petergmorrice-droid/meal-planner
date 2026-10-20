@@ -103,17 +103,12 @@ export function ShoppingModeView({
   const [filter, setFilter] = useState<'all' | 'to_buy' | 'bought'>('all');
   const [viewMode, setViewMode] = useState<'sections' | 'food_type' | 'all'>('food_type');
   const [showViewOptions, setShowViewOptions] = useState(false);
-  const [collapsedAisles, setCollapsedAisles] = useState<Record<string, boolean>>({});
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     planned: false,
     batch: false,
     adhoc: false,
     recurring: false
   });
-
-  const toggleAisle = (aisle: string) => {
-    setCollapsedAisles(prev => ({ ...prev, [aisle]: !prev[aisle] }));
-  };
 
   const toggleSection = (section: string) => {
     setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -185,7 +180,7 @@ export function ShoppingModeView({
   const groupedAisles = useMemo(() => {
     const map = new Map<FoodAisle, AggregatedShoppingListItem[]>();
     filteredItems.forEach(item => {
-      const aisle = getGroceryAisle(item as any);
+      const aisle = getGroceryAisle(item);
       const list = map.get(aisle) || [];
       list.push(item);
       map.set(aisle, list);
@@ -223,7 +218,7 @@ export function ShoppingModeView({
     // Out of stock but there after all: tapping it ticks it.
     const targetState = aggItem.outOfStock ? true : !aggItem.checked;
     parentOnToggle(aggItem.underlyingIds, targetState);
-    onTickRecorded(aggItem.key, getGroceryAisle(aggItem as any), targetState);
+    onTickRecorded(aggItem.key, getGroceryAisle(aggItem), targetState);
     if (targetState) {
       hold(aggItem.key);
       setLastAction({ kind: 'tick', key: aggItem.key, name: aggItem.name, ids: aggItem.underlyingIds });
@@ -240,7 +235,7 @@ export function ShoppingModeView({
     const value = !aggItem.outOfStock;
     onOutOfStock(aggItem.underlyingIds, value);
     release(aggItem.key);
-    if (aggItem.checked) onTickRecorded(aggItem.key, getGroceryAisle(aggItem as any), false);
+    if (aggItem.checked) onTickRecorded(aggItem.key, getGroceryAisle(aggItem), false);
     buzz(30);
     setLastAction(value ? { kind: 'out', key: aggItem.key, name: aggItem.name, ids: aggItem.underlyingIds } : null);
   };

@@ -1,5 +1,4 @@
 /** What's in the freezer, in the corner of Planning on big screens. */
-import React from 'react';
 import { BatchItem, Recipe } from '../../types';
 
 export default function FreezerWidget({ batches, recipes }: { batches: BatchItem[]; recipes: Recipe[] }) {

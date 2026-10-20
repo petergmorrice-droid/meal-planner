@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ArrowRight, Check, Trash2, Clock, PartyPopper, Trophy } from 'lucide-react';
 import { AggregatedShoppingListItem } from '../../shopList';
 

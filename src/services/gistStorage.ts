@@ -153,7 +153,7 @@ function describeHttpError(response: Response, body: any, action: string): Error
   return new Error(body?.message || `Failed to ${action} Gist (${response.status}).`);
 }
 
-async function request(url: string, init: RequestInit, action: string): Promise<Response> {
+async function request(url: string, init: RequestInit, _action: string): Promise<Response> {
   try {
     return await fetch(url, { cache: 'no-store', ...init });
   } catch {

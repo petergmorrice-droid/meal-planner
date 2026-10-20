@@ -1,14 +1,15 @@
 /** Things you add by hand most weeks: "Add every week?" (make it a weekly staple). */
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MealPlan } from '../../types';
 import { suggestedStaples, StapleSuggestion, productKey, shopQuantityText } from '../../shopList';
 import { getIngredientStep } from '../../utils';
 import { addStaple, currentStaples, newStaple, saveStaples } from '../../staples';
 import StapleSuggestSheet from './StapleSuggestSheet';
-import type { ShopToastState } from './ShopToast';
+import type  { ShopToastState } from './ShopToast';
+import type  { AppStore } from '../../store';
 
 export function useStapleSuggestions({ store, activePlan, setToastMessage }: {
-  store: any;
+  store: AppStore;
   activePlan: MealPlan | null;
   setToastMessage: (message: string | null, action?: ShopToastState['action']) => void;
 }) {

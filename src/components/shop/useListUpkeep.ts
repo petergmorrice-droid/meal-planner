@@ -4,8 +4,9 @@ import { MealPlan, ShoppingListItem } from '../../types';
 import { matchProduct, catalogForState } from '../../shopping';
 import { fitHandAddedToProducts } from '../../shopList';
 import { syncRecurringStaplesForPlan } from '../../utils';
+import type { AppStore } from '../../store';
 
-export function useListUpkeep(store: any, activePlan: MealPlan | null, dismissedItemIds: string[]) {
+export function useListUpkeep(store: AppStore, activePlan: MealPlan | null, dismissedItemIds: string[]) {
   // Weekly staples are on this week's list (and in step with what you set them to).
   useEffect(() => {
     if (!activePlan) return;

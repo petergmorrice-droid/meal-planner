@@ -1,8 +1,7 @@
-import React from 'react';
 import { shopQuantityText } from '../../shopList';
-import { formatListWithAnd } from './needs';
+import { formatListWithAnd, ThresholdWarningState } from './needs';
 
-export function BelowThresholdWarningModal({ data, onClose, onKeepRequired, onConfirmReduce }: { data: any, onClose: () => void, onKeepRequired: () => void, onConfirmReduce: (amount: number) => void }) {
+export function BelowThresholdWarningModal({ data, onClose, onKeepRequired, onConfirmReduce }: { data: ThresholdWarningState, onClose: () => void, onKeepRequired: () => void, onConfirmReduce: (amount: number) => void }) {
   const need = shopQuantityText({ amount: data.requirement?.requiredAmount ?? 0, unit: data.item?.unit });
   const recipes: string[] = data.requirement?.recipes || [];
   return (

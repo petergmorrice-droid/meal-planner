@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react';
 import { MealPlan, ShopRecord } from '../../types';
 import { addShopRecord, BIG_SHOP, learnRoute, shopDurationText, shopStats } from '../../shopList';
 import { readOpenShop, saveOpenShop } from './openShop';
+import type { AppStore } from '../../store';
 
-export function useShoppingTrip(store: any, activePlan: MealPlan | null, openPlanId?: string | null) {
+export function useShoppingTrip(store: AppStore, activePlan: MealPlan | null, openPlanId?: string | null) {
   const [isShoppingMode, setIsShoppingModeState] = useState<boolean>(() => {
     const open = readOpenShop();
     return !!open && (!openPlanId || openPlanId === open.planId) && (store.state.mealPlans || []).some((p: MealPlan) => p.id === open.planId);

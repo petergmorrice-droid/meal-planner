@@ -5,8 +5,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BatchItem, MealPlan, Recipe } from '../../types';
 import { DAYS_OF_WEEK } from '../../utils';
+import type { AppStore } from '../../store';
 
-export function useDayPicker(store: any, currentPlan: MealPlan | undefined, selectedDay: string | null) {
+export function useDayPicker(store: AppStore, currentPlan: MealPlan | undefined, selectedDay: string | null) {
   const [pickerSearch, setPickerSearch] = useState('');
   useEffect(() => { setPickerSearch(''); }, [selectedDay]);
 

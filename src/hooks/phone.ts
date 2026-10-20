@@ -16,15 +16,15 @@ export function useOnline() {
 
 /** A little buzz on phones that can (Android); nothing elsewhere. */
 export const buzz = (pattern: number | number[]) => {
-  try { (navigator as any).vibrate?.(pattern); } catch { /* not supported */ }
+  try { navigator.vibrate?.(pattern); } catch { /* not supported */ }
 };
 
-/** Keep the phone's screen on while shopping (where the browser allows it). */
+/** Keep the phone's screen on while shopping or cooking (where the browser allows it). */
 export function useScreenAwake() {
   useEffect(() => {
-    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    const nav = typeof navigator !== 'undefined' ? navigator : null;
     if (!nav?.wakeLock?.request) return;
-    let lock: any = null;
+    let lock: WakeLockSentinel | null = null;
     let stopped = false;
     const grab = async () => {
       try {

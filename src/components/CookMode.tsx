@@ -1,11 +1,30 @@
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { RatingRows } from './Stars';
 import { ratingsFor, withRating } from '../ratings';
 import PersonMark, { noteLook } from './PersonMark';
 import { formatCookingAmount } from '../shopping';
 import {
-  ChevronLeft, ChevronRight, ChefHat, Plus, Minus, Check, Timer, Type, Volume2, VolumeX,
-  ThumbsUp, ThumbsDown, Snowflake, Refrigerator, NotebookPen, Mic, MicOff, MessageCircleQuestionMark, Send, LoaderCircle, X, StickyNote, ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChefHat,
+  Plus,
+  Minus,
+  Check,
+  Timer,
+  Type,
+  Volume2,
+  VolumeX,
+  Snowflake,
+  Refrigerator,
+  NotebookPen,
+  Mic,
+  MicOff,
+  MessageCircleQuestionMark,
+  Send,
+  LoaderCircle,
+  X,
+  StickyNote,
+  ChevronDown,
 } from 'lucide-react';
 import { Recipe, PlannedMeal, MealPlan, CookingMethod, Ingredient } from '../types';
 import { scaleRecipeStepQuantities, DAYS_OF_WEEK } from '../utils';
@@ -15,9 +34,11 @@ import { TimerBar } from './cook/TimerBar';
 import { canSpeak, speak, stopSpeaking } from '../speech';
 import { canListen, createListener, parseAlternatives, VoiceCommand } from '../voiceCommands';
 import { askAboutRecipeApi, NoGeminiKeyError } from '../services/geminiService';
+import type  { AppStore } from '../store';
+import { useScreenAwake } from '../hooks/phone';
 
 interface CookModeProps {
-  store: any;
+  store: AppStore;
   dayName: string;
   meals: PlannedMeal[];
   initialActiveMealId: string;
@@ -36,23 +57,6 @@ const savePref = (k: string, v: boolean) => { try { localStorage.setItem(k, v ? 
 function ingredientLine(ing: Ingredient, scale: number): { amount: string; name: string } {
   const amount = formatCookingAmount((Number(ing.amount) || 0) * scale, ing.unit);
   return { amount: amount ? `${amount}${ing.unit ? ` ${ing.unit}` : ''}` : '', name: ing.name };
-}
-
-/** Keep the screen on while cooking (where the browser allows it). */
-function useScreenAwake() {
-  useEffect(() => {
-    const nav: any = navigator;
-    if (!nav?.wakeLock?.request) return;
-    let lock: any = null;
-    let stopped = false;
-    const grab = async () => {
-      try { if (document.visibilityState === 'visible' && !stopped) lock = await nav.wakeLock.request('screen'); } catch { /* not allowed */ }
-    };
-    const onVisible = () => { if (document.visibilityState === 'visible') void grab(); };
-    void grab();
-    document.addEventListener('visibilitychange', onVisible);
-    return () => { stopped = true; document.removeEventListener('visibilitychange', onVisible); try { lock?.release?.(); } catch { /* ignore */ } };
-  }, []);
 }
 
 /**
@@ -753,7 +757,7 @@ function FinishedScreen({
   onBack,
   onDone,
 }: {
-  store: any;
+  store: AppStore;
   recipe: Recipe;
   meal: PlannedMeal;
   dayName: string;

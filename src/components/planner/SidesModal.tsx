@@ -1,14 +1,15 @@
 /** Sides for a planned meal (peas, garlic bread…): popular ones, search the products, or add your own. */
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Minus, Trash2, Check, X, Search, Database } from 'lucide-react';
 import { PlannedMeal, PlannedMealSide } from '../../types';
 import { GROCERY_AISLES } from '../../utils';
 import { catalogForState, matchProduct, productMatchesSearch } from '../../shopping';
+import type  { AppStore } from '../../store';
 
 interface SidesModalInnerProps {
   dayName: string;
   meal: PlannedMeal;
-  store: any;
+  store: AppStore;
   onClose: () => void;
   onSave: (sides: PlannedMealSide[]) => void;
 }
@@ -37,7 +38,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase().trim();
-    const starts = (p: any) => (p.name.toLowerCase().startsWith(q) ? 0 : 1);
+    const starts = (p: { name: string }) => (p.name.toLowerCase().startsWith(q) ? 0 : 1);
     return catalog.products
       .filter((p) => productMatchesSearch(p, q))
       .sort((a, b) => starts(a) - starts(b) || a.name.localeCompare(b.name))

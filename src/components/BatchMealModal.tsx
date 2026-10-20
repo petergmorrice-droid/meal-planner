@@ -1,29 +1,23 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  X, 
-  Search, 
-  Plus, 
-  Minus, 
-  Snowflake, 
-  Check, 
-  CheckSquare, 
-  Square, 
-  Clock, 
-  Users, 
-  ArrowLeft, 
-  Utensils, 
-  ChefHat, 
-  Layers,
+import { useState, useMemo } from 'react';
+import {
+  X,
+  Search,
+  Plus,
+  Minus,
+  Check,
+  Clock,
+  ArrowLeft,
+  Utensils,
+  ChefHat,
   Sparkles,
-  ShoppingBag,
-  Info,
-  BookOpen
+  BookOpen,
 } from 'lucide-react';
-import { Recipe, Ingredient } from '../types';
-import { convertToShoppingQuantity, FoodAisle, GROCERY_AISLES, getGroceryAisle } from '../utils';
+import { Recipe } from '../types';
+import { convertToShoppingQuantity } from '../utils';
+import type  { AppStore } from '../store';
 
 interface BatchMealModalProps {
-  store: any;
+  store: AppStore;
   onClose: () => void;
   onAdd: (
     mealName: string,

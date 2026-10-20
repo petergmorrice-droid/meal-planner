@@ -49,13 +49,13 @@ function ringOnce() {
       });
     }
   } catch { /* ignore */ }
-  try { (navigator as any).vibrate?.([300, 150, 300]); } catch { /* not supported */ }
+  try { navigator.vibrate?.([300, 150, 300]); } catch { /* not supported */ }
 }
 
 export const timerActions = {
   start(label: string, minutes: number, recipe?: string): string {
     unlockTimerSound();
-    const id = (crypto as any).randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+    const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : String(Date.now() + Math.random());
     save([...timers, newTimer(id, label, minutes, Date.now(), recipe)]);
     return id;
   },

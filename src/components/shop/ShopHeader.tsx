@@ -1,9 +1,9 @@
 /** The Shop's top bar: ‹ week › like Planning; share, list options and Go shopping on the right. */
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Eye, Layers, ListOrdered, RotateCcw, Share2, ShoppingBag, ShoppingCart, Store, Trophy } from 'lucide-react';
 import { MealPlan } from '../../types';
 import { formatWeekSpan } from '../../shopList';
-import type { ShopViewMode } from './useShopLayout';
+import type  { ShopViewMode } from './useShopLayout';
 
 export default function ShopHeader({
   title, activePlan, sent, prevPlan, nextPlan, onSelectPlan, canShare, onShare, viewMode, onViewMode,

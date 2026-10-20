@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Fuse from 'fuse.js';
 import { X, Plus, Flame, Zap, Leaf, Sparkles, Trash2, ShoppingCart, ChevronRight, Search, Check } from 'lucide-react';
 import { Recipe, CookingMethod, Ingredient, GroceryItem } from '../types';
 import { buildCatalog } from '../shopping';
 import { GROCERY_AISLES, getGroceryAisle, type FoodAisle } from '../utils';
 import { recipeMethods, METHOD_LABEL, METHOD_ORDER } from '../recipeInfo';
+import type  { AppStore } from '../store';
 
 const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-500';
 const AISLES = (Object.keys(GROCERY_AISLES) as FoodAisle[]).sort((a, b) => GROCERY_AISLES[a].order - GROCERY_AISLES[b].order);
@@ -41,7 +42,7 @@ export function RecipeEditor({
   onChange: (next: Recipe) => void;
   method: CookingMethod;
   onMethod: (m: CookingMethod) => void;
-  store?: any;
+  store?: AppStore;
   showName?: boolean;
   onDelete?: () => void;
   /** Ask Gemini for the other appliance's steps (shown when the recipe has exactly one). */
@@ -57,12 +58,12 @@ export function RecipeEditor({
     [store?.state?.groceryDatabase, store?.state?.groceryOverrides], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const products: GroceryItem[] = useMemo(
-    () => (catalog ? catalog.products.filter((p: any) => !p.sameAs).map((p: any) => p.item as GroceryItem) : []),
+    () => (catalog ? catalog.products.filter((p) => !p.sameAs).map((p) => p.item as GroceryItem) : []),
     [catalog],
   );
   const productName = (id?: string) => {
     if (!id || !catalog) return null;
-    const p = catalog.products.find((x: any) => x.item.id === id);
+    const p = catalog.products.find((x) => x.item.id === id);
     return p ? (p.item as GroceryItem).name : null;
   };
 
@@ -120,7 +121,7 @@ export function RecipeEditor({
                 type="number"
                 inputMode="numeric"
                 min={key === 'servings' ? 1 : 0}
-                value={(recipe as any)[key] || ''}
+                value={recipe[key] || ''}
                 placeholder={key === 'servings' ? '2' : '–'}
                 onChange={(e) => onChange({ ...recipe, [key]: e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0) })}
                 aria-label={label}

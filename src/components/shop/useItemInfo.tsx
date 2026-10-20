@@ -1,5 +1,5 @@
 /** (i) on a row: what it's for, what was added and by whom, any note, who ticked it. */
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ShoppingListItem } from '../../types';
 import { AggregatedShoppingListItem, shopQuantityText } from '../../shopList';
 import { getGroceryAisle } from '../../utils';

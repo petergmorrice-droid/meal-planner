@@ -1,5 +1,4 @@
 /** The Shop list's sections: a group of rows (an aisle, A–Z…), out of stock, bought, already in the cupboard. */
-import React from 'react';
 import { ChevronDown } from 'lucide-react';
 import { ShoppingListItem } from '../../types';
 import { AggregatedShoppingListItem } from '../../shopList';

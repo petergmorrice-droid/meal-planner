@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pause, Play, Plus, X, BellRing, Timer } from 'lucide-react';
+import { Pause, Play, X, BellRing, Timer } from 'lucide-react';
 import { CookTimer, timeLeft, timerText } from '../../cookInfo';
 import { useCookTimers, useTimerAlarm } from '../../hooks/useCookTimers';
 

@@ -209,6 +209,9 @@ const getInitialState = (): AppState => {
 
 const friendlyError = (err: any, fallback: string) => (err && err.message) || fallback;
 
+/** Everything the screens get from the store: the data, and the ways to change it. */
+export type AppStore = ReturnType<typeof useStore>;
+
 export function useStore() {
   const [state, setStateRaw] = useState<AppState>(() => {
     const s = getInitialState();
@@ -467,7 +470,7 @@ export function useStore() {
     }
 
     if (processedPlan.status !== 'finalized') {
-      const hasMeals = Object.values(processedPlan.days).some((day: any) => day.meals && day.meals.length > 0);
+      const hasMeals = Object.values(processedPlan.days).some((day) => day.meals && day.meals.length > 0);
       processedPlan.status = hasMeals ? 'draft' : 'not_started';
     }
 

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  Sparkles, 
-  X, 
-  Check, 
-  ArrowRight, 
-  GitMerge, 
-  Edit3, 
-  ShoppingBag, 
-  AlertCircle, 
+import {
+  Sparkles,
+  X,
+  Check,
+  ArrowRight,
+  GitMerge,
+  Edit3,
+  ShoppingBag,
+  AlertCircle,
   RotateCw,
   CheckCircle2,
   Info,
@@ -16,11 +16,8 @@ import {
   Undo2,
   ThumbsUp,
   ThumbsDown,
-  Layers,
-  ArrowLeft,
-  ChevronRight
 } from 'lucide-react';
-import { GroceryItem, DatabaseCleanAction } from '../types';
+import { GroceryItem, DatabaseCleanAction, TabName } from '../types';
 import { cleanGroceryDatabaseApi } from '../services/geminiService';
 
 interface CleanDatabaseModalProps {
@@ -29,7 +26,7 @@ interface CleanDatabaseModalProps {
   groceryItems: GroceryItem[];
   onApplyChanges: (actions: DatabaseCleanAction[]) => Promise<void>;
   showToast: (msg: string) => void;
-  onNavigateTab?: (tab: 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings') => void;
+  onNavigateTab?: (tab: TabName) => void;
 }
 
 function toTitleCase(str: string): string {

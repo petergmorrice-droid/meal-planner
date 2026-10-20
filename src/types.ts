@@ -345,3 +345,6 @@ export interface AppState {
   groceryOverrides?: Record<string, Partial<GroceryItem>>;
   syncMeta?: SyncMeta;
 }
+
+/** The app's tabs ('this_week' is the Cook tab). */
+export type TabName = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';

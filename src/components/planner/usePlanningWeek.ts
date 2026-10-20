@@ -9,8 +9,9 @@ import {
   isWeekWithinForwardLimit, MAX_FORWARD_WEEKS, syncRecurringStaplesForPlan,
 } from '../../utils';
 import { preferredWeekStart } from '../../planning';
+import type { AppStore } from '../../store';
 
-export function usePlanningWeek(store: any, targetPlanId: string | null | undefined, setToastMessage: (msg: string | null) => void) {
+export function usePlanningWeek(store: AppStore, targetPlanId: string | null | undefined, setToastMessage: (msg: string | null) => void) {
   const currentMondayStr = formatDateISO(getMonday(new Date()));
   const nextMondayDate = new Date(currentMondayStr + 'T00:00:00');
   nextMondayDate.setDate(nextMondayDate.getDate() + 7);

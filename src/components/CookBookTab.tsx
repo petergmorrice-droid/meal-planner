@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ratingsFor, averagesById } from '../ratings';
 import { Search, Plus, X, SlidersHorizontal, BookOpen, Star, Clock, Leaf, Zap, Snowflake, History } from 'lucide-react';
-import { Recipe } from '../types';
+import { Recipe, UserPreferences, TabName } from '../types';
 import CookMode from './CookMode';
 import { RecipeModal } from './RecipePopup';
 import { AddRecipe } from './AddRecipe';
@@ -10,8 +10,8 @@ import {
   recipeHistories, sortRecipes, readRecipeSort, saveRecipeSort, RecipeSort, RECIPE_SORTS, todayISO, freezerPortions,
   recipeMatchesSearch, matchesQuickFilters, QUICK_FILTERS, QuickFilter, readFavouritesFirst, saveFavouritesFirst,
 } from '../recipeInfo';
+import type { AppStore } from '../store';
 
-type TabName = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
 const FILTER_ICON: Record<QuickFilter, React.ReactNode> = {
   favourites: <Star className="w-3.5 h-3.5" />,
@@ -36,7 +36,7 @@ export default function CookBookTab({
   startAddWith,
   onStartAddHandled,
 }: {
-  store: any;
+  store: AppStore;
   onNavigateTab?: (tab: TabName) => void;
   onAddToDay?: (recipe: Recipe) => void;
   /** Text or a link shared to the app (Android): opens "Add a recipe" with it. */
@@ -63,7 +63,7 @@ export default function CookBookTab({
 
   useEffect(() => { if (searchOpen) searchRef.current?.focus(); }, [searchOpen]);
 
-  const prefs = store.state.preferences || {};
+  const prefs: Partial<UserPreferences> = store.state.preferences || {};
   const recipes: Recipe[] = store.state.recipes || [];
   const today = todayISO();
   const history = useMemo(() => recipeHistories(store.state.mealPlans, today), [store.state.mealPlans, today]);
@@ -173,8 +173,8 @@ export default function CookBookTab({
                       <label key={pref} className="flex items-center gap-2 px-1 py-1.5 text-sm text-zinc-800 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={(prefs as any)[pref] !== false}
-                          onChange={() => store.updatePreferences({ [pref]: (prefs as any)[pref] === false })}
+                          checked={prefs[pref] !== false}
+                          onChange={() => store.updatePreferences({ [pref]: prefs[pref] === false })}
                           className="rounded border-zinc-300"
                         />
                         {label}

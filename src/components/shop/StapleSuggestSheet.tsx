@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Repeat, Minus, Plus } from 'lucide-react';
 import { canonicalUnit, formatUnit, formatAmount } from '../../shopping';
-import type { StapleSuggestion } from '../../shopList';
+import type  { StapleSuggestion } from '../../shopList';
 
 /** "Bin bags: add it every week?" — how much each week, then add it, or say it isn't a staple. */
 export default function StapleSuggestSheet({ suggestion, step = 1, onAdd, onDecline, onClose }: {

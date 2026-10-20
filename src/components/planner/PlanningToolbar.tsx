@@ -2,11 +2,12 @@
  * Planning's title row: search and one-tap filters (Classic), or just the title (List); the view
  * options on the right (Classic or List, rows of 1 or 2, sort, what the cards show).
  */
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Columns2, Eye, Rows, Search, X } from 'lucide-react';
-import { CARD_FIELD_OPTIONS } from '../RecipeCard';
+import { UserPreferences } from '../../types';
+import { CARD_FIELD_OPTIONS, CardPref } from '../RecipeCard';
 import { RECIPE_SORTS, RecipeSort, QUICK_FILTERS, QuickFilter } from '../../recipeInfo';
-import type { PlanningView } from './useMealBrowser';
+import type  { PlanningView } from './useMealBrowser';
 
 export default function PlanningToolbar({
   planningView, onPlanningView, searchOpen, onSearchOpen, search, onSearch, quickFilters, onToggleFilter,
@@ -29,9 +30,9 @@ export default function PlanningToolbar({
   favFirst: boolean;
   onFavFirst: (on: boolean) => void;
   /** The shared preferences (which fields the cards show). */
-  prefs: any;
+  prefs: Partial<UserPreferences>;
   /** Turn a card field on or off. */
-  onCardPref: (pref: string) => void;
+  onCardPref: (pref: CardPref) => void;
 }) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   return (

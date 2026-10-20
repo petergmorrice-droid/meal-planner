@@ -1,7 +1,6 @@
-import React from 'react';
 import { Star } from 'lucide-react';
 import PersonMark, { personLook } from './PersonMark';
-import type { PersonRatings } from '../ratings';
+import type  { PersonRatings } from '../ratings';
 
 /** 1 to 5 stars. Tappable when `onChange` is given (tap the same star again to take the rating off). */
 export function Stars({ value = 0, onChange, size = 'md', label }: { value?: number; onChange?: (stars: number) => void; size?: 'sm' | 'md' | 'lg'; label?: string }) {

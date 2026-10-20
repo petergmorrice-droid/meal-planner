@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Notice from '../Notice';
 
 export interface ShopToastState { message: string; action?: { label: string; run: () => void } }

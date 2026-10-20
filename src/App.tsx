@@ -21,8 +21,8 @@ import SettingsTab from './components/SettingsTab';
 import { applyTabColour } from './theme';
 import ErrorBoundary, { TestBreak } from './components/ErrorBoundary';
 import { getGistConfig } from './services/gistStorage';
+import type { TabName } from './types';
 
-type Tab = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
 export default function App() {
   // A recipe page shared to the app (Android: Share → Meals) arrives as ?share_url / ?share_text.
@@ -40,7 +40,7 @@ export default function App() {
     }
   });
   // Mid-shop (phone locked, app closed)? Open straight back into shopping mode.
-  const [activeTab, setActiveTab] = useState<Tab>(sharedRecipe ? 'cookbook' : readOpenShop() ? 'shop' : 'planning');
+  const [activeTab, setActiveTab] = useState<TabName>(sharedRecipe ? 'cookbook' : readOpenShop() ? 'shop' : 'planning');
   // "Tab colours" theme: the screen takes its tab's colour.
   useEffect(() => { applyTabColour(activeTab); }, [activeTab]);
   // "Add to a day…" from a recipe in the Cookbook: Planning opens its day chooser for it.
@@ -51,7 +51,7 @@ export default function App() {
   // Shop opens on its own best week, unless you came from "See the list" for a particular week.
   const [shopPlanRequest, setShopPlanRequest] = useState<string | null>(null);
   const [shopPanelRequest, setShopPanelRequest] = useState<'aisles' | 'staples' | 'history' | null>(null);
-  const handleNavigateTab = (tab: Tab, planId?: string) => {
+  const handleNavigateTab = (tab: TabName, planId?: string) => {
     if (planId) {
       store.setSelectedPlanId?.(planId);
       if (tab === 'shop') setShopPlanRequest(planId);

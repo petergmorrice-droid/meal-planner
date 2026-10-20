@@ -8,7 +8,7 @@ import {
   ArrowLeftRight, RotateCcw, ShoppingBag, Utensils, X, FileText, BookOpen,
   Star,
 } from 'lucide-react';
-import { MealPlan, PlannedMeal, Recipe, BatchItem, DayPlan } from '../types';
+import { MealPlan, PlannedMeal, Recipe, BatchItem, DayPlan, UserPreferences, TabName } from '../types';
 import { DAYS_OF_WEEK, formatDateISO, getMonday, getNextMonday, isWeekWithinForwardLimit } from '../utils';
 import { leftoverSourceDay, moveMeal, relinkLeftovers, cooksForText } from '../planning';
 import { formatWeekSpan, weekStartShort } from '../shopList';
@@ -17,11 +17,11 @@ import { DaySheet, describeMeal, mealTitle, dayTone } from './planner/DayListRow
 import { TimerBar } from './cook/TimerBar';
 import CookMode from './CookMode';
 import { RecipeModal } from './RecipePopup';
+import type { AppStore } from '../store';
 
-type TabName = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
 interface CookTabProps {
-  store: any;
+  store: AppStore;
   onNavigateTab?: (tab: TabName, planId?: string) => void;
 }
 
@@ -71,7 +71,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
 
   const recipes: Recipe[] = store.state.recipes || [];
   const batches: BatchItem[] = store.state.batches || [];
-  const prefs = store.state.preferences || {};
+  const prefs: Partial<UserPreferences> = store.state.preferences || {};
   // Your usual time is in Settings (6pm if not set); the Cook tab can change it just for tonight.
   const eatAt = eatAtFor(prefs, todayIso);
   const dinnerTime = eatAt.time;
@@ -700,7 +700,7 @@ function DayCard({
           {cooked && recipe && onRate && meal.type === 'recipe' && (
             <button type="button" onClick={onRate} className="mt-1 inline-flex items-center gap-1.5 cursor-pointer" data-cook-rate={day}>
               {ratings && (ratings.P || ratings.R) ? <RatingChip ratings={ratings} /> : null}
-              {!(ratings && me && (ratings as any)[me]) && (
+              {!(ratings && me && ratings[me as 'P' | 'R']) && (
                 <span className="h-7 px-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold inline-flex items-center gap-1"><Star className="w-3.5 h-3.5" />Rate it</span>
               )}
             </button>

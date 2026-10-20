@@ -1,7 +1,6 @@
 /** Takeaway, eating out or no meal on a day, with a note (and how many people, for the first two). */
-import React from 'react';
 import { FileText, Minus, Plus, ShoppingBag, Utensils, X } from 'lucide-react';
-import type { QuickMeal } from './DayPickerModal';
+import type  { QuickMeal } from './DayPickerModal';
 
 export interface CustomMealDraft { dayName: string; type: QuickMeal; note: string; servings: number }
 

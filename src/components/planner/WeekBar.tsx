@@ -1,5 +1,4 @@
 /** The bar above the week: ‹ week › (with the list of weeks), and sending the week to the shopping list. */
-import React from 'react';
 import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, History, Plus, RefreshCw, ShoppingCart } from 'lucide-react';
 import { MealPlan } from '../../types';
 

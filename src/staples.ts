@@ -10,6 +10,7 @@ import { canonicalUnit, formatUnit, matchProduct, aisleCategory } from './shoppi
 import type { Catalog } from './shopping/catalog';
 import { GROCERY_AISLES, getGroceryAisle, syncRecurringStaplesForAllPlans } from './utils';
 import { stapleQuantity, stapleTakesOver } from './shopList';
+import type { AppStore } from './store';
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
@@ -82,7 +83,7 @@ export function listWithStaples(
 }
 
 /** The staples as they are now (the latest, even if the screen hasn't caught up yet). */
-export function currentStaples(store: any): RecurringItem[] {
+export function currentStaples(store: AppStore): RecurringItem[] {
   return (store.getState?.() || store.state).preferences?.recurringItems || [];
 }
 
@@ -91,7 +92,7 @@ export function currentStaples(store: any): RecurringItem[] {
  * `list`: start from this list instead of the saved one; `alsoPreferences`: other preferences
  * saved in the same change.
  */
-export function saveStaples(store: any, staples: RecurringItem[], opts: {
+export function saveStaples(store: AppStore, staples: RecurringItem[], opts: {
   list?: ShoppingListItem[];
   takeOver?: { staple: RecurringItem; isSame: (i: ShoppingListItem) => boolean };
   alsoPreferences?: Record<string, unknown>;

@@ -3,6 +3,7 @@
 import { MealPlan, ShoppingListItem } from './types';
 import { generateShoppingListForPlan, getCurrentMondayStr, getNextMondayStr, formatWeekRange } from './utils';
 import { listSnapshot } from './planning';
+import type { AppStore } from './store';
 
 export function weekLabelFor(startDate: string): string {
   return startDate === getCurrentMondayStr() ? 'This Week' : startDate === getNextMondayStr() ? 'Next Week' : formatWeekRange(startDate);
@@ -13,7 +14,7 @@ export function weekLabelFor(startDate: string): string {
  * you've adjusted and anything either of you removed. Then remember what the list was made from,
  * so later changes to the week can be spotted ("Shopping list out of date").
  */
-export function sendWeekToShoppingList(store: any, plan: MealPlan) {
+export function sendWeekToShoppingList(store: AppStore, plan: MealPlan) {
   const sentPlan: MealPlan = { ...plan, status: 'finalized', lastFinalizedSnapshot: listSnapshot(plan) };
   store.updateMealPlan(sentPlan);
 
@@ -28,7 +29,7 @@ export function sendWeekToShoppingList(store: any, plan: MealPlan) {
   const prefsRecurring = store.state.preferences?.recurringItems || [];
   const recurringItemsToKeep: ShoppingListItem[] = [];
   const existingRecurring = existingItemsForPlan.filter((i) => i.isRecurring);
-  prefsRecurring.forEach((rec: any) => {
+  prefsRecurring.forEach((rec) => {
     const itemId = `recurring-${plan.id}-${rec.id}`;
     if (dismissedItemIds.includes(itemId)) return;
     const existing = existingRecurring.find((i) => i.id === itemId);

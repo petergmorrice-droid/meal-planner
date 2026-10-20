@@ -4,12 +4,13 @@
  * leftovers depend on it), notes and people, sides, copying a week, and sending it to the list.
  */
 import { useRef, useState } from 'react';
-import { BatchItem, DayPlan, MealPlan, MealType, PlannedMeal, PlannedMealSide, Recipe } from '../../types';
+import { BatchItem, DayPlan, MealPlan, MealType, PlannedMeal, PlannedMealSide, Recipe, TabName } from '../../types';
 import { canPlanFollowingWeek, createEmptyPlan, formatDateISO, syncRecurringStaplesForPlan } from '../../utils';
 import { changeDayMeal, copyWeekMeals, describeMealChange, earlierDaysWithRecipe, listSnapshot, mealOnDay, moveMeal } from '../../planning';
 import { sendWeekToShoppingList } from '../../planShopping';
 import { freezerBatchesFor } from '../../recipeInfo';
 import type { ToastAction } from './usePlanToast';
+import type { AppStore } from '../../store';
 
 /** "How are you having it?": leftovers from an earlier day, from the freezer, or cooked fresh. */
 export interface HowPrompt { dayName: string; recipe: Recipe; existingDays: string[]; freezer?: { batchId: string; portions: number } }
@@ -23,16 +24,15 @@ export interface RemoveLeftoversPrompt {
   isReplacement: boolean;
 }
 
-type Tab = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
 export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, setToastMessage, onNavigateTab }: {
-  store: any;
+  store: AppStore;
   currentPlan: MealPlan | undefined;
   /** Your usual number of people (Settings → Household). */
   defaultServings: number;
   weekLabel: (startDate: string) => string;
   setToastMessage: (msg: string | null, action?: ToastAction | null) => void;
-  onNavigateTab?: (tab: Tab, planId?: string) => void;
+  onNavigateTab?: (tab: TabName, planId?: string) => void;
 }) {
   // The latest store, for actions that run after a re-render (Undo).
   const storeRef = useRef(store);

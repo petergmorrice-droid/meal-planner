@@ -3,22 +3,48 @@
  * The pieces live in ./shop: the hooks hold the logic (which week, new products, staples, the (i)
  * panel, the trip), and src/shopListEdits.ts has the changes to the list as plain functions.
  */
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { BookOpen, Calendar, RotateCcw, ShoppingBag } from 'lucide-react';
-import { ShoppingListItem, MealPlan, ShopRoute } from '../types';
+import { ShoppingListItem, MealPlan, ShopRoute, TabName } from '../types';
 import { useJustTicked } from '../hooks/useJustTicked';
 import { matchProduct, matchProductDetailed, catalogForState, canonicalUnit, formatUnit } from '../shopping';
 import {
-  AggregatedShoppingListItem, aggregateShoppingItems, shopQuantityText, formatWeekSpan, parseQuickAdd, quickAddLine,
-  listAsText, productKey, routeAisleOrder, BIG_SHOP,
+  AggregatedShoppingListItem,
+  aggregateShoppingItems,
+  shopQuantityText,
+  formatWeekSpan,
+  parseQuickAdd,
+  quickAddLine,
+  listAsText,
+  productKey,
+  routeAisleOrder,
+  BIG_SHOP,
 } from '../shopList';
 import {
-  tickLines, markOutOfStock, answerCupboard, setLineAmount, setLineAmountAndUnit, stepLine, patchLines, removeLines,
-  addHandLines, addCatalogItems, addRecipeIngredients, restoreRemoved, HandLine,
+  tickLines,
+  markOutOfStock,
+  answerCupboard,
+  setLineAmount,
+  setLineAmountAndUnit,
+  stepLine,
+  patchLines,
+  removeLines,
+  addHandLines,
+  addCatalogItems,
+  addRecipeIngredients,
+  restoreRemoved,
+  HandLine,
 } from '../shopListEdits';
 import { sendWeekToShoppingList } from '../planShopping';
 import {
-  formatWeekRange, createEmptyPlan, isWeekWithinForwardLimit, FoodAisle, GROCERY_AISLES, getGroceryAisle, orderedAisles, getIngredientStep,
+  formatWeekRange,
+  createEmptyPlan,
+  isWeekWithinForwardLimit,
+  FoodAisle,
+  GROCERY_AISLES,
+  getGroceryAisle,
+  orderedAisles,
+  getIngredientStep,
 } from '../utils';
 import CatalogDrawer from './CatalogDrawer';
 import BatchMealModal from './BatchMealModal';
@@ -44,10 +70,11 @@ import { useListUpkeep } from './shop/useListUpkeep';
 import { useNewProducts } from './shop/useNewProducts';
 import { useStapleSuggestions } from './shop/useStapleSuggestions';
 import { useItemInfo } from './shop/useItemInfo';
+import type  { AppStore } from '../store';
 
 interface ShopTabProps {
-  store: any;
-  onNavigateTab?: (tab: 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings', planId?: string) => void;
+  store: AppStore;
+  onNavigateTab?: (tab: TabName, planId?: string) => void;
   /** Open on this week (e.g. "See the list" after sending a week from Planning). */
   openPlanId?: string | null;
   onOpenPlanHandled?: () => void;
@@ -393,8 +420,8 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     };
     favourites.forEach(f => push(f.name, f.category, true));
     catalogForState(store.state).products
-      .filter((p: any) => !p.sameAs)
-      .forEach((p: any) => push(p.name, p.category));
+      .filter((p) => !p.sameAs)
+      .forEach((p) => push(p.name, p.category));
     (store.state.shoppingList || []).forEach((i: ShoppingListItem) => push(i.name, i.category));
     return out;
   }, [favourites, store.state.groceryDatabase, store.state.groceryOverrides, store.state.shoppingList]);

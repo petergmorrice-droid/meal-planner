@@ -3,15 +3,16 @@
  * Asked straight after adding something new, and offered on the list until you answer.
  * Saving can also make it a weekly staple and/or a favourite.
  */
-import React, { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ShoppingListItem } from '../../types';
 import { notYetProducts, stapleQuantity, inProductUnit } from '../../shopList';
 import { GROCERY_AISLES } from '../../utils';
 import { addStaple, currentStaples, findStaple, newStaple, saveStaples } from '../../staples';
-import type { HandLine } from '../../shopListEdits';
+import type  { HandLine } from '../../shopListEdits';
 import SaveProductSheet, { NewProductDetails } from './SaveProductSheet';
 import { Favourite, FAVOURITES_KEY } from './useFavourites';
-import type { ShopToastState } from './ShopToast';
+import type  { ShopToastState } from './ShopToast';
+import type  { AppStore } from '../../store';
 
 /** What the "Save it as a product?" sheet is about. justAdded: it opened by itself, straight after adding it. */
 type ProductDraft = { name: string; amount?: number; unit?: string; category?: string; justAdded?: boolean; addedId?: string; addedQty?: string };
@@ -19,7 +20,7 @@ type ProductDraft = { name: string; amount?: number; unit?: string; category?: s
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export function useNewProducts({ store, weekItems, favourites, aisleOrder, setToast, setToastMessage, openRow }: {
-  store: any;
+  store: AppStore;
   /** This week's list. */
   weekItems: ShoppingListItem[];
   favourites: Favourite[];

@@ -1,5 +1,4 @@
 /** "Send this week to the shopping list": every day in full first (meal, people, sides, notes), then send. */
-import React from 'react';
 import { AlertCircle, BookOpen, Check, CheckCircle2, Sparkles, StickyNote, X } from 'lucide-react';
 import { MealPlan, Recipe } from '../../types';
 import { DAYS_OF_WEEK, formatWeekRange } from '../../utils';

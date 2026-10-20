@@ -1,5 +1,6 @@
 /** Your favourites (shared between phones): quick to add from the add box and the products list. */
 import { useMemo } from 'react';
+import type { AppStore } from '../../store';
 
 export interface Favourite { name: string; category: string }
 
@@ -17,7 +18,7 @@ const DEFAULT_FAVOURITES: Favourite[] = [
 /** The phone's own copy (older versions kept favourites only on the phone). */
 export const FAVOURITES_KEY = 'mealPlannerCustomFavouritesObj';
 
-export function useFavourites(store: any) {
+export function useFavourites(store: AppStore) {
   const favourites = useMemo<Favourite[]>(() => {
     if (store?.state?.preferences?.favouriteItems && store.state.preferences.favouriteItems.length > 0) {
       return store.state.preferences.favouriteItems;

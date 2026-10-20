@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PersonMark, { noteLook } from './PersonMark';
 import Notice from './Notice';
 import { Snowflake, Plus, Minus, X, Check, CalendarPlus, BookOpen, Trash2, ChevronRight, Search, StickyNote } from 'lucide-react';
-import { BatchItem, MealPlan, Recipe } from '../types';
+import { BatchItem, MealPlan, Recipe, TabName } from '../types';
 import { DAYS_OF_WEEK, formatDateISO, isWeekWithinForwardLimit } from '../utils';
 import { freezerGroups, frozenAgo, mealsFor, planDayDate, planFreezerMeal, whenText, FreezerGroup } from '../freezer';
 import { mealTitle } from './planner/DayListRow';
 import { RecipeModal } from './RecipePopup';
+import type { AppStore } from '../store';
 
-type TabName = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
 const portionsText = (n: number) => `${n} ${n === 1 ? 'portion' : 'portions'}`;
 const isoAtNoon = (date: string) => new Date(`${date}T12:00:00`).toISOString();
@@ -18,7 +18,7 @@ const isoAtNoon = (date: string) => new Date(`${date}T12:00:00`).toISOString();
  * already wants from it, and "Have it on…" to plan one. A portion is one person's helping,
  * the same as everywhere else in the app.
  */
-export default function BatchTab({ store, onNavigateTab }: { store: any; onNavigateTab?: (tab: TabName, planId?: string) => void }) {
+export default function BatchTab({ store, onNavigateTab }: { store: AppStore; onNavigateTab?: (tab: TabName, planId?: string) => void }) {
   const storeRef = useRef(store);
   storeRef.current = store;
   const todayIso = formatDateISO(new Date());

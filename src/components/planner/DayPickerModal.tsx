@@ -1,5 +1,4 @@
 /** "Select meal for <day>": search, cooked earlier this week, quick options, freezer batches, the cook book. */
-import React from 'react';
 import { ChefHat, Plus, RotateCcw, Search, ShoppingBag, Snowflake, Utensils, X } from 'lucide-react';
 import { BatchItem, Recipe } from '../../types';
 

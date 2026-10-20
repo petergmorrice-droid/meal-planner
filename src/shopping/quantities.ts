@@ -7,7 +7,7 @@
  * are reported so the person can check them.
  */
 import { currentCatalog } from './current';
-import { buildCatalog, matchProduct, sizeOfUnit, type Catalog, type Product } from './catalog';
+import { matchProduct, sizeOfUnit, type Catalog, type Product } from './catalog';
 import { groupingKey, displayName, matchKey } from './names';
 import { canonicalUnit, unitInfo, vagueUnit, formatUnit, formatAmount, parseAmount, formatCookingAmount, largeUnitQuantity } from './units';
 

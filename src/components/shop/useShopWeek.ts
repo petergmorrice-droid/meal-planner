@@ -11,8 +11,9 @@ import {
   isWeekWithinForwardLimit, syncRecurringStaplesForPlan,
 } from '../../utils';
 import { readOpenShop } from './openShop';
+import type { AppStore } from '../../store';
 
-export function useShopWeek(store: any, openPlanId?: string | null, onOpenPlanHandled?: () => void) {
+export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenPlanHandled?: () => void) {
   const nextMonday = getNextMonday(new Date());
   const currentMondayStr = formatDateISO(getMonday(new Date()));
   const nextMondayStr = formatDateISO(nextMonday);

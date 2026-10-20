@@ -7,7 +7,7 @@ import {
   X, Pencil, Sparkles, Minus, Plus, Check, Clock, Users, Flame, Zap, Leaf, Snowflake, CalendarCheck,
   CalendarPlus, ChefHat, ExternalLink, History, Star, Share2, ThumbsUp, ThumbsDown,
 } from 'lucide-react';
-import { Recipe, CookingMethod } from '../types';
+import { Recipe, CookingMethod, TabName } from '../types';
 import { RecipeEditor, methodSteps } from './RecipeEditor';
 import { formatCookingAmount } from '../shopping';
 import { scaleRecipeStepQuantities } from '../utils';
@@ -17,8 +17,8 @@ import {
   freezerPortions, formatAgo, formatPlannedDay, formatShortDate, todayISO, siteName, recipeIntro, recipeShareText,
   METHOD_LABEL, METHOD_ORDER,
 } from '../recipeInfo';
+import type { AppStore } from '../store';
 
-type TabName = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
 const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-500';
 
@@ -36,7 +36,7 @@ export function RecipeModal({
   onAddToDay,
   onNavigateTab,
 }: {
-  store?: any;
+  store?: AppStore;
   recipe: Recipe;
   onClose: () => void;
   initialServings?: number;

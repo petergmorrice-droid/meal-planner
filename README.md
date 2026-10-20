@@ -231,6 +231,7 @@ npm run build     # production build into dist/
 npm run build:single  # the whole app as ONE file: dist-single/index.html
 npm run preview   # serve the production build locally
 npm test          # tests for syncing, shopping quantities and recipe import
+npm run typecheck # strict TypeScript check (no loose types, nothing unused)
 npm run test:e2e  # builds the app and runs the browser tests (tests/e2e/README.md)
 ```
 
@@ -253,7 +254,8 @@ Main files:
   `src/planning.ts`. Both have unit tests.
 - `src/staples.ts` — the one way weekly staples are made, changed and removed
   (the staples window, "Add every week?", saving a new product as a staple)
-- `src/types.ts` — data shapes (Recipe, MealPlan, ShoppingListItem, …)
+- `src/types.ts` — data shapes (Recipe, MealPlan, ShoppingListItem, TabName, …);
+  `AppStore` (in `src/store.ts`) is what every screen gets from the store
 - `public/` — `sw.js` (opening without signal), the manifest and icons
   (`scripts/make-icons.py` draws the icons)
 
@@ -556,3 +558,13 @@ Main files:
   second one; if you'd added it by hand this week, the staple's line takes
   over instead of it being on the list twice; and changing any staple no
   longer brings back staple lines you'd taken off a week.
+- `Strict types` — TypeScript now checks strictly (`npm run typecheck`, with
+  `strict`, no unused code and no switch fall-through) and passes with no
+  errors (there were 10). Every screen gets a typed store (`AppStore`) instead
+  of `any`, the tab names are defined once (`TabName`), and loose `any`s in the
+  screens were replaced with real types (205 → 165; the rest are where data
+  comes in from outside: the Gist, Gemini, backups, browser speech). Unused
+  code went: two files nothing used, an old triage window, four unused
+  Gemini fallbacks, unused imports, and a second copy of "keep the screen
+  on" (cooking and shopping now share one). Nothing looks different: the
+  page is identical step by step before and after.

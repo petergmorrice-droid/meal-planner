@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Heart, Store, X, Plus, Clock, ArrowDownAZ, LayoutGrid, Check, BookOpen } from 'lucide-react';
 import { buildCatalog } from '../shopping';
+import type  { AppStore } from '../store';
 
 interface CatalogDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onAddItems: (items: { name: string; amount: number; unit: string; category?: string; isAdhoc?: boolean }[]) => void;
-  store: any;
+  store: AppStore;
   onToggleFavourite: (name: string, category: string) => void;
   /** How much of this is already on the week's list ("1 kg"), or null. */
   onTheList?: (name: string) => string | null;
@@ -43,7 +44,7 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
         map.set(p.name.toLowerCase(), { name: p.name, category: p.category || 'Other', isFav: false, recentCount: 0, source: 'db' });
       });
 
-    favourites.forEach((fav: any) => {
+    favourites.forEach((fav) => {
       const key = fav.name.toLowerCase();
       if (map.has(key)) {
         map.get(key)!.isFav = true;
@@ -52,7 +53,7 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
       }
     });
 
-    shoppingList.forEach((item: any) => {
+    shoppingList.forEach((item) => {
       const key = item.name.toLowerCase();
       if (map.has(key)) {
         map.get(key)!.recentCount += 1;

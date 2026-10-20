@@ -1,5 +1,4 @@
 /** "Copy a week": pick a week to copy, then (if this week has meals) confirm replacing them. */
-import React from 'react';
 import { X } from 'lucide-react';
 import { MealPlan } from '../../types';
 import { DAYS_OF_WEEK } from '../../utils';

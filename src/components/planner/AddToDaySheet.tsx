@@ -1,5 +1,4 @@
 /** "Add to a day" for a recipe (from the recipe pop-up or the Cookbook): pick the week and the day. */
-import React from 'react';
 import { Plus, X } from 'lucide-react';
 import { MealPlan, Recipe } from '../../types';
 import { DAYS_OF_WEEK } from '../../utils';
