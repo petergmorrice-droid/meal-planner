@@ -86,8 +86,8 @@ export default function CookBookTab({
   const noFavourites = !recipes.some((r) => r.favourite);
 
   return (
-    <div className="h-full flex flex-col bg-[#fafafa] relative">
-      <div className="bg-white border-b border-zinc-200/80 shrink-0">
+    <div className="h-full flex flex-col app-page relative">
+      <div className="app-bar border-b shrink-0">
         <div className="px-4 pt-2.5 pb-2 flex items-center gap-2 min-h-[52px]">
           {searchOpen ? (
             <div className="flex-1 flex items-center gap-2">

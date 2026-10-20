@@ -964,14 +964,14 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     
   
   return (
-    <div className="h-full flex flex-col bg-zinc-50/60 relative overflow-hidden">
+    <div className="h-full flex flex-col app-page relative overflow-hidden">
       {/* Toast notification */}
       {toastMessage && <Notice text={toastMessage} action={toastAction || undefined} onDone={() => setToastMessage(null)} />}
 
       {/* TOP SECTION: ALL MEALS (VISUALLY PRIORITIZED) */}
       <div className={`${planningView === 'list' ? 'shrink-0' : 'flex-1 min-h-0'} flex flex-col relative ${showFilterDropdown || showViewOptions ? 'z-35' : 'z-10'}`}>
         {/* Title row: search and one-tap filters (Classic), or just the title (List); view options on the right */}
-        <div className={`bg-white border-b border-zinc-200/80 px-3 sm:px-5 py-2 shrink-0 relative ${showViewOptions ? 'z-35' : 'z-10'}`}>
+        <div className={`app-bar border-b px-3 sm:px-5 py-2 shrink-0 relative ${showViewOptions ? 'z-35' : 'z-10'}`}>
           <div className="flex items-center gap-2">
             {planningView === 'classic' ? (
               isSearchExpanded ? (
@@ -1312,7 +1312,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
         )}
 
         {/* Dock bar: ‹ week › and sending to the shopping list */}
-        <div className="px-2 sm:px-4 py-1.5 border-b border-zinc-100 flex items-center justify-between gap-2 bg-white shrink-0">
+        <div className="px-2 sm:px-4 py-1.5 border-b flex items-center justify-between gap-2 app-bar shrink-0">
           <div className="flex items-center gap-1 min-w-0">
             <button
               type="button"

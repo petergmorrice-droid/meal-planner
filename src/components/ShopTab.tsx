@@ -1605,11 +1605,11 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#fafafa] relative overflow-hidden">
+    <div className="h-full flex flex-col app-page relative overflow-hidden">
       {toast && <ShopToast toast={toast} onClose={() => setToast(null)} />}
 
       {/* Header: ‹ week › like Planning; share, layout and Go shopping on the right */}
-      <header className="bg-white border-b border-zinc-200/80 px-2 sm:px-5 py-1.5 shrink-0 relative z-40">
+      <header className="app-bar border-b px-2 sm:px-5 py-1.5 shrink-0 relative z-40">
         <div className="max-w-[900px] mx-auto w-full flex items-center justify-between gap-2">
           <div className="flex items-center gap-0.5 min-w-0">
             <button
@@ -2377,7 +2377,7 @@ function ShoppingModeView({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col overflow-hidden animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 app-page flex flex-col overflow-hidden animate-in fade-in duration-150">
       {/* Header: what's left and the % done (the game), with the list options and close */}
       <header className="shrink-0 sticky top-0 z-30 shadow-2xs">
         <div className="bg-emerald-600 text-white px-4 pt-3 pb-3 sm:px-6">

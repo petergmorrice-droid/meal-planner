@@ -336,7 +336,7 @@ export default function CookMode({
 
   if (!activeMeal || !recipe) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col items-center justify-center p-6 text-center">
+      <div className="fixed inset-0 z-50 app-page flex flex-col items-center justify-center p-6 text-center">
         <ChefHat className="w-8 h-8 text-zinc-400 mb-3" />
         <h3 className="font-semibold text-zinc-900">Couldn't find this recipe</h3>
         <button onClick={onClose} className="mt-4 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl">Close</button>
@@ -418,7 +418,7 @@ export default function CookMode({
   );
 
   return (
-    <div id="cook-mode-overlay" className="fixed inset-0 z-50 bg-[#fafafa] flex flex-col overflow-hidden animate-in fade-in duration-200" data-cook-mode>
+    <div id="cook-mode-overlay" className="fixed inset-0 z-50 app-page flex flex-col overflow-hidden animate-in fade-in duration-200" data-cook-mode>
       {asking && (
         <AskSheet
           recipeName={recipe.name}
@@ -597,7 +597,7 @@ export default function CookMode({
               )}
             </div>
           </div>
-          <div className="shrink-0 flex gap-2 px-3 pt-2 bg-[#fafafa] border-t border-zinc-200" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+          <div className="shrink-0 flex gap-2 px-3 pt-2 app-page border-t border-zinc-200" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
             <button type="button" onClick={back} disabled={step === 0} className="w-14 h-14 rounded-xl border border-zinc-300 bg-white text-zinc-700 flex items-center justify-center disabled:opacity-30 cursor-pointer shrink-0" aria-label="Back a step" data-big-back>
               <ChevronLeft className="w-6 h-6" />
             </button>

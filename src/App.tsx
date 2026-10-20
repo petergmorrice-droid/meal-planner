@@ -17,6 +17,7 @@ import { TimerDock } from './components/cook/TimerBar';
 import { checkForUpdate, updateNow } from './appVersion';
 import { useEffect } from 'react';
 import SettingsTab from './components/SettingsTab';
+import { applyTabColour } from './theme';
 
 type Tab = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
@@ -37,6 +38,8 @@ export default function App() {
   });
   // Mid-shop (phone locked, app closed)? Open straight back into shopping mode.
   const [activeTab, setActiveTab] = useState<Tab>(sharedRecipe ? 'cookbook' : readOpenShop() ? 'shop' : 'planning');
+  // "Tab colours" theme: the screen takes its tab's colour.
+  useEffect(() => { applyTabColour(activeTab); }, [activeTab]);
   // "Add to a day…" from a recipe in the Cookbook: Planning opens its day chooser for it.
   const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
   
@@ -54,7 +57,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#fafafa] text-zinc-900 overflow-hidden">
+    <div className="flex flex-col h-screen app-page text-zinc-900 overflow-hidden">
       <UpdateBanner />
       <main className="flex-1 overflow-hidden relative flex flex-col">
         {activeTab === 'cookbook' && (
@@ -85,7 +88,7 @@ export default function App() {
       <TimerDock hidden={activeTab === 'this_week'} />
 
       {/* Minimalist Bottom Navigation */}
-      <nav className="bg-white/95 backdrop-blur-md border-t border-zinc-200/80 pb-safe shrink-0 relative z-30">
+      <nav className="app-nav backdrop-blur-md border-t border-zinc-200/80 pb-safe shrink-0 relative z-30">
         <div className="w-full max-w-lg mx-auto flex items-center justify-between px-1 sm:px-4 py-1.5 gap-0.5 sm:gap-1">
           <TabButton
             active={activeTab === 'cookbook'}

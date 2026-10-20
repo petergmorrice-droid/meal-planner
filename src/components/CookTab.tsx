@@ -281,7 +281,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
 
   if (!plan) {
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-[#fafafa] p-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center app-page p-6 text-center">
         <div className="w-14 h-14 rounded-2xl bg-zinc-100 flex items-center justify-center mb-4 text-zinc-400"><ChefHat className="w-7 h-7" /></div>
         <h2 className="text-lg font-semibold text-zinc-900">Nothing planned yet</h2>
         <p className="text-sm text-zinc-600 mt-1 max-w-xs">Plan the week and it'll show here, with what to cook tonight.</p>
@@ -361,8 +361,8 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
   const sheetRecipe = recipeFor(sheetMeal);
 
   return (
-    <div className="h-full flex flex-col bg-[#fafafa] relative overflow-hidden">
-      <header className="bg-white border-b border-zinc-200/80 px-2 sm:px-5 py-1.5 shrink-0 relative z-20">
+    <div className="h-full flex flex-col app-page relative overflow-hidden">
+      <header className="app-bar border-b px-2 sm:px-5 py-1.5 shrink-0 relative z-20">
         <div className="max-w-2xl mx-auto w-full flex items-center justify-between gap-2">
           <div className="flex items-center gap-0.5 min-w-0">
             <button type="button" onClick={() => prevPlan && setSelectedPlanId(prevPlan.id)} disabled={!prevPlan} className="w-9 h-9 rounded-xl flex items-center justify-center text-zinc-600 hover:bg-zinc-100 disabled:opacity-25 cursor-pointer disabled:cursor-default shrink-0" aria-label="Previous week" data-cook-week-prev>

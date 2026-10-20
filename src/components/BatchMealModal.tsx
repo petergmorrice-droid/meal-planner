@@ -392,7 +392,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
             </div>
 
             {/* Ingredients Checklist */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#fafafa]">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-zinc-50">
               <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider px-1">
                 Ingredients to Add to List ({selectedCount} of {ingredientList.length} selected)
               </div>
@@ -618,7 +618,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                 </div>
 
                 {/* Recipe List */}
-                <div className="flex-1 overflow-y-auto p-4 bg-[#fafafa]">
+                <div className="flex-1 overflow-y-auto p-4 bg-zinc-50">
                   {filteredRecipes.length === 0 ? (
                     <div className="text-center py-12 px-4 bg-white rounded-2xl border border-zinc-200/70">
                       <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center mx-auto mb-2 text-zinc-400">
@@ -704,7 +704,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
             {/* TAB CONTENT: CUSTOM MEAL */}
             {activeTab === 'custom' && (
               <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#fafafa]">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50">
                   {/* Meal Name & Portions */}
                   <div className="bg-white p-4 rounded-xl border border-zinc-200/80 shadow-2xs space-y-3">
                     <div>

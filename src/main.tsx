@@ -2,6 +2,10 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { applyTheme, savedTheme } from './theme';
+
+// This phone's colour theme, before the first paint.
+applyTheme(savedTheme());
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

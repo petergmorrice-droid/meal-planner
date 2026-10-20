@@ -76,8 +76,8 @@ export default function BatchTab({ store, onNavigateTab }: { store: any; onNavig
   const planGroup = groups.find((g) => g.key === planning) || null;
 
   return (
-    <div className="h-full flex flex-col bg-[#fafafa] relative overflow-hidden">
-      <header className="bg-white border-b border-zinc-200/80 px-4 py-2 shrink-0">
+    <div className="h-full flex flex-col app-page relative overflow-hidden">
+      <header className="app-bar border-b px-4 py-2 shrink-0">
         <div className="max-w-2xl mx-auto w-full flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-[15px] font-bold text-zinc-900 leading-tight">Freezer</h2>

@@ -225,11 +225,11 @@ export default function CatalogDrawer({ isOpen, onClose, onAddItems, store, onTo
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 bg-[#fafafa]">
+        <div className="flex-1 overflow-y-auto p-4 bg-zinc-50">
           
           {groupedItems.map((group, groupIdx) => (
             <div key={groupIdx} className="mb-6 last:mb-0">
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 px-1 sticky top-0 bg-[#fafafa]/90 backdrop-blur py-1 z-10">
+              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 px-1 sticky top-0 bg-zinc-50/90 backdrop-blur py-1 z-10">
                 {group.title === 'Favorites' ? 'Favourites' : group.title === 'Frequently Added' ? 'Often added' : group.title}
               </h3>
               

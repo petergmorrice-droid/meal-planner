@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { THEMES, ThemeId, applyTheme, savedTheme } from '../theme';
 import { AisleIcon } from './AisleLook';
 import Notice from './Notice';
 import {
@@ -130,9 +131,9 @@ export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: S
     );
 
   return (
-    <div className="h-full flex flex-col bg-[#fafafa] relative overflow-hidden">
+    <div className="h-full flex flex-col app-page relative overflow-hidden">
       {view === 'main' && (
-        <header className="bg-white border-b border-zinc-200/80 px-4 py-2.5 shrink-0">
+        <header className="app-bar border-b px-4 py-2.5 shrink-0">
           <div className="max-w-2xl mx-auto"><h2 className="text-[15px] font-bold text-zinc-900">Settings</h2></div>
         </header>
       )}
@@ -220,6 +221,51 @@ const SubHeader = ({ title, onBack, right }: { title: string; onBack: () => void
 
 // ---------- This phone ----------
 
+/** Colour theme: four looks, each shown as a little screen. This phone only. */
+function ThemeChooser({ say }: { say: (t: string) => void }) {
+  const [theme, setTheme] = useState<ThemeId>(() => savedTheme());
+  return (
+    <div className="px-4 py-3" data-setting-theme>
+      <span className="block text-[15px] font-semibold text-zinc-900">Colour theme</span>
+      <span className="block text-[13px] text-zinc-500 mb-2.5">Just this phone. Ticks, aisles and buttons keep their colours.</span>
+      <div className="grid grid-cols-2 gap-2">
+        {THEMES.map((t) => {
+          const on = theme === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { setTheme(t.id); applyTheme(t.id, true); say(`Colour theme: ${t.name}`); }}
+              aria-pressed={on}
+              className={`text-left rounded-xl border-2 p-1.5 cursor-pointer ${on ? 'border-emerald-600' : 'border-zinc-200'}`}
+              data-theme-choice={t.id}
+            >
+              {/* A little screen in that theme (fixed colours, so each looks like itself) */}
+              <span className="block rounded-lg overflow-hidden border border-black/5" style={{ background: t.page }} aria-hidden="true">
+                <span className="block h-3.5" style={{ background: t.bar }} />
+                <span className="flex gap-1 p-1.5">
+                  <span className="h-2 flex-1 rounded-sm bg-white/90" />
+                  <span className="h-2 w-5 rounded-sm" style={{ background: t.accent }} />
+                </span>
+                {t.id === 'tabs' && (
+                  <span className="flex h-1.5">
+                    {['#f59e0b', '#10b981', '#3b82f6', '#f97316', '#06b6d4'].map((c) => <span key={c} className="flex-1" style={{ background: c }} />)}
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-1 mt-1.5 px-0.5">
+                <span className={`text-sm font-semibold ${on ? 'text-emerald-800' : 'text-zinc-900'}`}>{t.name}</span>
+                {on && <Check className="w-3.5 h-3.5 text-emerald-700" />}
+              </span>
+              <span className="block text-[11px] text-zinc-500 px-0.5 leading-tight">{t.sub}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ThisPhone({ who, say }: { who: string; say: (t: string) => void }) {
   const [hasKey, setHasKey] = useState(() => !!getGeminiApiKey());
   const [editing, setEditing] = useState(false);
@@ -240,6 +286,7 @@ function ThisPhone({ who, say }: { who: string; say: (t: string) => void }) {
           </span>
           <Segmented value={who as 'P' | 'R'} options={[{ id: 'P', label: 'Peter' }, { id: 'R', label: 'Rachel' }]} onChange={(v) => { setCurrentDeviceIdentity(v); say(`This is ${v === 'P' ? "Peter's" : "Rachel's"} phone`); }} attr="who" />
         </div>
+        <ThemeChooser say={say} />
         <div className="px-4 py-3" data-setting-gemini>
           <div className="flex items-center gap-3">
             <span className="flex-1 min-w-0">
@@ -753,7 +800,7 @@ function ProductsPage({ store, onBack, onClean, say, setConfirm }: {
             </div>
           ) : (
             <>
-              <div className="sticky top-0 z-10 bg-[#fafafa] pt-3 pb-2 space-y-2">
+              <div className="sticky top-0 z-10 app-page pt-3 pb-2 space-y-2">
                 <div className="relative">
                   <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${view === 'all' ? catalog.products.length : shown.length} products`} className="w-full h-11 rounded-xl border border-zinc-300 bg-white pl-9 pr-9 text-base outline-none focus:border-emerald-500" data-products-search aria-label="Search products" />
