@@ -251,6 +251,8 @@ Main files:
   `usePlanningWeek`, `useWeekEditor`). Changes to the shopping list are plain
   functions in `src/shopListEdits.ts`; changes to a week's meals are in
   `src/planning.ts`. Both have unit tests.
+- `src/staples.ts` — the one way weekly staples are made, changed and removed
+  (the staples window, "Add every week?", saving a new product as a staple)
 - `src/types.ts` — data shapes (Recipe, MealPlan, ShoppingListItem, …)
 - `public/` — `sw.js` (opening without signal), the manifest and icons
   (`scripts/make-icons.py` draws the icons)
@@ -547,3 +549,10 @@ Main files:
   run (old filters, windows nothing opened) was removed. Nothing looks or
   works differently: the page is identical, step by step, before and after,
   and a new browser test (`screen-pieces`) opens every moved window.
+- `One way to make staples` — weekly staples are made, changed and removed in
+  one place (`src/staples.ts`) instead of three. That fixed four things in the
+  staples window: a new staple starts at one pack (butter 250 g, eggs 6; it
+  was 1 g and 1 egg); adding something that's already a staple doesn't make a
+  second one; if you'd added it by hand this week, the staple's line takes
+  over instead of it being on the list twice; and changing any staple no
+  longer brings back staple lines you'd taken off a week.

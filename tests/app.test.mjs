@@ -20,6 +20,7 @@ import {
   stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes, handAddedBy, noteAuthor,
   patchLines, removeLines, tickLines, markOutOfStock, answerCupboard, setLineAmount, setLineAmountAndUnit, stepLine,
   addHandLines, addCatalogItems, addRecipeIngredients, restoreRemoved,
+  stapleUnit, newStaple, stapleFor, findStaple, addStaple, removeStaple, changeStaple, stepStaple, listWithStaples, getCatalog,
 } from '../.test-build/app.mjs';
 
 let failures = 0, passes = 0;
@@ -934,6 +935,64 @@ test('week changes: copying a week gives new meals, not marked cooked', () => {
   assert.deepEqual(names(r.days), ['Mon:chilli', 'Fri:pizza'], "this week's meals are replaced");
   assert.ok(r.days.Monday.meals[0].id !== 'a' && !('cooked' in r.days.Monday.meals[0]), 'a new meal, not cooked yet');
   assert.equal(r.days.Monday.date, target.Monday.date, 'this week keeps its own dates');
+});
+
+// ---------- Weekly staples: one way to make and change them (src/staples.ts) ----------
+test('staples: a new one reads right for its amount, in its aisle', () => {
+  assert.equal(stapleUnit('each', 1), 'item');
+  assert.equal(stapleUnit('whole', 3), 'items');
+  assert.equal(stapleUnit('pint', 2), 'pints');
+  const s = newStaple({ name: '  Milk ', amount: 2, unit: 'pint' });
+  assert.deepEqual([s.name, s.amount, s.unit, s.category], ['Milk', 2, 'pints', GROCERY_AISLES.dairy_eggs.name]);
+  assert.ok(s.id);
+  assert.equal(newStaple({ name: 'Milk', amount: 1, unit: 'pint', category: 'Bakery & Bread' }).category, 'Bakery & Bread', 'an aisle you chose is kept');
+});
+
+test('staples: typed in the staples window, it starts at one pack of the product', () => {
+  const c = getCatalog();
+  const look = (t) => { const s = stapleFor(c, t); return `${s.name}: ${s.amount} ${s.unit}`; };
+  assert.equal(look('butter'), 'Butter: 250 g', 'not 1 g');
+  assert.equal(look('eggs'), 'Eggs: 6 eggs', 'not 1 egg');
+  assert.equal(look('Bananas'), 'Bananas: 1 item');
+  const odd = stapleFor(c, 'Birthday candles');
+  assert.deepEqual([odd.name, odd.amount, odd.unit], ['Birthday candles', 1, 'item'], 'not a product: what was typed, 1 of');
+});
+
+test('staples: never two of the same; step, change and remove', () => {
+  const milk = newStaple({ name: 'Milk', amount: 2, unit: 'pint' });
+  let r = addStaple([], milk);
+  assert.equal(r.added, true);
+  const again = addStaple(r.staples, newStaple({ name: 'milk ', amount: 4, unit: 'pint' }));
+  assert.equal(again.added, false, 'a second "milk" is not added');
+  assert.equal(again.staple.id, milk.id, 'the one you have is kept');
+  assert.equal(again.staples.length, 1);
+  assert.equal(findStaple(again.staples, 'MILK').id, milk.id);
+  const butter = newStaple({ name: 'Butter', amount: 250, unit: 'g' });
+  let list = [milk, butter];
+  list = stepStaple(list, butter.id, 1, 250);
+  assert.deepEqual([list[1].amount, list[1].unit], [500, 'g']);
+  list = stepStaple(stepStaple(list, butter.id, -1, 250), butter.id, -1, 250);
+  assert.equal(list[1].amount, 250, 'never below one pack');
+  list = stepStaple(list, milk.id, -1, 1);
+  assert.deepEqual([list[0].amount, list[0].unit], [1, 'pint'], 'singular for one');
+  list = changeStaple(list, milk.id, { category: 'Bakery & Bread' });
+  assert.equal(list[0].category, 'Bakery & Bread');
+  assert.deepEqual(removeStaple(list, milk.id).map((s) => s.name), ['Butter']);
+});
+
+test('staples: every week follows, lines taken off stay off, and a hand-added line is taken over', () => {
+  const monday = (offset) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + offset * 7); return d.toISOString().slice(0, 10); };
+  const plans = [{ id: 'w1', startDate: monday(0), days: {}, status: 'draft' }, { id: 'w2', startDate: monday(1), days: {}, status: 'draft' }];
+  const milk = newStaple({ name: 'Milk', amount: 2, unit: 'pint' });
+  const handAdded = { id: 'h', name: 'Milk', amount: 1, unit: 'pint', category: '', checked: true, isAdhoc: true, isBatch: false, planId: 'w2', note: 'semi' };
+  const removed = [`recurring-w1-${milk.id}`];
+  const list = listWithStaples(plans, [handAdded], [milk], removed, { staple: milk, isSame: (i) => i.name === 'Milk' });
+  assert.ok(!list.some((i) => i.planId === 'w1'), 'taken off week 1: stays off');
+  const w2 = list.filter((i) => i.planId === 'w2');
+  assert.equal(w2.length, 1, 'week 2: one milk line, not two');
+  assert.equal(w2[0].id, `recurring-w2-${milk.id}`);
+  assert.equal(w2[0].checked, true, 'already ticked: still ticked');
+  assert.equal(w2[0].note, 'semi', 'the note comes with it');
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

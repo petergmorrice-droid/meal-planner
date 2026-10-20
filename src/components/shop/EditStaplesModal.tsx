@@ -2,7 +2,9 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Minus, Trash2, X, RotateCcw, Search, Edit3 } from 'lucide-react';
 import { matchProduct, catalogForState, aisleCategory, productMatchesSearch } from '../../shopping';
-import { GROCERY_AISLES, getGroceryAisle, syncRecurringStaplesForAllPlans } from '../../utils';
+import { GROCERY_AISLES, getGroceryAisle } from '../../utils';
+import { productKey } from '../../shopList';
+import { addStaple, changeStaple, currentStaples, removeStaple, saveStaples, stapleFor, stepStaple } from '../../staples';
 
 export function EditRecurringStaplesModal({ store, onClose }: { store: any; onClose: () => void }) {
   const prefs = store.state.preferences || { recurringItems: [] };
@@ -32,103 +34,42 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
       .map((p) => p.item);
   }, [newItemName, catalog]);
 
+  // Every change goes through the shared staples functions (src/staples.ts): no doubles, every
+  // week's list follows, and lines either of you took off a week stay off.
+
+  /** Add what was typed or picked: one pack of the product it matches. */
   const handleQuickAddStaple = (name: string) => {
     if (!name.trim()) return;
-
-    const matched = matchProduct(catalog, name)?.item;
-
-    let finalName = name.trim();
-    let finalUnit = 'item';
-    let finalCategory = GROCERY_AISLES.pantry_spices.name;
-
-    if (matched) {
-      finalName = matched.name;
-      finalUnit = matched.unit || finalUnit;
-      finalCategory = aisleCategory(matched) || finalCategory;
-    } else {
-      finalCategory = GROCERY_AISLES[getGroceryAisle({ name: finalName })].name;
-    }
-
-    const newRecItem = {
-      id: crypto.randomUUID(),
-      name: finalName,
-      amount: 1,
-      unit: finalUnit,
-      category: finalCategory
-    };
-
-    const currentRecurring = prefs.recurringItems || [];
-    const updatedRecurring = [...currentRecurring, newRecItem];
-    store.updatePreferences({
-      recurringItems: updatedRecurring
-    });
-    if (store.updateShoppingList) {
-      const nextShoppingList = syncRecurringStaplesForAllPlans(
-        store.state.mealPlans || [],
-        store.state.shoppingList || [],
-        updatedRecurring
-      );
-      store.updateShoppingList(nextShoppingList);
-    }
-
+    const { staples, staple, added } = addStaple(currentStaples(store), stapleFor(catalog, name));
+    // If it's on a list already because you added it by hand, the staple's line takes over.
+    if (added) saveStaples(store, staples, { takeOver: { staple, isSame: (i) => productKey(i) === productKey(staple) } });
     setNewItemName('');
     setShowSuggestions(false);
   };
 
-  const handleRemoveRecurringItem = (id: string) => {
-    const currentRecurring = prefs.recurringItems || [];
-    const updatedRecurring = currentRecurring.filter((item: any) => item.id !== id);
-    store.updatePreferences({
-      recurringItems: updatedRecurring
-    });
-    if (store.updateShoppingList) {
-      const nextShoppingList = syncRecurringStaplesForAllPlans(
-        store.state.mealPlans || [],
-        store.state.shoppingList || [],
-        updatedRecurring
-      );
-      store.updateShoppingList(nextShoppingList);
-    }
-  };
+  const handleRemoveRecurringItem = (id: string) => saveStaples(store, removeStaple(currentStaples(store), id));
 
+  /** A step is a pack of the product (250 g of butter, 6 eggs), else 1. */
   const getStapleStep = (name: string): number => {
     const matched = matchProduct(catalog, name)?.item;
     return matched?.increment || 1;
   };
 
   const handleUpdateStapleQuantity = (id: string, delta: number) => {
-    const currentRecurring = prefs.recurringItems || [];
-    const updatedRecurring = currentRecurring.map((item: any) => {
-      if (item.id === id) {
-        const step = getStapleStep(item.name);
-        const actualDelta = delta < 0 ? -step : step;
-        const newAmount = Math.max(step, (item.amount || 1) + actualDelta);
-        
-        let nextUnit = item.unit;
-        if (['item', 'items'].includes((item.unit || '').toLowerCase().trim())) {
-          nextUnit = newAmount === 1 ? 'item' : 'items';
-        }
+    const staples = currentStaples(store);
+    const staple = staples.find((x) => x.id === id);
+    if (staple) saveStaples(store, stepStaple(staples, id, delta, getStapleStep(staple.name)));
+  };
 
-        return {
-          ...item,
-          amount: Math.round(newAmount * 100) / 100,
-          unit: nextUnit
-        };
-      }
-      return item;
-    });
-
-    store.updatePreferences({
-      recurringItems: updatedRecurring
-    });
-    if (store.updateShoppingList) {
-      const nextShoppingList = syncRecurringStaplesForAllPlans(
-        store.state.mealPlans || [],
-        store.state.shoppingList || [],
-        updatedRecurring
-      );
-      store.updateShoppingList(nextShoppingList);
+  const saveStapleDetails = () => {
+    if (editingStapleId) {
+      saveStaples(store, changeStaple(currentStaples(store), editingStapleId, {
+        amount: Math.max(0.1, editingStapleAmount),
+        unit: editingStapleUnit.trim() || 'item',
+        category: editingStapleCategory,
+      }));
     }
+    setEditingStapleId(null);
   };
 
   return (
@@ -211,7 +152,7 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
                 const aisle = getGroceryAisle(item);
                 const aisleInfo = GROCERY_AISLES[aisle];
                 return (
-                  <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-xl border transition-all bg-white border-zinc-200/80 shadow-2xs hover:border-zinc-300">
+                  <div key={item.id} data-staple={item.name} className="flex items-center justify-between px-3 py-2 rounded-xl border transition-all bg-white border-zinc-200/80 shadow-2xs hover:border-zinc-300">
                     <div className="flex-1 min-w-0 pr-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="font-semibold text-xs text-zinc-900 truncate">
@@ -235,6 +176,8 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
                           type="button"
                           onClick={() => handleUpdateStapleQuantity(item.id, -1)}
                           disabled={item.amount <= 0.1}
+                          aria-label={`Less ${item.name}`}
+                          data-staple-less
                           className="w-5 h-5 rounded flex items-center justify-center text-zinc-600 hover:text-zinc-950 hover:bg-white disabled:opacity-25 disabled:hover:bg-transparent transition-all cursor-pointer"
                         >
                           <Minus className="w-2.5 h-2.5 stroke-[2.5]" />
@@ -245,6 +188,8 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
                         <button
                           type="button"
                           onClick={() => handleUpdateStapleQuantity(item.id, 1)}
+                          aria-label={`More ${item.name}`}
+                          data-staple-more
                           className="w-5 h-5 rounded flex items-center justify-center text-zinc-600 hover:text-zinc-950 hover:bg-white transition-all cursor-pointer"
                         >
                           <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
@@ -271,6 +216,8 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
                       <button
                         type="button"
                         onClick={() => handleRemoveRecurringItem(item.id)}
+                        aria-label={`Remove ${item.name} from the staples`}
+                        data-staple-remove
                         className="p-1 text-zinc-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
                         title="Delete"
                       >
@@ -368,32 +315,7 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: any; onCl
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    const currentRecurring = prefs.recurringItems || [];
-                    const updatedRecurring = currentRecurring.map((item: any) => {
-                      if (item.id === editingStapleId) {
-                        return {
-                          ...item,
-                          amount: Math.max(0.1, editingStapleAmount),
-                          unit: editingStapleUnit.trim() || 'item',
-                          category: editingStapleCategory
-                        };
-                      }
-                      return item;
-                    });
-                    store.updatePreferences({
-                      recurringItems: updatedRecurring
-                    });
-                    if (store.updateShoppingList) {
-                      const nextShoppingList = syncRecurringStaplesForAllPlans(
-                        store.state.mealPlans || [],
-                        store.state.shoppingList || [],
-                        updatedRecurring
-                      );
-                      store.updateShoppingList(nextShoppingList);
-                    }
-                    setEditingStapleId(null);
-                  }}
+                  onClick={saveStapleDetails}
                   className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
                 >
                   Save Changes

@@ -31,3 +31,5 @@ export {
   patchLines, removeLines, tickLines, markOutOfStock, answerCupboard, setLineAmount, setLineAmountAndUnit, stepLine,
   addHandLines, addCatalogItems, addRecipeIngredients, restoreRemoved,
 } from '../src/shopListEdits';
+export { stapleUnit, newStaple, stapleFor, findStaple, addStaple, removeStaple, changeStaple, stepStaple, listWithStaples } from '../src/staples';
+export { getCatalog } from '../src/utils';

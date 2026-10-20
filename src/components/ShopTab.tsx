@@ -235,8 +235,8 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   // One row per product (the same rows and counts as shopping mode).
   const rows = useMemo(() => aggregateShoppingItems(buyingItems, neededOf), [buyingItems, neededOf]);
 
-  const newProducts = useNewProducts({ store, weekItems: currentWeekItems, favourites, aisleOrder, dismissedItemIds, setToast, setToastMessage, openRow: setOpenRowId });
-  const staples = useStapleSuggestions({ store, activePlan, dismissedItemIds, setToastMessage });
+  const newProducts = useNewProducts({ store, weekItems: currentWeekItems, favourites, aisleOrder, setToast, setToastMessage, openRow: setOpenRowId });
+  const staples = useStapleSuggestions({ store, activePlan, setToastMessage });
 
   const byName = (a: AggregatedShoppingListItem, b: AggregatedShoppingListItem) => a.name.localeCompare(b.name);
   // Just ticked: counts straight away, but stays in its place (crossed out, with Undo) for a few
