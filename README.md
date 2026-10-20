@@ -494,3 +494,8 @@ Main files:
   (`src/whoChanged.ts`: `editedBy`, `noteBy`, a day's `updatedBy`, a freezer
   meal's `addedBy`/`lastModifiedBy`, a recipe's `notesBy`) and synced with
   it; ticking something doesn't count as changing it.
+- `Notes reach cooking` — the Cook tab's day card shows the recipe's own
+  notes ("Recipe notes: …") under the day's note; cook mode has a Notes strip
+  at the top with the day's note and the recipe's notes, each in its writer's
+  colour, open at the start and folded to one line after the first step (tap
+  to see them again).

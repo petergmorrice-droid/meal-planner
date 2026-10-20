@@ -665,6 +665,13 @@ function DayCard({
             </button>
           )}
 
+          {recipe && (recipe.notes || '').trim() && (
+            <button type="button" onClick={onRecipe} className={`mt-1 w-full flex items-start gap-1.5 text-left text-[13px] cursor-pointer ${recipe.notesBy ? noteLook(recipe.notesBy).text : 'text-amber-900'}`} data-cook-recipe-note={day} data-note-by={recipe.notesBy || undefined}>
+              <BookOpen className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${noteLook(recipe.notesBy).icon}`} />
+              <span className="min-w-0 flex-1 line-clamp-2 break-words whitespace-pre-line"><span className="font-semibold">Recipe notes: </span>{recipe.notes!.trim()}</span>
+            </button>
+          )}
+
           {todayPanel}
 
           {isToday && canCook && (

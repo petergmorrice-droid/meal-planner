@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import PersonMark, { noteLook } from './PersonMark';
 import { formatCookingAmount } from '../shopping';
 import {
   ChevronLeft, ChevronRight, ChefHat, Plus, Minus, Check, Timer, Type, Volume2, VolumeX,
-  ThumbsUp, ThumbsDown, Snowflake, Refrigerator, NotebookPen, Mic, MicOff, MessageCircleQuestionMark, Send, LoaderCircle, X,
+  ThumbsUp, ThumbsDown, Snowflake, Refrigerator, NotebookPen, Mic, MicOff, MessageCircleQuestionMark, Send, LoaderCircle, X, StickyNote, ChevronDown,
 } from 'lucide-react';
 import { Recipe, PlannedMeal, MealPlan, CookingMethod, Ingredient } from '../types';
 import { scaleRecipeStepQuantities, DAYS_OF_WEEK } from '../utils';
@@ -132,6 +133,12 @@ export default function CookMode({
   // Step 0 is "Get everything out"; the recipe's steps follow.
   const stepCount = instructions.length + 1;
   const [step, setStep] = useState(0);
+  // The day's note and our notes on the recipe: open to start with, folded once you're past the first step (tap to see again).
+  const dayNote = (activeMeal?.note || '').trim();
+  const recipeNotes = (recipe?.notes || '').trim();
+  const [notesOpen, setNotesOpen] = useState(true);
+  const foldedNotes = useRef(false);
+  useEffect(() => { if (step > 0 && !foldedNotes.current) { foldedNotes.current = true; setNotesOpen(false); } }, [step]);
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
   useEffect(() => { setTicked({}); setStep(0); }, [activeMealId, method]);
 
@@ -543,6 +550,36 @@ export default function CookMode({
           <div className="max-w-2xl mx-auto space-y-0.5">
             {plan.banner && <p className="font-semibold">{plan.banner}</p>}
             {activeMeal.sides && activeMeal.sides.length > 0 && <p>With: {activeMeal.sides.map((s) => s.name).join(', ')}</p>}
+          </div>
+        </div>
+      )}
+
+      {(dayNote || recipeNotes) && (
+        <div className={`shrink-0 border-b px-4 py-2 ${notesOpen ? 'bg-white border-zinc-200' : 'bg-zinc-50 border-zinc-200'}`} data-cook-notes>
+          <div className="max-w-2xl mx-auto">
+            <button type="button" onClick={() => setNotesOpen((v) => !v)} aria-expanded={notesOpen} className="w-full flex items-center gap-1.5 text-left text-sm font-semibold text-zinc-800 cursor-pointer" data-cook-notes-toggle>
+              <StickyNote className="w-4 h-4 text-zinc-500 shrink-0" />
+              <span className="flex-1 min-w-0 truncate">
+                Notes{!notesOpen && <span className="font-normal text-zinc-500"> · {[dayNote, recipeNotes].filter(Boolean).length === 2 ? "today's and the recipe's" : dayNote ? "today's" : "the recipe's"}: tap to see</span>}
+              </span>
+              <ChevronDown className={`w-4 h-4 text-zinc-500 shrink-0 transition-transform ${notesOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {notesOpen && (
+              <div className="mt-1.5 space-y-1.5 max-h-40 overflow-y-auto">
+                {dayNote && (
+                  <div className={`rounded-xl border px-3 py-2 ${noteLook(activeMeal.noteBy).box}`} data-cook-day-note={activeMeal.noteBy || ''}>
+                    <p className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">For {dayName}<PersonMark who={activeMeal.noteBy} what="Note written" /></p>
+                    <p className={`text-[15px] leading-snug whitespace-pre-line ${noteLook(activeMeal.noteBy).text}`}>{dayNote}</p>
+                  </div>
+                )}
+                {recipeNotes && (
+                  <div className={`rounded-xl border px-3 py-2 ${noteLook(recipe?.notesBy).box}`} data-cook-recipe-notes={recipe?.notesBy || ''}>
+                    <p className="text-xs font-semibold text-zinc-600 flex items-center gap-1.5">Our notes on the recipe<PersonMark who={recipe?.notesBy} what="Notes written" /></p>
+                    <p className={`text-[15px] leading-snug whitespace-pre-line ${noteLook(recipe?.notesBy).text}`}>{recipeNotes}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
