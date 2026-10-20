@@ -371,6 +371,14 @@ export function RecipeModal({
               />
             ) : (
               <>
+                {/* Our notes first, so they're seen before cooking */}
+                {(edited.notes || '').trim() && (
+                  <section data-recipe-notes>
+                    <h3 className={`${sectionTitle} mb-2 flex items-center gap-1.5`}>Our notes<PersonMark who={edited.notesBy} what="Notes written" /></h3>
+                    <p className={`border rounded-2xl p-3 text-[15px] text-zinc-800 leading-relaxed whitespace-pre-line ${noteLook(edited.notesBy).box}`} data-notes-by={edited.notesBy || undefined}>{edited.notes}</p>
+                  </section>
+                )}
+
                 {/* People */}
                 <section className="bg-white rounded-2xl border border-zinc-200 p-3 flex items-center justify-between gap-3" data-recipe-people>
                   <div>
@@ -510,13 +518,6 @@ export function RecipeModal({
                     </div>
                   )}
                 </section>
-
-                {(edited.notes || '').trim() && (
-                  <section data-recipe-notes>
-                    <h3 className={`${sectionTitle} mb-2 flex items-center gap-1.5`}>Our notes<PersonMark who={edited.notesBy} what="Notes written" /></h3>
-                    <p className={`border rounded-2xl p-3 text-[15px] text-zinc-800 leading-relaxed whitespace-pre-line ${noteLook(edited.notesBy).box}`} data-notes-by={edited.notesBy || undefined}>{edited.notes}</p>
-                  </section>
-                )}
 
                 {edited.sourceUrl && /^https?:\/\//i.test(edited.sourceUrl) && (
                   <a
