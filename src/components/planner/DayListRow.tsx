@@ -33,6 +33,17 @@ export function describeMeal(meal: PlannedMeal, fromDay?: string | null): { labe
   return { label, note };
 }
 
+/**
+ * Leftover days are amber, freezer meals a faint ice blue, so they stand out from cooking days
+ * (Planning and Cook). Null for everything else.
+ */
+export function dayTone(meal: PlannedMeal | null | undefined): { card: string; past: string; kind: 'leftover' | 'freezer' } | null {
+  if (!meal) return null;
+  if (isLeftoverMeal(meal)) return { card: 'bg-amber-100/70 border-amber-300', past: 'bg-amber-50 border-amber-200', kind: 'leftover' };
+  if (meal.type === 'batch' || /^batch:/i.test(meal.name || '')) return { card: 'bg-cyan-50 border-cyan-200', past: 'bg-cyan-50/60 border-cyan-200/70', kind: 'freezer' };
+  return null;
+}
+
 /** "Takeaway" for meals saved before the app said Takeaway. */
 export const mealTitle = (meal: PlannedMeal) => {
   const n = cleanMealName(meal.name);
@@ -76,11 +87,13 @@ export function DayListRow({
   const isToday = !!dayPlan?.date && dayPlan.date === today;
   const isPast = !!dayPlan?.date && dayPlan.date < today;
   const d = meal ? describeMeal(meal, fromDay) : null;
+  const tone = dayTone(meal);
 
   return (
     <div
-      className={`flex items-stretch rounded-xl border min-h-[68px] ${isToday ? 'border-emerald-400 ring-1 ring-emerald-400 bg-white' : isPast ? 'border-zinc-200 bg-zinc-50' : 'border-zinc-200 bg-white'}`}
+      className={`flex items-stretch rounded-xl border min-h-[68px] ${isToday ? `border-emerald-400 ring-1 ring-emerald-400 ${tone ? tone.card.split(' ')[0] : 'bg-white'}` : tone ? (isPast ? tone.past : tone.card) : isPast ? 'border-zinc-200 bg-zinc-50' : 'border-zinc-200 bg-white'}`}
       data-list-day={day}
+      data-day-tone={tone?.kind}
       data-today={isToday || undefined}
       data-past={isPast || undefined}
     >
@@ -93,7 +106,7 @@ export function DayListRow({
         <button
           type="button"
           onClick={onOpen}
-          className="flex-1 min-w-0 text-left px-3 py-2 flex items-center gap-2 cursor-pointer hover:bg-zinc-50/80 transition-colors"
+          className="flex-1 min-w-0 text-left px-3 py-2 flex items-center gap-2 cursor-pointer hover:bg-black/[0.03] transition-colors"
           aria-label={`${day}: ${mealTitle(meal)}. Open the day`}
         >
           <span className="min-w-0 flex-1">
@@ -160,11 +173,12 @@ export function WeekDayCard({
   const d = meal ? describeMeal(meal, fromDay) : null;
   const dateText = dayPlan?.date ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
 
+  const tone = dayTone(meal);
   const header = (
-    <div className="flex items-start justify-between gap-1 shrink-0 mb-1">
-      <div className="min-w-0 leading-tight">
-        <span className={`block text-xs font-bold tracking-wide ${isPast ? 'text-zinc-400' : 'text-zinc-900'}`}>{day}</span>
-        <span className={`block text-[11px] ${isPast ? 'text-zinc-400' : 'text-zinc-500'}`}>{dateText}</span>
+    <div className="flex items-center justify-between gap-1 shrink-0 mb-1">
+      <div className="min-w-0 leading-tight truncate">
+        <span className={`text-xs font-bold ${isPast ? 'text-zinc-400' : 'text-zinc-900'}`}>{day.slice(0, 3)}</span>
+        <span className={`text-[11px] ml-1 ${isPast ? 'text-zinc-400' : 'text-zinc-500'}`}>{dateText}</span>
       </div>
       <span className="flex items-center gap-1 shrink-0">
         {meal && <PersonMark who={dayPlan?.updatedBy} what="Last changed" />}
@@ -211,7 +225,8 @@ export function WeekDayCard({
       data-past={isPast || undefined}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
-      className={`${frame} ${isPast ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-zinc-200 shadow-2xs'}`}
+      className={`${frame} ${tone ? (isPast ? tone.past : tone.card) : isPast ? 'bg-zinc-50 border-zinc-200' : 'bg-white border-zinc-200 shadow-2xs'}`}
+      data-day-tone={tone?.kind}
     >
       {header}
       <button
@@ -220,16 +235,20 @@ export function WeekDayCard({
         className="flex-1 min-h-0 text-left flex flex-col cursor-pointer"
         aria-label={`${day}: ${mealTitle(meal)}. Open the day`}
       >
-        <span className={`text-[13px] font-semibold leading-snug line-clamp-2 break-words ${isPast ? 'text-zinc-500' : 'text-zinc-900'}`}>{mealTitle(meal)}</span>
-        <span className="mt-1 flex flex-col items-start gap-1 min-h-0 overflow-hidden">
-          {d.label && d.label.text && <LabelChip label={d.label} />}
+        <span className={`shrink-0 text-[13px] font-semibold leading-snug line-clamp-2 break-words ${isPast ? 'text-zinc-500' : 'text-zinc-900'}`}>{mealTitle(meal)}</span>
+        <span className="mt-1 flex-1 flex flex-col items-start gap-1 min-h-0 overflow-hidden">
+          {d.label && d.label.text && (
+            <span className={`max-w-full inline-flex items-center gap-1 text-[11px] font-semibold border rounded-md px-1.5 py-px whitespace-nowrap ${d.label.tone}`}>
+              <span className="shrink-0 [&>svg]:w-3 [&>svg]:h-3">{d.label.icon}</span><span className="truncate">{d.label.text}</span>
+            </span>
+          )}
           {!d.note && cooksFor && <span className="text-[11px] font-medium text-zinc-700 leading-tight">{cooksFor}</span>}
           {d.note && <span className={`text-[11px] italic line-clamp-1 ${meal.noteBy ? noteLook(meal.noteBy).text : 'text-zinc-600'}`} data-meal-note-by={meal.noteBy || undefined}>{d.note}</span>}
           {meal.sides && meal.sides.length > 0 && (
             <span className="text-[11px] text-zinc-600 line-clamp-1">+ {meal.sides.map((s) => s.name).join(', ')}</span>
           )}
         </span>
-        <span className="mt-auto pt-1 flex items-center justify-between gap-1">
+        <span className="shrink-0 pt-1 flex items-center justify-between gap-1">
           {meal.type !== 'no_meal' ? (
             <span className="text-xs font-semibold text-zinc-600 inline-flex items-center gap-1" aria-label={`${meal.servings || 2} people`}>
               <Users className="w-3.5 h-3.5 text-zinc-400" />{meal.servings || 2}

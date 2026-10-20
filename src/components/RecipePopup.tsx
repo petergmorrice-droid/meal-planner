@@ -114,6 +114,17 @@ export function RecipeModal({
     setTimeout(() => setShareNote(''), 3500);
   };
 
+  // "Our notes", changed right here without editing the whole recipe.
+  const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  const saveNotes = () => {
+    const notes = (notesDraft || '').trim() || undefined;
+    const next: Recipe = { ...edited, notes };
+    if (notes) next.notesBy = store?.currentUser || next.notesBy; else delete next.notesBy;
+    setEdited(next);
+    setNotesDraft(null);
+    store?.updateRecipe?.(next);
+  };
+
   const handleSave = () => {
     const toSave: Recipe = {
       ...edited,
@@ -371,13 +382,34 @@ export function RecipeModal({
               />
             ) : (
               <>
-                {/* Our notes first, so they're seen before cooking */}
-                {(edited.notes || '').trim() && (
-                  <section data-recipe-notes>
-                    <h3 className={`${sectionTitle} mb-2 flex items-center gap-1.5`}>Our notes<PersonMark who={edited.notesBy} what="Notes written" /></h3>
+                {/* Our notes first, so they're seen before cooking. Always here: add, change or read them. */}
+                <section data-recipe-notes>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h3 className={`${sectionTitle} flex items-center gap-1.5`}>Our notes{(edited.notes || '').trim() && <PersonMark who={edited.notesBy} what="Notes written" />}</h3>
+                    {(edited.notes || '').trim() && notesDraft === null && store?.updateRecipe && (
+                      <button type="button" onClick={() => setNotesDraft(edited.notes || '')} className="h-8 px-2.5 rounded-lg text-sm font-semibold text-emerald-700 hover:bg-emerald-50 cursor-pointer" data-recipe-notes-edit>Change</button>
+                    )}
+                  </div>
+                  {notesDraft !== null ? (
+                    <div className="space-y-2">
+                      <textarea value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} rows={3} autoFocus
+                        placeholder="e.g. we use half the chilli, good with rice"
+                        className="w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-[15px] leading-relaxed outline-none focus:border-emerald-500" aria-label="Our notes" data-recipe-notes-input />
+                      <div className="flex gap-2">
+                        <button type="button" onClick={saveNotes} className="h-10 px-4 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer" data-recipe-notes-save>Save notes</button>
+                        <button type="button" onClick={() => setNotesDraft(null)} className="h-10 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (edited.notes || '').trim() ? (
                     <p className={`border rounded-2xl p-3 text-[15px] text-zinc-800 leading-relaxed whitespace-pre-line ${noteLook(edited.notesBy).box}`} data-notes-by={edited.notesBy || undefined}>{edited.notes}</p>
-                  </section>
-                )}
+                  ) : store?.updateRecipe ? (
+                    <button type="button" onClick={() => setNotesDraft('')} className="w-full rounded-2xl border border-dashed border-zinc-300 bg-white px-3 py-2.5 text-left text-[15px] text-zinc-500 hover:bg-zinc-50 cursor-pointer inline-flex items-center gap-1.5" data-recipe-notes-add>
+                      <Plus className="w-4 h-4 shrink-0" />Add a note, e.g. "we use half the chilli"
+                    </button>
+                  ) : (
+                    <p className="text-sm text-zinc-500">No notes yet.</p>
+                  )}
+                </section>
 
                 {/* People */}
                 <section className="bg-white rounded-2xl border border-zinc-200 p-3 flex items-center justify-between gap-3" data-recipe-people>

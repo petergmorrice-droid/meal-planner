@@ -38,7 +38,9 @@ import {
   Rows,
   History,
   Database,
-  Copy
+  Copy,
+  StickyNote,
+  BookOpen,
 } from 'lucide-react';
 import { Recipe, MealPlan, DayPlan, PlannedMeal, MealType, BatchItem, ShoppingListItem, PlannedMealSide, CookingMethod } from '../types';
 import { 
@@ -61,8 +63,8 @@ import {
 import { catalogForState, matchProduct, productMatchesSearch } from '../shopping';
 
 import { RecipeModal } from './CookBookTab';
-import { noteLook } from './PersonMark';
-import { DayListRow, WeekDayCard, WeekGlance, DaySheet, isLeftoverMeal } from './planner/DayListRow';
+import PersonMark, { noteLook } from './PersonMark';
+import { DayListRow, WeekDayCard, WeekGlance, DaySheet, isLeftoverMeal, describeMeal, mealTitle, dayTone } from './planner/DayListRow';
 import { changedDaysSinceList, listSnapshot, moveMeal, cooksForText as weekCooksForText, preferredWeekStart, leftoverSourceDay } from '../planning';
 import { sendWeekToShoppingList } from '../planShopping';
 import { RecipeCard, CARD_FIELD_OPTIONS, cardFieldsFromPrefs } from './RecipeCard';
@@ -1211,7 +1213,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
       <div className={`bg-white border-t border-zinc-200/90 ${showWeekDropdown ? 'z-40' : 'z-20'} flex flex-col transition-all duration-200 relative ${
         planningView === 'list'
           ? 'flex-1 min-h-0'
-          : 'shadow-xl shrink-0 h-[32%] md:h-[40%] min-h-[225px] md:min-h-[260px] max-h-[290px] md:max-h-[370px]'
+          : 'shadow-xl shrink-0 h-[38%] md:h-[40%] min-h-[265px] md:min-h-[270px] max-h-[330px] md:max-h-[380px]'
       }`}>
         {/* Week Selector Menu (Moved outside of scrollable container to prevent clipping) */}
         {showWeekDropdown && (
@@ -1446,7 +1448,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
         ) : (
         /* The week strip: drop recipes onto a day, tap a day for its panel */
         <div className="flex-1 p-2 md:p-3 overflow-x-auto overflow-y-hidden min-h-0 flex flex-col scrollbar-thin" ref={stripRef} data-week-strip>
-          <div className="grid grid-cols-7 gap-2 sm:gap-3 min-w-[1050px] md:min-w-0 flex-1 h-full">
+          <div className="grid grid-cols-7 gap-2 sm:gap-3 min-w-[1120px] md:min-w-0 flex-1 h-full">
             {currentPlan && DAYS_OF_WEEK.map(day => {
               const dayPlan = currentPlan!.days[day];
               const meal = dayPlan?.meals?.[0] || null;
@@ -2282,94 +2284,78 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                    Daily Meal Breakdown
+                    The week's meals
                   </span>
                   <span className="text-[11px] font-medium text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full">
                     {DAYS_OF_WEEK.length - unallocatedDays.length} / 7 days filled
                   </span>
                 </div>
 
-                <div className="space-y-1.5 max-h-60 sm:max-h-64 overflow-y-auto pr-1">
+                {/* Every day in full: the meal, what kind, people, sides, who it cooks for, and the notes. */}
+                <div className="space-y-1.5" data-send-breakdown>
                   {DAYS_OF_WEEK.map(day => {
                     const dayPlan = currentPlan.days[day];
-                    const meals = dayPlan?.meals || [];
-                    const hasMeal = meals.length > 0;
-                    const meal = hasMeal ? meals[0] : null;
-                    const dayDate = dayPlan?.date 
-                      ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) 
+                    const meal = dayPlan?.meals?.[0] || null;
+                    const dayDate = dayPlan?.date
+                      ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                       : '';
-
+                    const d = meal ? describeMeal(meal, leftoverSourceDay(currentPlan.days, day, meal)) : null;
+                    const cooks = meal ? weekCooksForText(currentPlan.days, day, meal) : null;
+                    const tone = dayTone(meal);
+                    const recipe = meal?.recipeId ? store.state.recipes.find((r: Recipe) => r.id === meal.recipeId) : null;
+                    const recipeNotes = (recipe?.notes || '').trim();
                     return (
                       <div
                         key={day}
-                        className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 ${
-                          hasMeal
-                            ? 'bg-white border-zinc-200 shadow-2xs'
-                            : 'bg-zinc-50/60 border-dashed border-zinc-200/80'
+                        className={`p-2.5 rounded-xl border flex items-start gap-2.5 ${
+                          meal ? (tone ? tone.card : 'bg-white border-zinc-200') : 'bg-zinc-50/60 border-dashed border-zinc-200/80'
                         }`}
+                        data-send-day={day}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {/* Day column label */}
-                          <div className="w-20 shrink-0">
-                            <span className="font-bold text-xs text-zinc-900 block">{day}</span>
-                            <span className="text-[11px] text-zinc-400 block">{dayDate}</span>
-                          </div>
-
-                          {/* Meal Info */}
-                          {meal ? (
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="shrink-0 flex items-center justify-center">
-                                {meal.type === 'takeout' ? (
-                                  <ShoppingBag className="w-4 h-4 text-orange-600" />
-                                ) : meal.type === 'eating_out' ? (
-                                  <Utensils className="w-4 h-4 text-blue-600" />
-                                ) : meal.type === 'no_meal' ? (
-                                  <X className="w-4 h-4 text-zinc-500" />
-                                ) : meal.type === 'batch' ? (
-                                  <Snowflake className="w-4 h-4 text-cyan-600" />
-                                ) : meal.type === 'leftover' ? (
-                                  <RotateCcw className="w-4 h-4 text-amber-600" />
-                                ) : (
-                                  <ChefHat className="w-4 h-4 text-emerald-600" />
+                        <div className="w-14 shrink-0 leading-tight pt-0.5">
+                          <span className="font-bold text-xs text-zinc-900 block">{day.slice(0, 3)}</span>
+                          <span className="text-[11px] text-zinc-500 block">{dayDate}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {meal && d ? (
+                            <>
+                              <span className="font-semibold text-sm text-zinc-900 block break-words leading-snug">{mealTitle(meal)}</span>
+                              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-zinc-600">
+                                {d.label && d.label.text && (
+                                  <span className={`inline-flex items-center gap-1 font-semibold border rounded-md px-1.5 py-px [&>svg]:w-3 [&>svg]:h-3 ${d.label.tone}`}>{d.label.icon}{d.label.text}</span>
                                 )}
+                                {meal.type !== 'no_meal' && <span>{meal.servings || 2} {(meal.servings || 2) === 1 ? 'person' : 'people'}</span>}
+                                {cooks && <span>{cooks}</span>}
+                                {meal.sides && meal.sides.length > 0 && <span>+ {meal.sides.map((x) => x.name).join(', ')}</span>}
                               </span>
-                              <div className="min-w-0">
-                                <span className="font-semibold text-xs text-zinc-900 block truncate" title={meal.name}>
-                                  {meal.name}
+                              {d.note && (
+                                <span className={`mt-1 flex items-start gap-1 text-xs break-words ${noteLook(meal.noteBy).text}`} data-send-note>
+                                  <StickyNote className={`w-3 h-3 shrink-0 mt-0.5 ${noteLook(meal.noteBy).icon}`} />
+                                  <span className="min-w-0">{d.note}</span>
+                                  <PersonMark who={meal.noteBy} what="Note written" />
                                 </span>
-                                <div className="flex items-center gap-2 text-[11px] text-zinc-500 mt-0.5">
-                                  {meal.type !== 'no_meal' && (
-                                    <span className="flex items-center gap-1 font-medium text-zinc-700 bg-zinc-100 px-1.5 py-0.5 rounded">
-                                      <span className="text-[11px] leading-none" role="img" aria-label="people">👤</span>
-                                      <span>{meal.servings || 2} {(meal.servings || 2) === 1 ? 'person' : 'people'}</span>
-                                    </span>
-                                  )}
-                                  {meal.note && (
-                                    <span className={`px-1 rounded truncate max-w-[140px] ${noteLook(meal.noteBy).text} ${noteLook(meal.noteBy).bg}`} title={meal.note}>
-                                      {meal.note}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
+                              )}
+                              {recipeNotes && (
+                                <span className={`mt-1 flex items-start gap-1 text-xs break-words whitespace-pre-line ${noteLook(recipe?.notesBy).text}`} data-send-recipe-note>
+                                  <BookOpen className={`w-3 h-3 shrink-0 mt-0.5 ${noteLook(recipe?.notesBy).icon}`} />
+                                  <span className="min-w-0"><span className="font-semibold">Recipe notes: </span>{recipeNotes}</span>
+                                </span>
+                              )}
+                            </>
                           ) : (
-                            <div className="flex items-center gap-1.5 text-xs text-zinc-400 italic">
-                              <span>Nothing planned</span>
-                            </div>
+                            <span className="text-xs text-zinc-400 italic">Nothing planned</span>
                           )}
                         </div>
-
-                        {/* Quick edit button to jump to this day */}
                         <button
                           type="button"
                           onClick={() => {
                             setShowFinalizeConfirmModal(false);
-                            setSelectedDay(day);
+                            if (meal) setDaySheet(day); else setSelectedDay(day);
                           }}
-                          className="text-[11px] font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 px-2 py-1 rounded-md transition-colors shrink-0 cursor-pointer"
+                          className="text-xs font-semibold text-emerald-700 hover:bg-emerald-50 px-2 py-1 rounded-md transition-colors shrink-0 cursor-pointer"
                           title={`Edit ${day}`}
                         >
-                          {hasMeal ? 'Edit' : '+ Add'}
+                          {meal ? 'Edit' : '+ Add'}
                         </button>
                       </div>
                     );

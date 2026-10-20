@@ -499,3 +499,11 @@ Main files:
   at the top with the day's note and the recipe's notes, each in its writer's
   colour, open at the start and folded to one line after the first step (tap
   to see them again).
+- `Planning fits, coloured days, full week summary` — the recipe pop-up
+  always has *Our notes* at the top (add or change them right there). The
+  Planning week strip is a little taller and its day cards fit (one-line
+  day and date, labels on one line, the meal name never squashed). Leftover
+  days are amber and freezer meals faint ice blue, on Planning and Cook
+  (`dayTone` in `src/components/planner/DayListRow.tsx`). *Send to list*
+  shows every day in full: meal, kind, people, who it cooks for, sides, the
+  day's note and the recipe's notes, with Edit opening that day.

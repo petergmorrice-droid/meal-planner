@@ -10,7 +10,7 @@ import { DAYS_OF_WEEK, formatDateISO, getMonday, getNextMonday, isWeekWithinForw
 import { leftoverSourceDay, moveMeal, relinkLeftovers, cooksForText } from '../planning';
 import { formatWeekSpan, weekStartShort } from '../shopList';
 import { recipeMinutes, startBy, clockText, parseClock, prepTonight, freezePortionsFromNote, eatAtFor } from '../cookInfo';
-import { DaySheet, describeMeal, mealTitle } from './planner/DayListRow';
+import { DaySheet, describeMeal, mealTitle, dayTone } from './planner/DayListRow';
 import { TimerBar } from './cook/TimerBar';
 import CookMode from './CookMode';
 import { RecipeModal } from './RecipePopup';
@@ -585,6 +585,8 @@ function DayCard({
   const date = new Date(iso + 'T00:00:00');
   const d = meal ? describeMeal(meal, fromDay) : null;
   const cooked = !!meal?.cooked;
+  // Leftover days amber, freezer meals faint ice blue.
+  const tone = dayTone(meal);
   const note = (d?.note || '').trim();
   const canCook = meal?.type === 'recipe' && !!recipe && !cooked;
   const title = meal ? mealTitle(meal) : '';
@@ -610,8 +612,9 @@ function DayCard({
 
   return (
     <section
-      className={`rounded-xl bg-white ${isToday ? 'border-2 border-emerald-500 shadow-sm px-3 py-2.5' : 'border border-zinc-200 px-3 py-2'} ${isPast && !isToday ? 'opacity-70' : ''}`}
+      className={`rounded-xl ${tone ? tone.card.split(' ')[0] : 'bg-white'} ${isToday ? 'border-2 border-emerald-500 shadow-sm px-3 py-2.5' : `border ${tone ? tone.card.split(' ')[1] : 'border-zinc-200'} px-3 py-2`} ${isPast && !isToday ? 'opacity-70' : ''}`}
       data-cook-row={day}
+      data-day-tone={tone?.kind}
     >
       <div className="flex items-start gap-2.5">
         {/* Date */}
