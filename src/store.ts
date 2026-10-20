@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { oldShoppingLineIds } from './shopList';
+import { setCurrentProducts } from './shopping/current';
 import { stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes } from './whoChanged';
 import {
   Recipe, MealPlan, PlannedMeal, BatchItem,
@@ -108,16 +110,29 @@ const normalizeState = (s: Partial<AppState> | null | undefined): AppState => ({
   groceryOverrides: s?.groceryOverrides || {},
 });
 
-const persistLocal = (s: AppState) => {
+/** Copies the first version of the app kept alongside the real one (only read now, for very old phones). */
+const LEGACY_COPIES = ['mealPlannerMealPlans', 'mealPlannerState'];
+
+/**
+ * Save everything on this phone (one copy). If the phone's storage is full, clear the old copies
+ * and try once more. Returns false if it still couldn't be saved, so the app can say so.
+ */
+export const persistLocal = (s: AppState): boolean => {
+  const json = JSON.stringify(s);
+  const write = () => localStorage.setItem('mealPlannerAppStateCache', json);
   try {
-    localStorage.setItem('mealPlannerAppStateCache', JSON.stringify(s));
-    localStorage.setItem('mealPlannerMealPlans', JSON.stringify(s.mealPlans));
-    localStorage.setItem('mealPlannerState', JSON.stringify({
-      groceryDatabase: s.groceryDatabase,
-      groceryOverrides: s.groceryOverrides
-    }));
+    write();
+    for (const k of LEGACY_COPIES) if (localStorage.getItem(k) !== null) localStorage.removeItem(k);
+    return true;
   } catch (e) {
-    console.error('Failed to write local storage state cache', e);
+    try {
+      for (const k of LEGACY_COPIES) localStorage.removeItem(k);
+      write();
+      return true;
+    } catch (e2) {
+      console.error('Could not save on this phone (storage full?)', e2);
+      return false;
+    }
   }
 };
 
@@ -195,7 +210,11 @@ const getInitialState = (): AppState => {
 const friendlyError = (err: any, fallback: string) => (err && err.message) || fallback;
 
 export function useStore() {
-  const [state, setStateRaw] = useState<AppState>(getInitialState);
+  const [state, setStateRaw] = useState<AppState>(() => {
+    const s = getInitialState();
+    setCurrentProducts(s.groceryDatabase, s.groceryOverrides);
+    return s;
+  });
   const stateRaw = state;
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const currentUser = useDeviceIdentity();
@@ -230,10 +249,14 @@ export function useStore() {
   };
 
   /** Replace the data on this phone (screen + local storage). */
+  // True when the last save on this phone failed (storage full): the app shows a warning.
+  const [saveProblem, setSaveProblem] = useState(false);
   const replaceState = (next: AppState) => {
     stateRef.current = next;
+    setCurrentProducts(next.groceryDatabase, next.groceryOverrides);
     setStateRaw(next);
-    persistLocal(next);
+    const ok = persistLocal(next);
+    setSaveProblem((was) => (was === !ok ? was : !ok));
   };
 
   const schedulePush = (delay = PUSH_DELAY_MS) => {
@@ -345,6 +368,18 @@ export function useStore() {
       }
     });
   };
+
+  // Shopping lines from weeks long gone are cleared (through the normal save, so the other phone
+  // clears them too): shortly after opening, once the first sync has had its chance.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const cur = stateRef.current;
+      const old = new Set(oldShoppingLineIds(cur.shoppingList || [], formatDateISO(new Date())));
+      if (old.size) commit(cur, { ...cur, shoppingList: cur.shoppingList.filter((i) => !old.has(i.id)) });
+    }, getGistConfig() ? 15000 : 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Background sync: on open, every SYNC_POLL_SECONDS while visible, on return to the app, and when back online.
   useEffect(() => {
@@ -749,6 +784,8 @@ export function useStore() {
 
   return {
     state,
+    /** The last save on this phone failed (storage full). */
+    saveProblem,
     /** The very latest state, including edits made earlier in the same tap (state is a render behind). */
     getState: () => stateRef.current,
     selectedPlanId,

@@ -301,6 +301,24 @@ export function suggestedStaples(
   return out.sort((a, b) => b.weeks - a.weeks || a.name.localeCompare(b.name));
 }
 
+/** How many weeks of shopping lines each phone keeps (enough for suggested staples and checking back). */
+export const KEEP_SHOP_WEEKS = 10;
+
+/**
+ * Lines from weeks that started more than `keepWeeks` weeks before this week (`todayIso`), which
+ * can be cleared so the saved data and every sync don't keep growing. Lines with no week are kept.
+ */
+export function oldShoppingLineIds(list: ShoppingListItem[], todayIso: string, keepWeeks = KEEP_SHOP_WEEKS): string[] {
+  const t = new Date(todayIso + 'T12:00:00');
+  const monday = new Date(t);
+  monday.setDate(t.getDate() - ((t.getDay() + 6) % 7) - 7 * keepWeeks);
+  const cutoff = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+  return (list || []).filter((i) => {
+    const week = i ? weekOfLine(i) : null;
+    return !!week && week < cutoff;
+  }).map((i) => i.id);
+}
+
 const COUNT_UNITS =['', 'whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', 'each'];
 
 /** How much to buy, as it reads in the shop: "1 kg", "2 cans", "6". */

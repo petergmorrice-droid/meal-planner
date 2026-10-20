@@ -7,7 +7,7 @@
 import type { GroceryItem } from '../types';
 import {
   buildCatalog, matchProduct, shoppingQuantityFor, quantityForAddedItem as addedItemQuantity,
-  stepForItem, matchKey, type Catalog,
+  stepForItem, matchKey, currentCatalog, type Catalog,
 } from '../shopping';
 
 export interface ConvertedIngredient {
@@ -18,30 +18,9 @@ export interface ConvertedIngredient {
   step: number;
 }
 
-// --- Catalogue built from the grocery list saved on this device (cached) ---
-let cachedRaw: string | null | undefined;
-let cachedCatalog: Catalog | null = null;
-
+// --- The household's products right now (kept up to date by the store; see shopping/current.ts) ---
 export function getCatalog(): Catalog {
-  let raw: string | null = null;
-  try {
-    raw = typeof window !== 'undefined' ? window.localStorage.getItem('mealPlannerState') : null;
-  } catch {
-    raw = null;
-  }
-  if (cachedCatalog && raw === cachedRaw) return cachedCatalog;
-  let db: GroceryItem[] | null = null;
-  let overrides: Record<string, Partial<GroceryItem>> | null = null;
-  try {
-    const parsed = raw ? JSON.parse(raw) : null;
-    db = parsed?.groceryDatabase ?? null;
-    overrides = parsed?.groceryOverrides ?? null;
-  } catch {
-    // use the built-in list
-  }
-  cachedCatalog = buildCatalog(db, overrides);
-  cachedRaw = raw;
-  return cachedCatalog;
+  return currentCatalog();
 }
 
 const catalogsByList = new WeakMap<object, Catalog>();

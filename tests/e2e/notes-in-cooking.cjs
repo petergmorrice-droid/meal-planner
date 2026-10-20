@@ -1,0 +1,50 @@
+// Notes reach cooking: the Cook tab card shows the recipe's notes; cook mode shows the day's and the recipe's.
+const { chromium, devices } = require('./pw.cjs');
+const { reviewSeed } = require('./review-seed.cjs');
+const OUT = process.argv[2];
+const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
+let failures = 0;
+const check = (ok, label, detail = '') => { console.log(ok ? 'PASS' : 'FAIL', label, ok ? '' : String(detail).slice(0, 500)); if (!ok) failures++; };
+(async () => {
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ ...devices['iPhone 13'], locale: 'en-GB', timezoneId: 'Europe/London' });
+  await ctx.clock.install({ time: new Date('2026-10-14T12:00:00+01:00') });
+  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  const S = reviewSeed();
+  const plan = S.mealPlans[0];
+  const thu = plan.days.Thursday.meals[0];
+  thu.note = 'make extra rice'; thu.noteBy = 'P';
+  const recipe = S.recipes.find((r) => r.id === thu.recipeId);
+  recipe.notes = 'We use half the chilli'; recipe.notesBy = 'R';
+  await ctx.addInitScript((s) => { if (!localStorage.getItem('seeded')) { localStorage.setItem('mealPlannerAppStateCache', JSON.stringify(s)); localStorage.setItem('seeded', '1'); } }, S);
+  const page = await ctx.newPage();
+  const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(URL); await page.waitForTimeout(1500);
+  await page.locator('nav button', { hasText: /^Cook$/ }).click(); await page.waitForTimeout(700);
+  const card = page.locator('[data-cook-row="Thursday"]');
+  const rn = card.locator('[data-cook-recipe-note]');
+  check(await rn.count() === 1 && /Recipe notes: We use half the chilli/.test(await rn.innerText()), `Cook tab: ${recipe.name} shows the recipe's notes`);
+  check(/text-pink-800/.test(await rn.getAttribute('class')) && /text-blue-800/.test(await card.locator('[data-cook-note]').getAttribute('class')), "in their writers' colours (Rachel's recipe notes pink, Peter's day note blue)");
+  await page.screenshot({ path: `${OUT}/n1-cook-card.png` });
+  // Cook mode from the recipe
+  await card.locator('[data-cook-recipe]').click(); await page.waitForTimeout(600);
+  const order = await page.evaluate(() => { const n = document.querySelector('[data-recipe-notes]'); const p = document.querySelector('[data-recipe-people]'); return !!(n && p && (n.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING)); });
+  check(order, 'recipe pop-up: "Our notes" at the top, before people and ingredients');
+  await page.screenshot({ path: `${OUT}/n0-recipe-popup.png` });
+  await page.getByRole('button', { name: /Start cooking/ }).first().click(); await page.waitForTimeout(900);
+  const notes = page.locator('[data-cook-notes]');
+  check(await notes.count() === 1, 'cook mode: a Notes strip');
+  check(/make extra rice/.test(await notes.innerText()) && /We use half the chilli/.test(await notes.innerText()), "cook mode: the day's note and the recipe's notes", await notes.innerText());
+  check(await page.locator('[data-cook-day-note="P"]').count() === 1 && await page.locator('[data-cook-recipe-notes="R"]').count() === 1, 'each with who wrote it');
+  await page.screenshot({ path: `${OUT}/n2-cook-mode.png` });
+  // Next step: folds to one line; tap to see again
+  await page.locator('[data-cook-next], [data-big-next]').first().click(); await page.waitForTimeout(400);
+  check(!/We use half the chilli/.test(await notes.innerText()) && /tap to see/.test(await notes.innerText()), 'past the first step: folded to one line');
+  await page.locator('[data-cook-notes-toggle]').click(); await page.waitForTimeout(300);
+  check(/We use half the chilli/.test(await notes.innerText()), 'tap: shows them again');
+  await page.screenshot({ path: `${OUT}/n3-cook-mode-step.png` });
+  check(errors.length === 0, 'no page errors', errors.join(' | '));
+  await browser.close();
+  console.log(failures ? `${failures} FAILED` : 'all passed');
+  process.exit(failures ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(1); });

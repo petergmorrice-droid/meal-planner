@@ -231,6 +231,7 @@ npm run build     # production build into dist/
 npm run build:single  # the whole app as ONE file: dist-single/index.html
 npm run preview   # serve the production build locally
 npm test          # tests for syncing, shopping quantities and recipe import
+npm run test:e2e  # builds the app and runs the browser tests (tests/e2e/README.md)
 ```
 
 Main files:
@@ -519,3 +520,15 @@ Main files:
   `src/shopList.ts`). Choose how much each week and it becomes a weekly
   staple (this week's line becomes the staple's line); *Not a staple* stops
   suggesting it on both phones (`preferences.notStaples`).
+- `Safety` — the browser tests now live in the project (`tests/e2e/`, run
+  with `npm run test:e2e`), not just on the machine that wrote them. Each
+  phone saves one copy of the data instead of three (the old duplicate copies
+  are removed), and if the phone's storage is full the app says so plainly
+  with a Backup button instead of failing silently. Shopping lines from more
+  than 10 weeks ago are cleared, through the normal save so the other phone
+  clears them too (`oldShoppingLineIds`), so the data and every sync stop
+  growing. Each tab has a safety net (`src/components/ErrorBoundary.tsx`): if
+  something goes wrong on one, it shows *Try again* / *Reload the app* and
+  the other tabs keep working. The product list is kept in memory for the
+  Shop's matching (`src/shopping/current.ts`) instead of being re-read from
+  storage each time.

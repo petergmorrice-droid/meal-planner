@@ -6,6 +6,7 @@
  * Amounts that can't be converted are never added to amounts that can; they
  * are reported so the person can check them.
  */
+import { currentCatalog } from './current';
 import { buildCatalog, matchProduct, sizeOfUnit, type Catalog, type Product } from './catalog';
 import { groupingKey, displayName, matchKey } from './names';
 import { canonicalUnit, unitInfo, vagueUnit, formatUnit, formatAmount, parseAmount, formatCookingAmount, largeUnitQuantity } from './units';
@@ -272,18 +273,7 @@ export function stepForItem(catalog: Catalog, item: { name: string; unit?: strin
   return 1;
 }
 
-/** Catalogue built from whatever the app has saved on this device (for code outside React). */
+/** Catalogue of the household's products right now (for code outside React). */
 export function catalogFromLocalStorage(): Catalog {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const raw = window.localStorage.getItem('mealPlannerState');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return buildCatalog(parsed?.groceryDatabase, parsed?.groceryOverrides);
-      }
-    }
-  } catch {
-    // fall through to the built-in list
-  }
-  return buildCatalog(null, null);
+  return currentCatalog();
 }

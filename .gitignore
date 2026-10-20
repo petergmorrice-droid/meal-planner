@@ -9,3 +9,4 @@ coverage/
 .test-build/
 dist-single/
 dist-preview/
+tests/e2e/.out/

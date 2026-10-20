@@ -8,7 +8,7 @@ import {
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
   learnRoute, routeAisleOrder, sortByRoute, addShopRecord, shopStats, milestoneCrossed, isToBuy, notYetProducts,
-  packsOnLine, stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts, suggestedStaples,
+  packsOnLine, stapleQuantity, stapleTakesOver, inProductUnit, fitHandAddedToProducts, suggestedStaples, oldShoppingLineIds,
   ratingsFor, averageStars, averagesById, withRating,
   parseClock, clockText, startBy, recipeMinutes, stepsToDoAhead, prepTonight, freezePortionsFromNote,
   ingredientsForStep, stepMinutes, stepTimerLabel, newTimer, timeLeft, tickTimers, pauseTimer, resumeTimer,
@@ -459,6 +459,14 @@ test('ratings: Peter and Rachel each rate a recipe', () => {
   assert.deepEqual(ratingsFor(list, 'r1'), { P: 3 }, '0 takes it off');
   assert.deepEqual([...averagesById(list)].sort(), [['r1', 3], ['r2', 2]]);
   assert.equal(averageStars({}), null);
+});
+
+test('shop: lines from weeks long gone are cleared (10 weeks kept)', () => {
+  const line = (id, planId) => ({ id, name: 'x', amount: 1, unit: '', checked: true, isAdhoc: true, planId });
+  const list = [line('now', 'plan-2026-10-19'), line('w10', 'plan-2026-08-10'), line('w11', 'plan-2026-08-03'), line('old', 'plan-2026-01-05'), line('none', undefined)];
+  assert.deepEqual(oldShoppingLineIds(list, '2026-10-21'), ['w11', 'old'], 'this week and the 10 before kept; older cleared; lines with no week kept');
+  assert.deepEqual(oldShoppingLineIds(list, '2026-10-19'), ['w11', 'old'], 'a Monday works the same');
+  assert.deepEqual(oldShoppingLineIds([], '2026-10-21'), []);
 });
 
 test('shop: typing into the add box', () => {

@@ -5,3 +5,4 @@ export * from './quantities';
 export * from './linking';
 export * from './aisles';
 export * from './productList';
+export * from './current';

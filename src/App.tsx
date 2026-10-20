@@ -18,6 +18,8 @@ import { checkForUpdate, updateNow } from './appVersion';
 import { useEffect } from 'react';
 import SettingsTab from './components/SettingsTab';
 import { applyTabColour } from './theme';
+import ErrorBoundary, { TestBreak } from './components/ErrorBoundary';
+import { getGistConfig } from './services/gistStorage';
 
 type Tab = 'cookbook' | 'planning' | 'this_week' | 'shop' | 'batch' | 'settings';
 
@@ -59,29 +61,36 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen app-page text-zinc-900 overflow-hidden">
       <UpdateBanner />
+      {store.saveProblem && <SaveProblemBanner exportAll={store.exportAllData} />}
       <main className="flex-1 overflow-hidden relative flex flex-col">
         {activeTab === 'cookbook' && (
-          <CookBookTab
-            store={store}
-            onNavigateTab={handleNavigateTab}
-            onAddToDay={(recipe) => { setPendingAddRecipeId(recipe.id); setActiveTab('planning'); }}
-            startAddWith={sharedRecipe}
-            onStartAddHandled={() => setSharedRecipe(null)}
-          />
+          <ErrorBoundary key="cookbook" name="Cookbook">
+            <TestBreak tab="cookbook" />
+            <CookBookTab
+              store={store}
+              onNavigateTab={handleNavigateTab}
+              onAddToDay={(recipe) => { setPendingAddRecipeId(recipe.id); setActiveTab('planning'); }}
+              startAddWith={sharedRecipe}
+              onStartAddHandled={() => setSharedRecipe(null)}
+            />
+          </ErrorBoundary>
         )}
         {activeTab === 'planning' && (
-          <PlanningTab 
-            store={store} 
-            onNavigateTab={handleNavigateTab} 
-            targetPlanId={store.selectedPlanId} 
-            pendingAddRecipeId={pendingAddRecipeId}
-            onPendingAddDone={() => setPendingAddRecipeId(null)}
-          />
+          <ErrorBoundary key="planning" name="Planning">
+            <TestBreak tab="planning" />
+            <PlanningTab
+              store={store}
+              onNavigateTab={handleNavigateTab}
+              targetPlanId={store.selectedPlanId}
+              pendingAddRecipeId={pendingAddRecipeId}
+              onPendingAddDone={() => setPendingAddRecipeId(null)}
+            />
+          </ErrorBoundary>
         )}
-        {activeTab === 'this_week' && <CookTab store={store} onNavigateTab={handleNavigateTab} />}
-        {activeTab === 'shop' && <ShopTab store={store} onNavigateTab={handleNavigateTab} openPlanId={shopPlanRequest} onOpenPlanHandled={() => setShopPlanRequest(null)} openPanel={shopPanelRequest} onOpenPanelHandled={() => setShopPanelRequest(null)} />}
-        {activeTab === 'batch' && <BatchTab store={store} onNavigateTab={handleNavigateTab} />}
-        {activeTab === 'settings' && <SettingsTab store={store} onNavigateTab={handleNavigateTab} onOpenShopPanel={(panel) => { setShopPanelRequest(panel); setActiveTab('shop'); }} />}
+        {activeTab === 'this_week' && <ErrorBoundary key="cook" name="Cook"><TestBreak tab="this_week" /><CookTab store={store} onNavigateTab={handleNavigateTab} /></ErrorBoundary>}
+        {activeTab === 'shop' && <ErrorBoundary key="shop" name="Shop"><TestBreak tab="shop" /><ShopTab store={store} onNavigateTab={handleNavigateTab} openPlanId={shopPlanRequest} onOpenPlanHandled={() => setShopPlanRequest(null)} openPanel={shopPanelRequest} onOpenPanelHandled={() => setShopPanelRequest(null)} /></ErrorBoundary>}
+        {activeTab === 'batch' && <ErrorBoundary key="freezer" name="Freezer"><TestBreak tab="batch" /><BatchTab store={store} onNavigateTab={handleNavigateTab} /></ErrorBoundary>}
+        {activeTab === 'settings' && <ErrorBoundary key="settings" name="Settings"><TestBreak tab="settings" /><SettingsTab store={store} onNavigateTab={handleNavigateTab} onOpenShopPanel={(panel) => { setShopPanelRequest(panel); setActiveTab('shop'); }} /></ErrorBoundary>}
       </main>
 
       {/* Kitchen timers keep going (and ring) on every tab; the Cook tab shows them at the top. */}
@@ -176,6 +185,33 @@ function TabButton({
       </div>
       <span className="text-[11px] sm:text-[11px] tracking-tight mt-0.5 whitespace-nowrap truncate w-full text-center">{label}</span>
     </button>
+  );
+}
+
+/**
+ * This phone couldn't save the latest changes (its storage for the app is full). Says so plainly,
+ * says whether they're still reaching the other phone, and offers a backup download.
+ */
+function SaveProblemBanner({ exportAll }: { exportAll: () => string }) {
+  const download = () => {
+    try {
+      const blob = new Blob([exportAll()], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `meal-planner-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch { /* nothing more to try */ }
+  };
+  const syncing = !!getGistConfig();
+  return (
+    <div className="shrink-0 bg-rose-50 border-b border-rose-200 text-rose-950 px-4 py-2 flex items-center gap-3 text-sm" role="alert" data-save-problem>
+      <span className="flex-1 min-w-0">
+        <strong>This phone couldn't save your latest changes</strong> (its storage is full).{' '}
+        {syncing ? "They're still being sent to the other phone." : 'Download a backup so nothing is lost.'}
+      </span>
+      <button type="button" onClick={download} className="h-8 px-3 rounded-lg bg-white border border-rose-300 text-rose-800 font-semibold cursor-pointer shrink-0" data-save-problem-backup>Backup</button>
+    </div>
   );
 }
 
