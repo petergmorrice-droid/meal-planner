@@ -6,7 +6,8 @@ import { Recipe, MealPlan, BatchItem, CookingMethod } from './types';
 export const METHOD_ORDER: CookingMethod[] = ['oven_hob', 'ninja'];
 export const METHOD_LABEL: Record<CookingMethod, string> = { oven_hob: 'Oven/Hob', ninja: 'Ninja' };
 
-const hasSteps = (steps?: string[]) => Array.isArray(steps) && steps.some((s) => typeof s === 'string' && s.trim() !== '');
+const hasSteps = (steps?: string[]) =>
+  Array.isArray(steps) && steps.some((s) => typeof s === 'string' && s.trim() !== '');
 
 /** The ways this recipe can actually be cooked: methods with written steps (or, failing that, the ones it's marked for). */
 export function recipeMethods(recipe: Recipe): CookingMethod[] {
@@ -34,7 +35,11 @@ export function formatMinutes(mins: number): string {
 }
 
 export const isVegetarianRecipe = (r: Recipe) =>
-  !!(r.isVegetarian || r.isVegan || r.tags?.some((t) => ['vegetarian', 'vegi', 'veggie', 'vegan'].includes(String(t).toLowerCase())));
+  !!(
+    r.isVegetarian ||
+    r.isVegan ||
+    r.tags?.some((t) => ['vegetarian', 'vegi', 'veggie', 'vegan'].includes(String(t).toLowerCase()))
+  );
 export const isVeganRecipe = (r: Recipe) => !!(r.isVegan || r.tags?.some((t) => String(t).toLowerCase() === 'vegan'));
 
 export interface RecipeHistory {
@@ -45,7 +50,8 @@ export interface RecipeHistory {
 }
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const todayISO = () => iso(new Date());
 
 /** When each recipe was last on the plan and when it's next on it, from all your weeks. */
@@ -66,8 +72,9 @@ export function recipeHistories(plans: MealPlan[] | undefined, today: string): M
       for (const meal of day.meals) {
         if (!meal?.recipeId) continue;
         const h = out.get(meal.recipeId) || {};
-        if (date < today) { if (!h.lastHad || date > h.lastHad) h.lastHad = date; }
-        else if (!h.nextPlanned || date < h.nextPlanned) h.nextPlanned = date;
+        if (date < today) {
+          if (!h.lastHad || date > h.lastHad) h.lastHad = date;
+        } else if (!h.nextPlanned || date < h.nextPlanned) h.nextPlanned = date;
         out.set(meal.recipeId, h);
       }
     });
@@ -84,7 +91,10 @@ export function formatAgo(date: string, today: string): string {
   if (d <= 0) return 'today';
   if (d === 1) return 'yesterday';
   if (d < 7) return `${d} days ago`;
-  if (d < 56) { const w = Math.round(d / 7); return w === 1 ? '1 week ago' : `${w} weeks ago`; }
+  if (d < 56) {
+    const w = Math.round(d / 7);
+    return w === 1 ? '1 week ago' : `${w} weeks ago`;
+  }
   const m = Math.round(d / 30.44);
   if (m >= 12) return 'over a year ago';
   return `${m} months ago`;
@@ -105,14 +115,21 @@ export function formatPlannedDay(date: string, today: string): string {
 export function formatShortDate(date: string, today: string): string {
   const dt = new Date(date + 'T12:00:00');
   const sameYear = date.slice(0, 4) === today.slice(0, 4);
-  return dt.toLocaleDateString('en-GB', sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
+  return dt.toLocaleDateString(
+    'en-GB',
+    sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' },
+  );
 }
 
 /** This recipe's batches in the freezer (linked to it, or with exactly its name), oldest first. */
 export function freezerBatchesFor(recipe: Recipe, batches: BatchItem[] | undefined): BatchItem[] {
   const name = (recipe.name || '').trim().toLowerCase();
   return (batches || [])
-    .filter((b) => (b.recipeId ? b.recipeId === recipe.id : (b.name || '').trim().toLowerCase() === name) && (Number(b.portions) || 0) > 0)
+    .filter(
+      (b) =>
+        (b.recipeId ? b.recipeId === recipe.id : (b.name || '').trim().toLowerCase() === name) &&
+        (Number(b.portions) || 0) > 0,
+    )
     .sort((a, b) => String(a.dateAdded || '').localeCompare(String(b.dateAdded || '')));
 }
 
@@ -134,27 +151,45 @@ export function readRecipeSort(): RecipeSort {
   try {
     const v = localStorage.getItem(RECIPE_SORT_KEY);
     return RECIPE_SORTS.some((s) => s.id === v) ? (v as RecipeSort) : 'az';
-  } catch { return 'az'; }
+  } catch {
+    return 'az';
+  }
 }
 export function saveRecipeSort(sort: RecipeSort) {
-  try { localStorage.setItem(RECIPE_SORT_KEY, sort); } catch { /* per-phone convenience only */ }
+  try {
+    localStorage.setItem(RECIPE_SORT_KEY, sort);
+  } catch {
+    /* per-phone convenience only */
+  }
 }
 
 /**
  * Recipes in the chosen order. "Not had lately": never had first, then the longest since you
  * last had it; anything already planned from today on goes to the end.
  */
-export function sortRecipes(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>, favouritesFirst = false, ratings?: Map<string, number>): Recipe[] {
+export function sortRecipes(
+  recipes: Recipe[],
+  sort: RecipeSort,
+  histories: Map<string, RecipeHistory>,
+  favouritesFirst = false,
+  ratings?: Map<string, number>,
+): Recipe[] {
   const sorted = sortRecipesBy(recipes, sort, histories, ratings);
   if (!favouritesFirst) return sorted;
   return [...sorted.filter((r) => r.favourite), ...sorted.filter((r) => !r.favourite)];
 }
 
-function sortRecipesBy(recipes: Recipe[], sort: RecipeSort, histories: Map<string, RecipeHistory>, ratings?: Map<string, number>): Recipe[] {
+function sortRecipesBy(
+  recipes: Recipe[],
+  sort: RecipeSort,
+  histories: Map<string, RecipeHistory>,
+  ratings?: Map<string, number>,
+): Recipe[] {
   const byName = (a: Recipe, b: Recipe) => (a.name || '').localeCompare(b.name || '', 'en-GB', { sensitivity: 'base' });
   const list = [...recipes];
   // Best rated: highest average first; ones nobody's rated yet go last, A–Z.
-  if (sort === 'rated') return list.sort((a, b) => (ratings?.get(b.id) ?? -1) - (ratings?.get(a.id) ?? -1) || byName(a, b));
+  if (sort === 'rated')
+    return list.sort((a, b) => (ratings?.get(b.id) ?? -1) - (ratings?.get(a.id) ?? -1) || byName(a, b));
   if (sort === 'added') return list;
   if (sort === 'newest') return list.reverse();
   if (sort === 'az') return list.sort(byName);
@@ -175,10 +210,18 @@ function sortRecipesBy(recipes: Recipe[], sort: RecipeSort, histories: Map<strin
 
 export const FAVOURITES_FIRST_KEY = 'recipe_fav_first';
 export function readFavouritesFirst(): boolean {
-  try { return localStorage.getItem(FAVOURITES_FIRST_KEY) === '1'; } catch { return false; }
+  try {
+    return localStorage.getItem(FAVOURITES_FIRST_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 export function saveFavouritesFirst(on: boolean) {
-  try { localStorage.setItem(FAVOURITES_FIRST_KEY, on ? '1' : '0'); } catch { /* per-phone convenience only */ }
+  try {
+    localStorage.setItem(FAVOURITES_FIRST_KEY, on ? '1' : '0');
+  } catch {
+    /* per-phone convenience only */
+  }
 }
 
 /** Search a recipe's name, ingredients, tags, intro and your notes. */
@@ -186,11 +229,13 @@ export function recipeMatchesSearch(recipe: Recipe, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   const has = (v?: string) => typeof v === 'string' && v.toLowerCase().includes(q);
-  return has(recipe.name)
-    || (recipe.ingredients || []).some((i) => has(i?.name) || has(i?.note))
-    || (recipe.tags || []).some((t) => has(t))
-    || has(recipe.description)
-    || has(recipe.notes);
+  return (
+    has(recipe.name) ||
+    (recipe.ingredients || []).some((i) => has(i?.name) || has(i?.note)) ||
+    (recipe.tags || []).some((t) => has(t)) ||
+    has(recipe.description) ||
+    has(recipe.notes)
+  );
 }
 
 export type QuickFilter = 'favourites' | 'not_lately' | 'quick' | 'veggie' | 'ninja' | 'freezer';
@@ -213,35 +258,56 @@ export function matchesQuickFilters(
 ): boolean {
   return filters.every((f) => {
     switch (f) {
-      case 'favourites': return !!recipe.favourite;
+      case 'favourites':
+        return !!recipe.favourite;
       case 'not_lately': {
         if (ctx.history?.nextPlanned) return false;
         return !ctx.history?.lastHad || daysBetween(ctx.history.lastHad, ctx.today) >= NOT_LATELY_DAYS;
       }
-      case 'quick': { const t = totalMinutes(recipe); return t !== null && t <= 30; }
-      case 'veggie': return isVegetarianRecipe(recipe);
-      case 'ninja': return recipeMethods(recipe).includes('ninja');
-      case 'freezer': return ctx.freezer > 0;
-      default: return true;
+      case 'quick': {
+        const t = totalMinutes(recipe);
+        return t !== null && t <= 30;
+      }
+      case 'veggie':
+        return isVegetarianRecipe(recipe);
+      case 'ninja':
+        return recipeMethods(recipe).includes('ninja');
+      case 'freezer':
+        return ctx.freezer > 0;
+      default:
+        return true;
     }
   });
 }
 
 /** Comparable form of a recipe name: case, punctuation and "&"/"and" don't matter. */
 export function normaliseRecipeName(name: string): string {
-  return (name || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\b(the|a|an)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  return (name || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(the|a|an)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 const normaliseUrl = (u?: string) => {
   if (!u) return '';
-  try { const x = new URL(u.trim()); return (x.hostname.replace(/^www\./, '') + x.pathname.replace(/\/+$/, '')).toLowerCase(); } catch { return ''; }
+  try {
+    const x = new URL(u.trim());
+    return (x.hostname.replace(/^www\./, '') + x.pathname.replace(/\/+$/, '')).toLowerCase();
+  } catch {
+    return '';
+  }
 };
 /** A recipe already in the book with the same name or from the same web page. */
 export function findDuplicate(recipes: Recipe[], candidate: Recipe): Recipe | undefined {
   const name = normaliseRecipeName(candidate.name);
   const url = normaliseUrl(candidate.sourceUrl);
-  return recipes.find((r) => r.id !== candidate.id && (
-    (name && normaliseRecipeName(r.name) === name) || (url && normaliseUrl(r.sourceUrl) === url)
-  ));
+  return recipes.find(
+    (r) =>
+      r.id !== candidate.id &&
+      ((name && normaliseRecipeName(r.name) === name) || (url && normaliseUrl(r.sourceUrl) === url)),
+  );
 }
 
 /** True when the text is just a web address (so it's a link to import, not a recipe). */
@@ -253,7 +319,12 @@ export function isJustAUrl(text: string): boolean {
 /** The recipe as plain text for sharing (WhatsApp, a text, an email). */
 export function recipeShareText(
   recipe: Recipe,
-  opts: { people?: number; method?: CookingMethod; formatAmount: (amount: number, unit?: string) => string; scaleStep?: (step: string, scale: number) => string },
+  opts: {
+    people?: number;
+    method?: CookingMethod;
+    formatAmount: (amount: number, unit?: string) => string;
+    scaleStep?: (step: string, scale: number) => string;
+  },
 ): string {
   const base = recipe.servings || 2;
   const people = opts.people || base;
@@ -300,7 +371,11 @@ export function recipeIntro(recipe: Recipe): string {
 
 /** "bbcgoodfood.com" from a link, for showing it short. */
 export function siteName(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }
 
 /**

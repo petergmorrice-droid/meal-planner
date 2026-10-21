@@ -5,21 +5,26 @@ import { Recipe, CookingMethod, Ingredient, GroceryItem } from '../types';
 import { catalogForState } from '../shopping';
 import { GROCERY_AISLES, getGroceryAisle, type FoodAisle } from '../utils';
 import { recipeMethods, METHOD_LABEL, METHOD_ORDER } from '../recipeInfo';
-import type  { AppStore } from '../store';
+import type { AppStore } from '../store';
 
 const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-500';
-const AISLES = (Object.keys(GROCERY_AISLES) as FoodAisle[]).sort((a, b) => GROCERY_AISLES[a].order - GROCERY_AISLES[b].order);
-const titleCase = (s: string) => s.trim().replace(/\s+/g, ' ').replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+const AISLES = (Object.keys(GROCERY_AISLES) as FoodAisle[]).sort(
+  (a, b) => GROCERY_AISLES[a].order - GROCERY_AISLES[b].order,
+);
+const titleCase = (s: string) =>
+  s
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
 /** The steps being edited for a method, and how to write changes back to the recipe. */
 export function methodSteps(recipe: Recipe, method: CookingMethod) {
   const methods = recipeMethods(recipe);
   const steps: string[] = recipe.methodInstructions?.[method] || recipe.instructions || [];
-  const writeSteps = (next: string[]): Recipe => (
+  const writeSteps = (next: string[]): Recipe =>
     recipe.methodInstructions?.[method] || !recipe.instructions?.length || methods.length > 0
       ? { ...recipe, methodInstructions: { ...(recipe.methodInstructions || {}), [method]: next } }
-      : { ...recipe, instructions: next }
-  );
+      : { ...recipe, instructions: next };
   return { methods, steps, writeSteps };
 }
 
@@ -75,7 +80,9 @@ export function RecipeEditor({
     if (choice.kind === 'product') {
       if (choice.remember && store?.updateGroceryOverride) {
         const existing = store.state.groceryOverrides?.[choice.item.id] || {};
-        const aliases = Array.from(new Set([...(existing.aliases || choice.item.aliases || []), ing.name.trim()].filter(Boolean)));
+        const aliases = Array.from(
+          new Set([...(existing.aliases || choice.item.aliases || []), ing.name.trim()].filter(Boolean)),
+        );
         store.updateGroceryOverride(choice.item.id, { ...existing, aliases });
       }
       updateIngredient(idx, { groceryId: choice.item.id });
@@ -83,7 +90,12 @@ export function RecipeEditor({
       const id = `gdb-custom-${crypto.randomUUID()}`;
       const name = titleCase(ing.name);
       store?.updateGroceryOverride?.(id, {
-        id, name, category: GROCERY_AISLES[choice.aisle].name, unit: ing.unit || 'unit', increment: 1, cost: 0,
+        id,
+        name,
+        category: GROCERY_AISLES[choice.aisle].name,
+        unit: ing.unit || 'unit',
+        increment: 1,
+        cost: 0,
         aliases: Array.from(new Set([ing.name.trim(), name])),
       });
       updateIngredient(idx, { groceryId: id });
@@ -111,11 +123,13 @@ export function RecipeEditor({
           </label>
         )}
         <div className="grid grid-cols-3 gap-2">
-          {([
-            ['Prep (min)', 'prepTime'],
-            ['Cook (min)', 'cookTime'],
-            ['Serves', 'servings'],
-          ] as const).map(([label, key]) => (
+          {(
+            [
+              ['Prep (min)', 'prepTime'],
+              ['Cook (min)', 'cookTime'],
+              ['Serves', 'servings'],
+            ] as const
+          ).map(([label, key]) => (
             <label key={key} className="block">
               <span className="text-xs font-semibold text-zinc-600 block mb-1">{label}</span>
               <input
@@ -124,7 +138,12 @@ export function RecipeEditor({
                 min={key === 'servings' ? 1 : 0}
                 value={recipe[key] || ''}
                 placeholder={key === 'servings' ? '2' : '–'}
-                onChange={(e) => onChange({ ...recipe, [key]: e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                onChange={(e) =>
+                  onChange({
+                    ...recipe,
+                    [key]: e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0),
+                  })
+                }
                 aria-label={label}
                 className="w-full h-11 rounded-xl border border-zinc-300 px-3 text-base text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
               />
@@ -140,26 +159,38 @@ export function RecipeEditor({
                 type="button"
                 onClick={() => {
                   const cur = recipe.cookingMethods || methods;
-                  onChange({ ...recipe, cookingMethods: (on ? cur.filter((x) => x !== m) : [...cur, m]) as CookingMethod[] });
+                  onChange({
+                    ...recipe,
+                    cookingMethods: (on ? cur.filter((x) => x !== m) : [...cur, m]) as CookingMethod[],
+                  });
                 }}
                 aria-pressed={on}
                 className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-300'}`}
               >
-                {m === 'ninja' ? <Zap className="w-4 h-4" /> : <Flame className="w-4 h-4" />}{METHOD_LABEL[m]}
+                {m === 'ninja' ? <Zap className="w-4 h-4" /> : <Flame className="w-4 h-4" />}
+                {METHOD_LABEL[m]}
               </button>
             );
           })}
-          {([['Vegetarian', 'isVegetarian'], ['Vegan', 'isVegan']] as const).map(([label, key]) => {
+          {(
+            [
+              ['Vegetarian', 'isVegetarian'],
+              ['Vegan', 'isVegan'],
+            ] as const
+          ).map(([label, key]) => {
             const on = !!recipe[key];
             return (
               <button
                 key={key}
                 type="button"
-                onClick={() => onChange({ ...recipe, [key]: !on, ...(key === 'isVegan' && !on ? { isVegetarian: true } : {}) })}
+                onClick={() =>
+                  onChange({ ...recipe, [key]: !on, ...(key === 'isVegan' && !on ? { isVegetarian: true } : {}) })
+                }
                 aria-pressed={on}
                 className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${on ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-zinc-700 border-zinc-300'}`}
               >
-                <Leaf className="w-4 h-4" />{label}
+                <Leaf className="w-4 h-4" />
+                {label}
               </button>
             );
           })}
@@ -168,17 +199,28 @@ export function RecipeEditor({
 
       {/* Ingredients */}
       <section data-recipe-ingredients>
-        <h3 className={`${sectionTitle} mb-2`}>Ingredients <span className="normal-case font-medium tracking-normal">({recipe.ingredients.length})</span></h3>
+        <h3 className={`${sectionTitle} mb-2`}>
+          Ingredients <span className="normal-case font-medium tracking-normal">({recipe.ingredients.length})</span>
+        </h3>
         {unlinkedCount > 0 && (
-          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-2" data-unlinked-note>
-            {unlinkedCount === 1 ? '1 ingredient isn\'t' : `${unlinkedCount} ingredients aren't`} on your grocery list yet. Tap <strong>Shop as</strong> to pick what you buy, so it lands in the right aisle. Or leave it: it goes on the list as written.
+          <p
+            className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-2"
+            data-unlinked-note
+          >
+            {unlinkedCount === 1 ? "1 ingredient isn't" : `${unlinkedCount} ingredients aren't`} on your grocery list
+            yet. Tap <strong>Shop as</strong> to pick what you buy, so it lands in the right aisle. Or leave it: it goes
+            on the list as written.
           </p>
         )}
         <div className="space-y-2">
           {recipe.ingredients.map((ing, idx) => {
             const linked = productName(ing.groceryId);
             return (
-              <div key={ing.id || idx} className="bg-white rounded-xl border border-zinc-200 p-2 space-y-1.5" data-edit-ingredient={ing.name}>
+              <div
+                key={ing.id || idx}
+                className="bg-white rounded-xl border border-zinc-200 p-2 space-y-1.5"
+                data-edit-ingredient={ing.name}
+              >
                 <div className="flex gap-1.5">
                   <input
                     value={ing.name}
@@ -228,7 +270,9 @@ export function RecipeEditor({
                     onClick={() => setShopFor(idx)}
                     data-shop-as={ing.name}
                     className={`w-full h-10 rounded-lg px-2 text-sm flex items-center gap-2 cursor-pointer border ${
-                      linked ? 'border-zinc-200 bg-zinc-50 text-zinc-700' : 'border-amber-300 bg-amber-50 text-amber-900'
+                      linked
+                        ? 'border-zinc-200 bg-zinc-50 text-zinc-700'
+                        : 'border-amber-300 bg-amber-50 text-amber-900'
                     }`}
                   >
                     <ShoppingCart className="w-4 h-4 shrink-0" />
@@ -243,10 +287,19 @@ export function RecipeEditor({
           })}
           <button
             type="button"
-            onClick={() => onChange({ ...recipe, ingredients: [...recipe.ingredients, { id: crypto.randomUUID(), name: '', amount: 0, unit: '', category: 'Pantry' }] })}
+            onClick={() =>
+              onChange({
+                ...recipe,
+                ingredients: [
+                  ...recipe.ingredients,
+                  { id: crypto.randomUUID(), name: '', amount: 0, unit: '', category: 'Pantry' },
+                ],
+              })
+            }
             className="w-full h-11 rounded-xl border border-dashed border-emerald-300 text-emerald-800 bg-emerald-50/60 text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />Add ingredient
+            <Plus className="w-4 h-4" />
+            Add ingredient
           </button>
         </div>
       </section>
@@ -266,7 +319,12 @@ export function RecipeEditor({
                   onClick={() => onMethod(m)}
                   className={`h-9 px-3 rounded-lg text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${method === m ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600'}`}
                 >
-                  {m === 'ninja' ? <Zap className="w-4 h-4 text-amber-500" /> : <Flame className="w-4 h-4 text-rose-500" />}{METHOD_LABEL[m]}
+                  {m === 'ninja' ? (
+                    <Zap className="w-4 h-4 text-amber-500" />
+                  ) : (
+                    <Flame className="w-4 h-4 text-rose-500" />
+                  )}
+                  {METHOD_LABEL[m]}
                 </button>
               ))}
             </div>
@@ -275,7 +333,9 @@ export function RecipeEditor({
         <div className="space-y-2">
           {steps.map((step, idx) => (
             <div key={idx} className="flex gap-2 items-start">
-              <span className="w-8 h-8 rounded-full bg-zinc-200 text-zinc-700 text-sm font-bold flex items-center justify-center shrink-0 mt-1">{idx + 1}</span>
+              <span className="w-8 h-8 rounded-full bg-zinc-200 text-zinc-700 text-sm font-bold flex items-center justify-center shrink-0 mt-1">
+                {idx + 1}
+              </span>
               <textarea
                 value={step}
                 onChange={(e) => onChange(writeSteps(steps.map((s, i) => (i === idx ? e.target.value : s))))}
@@ -298,7 +358,8 @@ export function RecipeEditor({
             onClick={() => onChange(writeSteps([...steps, '']))}
             className="w-full h-11 rounded-xl border border-dashed border-emerald-300 text-emerald-800 bg-emerald-50/60 text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />Add step
+            <Plus className="w-4 h-4" />
+            Add step
           </button>
           {onWriteMethod && missingMethod && recipe.ingredients.length > 0 && (
             <button
@@ -309,9 +370,15 @@ export function RecipeEditor({
               className="w-full h-11 rounded-xl border border-dashed border-zinc-300 bg-white text-zinc-800 text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
             >
               {writing ? (
-                <><span className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-700 rounded-full animate-spin" />Writing {METHOD_LABEL[missingMethod]} steps…</>
+                <>
+                  <span className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-700 rounded-full animate-spin" />
+                  Writing {METHOD_LABEL[missingMethod]} steps…
+                </>
               ) : (
-                <><Sparkles className="w-4 h-4 text-emerald-600" />Write {METHOD_LABEL[missingMethod]} instructions with Gemini</>
+                <>
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  Write {METHOD_LABEL[missingMethod]} instructions with Gemini
+                </>
               )}
             </button>
           )}
@@ -362,7 +429,8 @@ export function RecipeEditor({
             onClick={onDelete}
             className="h-11 px-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-sm font-semibold inline-flex items-center gap-2 cursor-pointer"
           >
-            <Trash2 className="w-4 h-4" />Delete this recipe
+            <Trash2 className="w-4 h-4" />
+            Delete this recipe
           </button>
         </section>
       )}
@@ -401,17 +469,34 @@ export function ShopAsSheet({
 }) {
   const [query, setQuery] = useState('');
   const [remember, setRemember] = useState(true);
-  const [aisle, setAisle] = useState<FoodAisle>(() => getGroceryAisle({ name: ingredient.name, category: ingredient.category }));
-  const fuse = useMemo(() => new Fuse(products, { keys: [{ name: 'name', weight: 0.7 }, { name: 'aliases', weight: 0.5 }], threshold: 0.38, ignoreLocation: true }), [products]);
+  const [aisle, setAisle] = useState<FoodAisle>(() =>
+    getGroceryAisle({ name: ingredient.name, category: ingredient.category }),
+  );
+  const fuse = useMemo(
+    () =>
+      new Fuse(products, {
+        keys: [
+          { name: 'name', weight: 0.7 },
+          { name: 'aliases', weight: 0.5 },
+        ],
+        threshold: 0.38,
+        ignoreLocation: true,
+      }),
+    [products],
+  );
   const results = useMemo(() => {
     const q = (query.trim() || ingredient.name.trim()).toLowerCase();
     if (!q) return [];
     const exact = query.trim()
-      ? products.filter((p) => p.name.toLowerCase().includes(q) || (p.aliases || []).some((a) => a.toLowerCase().includes(q)))
+      ? products.filter(
+          (p) => p.name.toLowerCase().includes(q) || (p.aliases || []).some((a) => a.toLowerCase().includes(q)),
+        )
       : [];
     const fuzzy = fuse.search(q).map((r) => r.item);
     const seen = new Set<string>();
-    return [...exact, ...fuzzy].filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true))).slice(0, query.trim() ? 12 : 5);
+    return [...exact, ...fuzzy]
+      .filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)))
+      .slice(0, query.trim() ? 12 : 5);
   }, [query, ingredient.name, products, fuse]);
   const amount = [ingredient.amount || '', ingredient.unit || ''].filter(Boolean).join(' ');
 
@@ -427,9 +512,18 @@ export function ShopAsSheet({
         <div className="px-4 pt-4 pb-3 border-b border-zinc-200 flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <h3 className="text-base font-bold text-zinc-900">What do you buy for this?</h3>
-            <p className="text-sm text-zinc-600 break-words">{amount ? `${amount} ` : ''}{ingredient.name}{ingredient.note ? `, ${ingredient.note}` : ''}</p>
+            <p className="text-sm text-zinc-600 break-words">
+              {amount ? `${amount} ` : ''}
+              {ingredient.name}
+              {ingredient.note ? `, ${ingredient.note}` : ''}
+            </p>
           </div>
-          <button type="button" onClick={onClose} className="w-10 h-10 rounded-full border border-zinc-200 flex items-center justify-center shrink-0 cursor-pointer" aria-label="Close">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-10 h-10 rounded-full border border-zinc-200 flex items-center justify-center shrink-0 cursor-pointer"
+            aria-label="Close"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -447,31 +541,38 @@ export function ShopAsSheet({
             />
           </div>
           <div>
-            <span className="text-xs font-semibold text-zinc-500 block mb-1.5">{query.trim() ? 'On your grocery list' : 'Closest on your grocery list'}</span>
+            <span className="text-xs font-semibold text-zinc-500 block mb-1.5">
+              {query.trim() ? 'On your grocery list' : 'Closest on your grocery list'}
+            </span>
             {results.length > 0 ? (
               <>
-              <ul className="rounded-xl border border-zinc-200 divide-y divide-zinc-100">
-                {results.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => onChoose({ kind: 'product', item: p, remember })}
-                      data-product={p.name}
-                      className="w-full text-left px-3 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-zinc-50"
-                    >
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-[15px] font-medium text-zinc-900 truncate">{p.name}</span>
-                        <span className="block text-xs text-zinc-500">{GROCERY_AISLES[getGroceryAisle(p)].name}</span>
-                      </span>
-                      {currentId === p.id && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <label className="flex items-center gap-2 mt-2 text-sm text-zinc-700 cursor-pointer">
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="rounded border-zinc-300" />
-                Remember for next time (“{ingredient.name.trim()}” will match it)
-              </label>
+                <ul className="rounded-xl border border-zinc-200 divide-y divide-zinc-100">
+                  {results.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => onChoose({ kind: 'product', item: p, remember })}
+                        data-product={p.name}
+                        className="w-full text-left px-3 py-2.5 flex items-center gap-2 cursor-pointer hover:bg-zinc-50"
+                      >
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-[15px] font-medium text-zinc-900 truncate">{p.name}</span>
+                          <span className="block text-xs text-zinc-500">{GROCERY_AISLES[getGroceryAisle(p)].name}</span>
+                        </span>
+                        {currentId === p.id && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <label className="flex items-center gap-2 mt-2 text-sm text-zinc-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    className="rounded border-zinc-300"
+                  />
+                  Remember for next time (“{ingredient.name.trim()}” will match it)
+                </label>
               </>
             ) : (
               <p className="text-sm text-zinc-500">Nothing close. Search for it, or add it below.</p>
@@ -488,7 +589,11 @@ export function ShopAsSheet({
                 aria-label="Aisle"
                 className="w-full h-11 rounded-xl border border-zinc-300 px-2 text-base sm:text-sm bg-white"
               >
-                {AISLES.map((a) => <option key={a} value={a}>{GROCERY_AISLES[a].name}</option>)}
+                {AISLES.map((a) => (
+                  <option key={a} value={a}>
+                    {GROCERY_AISLES[a].name}
+                  </option>
+                ))}
               </select>
             </label>
             <button
@@ -497,7 +602,8 @@ export function ShopAsSheet({
               data-add-new-product
               className="w-full h-11 rounded-xl bg-emerald-600 text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />Add “{titleCase(ingredient.name)}” to my grocery list
+              <Plus className="w-4 h-4" />
+              Add “{titleCase(ingredient.name)}” to my grocery list
             </button>
             <button
               type="button"

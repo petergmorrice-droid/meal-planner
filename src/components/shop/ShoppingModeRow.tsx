@@ -21,12 +21,21 @@ interface ShoppingModeItemRowProps {
 }
 
 /** The (i) on a shopping-mode row: doesn't tick it or start a press-and-hold. */
-function InfoButton({ item, onInfo }: { item: AggregatedShoppingListItem; onInfo: (item: AggregatedShoppingListItem) => void }) {
+function InfoButton({
+  item,
+  onInfo,
+}: {
+  item: AggregatedShoppingListItem;
+  onInfo: (item: AggregatedShoppingListItem) => void;
+}) {
   return (
     <button
       type="button"
       onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => { e.stopPropagation(); onInfo(item); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onInfo(item);
+      }}
       className="w-9 h-9 -mr-1 shrink-0 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 cursor-pointer"
       aria-label={`About ${item.name}: what it's for and who added it`}
       data-item-info
@@ -41,7 +50,10 @@ function usePressHold(onHold: () => void, ms = 550) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
   const start = useRef<{ x: number; y: number } | null>(null);
-  const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
+  const clear = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
   useEffect(() => clear, []);
   return {
     handlers: {
@@ -49,7 +61,10 @@ function usePressHold(onHold: () => void, ms = 550) {
         held.current = false;
         start.current = { x: e.clientX, y: e.clientY };
         clear();
-        timer.current = setTimeout(() => { held.current = true; onHold(); }, ms);
+        timer.current = setTimeout(() => {
+          held.current = true;
+          onHold();
+        }, ms);
       },
       onPointerMove: (e: React.PointerEvent) => {
         if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) clear();
@@ -60,13 +75,20 @@ function usePressHold(onHold: () => void, ms = 550) {
       onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
     },
     /** True (once) if the press that just ended was a hold, so the tap that follows is ignored. */
-    wasHeld: () => { const h = held.current; held.current = false; return h; },
+    wasHeld: () => {
+      const h = held.current;
+      held.current = false;
+      return h;
+    },
   };
 }
 
 /** "Out of stock" label on a row. */
 const OutOfStockPill = () => (
-  <span className="shrink-0 text-xs font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1" data-out-of-stock>
+  <span
+    className="shrink-0 text-xs font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1"
+    data-out-of-stock
+  >
     Out of stock
   </span>
 );
@@ -76,7 +98,10 @@ function UndoTick({ name, onUndo }: { name: string; onUndo: () => void }) {
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onUndo(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onUndo();
+      }}
       className="shrink-0 px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 text-sm font-semibold cursor-pointer active:bg-emerald-50"
       aria-label={`Undo: ${name} not bought`}
       data-undo-tick
@@ -100,7 +125,9 @@ export function ShoppingModeItemRow({
   const note = noteLook(noteAuthor(item.parts || []));
   const tickerLook = personLook(item.checkedBy);
   const press = usePressHold(() => onHold?.(item.id));
-  const tap = () => { if (!press.wasHeld()) onToggle(item.id); };
+  const tap = () => {
+    if (!press.wasHeld()) onToggle(item.id);
+  };
   const out = !!item.outOfStock;
   const noCallout = { WebkitTouchCallout: 'none' } as React.CSSProperties;
   if (compact) {
@@ -129,27 +156,41 @@ export function ShoppingModeItemRow({
           {item.checked && <Check className="w-4 h-4 stroke-[3]" />}
         </button>
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <span className={`text-base font-semibold truncate ${item.checked ? 'line-through text-zinc-400 font-medium' : out ? 'text-zinc-500' : 'text-zinc-900'}`}>
+          <span
+            className={`text-base font-semibold truncate ${item.checked ? 'line-through text-zinc-400 font-medium' : out ? 'text-zinc-500' : 'text-zinc-900'}`}
+          >
             {item.name}
           </span>
           {item.checkCupboard && !item.checked && (
-            <span className="shrink-0 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-px" title="Store-cupboard item: check you have it">
+            <span
+              className="shrink-0 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-px"
+              title="Store-cupboard item: check you have it"
+            >
               cupboard
             </span>
           )}
           {item.needsCheck && !item.checked && (
-            <span className="shrink-0 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 py-px" title={item.quantityNote}>
+            <span
+              className="shrink-0 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 py-px"
+              title={item.quantityNote}
+            >
               check
             </span>
           )}
           {addedBy && !item.checked && <PersonMark who={addedBy} what="Added or changed" />}
           {item.note && (
             <span className={`min-w-0 truncate text-xs inline-flex items-center gap-0.5 ${note.text}`} data-row-note>
-              <StickyNote className={`w-3 h-3 shrink-0 ${note.icon}`} />{item.note}
+              <StickyNote className={`w-3 h-3 shrink-0 ${note.icon}`} />
+              {item.note}
             </span>
           )}
           {tickedBy && !justTicked && (
-            <span className={`shrink-0 text-xs font-semibold px-1.5 py-px rounded-full ring-1 ring-inset ${tickerLook ? tickerLook.mark : 'text-emerald-700 ring-emerald-200'}`} data-ticked-by>✓ {tickedBy}</span>
+            <span
+              className={`shrink-0 text-xs font-semibold px-1.5 py-px rounded-full ring-1 ring-inset ${tickerLook ? tickerLook.mark : 'text-emerald-700 ring-emerald-200'}`}
+              data-ticked-by
+            >
+              ✓ {tickedBy}
+            </span>
           )}
         </div>
         {justTicked ? (
@@ -161,7 +202,11 @@ export function ShoppingModeItemRow({
             <span className={`text-base font-bold tabular-nums ${item.checked ? 'text-zinc-400' : 'text-emerald-700'}`}>
               {shopQuantityText(item)}
             </span>
-            {item.neededText && !item.checked && <span className="text-[11px] text-zinc-500 tabular-nums" data-row-need>need {item.neededText}</span>}
+            {item.neededText && !item.checked && (
+              <span className="text-[11px] text-zinc-500 tabular-nums" data-row-need>
+                need {item.neededText}
+              </span>
+            )}
           </span>
         )}
         {onInfo && !justTicked && <InfoButton item={item} onInfo={onInfo} />}
@@ -178,10 +223,10 @@ export function ShoppingModeItemRow({
         justTicked
           ? 'bg-emerald-50/70 border-emerald-200'
           : out
-          ? 'bg-amber-50/60 border-amber-200'
-          : item.checked
-          ? 'bg-zinc-100/60 border-zinc-200/70 opacity-55'
-          : 'bg-white border-zinc-200/90 shadow-2xs hover:border-zinc-300'
+            ? 'bg-amber-50/60 border-amber-200'
+            : item.checked
+              ? 'bg-zinc-100/60 border-zinc-200/70 opacity-55'
+              : 'bg-white border-zinc-200/90 shadow-2xs hover:border-zinc-300'
       }`}
       data-row="detailed"
       data-just-ticked={justTicked || undefined}
@@ -189,22 +234,28 @@ export function ShoppingModeItemRow({
       {/* Left: Item name & Quantity with for meal in small print */}
       <div className="flex-1 min-w-0 pr-2">
         {/* Large item name */}
-        <p className={`text-base sm:text-lg font-bold text-zinc-900 leading-snug tracking-tight flex items-center gap-1.5 ${
-          item.checked ? 'line-through text-zinc-400 font-medium' : ''
-        }`}>
+        <p
+          className={`text-base sm:text-lg font-bold text-zinc-900 leading-snug tracking-tight flex items-center gap-1.5 ${
+            item.checked ? 'line-through text-zinc-400 font-medium' : ''
+          }`}
+        >
           <span className="min-w-0">{item.name}</span>
           {addedBy && !item.checked && <PersonMark who={addedBy} what="Added or changed" />}
         </p>
 
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           {/* Large Quantity */}
-          <span className={`text-sm sm:text-base font-bold tabular-nums ${
-            item.checked ? 'text-zinc-400' : 'text-emerald-700'
-          }`}>
+          <span
+            className={`text-sm sm:text-base font-bold tabular-nums ${
+              item.checked ? 'text-zinc-400' : 'text-emerald-700'
+            }`}
+          >
             {shopQuantityText(item)}
           </span>
           {item.neededText && !item.checked && (
-            <span className="text-xs text-zinc-600 tabular-nums" data-row-need>(meals use {item.neededText})</span>
+            <span className="text-xs text-zinc-600 tabular-nums" data-row-need>
+              (meals use {item.neededText})
+            </span>
           )}
 
           {/* for meal in small print */}
@@ -220,20 +271,33 @@ export function ShoppingModeItemRow({
             </span>
           )}
           {item.needsCheck && !item.checked && (
-            <span className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-1.5 py-0.5" title={item.quantityNote}>
+            <span
+              className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-1.5 py-0.5"
+              title={item.quantityNote}
+            >
               check amount
             </span>
           )}
         </div>
         {item.note && (
-          <p className={`text-sm mt-1 flex items-center gap-1 ${note.text}`} data-row-note><StickyNote className={`w-3.5 h-3.5 shrink-0 ${note.icon}`} />{item.note}</p>
+          <p className={`text-sm mt-1 flex items-center gap-1 ${note.text}`} data-row-note>
+            <StickyNote className={`w-3.5 h-3.5 shrink-0 ${note.icon}`} />
+            {item.note}
+          </p>
         )}
         {item.quantityNote && !item.checked && (
           <p className={`text-xs mt-1 ${item.needsCheck ? 'text-rose-600' : 'text-zinc-500'}`}>{item.quantityNote}</p>
         )}
       </div>
 
-      {tickedBy && !justTicked && <span className={`shrink-0 text-xs font-semibold px-1.5 py-px rounded-full ring-1 ring-inset ${tickerLook ? tickerLook.mark : 'text-emerald-700 ring-emerald-200'}`} data-ticked-by>✓ {tickedBy}</span>}
+      {tickedBy && !justTicked && (
+        <span
+          className={`shrink-0 text-xs font-semibold px-1.5 py-px rounded-full ring-1 ring-inset ${tickerLook ? tickerLook.mark : 'text-emerald-700 ring-emerald-200'}`}
+          data-ticked-by
+        >
+          ✓ {tickedBy}
+        </span>
+      )}
       {out && !justTicked && <OutOfStockPill />}
       {justTicked && <UndoTick name={item.name} onUndo={() => onToggle(item.id)} />}
       {onInfo && !justTicked && <InfoButton item={item} onInfo={onInfo} />}

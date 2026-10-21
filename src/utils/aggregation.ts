@@ -16,7 +16,7 @@ export function aggregateIngredients(items: ShoppingListItem[]): AggregatedQuant
   if (items.length === 0) return { amount: 0, unit: '', displayQuantity: '0' };
 
   const groups = new Map<string, number>();
-  items.forEach(item => {
+  items.forEach((item) => {
     const unit = canonicalUnit(item.unit);
     const amount = typeof item.amount === 'number' && isFinite(item.amount) ? item.amount : 0;
     groups.set(unit, (groups.get(unit) || 0) + amount);

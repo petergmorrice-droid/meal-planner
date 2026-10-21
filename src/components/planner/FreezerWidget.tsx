@@ -12,16 +12,16 @@ export default function FreezerWidget({ batches, recipes }: { batches: BatchItem
           </span>
         </div>
         <ul className="text-xs space-y-1.5 max-h-32 overflow-y-auto">
-          {batches.length === 0 && (
-             <li className="text-zinc-400 italic">No batches</li>
-          )}
+          {batches.length === 0 && <li className="text-zinc-400 italic">No batches</li>}
           {batches.map((batch: BatchItem) => {
             const recipe = batch.recipeId ? recipes.find((r: Recipe) => r.id === batch.recipeId) : null;
             const displayName = batch.name || recipe?.name || 'Freezer Batch';
             return (
               <li key={batch.id} className="flex justify-between items-center text-zinc-700">
                 <span className="truncate pr-2 font-normal">{displayName}</span>
-                <span className="font-semibold text-zinc-900 shrink-0">({batch.portions} {batch.portions === 1 ? 'meal' : 'meals'})</span>
+                <span className="font-semibold text-zinc-900 shrink-0">
+                  ({batch.portions} {batch.portions === 1 ? 'meal' : 'meals'})
+                </span>
               </li>
             );
           })}

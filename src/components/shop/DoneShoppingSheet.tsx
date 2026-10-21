@@ -46,7 +46,10 @@ export default function DoneShoppingSheet({
   const choose = (c: DoneChoice) => onChoose(c, outToNext);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
       <div
         className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto shadow-xl border border-zinc-200 animate-in slide-in-from-bottom-4 duration-150"
         onClick={(e) => e.stopPropagation()}
@@ -55,8 +58,16 @@ export default function DoneShoppingSheet({
         data-done-sheet
       >
         <div className="px-5 pt-5 pb-4 text-center border-b border-zinc-100">
-          <div className={`w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center ${allDone || newBest ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-700'}`}>
-            {newBest ? <Trophy className="w-6 h-6" /> : allDone ? <PartyPopper className="w-6 h-6" /> : <Check className="w-6 h-6 stroke-[3]" />}
+          <div
+            className={`w-12 h-12 rounded-2xl mx-auto mb-2 flex items-center justify-center ${allDone || newBest ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-700'}`}
+          >
+            {newBest ? (
+              <Trophy className="w-6 h-6" />
+            ) : allDone ? (
+              <PartyPopper className="w-6 h-6" />
+            ) : (
+              <Check className="w-6 h-6 stroke-[3]" />
+            )}
           </div>
           <h3 className="text-xl font-bold text-zinc-900" data-done-title>
             {allDone ? `All ${total} bought` : `${bought} of ${total} bought`}
@@ -67,10 +78,14 @@ export default function DoneShoppingSheet({
             </p>
           )}
           {newBest && (
-            <p className="text-sm font-semibold text-emerald-700 mt-1" data-done-best>{best === null ? 'Your first timed shop: the time to beat!' : `A new personal best! (was ${best} min)`}</p>
+            <p className="text-sm font-semibold text-emerald-700 mt-1" data-done-best>
+              {best === null ? 'Your first timed shop: the time to beat!' : `A new personal best! (was ${best} min)`}
+            </p>
           )}
           {!newBest && bigShop && best !== null && minutes !== null && (
-            <p className="text-sm text-zinc-500 mt-1" data-done-best>Your best: {best} min</p>
+            <p className="text-sm text-zinc-500 mt-1" data-done-best>
+              Your best: {best} min
+            </p>
           )}
         </div>
 
@@ -92,7 +107,9 @@ export default function DoneShoppingSheet({
                   <span>Put them on {nextWeekLabel} too</span>
                 </label>
               ) : null}
-              {!outToNext && <p className="text-xs text-amber-900/80 mt-1">Otherwise they stay on this list, marked out of stock.</p>}
+              {!outToNext && (
+                <p className="text-xs text-amber-900/80 mt-1">Otherwise they stay on this list, marked out of stock.</p>
+              )}
             </div>
           )}
 
@@ -150,7 +167,12 @@ export default function DoneShoppingSheet({
               </button>
             </>
           )}
-          <button type="button" onClick={onClose} className="w-full py-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 cursor-pointer" data-done-cancel>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 cursor-pointer"
+            data-done-cancel
+          >
             Keep shopping
           </button>
         </div>

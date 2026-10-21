@@ -36,7 +36,10 @@ function PartAmount({
   useEffect(() => setText(shown), [shown]);
 
   const commit = () => {
-    if (text.trim() === shown.trim() || !text.trim()) { setText(shown); return; }
+    if (text.trim() === shown.trim() || !text.trim()) {
+      setText(shown);
+      return;
+    }
     let { amount, unit } = parseQtyAndUnit(text, part.unit || 'item');
     // Typed "1.5 kg" for a line kept in grams: store 1500 g, so − / + still step in grams.
     const typed = unitInfo(unit);
@@ -69,7 +72,9 @@ function PartAmount({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={commit}
-          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
           className="w-20 text-center text-sm font-semibold text-zinc-900 bg-transparent border-0 outline-none focus:bg-white rounded"
           aria-label="Amount"
           data-amount
@@ -99,8 +104,12 @@ function AddExtra({ onAdd }: { onAdd: () => void }) {
     <div className="flex items-center gap-3" data-part-extra>
       <span className="flex-1 min-w-0 text-sm text-zinc-600 leading-snug">Added by you</span>
       <div className="flex items-center bg-zinc-50 border border-zinc-200 rounded-xl shrink-0">
-        <span className="w-10 h-10 flex items-center justify-center text-zinc-300" aria-hidden="true"><Minus className="w-4 h-4" /></span>
-        <span className="w-20 text-center text-sm font-semibold text-zinc-400" data-amount>0</span>
+        <span className="w-10 h-10 flex items-center justify-center text-zinc-300" aria-hidden="true">
+          <Minus className="w-4 h-4" />
+        </span>
+        <span className="w-20 text-center text-sm font-semibold text-zinc-400" data-amount>
+          0
+        </span>
         <button
           type="button"
           onClick={onAdd}
@@ -174,7 +183,10 @@ export default function ItemSheet({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150" onClick={saveAndClose}>
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+      onClick={saveAndClose}
+    >
       <div
         className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] flex flex-col shadow-xl border border-zinc-200 animate-in slide-in-from-bottom-4 duration-150"
         onClick={(e) => e.stopPropagation()}
@@ -195,40 +207,80 @@ export default function ItemSheet({
             ) : (
               <h3 className="text-lg font-semibold text-zinc-900 truncate">{row.name}</h3>
             )}
-            <p className="text-sm text-zinc-500 tabular-nums">{shopQuantityText(row)} on the list{row.checked ? ' · bought' : ''}</p>
-            {row.neededText && <p className="text-sm text-zinc-700 tabular-nums" data-item-sheet-need>Your meals use {row.neededText}</p>}
+            <p className="text-sm text-zinc-500 tabular-nums">
+              {shopQuantityText(row)} on the list{row.checked ? ' · bought' : ''}
+            </p>
+            {row.neededText && (
+              <p className="text-sm text-zinc-700 tabular-nums" data-item-sheet-need>
+                Your meals use {row.neededText}
+              </p>
+            )}
           </div>
-          <button type="button" onClick={saveAndClose} className="p-1.5 -mr-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer" aria-label="Close">
+          <button
+            type="button"
+            onClick={saveAndClose}
+            className="p-1.5 -mr-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer"
+            aria-label="Close"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="overflow-y-auto px-5 py-4 space-y-5">
           {row.outOfStock && (
-            <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5" data-item-out>
+            <div
+              className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5"
+              data-item-out
+            >
               <span className="flex-1 text-sm text-amber-950">Out of stock at the shop</span>
               {onBackInStock && (
-                <button type="button" onClick={onBackInStock} className="shrink-0 text-sm font-semibold text-amber-900 underline cursor-pointer" data-back-in-stock>
+                <button
+                  type="button"
+                  onClick={onBackInStock}
+                  className="shrink-0 text-sm font-semibold text-amber-900 underline cursor-pointer"
+                  data-back-in-stock
+                >
                   Back on the list
                 </button>
               )}
             </div>
           )}
           <section className="space-y-3">
-            {[...row.parts].sort((a, b) => partOrder(a) - partOrder(b)).map((part) => (
-              <PartAmount key={part.id} part={part} label={partDetail(part)} by={isHandAdded(part) ? part.editedBy || part.addedBy : undefined} onStep={onStep} onSet={onSetAmount} />
-            ))}
+            {[...row.parts]
+              .sort((a, b) => partOrder(a) - partOrder(b))
+              .map((part) => (
+                <PartAmount
+                  key={part.id}
+                  part={part}
+                  label={partDetail(part)}
+                  by={isHandAdded(part) ? part.editedBy || part.addedBy : undefined}
+                  onStep={onStep}
+                  onSet={onSetAmount}
+                />
+              ))}
             {onAddExtra && !row.parts.some(isHandAdded) && <AddExtra onAdd={onAddExtra} />}
-            {row.quantityNote && <p className={`text-xs ${row.needsCheck ? 'text-rose-700' : 'text-zinc-500'}`}>{row.quantityNote}</p>}
+            {row.quantityNote && (
+              <p className={`text-xs ${row.needsCheck ? 'text-rose-700' : 'text-zinc-500'}`}>{row.quantityNote}</p>
+            )}
             {hasStaple && (
-              <button type="button" onClick={onManageStaples} className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer" data-manage-staples>
+              <button
+                type="button"
+                onClick={onManageStaples}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                data-manage-staples
+              >
                 <RotateCcw className="w-3.5 h-3.5" /> Change weekly staples…
               </button>
             )}
           </section>
 
           {onSaveAsProduct && (
-            <button type="button" onClick={onSaveAsProduct} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-left cursor-pointer" data-item-save-product>
+            <button
+              type="button"
+              onClick={onSaveAsProduct}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-left cursor-pointer"
+              data-item-save-product
+            >
               <PackagePlus className="w-5 h-5 shrink-0 text-emerald-700" />
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-emerald-950">Save as a product for next time</span>
@@ -238,12 +290,19 @@ export default function ItemSheet({
           )}
 
           <label className="block">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 mb-1"><StickyNote className="w-3.5 h-3.5" /> Note{row.note && <PersonMark who={noteAuthor(row.parts)} what="Note written" />}</span>
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 mb-1">
+              <StickyNote className="w-3.5 h-3.5" /> Note
+              {row.note && <PersonMark who={noteAuthor(row.parts)} what="Note written" />}
+            </span>
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              onBlur={() => { if (note.trim() !== (row.note || '')) onSaveNote(note.trim()); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              onBlur={() => {
+                if (note.trim() !== (row.note || '')) onSaveNote(note.trim());
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
               placeholder="e.g. semi-skimmed, big tub, if on offer"
               className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-[15px] focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none"
               data-item-note
@@ -261,7 +320,9 @@ export default function ItemSheet({
                 data-item-aisle
               >
                 {aisles.map((a) => (
-                  <option key={a} value={a}>{GROCERY_AISLES[a].name}</option>
+                  <option key={a} value={a}>
+                    {GROCERY_AISLES[a].name}
+                  </option>
                 ))}
               </select>
             </span>
@@ -277,7 +338,9 @@ export default function ItemSheet({
           >
             <Heart className={`w-5 h-5 shrink-0 ${isFavourite ? 'text-rose-500 fill-rose-500' : 'text-zinc-400'}`} />
             <span className="min-w-0">
-              <span className="block text-sm font-semibold text-zinc-900">{isFavourite ? 'A favourite' : 'Make it a favourite'}</span>
+              <span className="block text-sm font-semibold text-zinc-900">
+                {isFavourite ? 'A favourite' : 'Make it a favourite'}
+              </span>
               <span className="block text-xs text-zinc-500">Favourites come first when you add items</span>
             </span>
           </button>

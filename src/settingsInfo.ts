@@ -21,10 +21,13 @@ export function agoText(when: Date | string | number | null | undefined, now = D
 export function syncProblemText(err: string | null | undefined): string {
   const e = String(err || '');
   if (!e) return '';
-  if (/401|bad credentials|unauthori[sz]ed/i.test(e)) return "GitHub didn't accept the token (it may have expired). Make a new one and connect again.";
-  if (/404|not found/i.test(e)) return "Couldn't find the shared data on GitHub. Check the sync code, or connect again.";
+  if (/401|bad credentials|unauthori[sz]ed/i.test(e))
+    return "GitHub didn't accept the token (it may have expired). Make a new one and connect again.";
+  if (/404|not found/i.test(e))
+    return "Couldn't find the shared data on GitHub. Check the sync code, or connect again.";
   if (/403|rate limit|abuse/i.test(e)) return 'GitHub is limiting requests for a while. It will try again by itself.';
-  if (/failed to fetch|network|offline|load failed|timed? ?out|abort/i.test(e)) return "No internet just now. Changes are kept on this phone and sync when it's back.";
+  if (/failed to fetch|network|offline|load failed|timed? ?out|abort/i.test(e))
+    return "No internet just now. Changes are kept on this phone and sync when it's back.";
   return e;
 }
 
@@ -32,7 +35,8 @@ export function syncProblemText(err: string | null | undefined): string {
 export function backupSummary(text: string): { ok: boolean; parts: string[]; state?: any } {
   try {
     const s = JSON.parse(text);
-    if (!s || typeof s !== 'object' || (!Array.isArray(s.recipes) && !Array.isArray(s.mealPlans))) return { ok: false, parts: [] };
+    if (!s || typeof s !== 'object' || (!Array.isArray(s.recipes) && !Array.isArray(s.mealPlans)))
+      return { ok: false, parts: [] };
     const n = (a: any) => (Array.isArray(a) ? a.length : 0);
     const plural = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
     return {
@@ -45,5 +49,7 @@ export function backupSummary(text: string): { ok: boolean; parts: string[]; sta
         plural(n(s.batches), 'freezer item', 'freezer items'),
       ],
     };
-  } catch { return { ok: false, parts: [] }; }
+  } catch {
+    return { ok: false, parts: [] };
+  }
 }

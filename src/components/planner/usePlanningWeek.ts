@@ -5,13 +5,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MealPlan } from '../../types';
 import {
-  createEmptyPlan, formatDateISO, formatWeekRange, getMonday, canPlanFollowingWeek, isCurrentOrFutureWeek,
-  isWeekWithinForwardLimit, MAX_FORWARD_WEEKS, syncRecurringStaplesForPlan,
+  createEmptyPlan,
+  formatDateISO,
+  formatWeekRange,
+  getMonday,
+  canPlanFollowingWeek,
+  isCurrentOrFutureWeek,
+  isWeekWithinForwardLimit,
+  MAX_FORWARD_WEEKS,
+  syncRecurringStaplesForPlan,
 } from '../../utils';
 import { preferredWeekStart } from '../../planning';
 import type { AppStore } from '../../store';
 
-export function usePlanningWeek(store: AppStore, targetPlanId: string | null | undefined, setToastMessage: (msg: string | null) => void) {
+export function usePlanningWeek(
+  store: AppStore,
+  targetPlanId: string | null | undefined,
+  setToastMessage: (msg: string | null) => void,
+) {
   const currentMondayStr = formatDateISO(getMonday(new Date()));
   const nextMondayDate = new Date(currentMondayStr + 'T00:00:00');
   nextMondayDate.setDate(nextMondayDate.getDate() + 7);
@@ -23,22 +34,31 @@ export function usePlanningWeek(store: AppStore, targetPlanId: string | null | u
 
   /** "This Week", "Next Week", "Last Week", or the dates. */
   const weekLabel = (startDate: string) =>
-    startDate === currentMondayStr ? 'This Week'
-      : startDate === nextMondayStr ? 'Next Week'
-      : startDate === lastMondayStr ? 'Last Week'
-      : formatWeekRange(startDate);
+    startDate === currentMondayStr
+      ? 'This Week'
+      : startDate === nextMondayStr
+        ? 'Next Week'
+        : startDate === lastMondayStr
+          ? 'Last Week'
+          : formatWeekRange(startDate);
 
   // This week and later ones within the forward limit (never past weeks).
   const allowedPlans: MealPlan[] = useMemo(() => {
     return (store.state.mealPlans || [])
-      .filter((p: MealPlan) => isCurrentOrFutureWeek(p.startDate) && isWeekWithinForwardLimit(p.startDate, undefined, maxWeeks))
+      .filter(
+        (p: MealPlan) =>
+          isCurrentOrFutureWeek(p.startDate) && isWeekWithinForwardLimit(p.startDate, undefined, maxWeeks),
+      )
       .sort((a: MealPlan, b: MealPlan) => a.startDate.localeCompare(b.startDate));
   }, [store.state.mealPlans, currentMondayStr, maxWeeks]);
 
   // The week asked for (from another tab), else the one you're most likely planning.
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
     const plans = (store.state.mealPlans || [])
-      .filter((p: MealPlan) => isCurrentOrFutureWeek(p.startDate) && isWeekWithinForwardLimit(p.startDate, undefined, maxWeeks))
+      .filter(
+        (p: MealPlan) =>
+          isCurrentOrFutureWeek(p.startDate) && isWeekWithinForwardLimit(p.startDate, undefined, maxWeeks),
+      )
       .sort((a: MealPlan, b: MealPlan) => a.startDate.localeCompare(b.startDate));
 
     const preferredId = targetPlanId || store.selectedPlanId;
@@ -48,7 +68,9 @@ export function usePlanningWeek(store: AppStore, targetPlanId: string | null | u
     }
 
     // Monday–Thursday: this week (what's for tea tonight); Friday–Sunday: next week (planning time).
-    const preferred = plans.find((p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr));
+    const preferred = plans.find(
+      (p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr),
+    );
     if (preferred) return preferred.id;
     const nextWeekPlan = plans.find((p: MealPlan) => p.startDate === nextMondayStr);
     if (nextWeekPlan) return nextWeekPlan.id;
@@ -75,8 +97,10 @@ export function usePlanningWeek(store: AppStore, targetPlanId: string | null | u
   useEffect(() => {
     if (allowedPlans.length === 0) {
       if (selectedPlanId !== null) setSelectedPlanId(null);
-    } else if (!selectedPlanId || !allowedPlans.some(p => p.id === selectedPlanId)) {
-      const preferred = allowedPlans.find((p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr));
+    } else if (!selectedPlanId || !allowedPlans.some((p) => p.id === selectedPlanId)) {
+      const preferred = allowedPlans.find(
+        (p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr),
+      );
       const nextWeekPlan = allowedPlans.find((p: MealPlan) => p.startDate === nextMondayStr);
       const currentWeekPlan = allowedPlans.find((p: MealPlan) => p.startDate === currentMondayStr);
       setSelectedPlanId(preferred?.id || nextWeekPlan?.id || currentWeekPlan?.id || allowedPlans[0].id);
@@ -86,10 +110,13 @@ export function usePlanningWeek(store: AppStore, targetPlanId: string | null | u
   // The week on screen (falling back the same way while the selection catches up).
   let currentPlan = allowedPlans.find((p: MealPlan) => p.id === selectedPlanId);
   if (!currentPlan && allowedPlans.length > 0) {
-    currentPlan = allowedPlans.find((p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr)) ||
-                  allowedPlans.find((p: MealPlan) => p.startDate === nextMondayStr) ||
-                  allowedPlans.find((p: MealPlan) => p.startDate === currentMondayStr) ||
-                  allowedPlans[0];
+    currentPlan =
+      allowedPlans.find(
+        (p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr),
+      ) ||
+      allowedPlans.find((p: MealPlan) => p.startDate === nextMondayStr) ||
+      allowedPlans.find((p: MealPlan) => p.startDate === currentMondayStr) ||
+      allowedPlans[0];
   }
 
   // Sync selectedPlanId with the resolved currentPlan to prevent detached state

@@ -91,7 +91,13 @@ export function plannedNeedsByName(plan: MealPlan | null, recipes: Recipe[]): Ma
               const scaled = Math.round(ing.amount * scale * 100) / 100;
               recipeSet.add(recipe.name);
               nightSet.add(dayName);
-              breakdown.push({ recipeName: recipe.name, night: dayName, servings: mealServings, amount: scaled, unit: ing.unit });
+              breakdown.push({
+                recipeName: recipe.name,
+                night: dayName,
+                servings: mealServings,
+                amount: scaled,
+                unit: ing.unit,
+              });
             }
           });
         }
@@ -112,7 +118,10 @@ export function plannedNeedsByName(plan: MealPlan | null, recipes: Recipe[]): Ma
 }
 
 /** What each meal uses of a meal line: [{ "Chilli con carne (Wed)", "1 can" }]. */
-export function mealBreakdownFor(part: ShoppingListItem, needs: Map<string, PlannedRequirement>): { label: string; amount: string }[] {
+export function mealBreakdownFor(
+  part: ShoppingListItem,
+  needs: Map<string, PlannedRequirement>,
+): { label: string; amount: string }[] {
   if (!isMealLine(part)) return [];
   const req = needs.get(part.name.toLowerCase().trim());
   if (!req || !req.breakdown.length) return [];
@@ -124,7 +133,10 @@ export function mealBreakdownFor(part: ShoppingListItem, needs: Map<string, Plan
     const label = formatUnit(b.unit || '', n > 0 && n < 1 ? 1 : n);
     const amount = n > 0 ? `${formatCookingAmount(n, b.unit)}${label ? ` ${label}` : ''}` : '';
     const name = `${b.recipeName} (${b.night.slice(0, 3)})`;
-    if (!seen.has(name + amount)) { seen.add(name + amount); out.push({ label: name, amount }); }
+    if (!seen.has(name + amount)) {
+      seen.add(name + amount);
+      out.push({ label: name, amount });
+    }
   }
   return out;
 }
@@ -141,7 +153,8 @@ export function usePlannedNeeds(activePlan: MealPlan | null, recipes: Recipe[] |
 
   /** What the meals use for a meal line (see aggregateShoppingItems). */
   const neededOf = useCallback(
-    (part: ShoppingListItem) => (needs.size ? needs.get(part.name.toLowerCase().trim())?.neededText ?? '' : undefined),
+    (part: ShoppingListItem) =>
+      needs.size ? (needs.get(part.name.toLowerCase().trim())?.neededText ?? '') : undefined,
     [needs],
   );
 

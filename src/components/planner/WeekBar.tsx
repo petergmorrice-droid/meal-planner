@@ -1,9 +1,32 @@
 /** The bar above the week: ‹ week › (with the list of weeks), and sending the week to the shopping list. */
-import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Copy, History, Plus, RefreshCw, ShoppingCart } from 'lucide-react';
+import {
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  History,
+  Plus,
+  RefreshCw,
+  ShoppingCart,
+} from 'lucide-react';
 import { MealPlan } from '../../types';
 
 /** The list of weeks (opens above the bar), with Copy a week, Plan the week after and Past weeks. */
-export function WeekMenu({ plans, currentPlan, weekLabel, onPick, onClose, canCopy, onCopy, canPlanNext, maxWeeks, onPlanNext, onPastWeeks }: {
+export function WeekMenu({
+  plans,
+  currentPlan,
+  weekLabel,
+  onPick,
+  onClose,
+  canCopy,
+  onCopy,
+  canPlanNext,
+  maxWeeks,
+  onPlanNext,
+  onPastWeeks,
+}: {
   plans: MealPlan[];
   currentPlan: MealPlan | undefined;
   weekLabel: (startDate: string) => string;
@@ -20,14 +43,9 @@ export function WeekMenu({ plans, currentPlan, weekLabel, onPick, onClose, canCo
 }) {
   return (
     <>
-      <div
-        className="fixed inset-0 z-40"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 z-40" onClick={onClose} />
       <div className="absolute left-2 sm:left-4 bottom-full mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-zinc-200 p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
-        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-          Weeks
-        </div>
+        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Weeks</div>
 
         <div className="max-h-60 overflow-y-auto space-y-1">
           {plans.map((plan: MealPlan) => {
@@ -37,9 +55,7 @@ export function WeekMenu({ plans, currentPlan, weekLabel, onPick, onClose, canCo
                 key={plan.id}
                 onClick={() => onPick(plan.id)}
                 className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                  isSelected
-                    ? 'bg-zinc-100 text-zinc-900 font-semibold'
-                    : 'hover:bg-zinc-50 text-zinc-700'
+                  isSelected ? 'bg-zinc-100 text-zinc-900 font-semibold' : 'hover:bg-zinc-50 text-zinc-700'
                 }`}
               >
                 <div>
@@ -106,7 +122,20 @@ export function WeekMenu({ plans, currentPlan, weekLabel, onPick, onClose, canCo
 
 /** ‹ week › on the left; Send to list / Update list / Sent on the right. */
 export function WeekDockBar({
-  title, menuOpen, onMenu, prevPlan, onPrev, canNext, onNext, status, changedDays, mealsPlanned, onUpdateList, onSent, onNoMeals, onSend,
+  title,
+  menuOpen,
+  onMenu,
+  prevPlan,
+  onPrev,
+  canNext,
+  onNext,
+  status,
+  changedDays,
+  mealsPlanned,
+  onUpdateList,
+  onSent,
+  onNoMeals,
+  onSend,
 }: {
   /** "This Week", "Next Week" or the dates. */
   title: string;
@@ -145,10 +174,10 @@ export function WeekDockBar({
           aria-label="Choose a week"
           data-week-name
         >
-          <span className="text-sm font-semibold text-zinc-900 whitespace-nowrap">
-            {title}
-          </span>
-          <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 shrink-0 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+          <span className="text-sm font-semibold text-zinc-900 whitespace-nowrap">{title}</span>
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-zinc-500 shrink-0 transition-transform ${menuOpen ? 'rotate-180' : ''}`}
+          />
         </button>
         <button
           type="button"
@@ -174,7 +203,10 @@ export function WeekDockBar({
             >
               <RefreshCw className="w-4 h-4" />
               <span>Update list</span>
-              <span className="text-xs font-semibold bg-amber-950/10 rounded px-1">{changedDays.length}<span className="hidden sm:inline"> {changedDays.length === 1 ? 'change' : 'changes'}</span></span>
+              <span className="text-xs font-semibold bg-amber-950/10 rounded px-1">
+                {changedDays.length}
+                <span className="hidden sm:inline"> {changedDays.length === 1 ? 'change' : 'changes'}</span>
+              </span>
             </button>
           ) : (
             <button

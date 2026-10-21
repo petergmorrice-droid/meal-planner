@@ -6,16 +6,20 @@ import { Ingredient, PlannedMeal, Recipe } from './types';
 
 /** "19:00" -> minutes after midnight (null if not a time). */
 export function parseClock(hhmm: string | undefined | null): number | null {
-  const m = String(hhmm ?? '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  const m = String(hhmm ?? '')
+    .trim()
+    .match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return null;
-  const h = Number(m[1]), min = Number(m[2]);
+  const h = Number(m[1]),
+    min = Number(m[2]);
   return h < 24 && min < 60 ? h * 60 + min : null;
 }
 
 /** Minutes after midnight -> "5:45pm", "7pm", "12:30pm". */
 export function clockText(minutes: number): string {
   const t = ((Math.round(minutes) % 1440) + 1440) % 1440;
-  const h24 = Math.floor(t / 60), m = t % 60;
+  const h24 = Math.floor(t / 60),
+    m = t % 60;
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   return `${h12}${m ? `:${String(m).padStart(2, '0')}` : ''}${h24 < 12 ? 'am' : 'pm'}`;
 }
@@ -39,15 +43,18 @@ export function eatAtFor(
 ): { time: string; usual: string; tonightOnly: boolean } {
   const usual = parseClock(prefs?.eatAt) !== null ? prefs!.eatAt! : DEFAULT_EAT_AT;
   const t = prefs?.eatAtTonight;
-  if (t && t.date === todayIso && parseClock(t.time) !== null && t.time !== usual) return { time: t.time, usual, tonightOnly: true };
+  if (t && t.date === todayIso && parseClock(t.time) !== null && t.time !== usual)
+    return { time: t.time, usual, tonightOnly: true };
   return { time: usual, usual, tonightOnly: false };
 }
 
 /** Prep + cook time for the method you'll use (falls back to the recipe's times). */
 export function recipeMinutes(recipe: Recipe | null | undefined, method?: string): number {
   if (!recipe) return 0;
-  const prep = (method && recipe.methodPrepTime?.[method as keyof typeof recipe.methodPrepTime]) ?? recipe.prepTime ?? 0;
-  const cook = (method && recipe.methodCookTime?.[method as keyof typeof recipe.methodCookTime]) ?? recipe.cookTime ?? 0;
+  const prep =
+    (method && recipe.methodPrepTime?.[method as keyof typeof recipe.methodPrepTime]) ?? recipe.prepTime ?? 0;
+  const cook =
+    (method && recipe.methodCookTime?.[method as keyof typeof recipe.methodCookTime]) ?? recipe.cookTime ?? 0;
   return (Number(prep) || 0) + (Number(cook) || 0);
 }
 
@@ -68,7 +75,11 @@ const short = (s: string, max = 90) => (s.length > max ? `${s.slice(0, max - 1).
  * Anything to do tonight for tomorrow's meal: take a freezer meal out, or a step the recipe
  * says needs doing ahead. Null when there's nothing.
  */
-export function prepTonight(meal: PlannedMeal | null | undefined, recipe: Recipe | null | undefined, freezerName?: string): string | null {
+export function prepTonight(
+  meal: PlannedMeal | null | undefined,
+  recipe: Recipe | null | undefined,
+  freezerName?: string,
+): string | null {
   if (!meal || meal.cooked) return null;
   if (meal.type === 'batch') {
     const name = (freezerName || meal.name || '').replace(/^batch:\s*/i, '').trim() || 'meal';
@@ -87,16 +98,57 @@ export function freezePortionsFromNote(note?: string | null): number | null {
 
 // ---------- What each step needs ----------
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+const norm = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 const singular = (w: string) =>
-  /ies$/.test(w) ? w.slice(0, -3) + 'y'
-  : /(oes|ches|shes|sses|xes)$/.test(w) ? w.slice(0, -2)
-  : /[^s]s$/.test(w) ? w.slice(0, -1)
-  : w;
+  /ies$/.test(w)
+    ? w.slice(0, -3) + 'y'
+    : /(oes|ches|shes|sses|xes)$/.test(w)
+      ? w.slice(0, -2)
+      : /[^s]s$/.test(w)
+        ? w.slice(0, -1)
+        : w;
 /** Words too general to say a step uses an ingredient ("the water", "the sauce", "the pan"). */
 /** Words that say what form something comes in, not what it is. */
-const FORM = new Set(['granule', 'powder', 'paste', 'flake', 'cube', 'puree', 'leave', 'leaf', 'fillet', 'breast', 'thigh']);
-const GENERIC = new Set(['water', 'oil', 'salt', 'pepper', 'sauce', 'stock', 'mix', 'mixture', 'powder', 'paste', 'fresh', 'dried', 'frozen', 'large', 'small', 'medium', 'red', 'green', 'white', 'black']);
+const FORM = new Set([
+  'granule',
+  'powder',
+  'paste',
+  'flake',
+  'cube',
+  'puree',
+  'leave',
+  'leaf',
+  'fillet',
+  'breast',
+  'thigh',
+]);
+const GENERIC = new Set([
+  'water',
+  'oil',
+  'salt',
+  'pepper',
+  'sauce',
+  'stock',
+  'mix',
+  'mixture',
+  'powder',
+  'paste',
+  'fresh',
+  'dried',
+  'frozen',
+  'large',
+  'small',
+  'medium',
+  'red',
+  'green',
+  'white',
+  'black',
+]);
 
 /**
  * The ingredients a step mentions, in recipe order: "Boil the potatoes… mash with the butter and
@@ -130,7 +182,8 @@ export function stepMinutes(step: string): number | null {
   return total > 0 ? Math.round(total) : null;
 }
 
-const TIMER_VERBS = /^(simmer|boil|fry|stir-fry|roast|bake|grill|cook|rest|leave|marinate|soak|chill|stir|brown|steam|poach|reduce|heat|microwave|air[- ]fry|sear|toast|blanch|slow[- ]cook|pressure[- ]cook|prove|stand|steep|braise|stew|saute|sauté|griddle|warm|melt|whisk|knead|set|cool|freeze|defrost|thaw)\b/i;
+const TIMER_VERBS =
+  /^(simmer|boil|fry|stir-fry|roast|bake|grill|cook|rest|leave|marinate|soak|chill|stir|brown|steam|poach|reduce|heat|microwave|air[- ]fry|sear|toast|blanch|slow[- ]cook|pressure[- ]cook|prove|stand|steep|braise|stew|saute|sauté|griddle|warm|melt|whisk|knead|set|cool|freeze|defrost|thaw)\b/i;
 
 /**
  * A short name for a step's timer, from the words just before the time:
@@ -140,13 +193,25 @@ const TIMER_VERBS = /^(simmer|boil|fry|stir-fry|roast|bake|grill|cook|rest|leave
  */
 export function stepTimerLabel(step: string): string {
   const time = step.search(/(\d+(?:\.\d+)?|½|an?)\s*(?:-|to)?\s*(?:\d+\s*)?(?:hours?|hrs?|minutes?|mins?)\b/i);
-  let before = (time > 0 ? step.slice(0, time) : step).replace(/\s+(?:for|about|around|approx\.?|roughly|another|more|a further)\s*$/i, '').replace(/\s+(?:for|about|around)\s*$/i, '');
+  let before = (time > 0 ? step.slice(0, time) : step)
+    .replace(/\s+(?:for|about|around|approx\.?|roughly|another|more|a further)\s*$/i, '')
+    .replace(/\s+(?:for|about|around)\s*$/i, '');
   // The sentence the time is in.
   const sentences = before.split(/[.;:!?]\s+/);
   before = (sentences[sentences.length - 1] || before).trim();
   // The last part of it that starts with something you do ("…and simmer").
-  const clauses = before.split(/,\s*|\s+then\s+|\s+and\s+/i).map((c) => c.trim()).filter(Boolean);
-  let label = clauses.slice().reverse().find((c) => TIMER_VERBS.test(c)) || clauses[0] || before || step;
+  const clauses = before
+    .split(/,\s*|\s+then\s+|\s+and\s+/i)
+    .map((c) => c.trim())
+    .filter(Boolean);
+  let label =
+    clauses
+      .slice()
+      .reverse()
+      .find((c) => TIMER_VERBS.test(c)) ||
+    clauses[0] ||
+    before ||
+    step;
   // Drop "in 2 tbsp olive oil", "on a medium heat", "to 200C".
   label = label.split(/\s+(?:in|with|on|over|under|until|at|to|into|from|following)\s+/i)[0];
   const words = label.split(/\s+/).slice(0, 5).join(' ');
@@ -184,7 +249,10 @@ export function timeLeft(t: CookTimer, now: number): number {
 export function tickTimers(timers: CookTimer[], now: number): CookTimer[] {
   let changed = false;
   const out = timers.map((t) => {
-    if (t.state === 'running' && t.endsAt !== null && t.endsAt <= now) { changed = true; return { ...t, state: 'ringing' as const, leftMs: 0 }; }
+    if (t.state === 'running' && t.endsAt !== null && t.endsAt <= now) {
+      changed = true;
+      return { ...t, state: 'ringing' as const, leftMs: 0 };
+    }
     return t;
   });
   return changed ? out : timers;
@@ -206,6 +274,10 @@ export function addMinute(t: CookTimer, now: number): CookTimer {
 /** "4:05", "1:02:00", "0:09". */
 export function timerText(ms: number): string {
   const s = Math.ceil(Math.max(0, ms) / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+  const h = Math.floor(s / 3600),
+    m = Math.floor((s % 3600) / 60),
+    sec = s % 60;
+  return h
+    ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    : `${m}:${String(sec).padStart(2, '0')}`;
 }

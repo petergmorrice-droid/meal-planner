@@ -46,7 +46,11 @@ export function isWeekWithinForwardLimit(startDateStr: string, baseDate?: Date, 
   return startDateStr >= currentMondayStr && targetDate.getTime() <= maxMonday.getTime();
 }
 
-export function canPlanFollowingWeek(currentStartDateStr?: string, baseDate?: Date, maxWeeks = MAX_FORWARD_WEEKS): boolean {
+export function canPlanFollowingWeek(
+  currentStartDateStr?: string,
+  baseDate?: Date,
+  maxWeeks = MAX_FORWARD_WEEKS,
+): boolean {
   if (!currentStartDateStr) return false;
   const currentMondayStr = formatDateISO(getMonday(baseDate || new Date()));
   if (currentStartDateStr < currentMondayStr) return false;
@@ -96,7 +100,7 @@ export function formatWeekRange(startDateStr?: string): string {
   if (isNaN(start.getTime())) return '';
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
-  
+
   const startDay = start.getDate();
   const startMonth = SHORT_MONTHS[start.getMonth()];
   const endDay = end.getDate();
@@ -143,16 +147,16 @@ export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], c
   const weekLabel = `Week of ${formatWeekRange(plan.startDate)}`;
   const inputs: IngredientInput[] = [];
 
-  (Object.values(plan.days) as DayPlan[]).forEach(day => {
+  (Object.values(plan.days) as DayPlan[]).forEach((day) => {
     if (!day || !day.meals) return;
-    day.meals.forEach(meal => {
+    day.meals.forEach((meal) => {
       if ((meal.type === 'recipe' || meal.type === 'leftover') && meal.recipeId) {
-        const recipe = recipes.find(r => r.id === meal.recipeId);
+        const recipe = recipes.find((r) => r.id === meal.recipeId);
         if (recipe && Array.isArray(recipe.ingredients)) {
           const mealServings = meal.servings ?? 2;
           const baseServings = recipe.servings && recipe.servings > 0 ? recipe.servings : 2;
           const scale = mealServings / baseServings;
-          recipe.ingredients.forEach(ing => {
+          recipe.ingredients.forEach((ing) => {
             if (!ing || !ing.name) return;
             const amount = typeof ing.amount === 'number' ? ing.amount : parseFloat(String(ing.amount));
             inputs.push({
@@ -168,16 +172,22 @@ export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], c
       }
 
       if (meal.sides && Array.isArray(meal.sides)) {
-        meal.sides.forEach(side => {
+        meal.sides.forEach((side) => {
           if (!side || !side.name) return;
-          inputs.push({ name: side.name, amount: side.amount, unit: side.unit, category: side.category, source: `${meal.name} (Side)` });
+          inputs.push({
+            name: side.name,
+            amount: side.amount,
+            unit: side.unit,
+            category: side.category,
+            source: `${meal.name} (Side)`,
+          });
         });
       }
     });
   });
 
   const lines = buildShoppingLines(inputs, catalog ?? getCatalog());
-  return lines.map(line => {
+  return lines.map((line) => {
     const cleanKey = (matchKey(line.name) || line.key).replace(/[^a-z0-9_-]/g, '_');
     const item: ShoppingListItem = {
       id: `plan-${plan.id}-${cleanKey}`,
@@ -200,7 +210,16 @@ export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], c
   });
 }
 
-export { GROCERY_AISLES, getGroceryAisle, guessAisle, orderedAisles, aislePositions, aisleName, isAisleName, aisleCategory } from './shopping/aisles';
+export {
+  GROCERY_AISLES,
+  getGroceryAisle,
+  guessAisle,
+  orderedAisles,
+  aislePositions,
+  aisleName,
+  isAisleName,
+  aisleCategory,
+} from './shopping/aisles';
 export type { FoodAisle, AisleInfo } from './shopping/aisles';
 
 export function cleanDays(days: Record<string, import('./types').DayPlan>): Record<string, import('./types').DayPlan> {
@@ -234,13 +253,13 @@ export function sanitizeForFirestore<T>(obj: T): T {
 export function parseQtyAndUnit(text: string, defaultUnit: string = 'item'): { amount: number; unit: string } {
   const trimmed = text.trim();
   if (!trimmed) return { amount: 1, unit: defaultUnit };
-  
+
   // Match a decimal/fraction/integer number optionally followed by unit text
   const match = trimmed.match(/^([\d.]+)\s*(.*)$/);
   if (!match) {
     return { amount: 1, unit: trimmed };
   }
-  
+
   const amount = parseFloat(match[1]) || 1;
   const unit = match[2].trim() || defaultUnit;
   return { amount, unit };
@@ -268,13 +287,43 @@ export function formatScaledNumber(num: number): string {
 export function scaleRecipeStepQuantities(step: string, ingredients: any[], scale: number): string {
   const ingredientWords = new Set<string>(['water', 'oil', 'salt', 'pepper']);
   const ingredientUnits = new Set<string>([
-    'g', 'ml', 'kg', 'l', 'tbsp', 'tsp', 'cup', 'cups', 'clove', 'cloves', 
-    'can', 'cans', 'pack', 'packs', 'slice', 'slices', 'fillet', 'fillets', 
-    'breast', 'breasts', 'bunch', 'bunches', 'piece', 'pieces', 'pinch', 'pinches',
-    'sprig', 'sprigs', 'tablespoon', 'tablespoons', 'teaspoon', 'teaspoons', 'tin', 'tins'
+    'g',
+    'ml',
+    'kg',
+    'l',
+    'tbsp',
+    'tsp',
+    'cup',
+    'cups',
+    'clove',
+    'cloves',
+    'can',
+    'cans',
+    'pack',
+    'packs',
+    'slice',
+    'slices',
+    'fillet',
+    'fillets',
+    'breast',
+    'breasts',
+    'bunch',
+    'bunches',
+    'piece',
+    'pieces',
+    'pinch',
+    'pinches',
+    'sprig',
+    'sprigs',
+    'tablespoon',
+    'tablespoons',
+    'teaspoon',
+    'teaspoons',
+    'tin',
+    'tins',
   ]);
 
-  ingredients.forEach(ing => {
+  ingredients.forEach((ing) => {
     const nameWords = ing.name.toLowerCase().split(/[^a-z0-9]+/i);
     nameWords.forEach((w: string) => {
       if (w.length > 2) {
@@ -295,10 +344,43 @@ export function scaleRecipeStepQuantities(step: string, ingredients: any[], scal
   });
 
   const exclusionKeywords = new Set<string>([
-    'minute', 'minutes', 'min', 'mins', 'second', 'seconds', 'sec', 'secs',
-    'hour', 'hours', 'hr', 'hrs', 'c', 'f', 'degrees', 'degree', '°c', '°f', '°',
-    'percent', 'percentage', '%', 'step', 'steps', 'cm', 'inch', 'inches',
-    'tin', 'tins', 'pan', 'pans', 'tray', 'trays', 'serves', 'servings', 'portions', 'portion'
+    'minute',
+    'minutes',
+    'min',
+    'mins',
+    'second',
+    'seconds',
+    'sec',
+    'secs',
+    'hour',
+    'hours',
+    'hr',
+    'hrs',
+    'c',
+    'f',
+    'degrees',
+    'degree',
+    '°c',
+    '°f',
+    '°',
+    'percent',
+    'percentage',
+    '%',
+    'step',
+    'steps',
+    'cm',
+    'inch',
+    'inches',
+    'tin',
+    'tins',
+    'pan',
+    'pans',
+    'tray',
+    'trays',
+    'serves',
+    'servings',
+    'portions',
+    'portion',
   ]);
 
   const numberRegex = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)/g; // "1 1/2", "1/2", "1.5"
@@ -317,12 +399,15 @@ export function scaleRecipeStepQuantities(step: string, ingredients: any[], scal
     lastIndex = numberRegex.lastIndex;
 
     const lookaheadContext = step.slice(lastIndex, lastIndex + 35);
-    const lookaheadWords = lookaheadContext.toLowerCase().split(/[^a-z0-9°%]+/i).filter(Boolean);
+    const lookaheadWords = lookaheadContext
+      .toLowerCase()
+      .split(/[^a-z0-9°%]+/i)
+      .filter(Boolean);
 
     const nextThreeWords = lookaheadWords.slice(0, 3);
 
-    const hasExclusion = nextThreeWords.some(w => exclusionKeywords.has(w));
-    const hasIngredientOrUnit = nextThreeWords.some(w => ingredientWords.has(w) || ingredientUnits.has(w));
+    const hasExclusion = nextThreeWords.some((w) => exclusionKeywords.has(w));
+    const hasIngredientOrUnit = nextThreeWords.some((w) => ingredientWords.has(w) || ingredientUnits.has(w));
 
     if (!hasExclusion && hasIngredientOrUnit) {
       const originalValue = parseNumberValue(matchStr);
@@ -344,10 +429,10 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   const nameLower = (recipe.name || '').toLowerCase();
   const descLower = (recipe.description || '').toLowerCase();
-  
+
   // Combine all names of ingredients and tags
-  const ingredientsLower = (recipe.ingredients || []).map(i => (i.name || '').toLowerCase()).join(' ');
-  const tagsLower = (recipe.tags || []).map(t => t.toLowerCase()).join(' ');
+  const ingredientsLower = (recipe.ingredients || []).map((i) => (i.name || '').toLowerCase()).join(' ');
+  const tagsLower = (recipe.tags || []).map((t) => t.toLowerCase()).join(' ');
 
   const searchStr = `${nameLower} ${descLower} ${ingredientsLower} ${tagsLower}`;
 
@@ -358,15 +443,15 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 2. Pasta / Spaghetti / Penne / Lasagne / Lasagna
   if (
-    searchStr.includes('pasta') || 
-    searchStr.includes('spaghetti') || 
-    searchStr.includes('penne') || 
-    searchStr.includes('lasagne') || 
-    searchStr.includes('lasagna') || 
-    searchStr.includes('bolognese') || 
-    searchStr.includes('macaroni') || 
-    searchStr.includes('linguine') || 
-    searchStr.includes('fettuccine') || 
+    searchStr.includes('pasta') ||
+    searchStr.includes('spaghetti') ||
+    searchStr.includes('penne') ||
+    searchStr.includes('lasagne') ||
+    searchStr.includes('lasagna') ||
+    searchStr.includes('bolognese') ||
+    searchStr.includes('macaroni') ||
+    searchStr.includes('linguine') ||
+    searchStr.includes('fettuccine') ||
     searchStr.includes('tagliatelle') ||
     searchStr.includes('carbonara') ||
     searchStr.includes('cannelloni') ||
@@ -379,11 +464,11 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 3. Chicken / Poultry / Turkey / Duck
   if (
-    searchStr.includes('chicken') || 
-    searchStr.includes('turkey') || 
-    searchStr.includes('poultry') || 
-    searchStr.includes('thigh') || 
-    searchStr.includes('breast') || 
+    searchStr.includes('chicken') ||
+    searchStr.includes('turkey') ||
+    searchStr.includes('poultry') ||
+    searchStr.includes('thigh') ||
+    searchStr.includes('breast') ||
     searchStr.includes('drumstick') ||
     searchStr.includes('duck')
   ) {
@@ -392,16 +477,16 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 4. Beef / Steak / Meatballs / Pork / Porkchop / Bacon / Sausage / Ham / Lamb / Mince
   if (
-    searchStr.includes('beef') || 
-    searchStr.includes('steak') || 
-    searchStr.includes('pork') || 
-    searchStr.includes('bacon') || 
-    searchStr.includes('sausage') || 
-    searchStr.includes('ham') || 
-    searchStr.includes('lamb') || 
-    searchStr.includes('mince') || 
-    searchStr.includes('meatball') || 
-    searchStr.includes('chorizo') || 
+    searchStr.includes('beef') ||
+    searchStr.includes('steak') ||
+    searchStr.includes('pork') ||
+    searchStr.includes('bacon') ||
+    searchStr.includes('sausage') ||
+    searchStr.includes('ham') ||
+    searchStr.includes('lamb') ||
+    searchStr.includes('mince') ||
+    searchStr.includes('meatball') ||
+    searchStr.includes('chorizo') ||
     searchStr.includes('gammon') ||
     searchStr.includes('pepperoni') ||
     searchStr.includes('ribs') ||
@@ -412,15 +497,15 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 5. Fish / Seafood / Salmon / Tuna / Prawn / Shrimp / Seafood / Cod / Haddock
   if (
-    searchStr.includes('fish') || 
-    searchStr.includes('salmon') || 
-    searchStr.includes('tuna') || 
-    searchStr.includes('prawn') || 
-    searchStr.includes('shrimp') || 
-    searchStr.includes('seafood') || 
-    searchStr.includes('cod') || 
-    searchStr.includes('haddock') || 
-    searchStr.includes('sea bass') || 
+    searchStr.includes('fish') ||
+    searchStr.includes('salmon') ||
+    searchStr.includes('tuna') ||
+    searchStr.includes('prawn') ||
+    searchStr.includes('shrimp') ||
+    searchStr.includes('seafood') ||
+    searchStr.includes('cod') ||
+    searchStr.includes('haddock') ||
+    searchStr.includes('sea bass') ||
     searchStr.includes('trout') ||
     searchStr.includes('sea-bass') ||
     searchStr.includes('mackerel') ||
@@ -432,11 +517,11 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 6. Rice / Basmati / Risotto / Paella / Pilau
   if (
-    searchStr.includes('rice') || 
-    searchStr.includes('basmati') || 
-    searchStr.includes('risotto') || 
-    searchStr.includes('paella') || 
-    searchStr.includes('pilau') || 
+    searchStr.includes('rice') ||
+    searchStr.includes('basmati') ||
+    searchStr.includes('risotto') ||
+    searchStr.includes('paella') ||
+    searchStr.includes('pilau') ||
     searchStr.includes('pulao') ||
     searchStr.includes('biryani') ||
     searchStr.includes('fried-rice') ||
@@ -447,11 +532,11 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 7. Potatoes / Chips / Mash / Sweet Potato
   if (
-    searchStr.includes('potato') || 
-    searchStr.includes('potatoes') || 
-    searchStr.includes('sweet potato') || 
-    searchStr.includes('chips') || 
-    searchStr.includes('gnochi') || 
+    searchStr.includes('potato') ||
+    searchStr.includes('potatoes') ||
+    searchStr.includes('sweet potato') ||
+    searchStr.includes('chips') ||
+    searchStr.includes('gnochi') ||
     searchStr.includes('gnocchi') ||
     searchStr.includes('hash brown') ||
     searchStr.includes('wedges') ||
@@ -462,14 +547,14 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 8. Curry / Chili / Chilli / Spicy / Jalapeno
   if (
-    searchStr.includes('curry') || 
-    searchStr.includes('chili') || 
-    searchStr.includes('chilli') || 
-    searchStr.includes('spicy') || 
-    searchStr.includes('jalapeno') || 
-    searchStr.includes('korma') || 
-    searchStr.includes('tikka') || 
-    searchStr.includes('madras') || 
+    searchStr.includes('curry') ||
+    searchStr.includes('chili') ||
+    searchStr.includes('chilli') ||
+    searchStr.includes('spicy') ||
+    searchStr.includes('jalapeno') ||
+    searchStr.includes('korma') ||
+    searchStr.includes('tikka') ||
+    searchStr.includes('madras') ||
     searchStr.includes('jalfrezi') ||
     searchStr.includes('balti') ||
     searchStr.includes('bhuna') ||
@@ -480,12 +565,12 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 9. Cheese / Mozzarella / Cheddar / Parmesan / Feta
   if (
-    searchStr.includes('cheese') || 
-    searchStr.includes('mozzarella') || 
-    searchStr.includes('cheddar') || 
-    searchStr.includes('parmesan') || 
-    searchStr.includes('feta') || 
-    searchStr.includes('halloumi') || 
+    searchStr.includes('cheese') ||
+    searchStr.includes('mozzarella') ||
+    searchStr.includes('cheddar') ||
+    searchStr.includes('parmesan') ||
+    searchStr.includes('feta') ||
+    searchStr.includes('halloumi') ||
     searchStr.includes('ricotta') ||
     searchStr.includes('mascarpone') ||
     searchStr.includes('pecorino') ||
@@ -496,10 +581,10 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 10. Eggs / Omelette / Frittata
   if (
-    searchStr.includes('egg ') || 
-    searchStr.includes('eggs') || 
-    searchStr.includes('omelette') || 
-    searchStr.includes('frittata') || 
+    searchStr.includes('egg ') ||
+    searchStr.includes('eggs') ||
+    searchStr.includes('omelette') ||
+    searchStr.includes('frittata') ||
     searchStr.includes('egg-') ||
     searchStr.includes('quiche')
   ) {
@@ -508,9 +593,9 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 11. Soup / Broth / Stew
   if (
-    searchStr.includes('soup') || 
-    searchStr.includes('broth') || 
-    searchStr.includes('stew') || 
+    searchStr.includes('soup') ||
+    searchStr.includes('broth') ||
+    searchStr.includes('stew') ||
     searchStr.includes('chowder') ||
     searchStr.includes('ramen')
   ) {
@@ -519,8 +604,8 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 12. Salad / Lettuce / Cucumber
   if (
-    searchStr.includes('salad') || 
-    searchStr.includes('lettuce') || 
+    searchStr.includes('salad') ||
+    searchStr.includes('lettuce') ||
     searchStr.includes('cucumber') ||
     searchStr.includes('coleslaw')
   ) {
@@ -529,15 +614,15 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
   // 13. Bread / Toast / Bagel / Sourdough / Naan
   if (
-    searchStr.includes('bread') || 
-    searchStr.includes('toast') || 
-    searchStr.includes('bagel') || 
-    searchStr.includes('sourdough') || 
-    searchStr.includes('naan') || 
-    searchStr.includes('baguette') || 
-    searchStr.includes('flatbread') || 
-    searchStr.includes('bun') || 
-    searchStr.includes('tortilla') || 
+    searchStr.includes('bread') ||
+    searchStr.includes('toast') ||
+    searchStr.includes('bagel') ||
+    searchStr.includes('sourdough') ||
+    searchStr.includes('naan') ||
+    searchStr.includes('baguette') ||
+    searchStr.includes('flatbread') ||
+    searchStr.includes('bun') ||
+    searchStr.includes('tortilla') ||
     searchStr.includes('taco') ||
     searchStr.includes('focaccia') ||
     searchStr.includes('pita') ||
@@ -548,8 +633,9 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
   }
 
   // 14. Vegetarian / Vegan
-  const isVeg = recipe.isVegetarian || recipe.tags?.some(t => ['vegetarian', 'vegi', 'veggie'].includes(t.toLowerCase()));
-  const isVgn = recipe.isVegan || recipe.tags?.some(t => ['vegan'].includes(t.toLowerCase()));
+  const isVeg =
+    recipe.isVegetarian || recipe.tags?.some((t) => ['vegetarian', 'vegi', 'veggie'].includes(t.toLowerCase()));
+  const isVgn = recipe.isVegan || recipe.tags?.some((t) => ['vegan'].includes(t.toLowerCase()));
   if (isVgn || isVeg) {
     emojis.add('🌱');
   }
@@ -559,21 +645,36 @@ export function getRecipeEmojis(recipe: Recipe): string[] {
 
 export function getEmojiLabel(emoji: string): string {
   switch (emoji) {
-    case '🍕': return 'Pizza';
-    case '🍝': return 'Pasta / Noodles';
-    case '🍗': return 'Chicken / Poultry';
-    case '🥩': return 'Beef / Pork / Meat';
-    case '🐟': return 'Fish / Seafood';
-    case '🍚': return 'Rice / Grains';
-    case '🥔': return 'Potatoes';
-    case '🌶️': return 'Spicy / Curry';
-    case '🧀': return 'Cheese / Dairy';
-    case '🥚': return 'Eggs';
-    case '🥣': return 'Soup / Stew';
-    case '🥗': return 'Salad / Greens';
-    case '🍞': return 'Bread / Carbs';
-    case '🌱': return 'Vegetarian / Vegan';
-    default: return '';
+    case '🍕':
+      return 'Pizza';
+    case '🍝':
+      return 'Pasta / Noodles';
+    case '🍗':
+      return 'Chicken / Poultry';
+    case '🥩':
+      return 'Beef / Pork / Meat';
+    case '🐟':
+      return 'Fish / Seafood';
+    case '🍚':
+      return 'Rice / Grains';
+    case '🥔':
+      return 'Potatoes';
+    case '🌶️':
+      return 'Spicy / Curry';
+    case '🧀':
+      return 'Cheese / Dairy';
+    case '🥚':
+      return 'Eggs';
+    case '🥣':
+      return 'Soup / Stew';
+    case '🥗':
+      return 'Salad / Greens';
+    case '🍞':
+      return 'Bread / Carbs';
+    case '🌱':
+      return 'Vegetarian / Vegan';
+    default:
+      return '';
   }
 }
 
@@ -581,7 +682,7 @@ export function syncRecurringStaplesForPlan(
   plan: MealPlan,
   shoppingList: ShoppingListItem[],
   recurringItems: RecurringItem[],
-  dismissedItemIds: string[] = []
+  dismissedItemIds: string[] = [],
 ): ShoppingListItem[] {
   if (!plan || !plan.id) return shoppingList;
 
@@ -593,25 +694,25 @@ export function syncRecurringStaplesForPlan(
     plan.startDate === currentMondayStr
       ? 'This Week'
       : plan.startDate === nextMondayStr
-      ? 'Next Week'
-      : formatWeekRange(plan.startDate)
+        ? 'Next Week'
+        : formatWeekRange(plan.startDate)
   }`;
 
   const currentList = [...(shoppingList || [])];
-  const otherItems = currentList.filter(i => i.planId !== plan.id);
-  const planItems = currentList.filter(i => i.planId === plan.id);
+  const otherItems = currentList.filter((i) => i.planId !== plan.id);
+  const planItems = currentList.filter((i) => i.planId === plan.id);
 
-  const nonRecurringItems = planItems.filter(i => !i.isRecurring);
-  const existingRecurring = planItems.filter(i => i.isRecurring);
+  const nonRecurringItems = planItems.filter((i) => !i.isRecurring);
+  const existingRecurring = planItems.filter((i) => i.isRecurring);
 
   const syncedRecurring: ShoppingListItem[] = [];
 
-  (recurringItems || []).forEach(rec => {
+  (recurringItems || []).forEach((rec) => {
     const itemId = `recurring-${plan.id}-${rec.id}`;
     if (dismissedItemIds.includes(itemId)) return;
 
     const existing = existingRecurring.find(
-      i => i.id === itemId || (i.name.toLowerCase().trim() === rec.name.toLowerCase().trim() && i.isRecurring)
+      (i) => i.id === itemId || (i.name.toLowerCase().trim() === rec.name.toLowerCase().trim() && i.isRecurring),
     );
 
     if (!existing) {
@@ -625,7 +726,7 @@ export function syncRecurringStaplesForPlan(
         isAdhoc: false,
         isRecurring: true,
         planId: plan.id,
-        weekLabel
+        weekLabel,
       });
     } else {
       if (!existing.userAdjusted) {
@@ -638,7 +739,7 @@ export function syncRecurringStaplesForPlan(
           category: rec.category || existing.category || 'Pantry & Spices',
           isRecurring: true,
           planId: plan.id,
-          weekLabel
+          weekLabel,
         });
       } else {
         syncedRecurring.push(existing);
@@ -647,8 +748,8 @@ export function syncRecurringStaplesForPlan(
   });
 
   // Preserve userAdjusted recurring items even if removed from preferences
-  existingRecurring.forEach(existing => {
-    if (existing.userAdjusted && !syncedRecurring.some(s => s.id === existing.id)) {
+  existingRecurring.forEach((existing) => {
+    if (existing.userAdjusted && !syncedRecurring.some((s) => s.id === existing.id)) {
       syncedRecurring.push(existing);
     }
   });
@@ -660,14 +761,13 @@ export function syncRecurringStaplesForAllPlans(
   plans: MealPlan[],
   shoppingList: ShoppingListItem[],
   recurringItems: RecurringItem[],
-  dismissedItemIds: string[] = []
+  dismissedItemIds: string[] = [],
 ): ShoppingListItem[] {
   let updatedList = [...(shoppingList || [])];
-  (plans || []).forEach(plan => {
+  (plans || []).forEach((plan) => {
     if (plan && plan.startDate && !isPastWeek(plan.startDate)) {
       updatedList = syncRecurringStaplesForPlan(plan, updatedList, recurringItems, dismissedItemIds);
     }
   });
   return updatedList;
 }
-

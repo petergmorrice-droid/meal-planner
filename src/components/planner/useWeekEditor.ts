@@ -10,14 +10,28 @@
 import { useState } from 'react';
 import { BatchItem, DayPlan, MealPlan, MealType, PlannedMeal, PlannedMealSide, Recipe, TabName } from '../../types';
 import { canPlanFollowingWeek, createEmptyPlan, formatDateISO, syncRecurringStaplesForPlan } from '../../utils';
-import { changeDayMeal, copyWeekMeals, describeMealChange, earlierDaysWithRecipe, listSnapshot, mealOnDay, moveMeal, undoDays } from '../../planning';
+import {
+  changeDayMeal,
+  copyWeekMeals,
+  describeMealChange,
+  earlierDaysWithRecipe,
+  listSnapshot,
+  mealOnDay,
+  moveMeal,
+  undoDays,
+} from '../../planning';
 import { sendWeekToShoppingList } from '../../planShopping';
 import { freezerBatchesFor } from '../../recipeInfo';
 import type { ToastAction } from './usePlanToast';
 import type { AppStore } from '../../store';
 
 /** "How are you having it?": leftovers from an earlier day, from the freezer, or cooked fresh. */
-export interface HowPrompt { dayName: string; recipe: Recipe; existingDays: string[]; freezer?: { batchId: string; portions: number } }
+export interface HowPrompt {
+  dayName: string;
+  recipe: Recipe;
+  existingDays: string[];
+  freezer?: { batchId: string; portions: number };
+}
 
 /** Taking a meal away would leave leftover days with nothing to be leftovers of. */
 export interface RemoveLeftoversPrompt {
@@ -32,7 +46,14 @@ export interface RemoveLeftoversPrompt {
 
 type Days = Record<string, DayPlan>;
 
-export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, setToastMessage, onNavigateTab }: {
+export function useWeekEditor({
+  store,
+  currentPlan,
+  defaultServings,
+  weekLabel,
+  setToastMessage,
+  onNavigateTab,
+}: {
   store: AppStore;
   currentPlan: MealPlan | undefined;
   /** Your usual number of people (Settings → Household). */
@@ -74,7 +95,8 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
       if (!next) return null;
       before = p.days;
       after = next;
-      const keepRecord = p.status === 'finalized' && !p.lastFinalizedSnapshot ? { lastFinalizedSnapshot: listSnapshot(p) } : {};
+      const keepRecord =
+        p.status === 'finalized' && !p.lastFinalizedSnapshot ? { lastFinalizedSnapshot: listSnapshot(p) } : {};
       return { ...p, ...keepRecord, days: next };
     });
     if (!before || !after) return false;
@@ -83,7 +105,12 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
   };
 
   /** Change one meal on a day (null if the day or meal isn't there any more). */
-  const editMeal = (days: Days, dayName: string, mealId: string, patch: (m: PlannedMeal) => PlannedMeal): Days | null => {
+  const editMeal = (
+    days: Days,
+    dayName: string,
+    mealId: string,
+    patch: (m: PlannedMeal) => PlannedMeal,
+  ): Days | null => {
     const day = days[dayName];
     if (!day || !day.meals.some((m) => m.id === mealId)) return null;
     return { ...days, [dayName]: { ...day, meals: day.meals.map((m) => (m.id === mealId ? patch(m) : m)) } };
@@ -98,7 +125,12 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
     const batches = freezerBatchesFor(recipe, store.state.batches);
     const portions = batches.reduce((n: number, b: BatchItem) => n + (Number(b.portions) || 0), 0);
     if (existingDays.length > 0 || portions > 0) {
-      setHowPrompt({ dayName, recipe, existingDays, freezer: portions > 0 ? { batchId: batches[0].id, portions } : undefined });
+      setHowPrompt({
+        dayName,
+        recipe,
+        existingDays,
+        freezer: portions > 0 ? { batchId: batches[0].id, portions } : undefined,
+      });
       return true;
     }
     return false;
@@ -159,32 +191,39 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
     if (!howPrompt || !currentPlan) return false;
     const { dayName, recipe, existingDays, freezer } = howPrompt;
     const sourceDay = existingDays && existingDays.length > 0 ? existingDays[existingDays.length - 1] : null;
-    const newMeal: PlannedMeal = how === 'freezer' && freezer
-      ? {
-          // From the freezer: no ingredients to buy; linked to the batch and the recipe
-          id: crypto.randomUUID(),
-          type: 'batch',
-          batchId: freezer.batchId,
-          recipeId: recipe.id,
-          name: `Batch: ${recipe.name}`,
-          servings: defaultServings,
-          note: '',
-        }
-      : {
-          id: crypto.randomUUID(),
-          type: how === 'leftover' ? 'leftover' : 'recipe',
-          recipeId: recipe.id,
-          name: how === 'leftover' ? `Leftovers: ${recipe.name}` : recipe.name,
-          servings: defaultServings,
-          note: how === 'leftover' ? (sourceDay ? `Reheat from ${sourceDay}` : 'Reheat leftovers') : undefined,
-        };
+    const newMeal: PlannedMeal =
+      how === 'freezer' && freezer
+        ? {
+            // From the freezer: no ingredients to buy; linked to the batch and the recipe
+            id: crypto.randomUUID(),
+            type: 'batch',
+            batchId: freezer.batchId,
+            recipeId: recipe.id,
+            name: `Batch: ${recipe.name}`,
+            servings: defaultServings,
+            note: '',
+          }
+        : {
+            id: crypto.randomUUID(),
+            type: how === 'leftover' ? 'leftover' : 'recipe',
+            recipeId: recipe.id,
+            name: how === 'leftover' ? `Leftovers: ${recipe.name}` : recipe.name,
+            servings: defaultServings,
+            note: how === 'leftover' ? (sourceDay ? `Reheat from ${sourceDay}` : 'Reheat leftovers') : undefined,
+          };
     setHowPrompt(null);
     changeMeal(dayName, mealNow(dayName), newMeal);
     return true;
   };
 
   /** Takeaway, eating out, no meal, or a freezer batch, on a day. */
-  const addCustomMeal = (dayName: string, type: MealType, batchId?: string, note?: string, servings?: number): boolean => {
+  const addCustomMeal = (
+    dayName: string,
+    type: MealType,
+    batchId?: string,
+    note?: string,
+    servings?: number,
+  ): boolean => {
     if (!currentPlan) return false;
     let name = '';
     if (type === 'takeout') name = 'Takeaway';
@@ -196,14 +235,15 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
       name = `Batch: ${batch?.name || recipe?.name || 'Batch Meal'}`;
       if (!note) note = 'Heat up a premade batch';
     }
-    const batchRecipeId = type === 'batch' && batchId ? store.state.batches.find((b: BatchItem) => b.id === batchId)?.recipeId : undefined;
+    const batchRecipeId =
+      type === 'batch' && batchId ? store.state.batches.find((b: BatchItem) => b.id === batchId)?.recipeId : undefined;
     const newMeal: PlannedMeal = {
       id: crypto.randomUUID(),
       type,
       batchId,
       ...(batchRecipeId ? { recipeId: batchRecipeId } : {}),
       name,
-      servings: type === 'no_meal' ? 0 : (servings || defaultServings),
+      servings: type === 'no_meal' ? 0 : servings || defaultServings,
       note: note?.trim() || '',
     };
     changeMeal(dayName, mealNow(dayName), newMeal);
@@ -212,9 +252,13 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
 
   /** People and notes from the day panel. */
   const saveDayDetails = (dayName: string, mealId: string, patch: { servings: number; note: string }) => {
-    const saved = editDays((days) => editMeal(days, dayName, mealId, (m) => ({
-      ...m, servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)), note: patch.note,
-    })));
+    const saved = editDays((days) =>
+      editMeal(days, dayName, mealId, (m) => ({
+        ...m,
+        servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)),
+        note: patch.note,
+      })),
+    );
     if (saved) setToastMessage('Saved');
   };
 
@@ -224,11 +268,14 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
     if (!plan || from === to) return;
     const r = moveMeal(plan.days, from, to);
     const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
-    editDays((days) => moveMeal(days, from, to).days, (r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh);
+    editDays(
+      (days) => moveMeal(days, from, to).days,
+      (r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh,
+    );
   };
 
   const removeMeal = (dayName: string, mealId: string) => {
-    const mealToRemove = live()?.days[dayName]?.meals.find(m => m.id === mealId);
+    const mealToRemove = live()?.days[dayName]?.meals.find((m) => m.id === mealId);
     if (!mealToRemove) return;
     changeMeal(dayName, mealToRemove, null);
   };
@@ -263,7 +310,8 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
     return done;
   };
 
-  const seeTheList = (planId: string) => (onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop', planId) } : null);
+  const seeTheList = (planId: string) =>
+    onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop', planId) } : null;
 
   /** Send the week to the shopping list (first time), and get the week after ready. */
   const sendToList = () => {
@@ -299,8 +347,20 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
   };
 
   return {
-    howPrompt, cancelHow: () => setHowPrompt(null), confirmHow,
-    removeLeftoversPrompt, cancelRemoveLeftovers: () => setRemoveLeftoversPrompt(null), confirmRemoveWithLeftovers,
-    placeRecipe, addCustomMeal, saveDayDetails, moveDayMeal, removeMeal, saveSides, copyWeek, sendToList, updateList,
+    howPrompt,
+    cancelHow: () => setHowPrompt(null),
+    confirmHow,
+    removeLeftoversPrompt,
+    cancelRemoveLeftovers: () => setRemoveLeftoversPrompt(null),
+    confirmRemoveWithLeftovers,
+    placeRecipe,
+    addCustomMeal,
+    saveDayDetails,
+    moveDayMeal,
+    removeMeal,
+    saveSides,
+    copyWeek,
+    sendToList,
+    updateList,
   };
 }

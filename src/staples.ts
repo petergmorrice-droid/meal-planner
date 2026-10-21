@@ -21,7 +21,17 @@ export function stapleUnit(unit: string, amount: number): string {
 }
 
 /** A new staple. Its aisle is the one given, else worked out from the name. */
-export function newStaple({ name, amount, unit, category }: { name: string; amount: number; unit: string; category?: string }): RecurringItem {
+export function newStaple({
+  name,
+  amount,
+  unit,
+  category,
+}: {
+  name: string;
+  amount: number;
+  unit: string;
+  category?: string;
+}): RecurringItem {
   const clean = name.trim();
   return {
     id: crypto.randomUUID(),
@@ -40,14 +50,22 @@ export function stapleFor(catalog: Catalog, typed: string): RecurringItem {
   const item = matchProduct(catalog, typed)?.item;
   if (!item) return newStaple({ name: typed, amount: 1, unit: 'item' });
   const q = stapleQuantity(item.unit || 'item', item.increment || 1, 1);
-  return newStaple({ name: item.name, amount: q.amount, unit: q.unit, category: aisleCategory(item) || GROCERY_AISLES.pantry_spices.name });
+  return newStaple({
+    name: item.name,
+    amount: q.amount,
+    unit: q.unit,
+    category: aisleCategory(item) || GROCERY_AISLES.pantry_spices.name,
+  });
 }
 
 /** The staple with this name, if there is one. */
 export const findStaple = (staples: RecurringItem[], name: string) => staples.find((s) => sameName(s.name, name));
 
 /** Add a staple, unless there's one of that name already (then that one is kept). */
-export function addStaple(staples: RecurringItem[], staple: RecurringItem): { staples: RecurringItem[]; staple: RecurringItem; added: boolean } {
+export function addStaple(
+  staples: RecurringItem[],
+  staple: RecurringItem,
+): { staples: RecurringItem[]; staple: RecurringItem; added: boolean } {
   const existing = findStaple(staples, staple.name);
   if (existing) return { staples, staple: existing, added: false };
   return { staples: [...staples, staple], staple, added: true };
@@ -55,7 +73,11 @@ export function addStaple(staples: RecurringItem[], staple: RecurringItem): { st
 
 export const removeStaple = (staples: RecurringItem[], id: string) => staples.filter((s) => s.id !== id);
 
-export function changeStaple(staples: RecurringItem[], id: string, patch: Partial<Omit<RecurringItem, 'id'>>): RecurringItem[] {
+export function changeStaple(
+  staples: RecurringItem[],
+  id: string,
+  patch: Partial<Omit<RecurringItem, 'id'>>,
+): RecurringItem[] {
   return staples.map((s) => (s.id === id ? { ...s, ...patch } : s));
 }
 
@@ -75,7 +97,10 @@ export function stepStaple(staples: RecurringItem[], id: string, dir: number, st
  * the staple's own line replaces (so it isn't on the list twice).
  */
 export function listWithStaples(
-  plans: MealPlan[], list: ShoppingListItem[], staples: RecurringItem[], removedIds: string[],
+  plans: MealPlan[],
+  list: ShoppingListItem[],
+  staples: RecurringItem[],
+  removedIds: string[],
   takeOver?: { staple: RecurringItem; isSame: (i: ShoppingListItem) => boolean },
 ): ShoppingListItem[] {
   const synced = syncRecurringStaplesForAllPlans(plans, list, staples, removedIds);
@@ -92,13 +117,24 @@ export function currentStaples(store: AppStore): RecurringItem[] {
  * latest list. `alsoChangeList`: another change to the list made at the same time;
  * `alsoPreferences`: other preferences saved in the same change.
  */
-export function saveStaples(store: AppStore, staples: RecurringItem[], opts: {
-  alsoChangeList?: (list: ShoppingListItem[]) => ShoppingListItem[];
-  takeOver?: { staple: RecurringItem; isSame: (i: ShoppingListItem) => boolean };
-  alsoPreferences?: Partial<UserPreferences>;
-} = {}) {
+export function saveStaples(
+  store: AppStore,
+  staples: RecurringItem[],
+  opts: {
+    alsoChangeList?: (list: ShoppingListItem[]) => ShoppingListItem[];
+    takeOver?: { staple: RecurringItem; isSame: (i: ShoppingListItem) => boolean };
+    alsoPreferences?: Partial<UserPreferences>;
+  } = {},
+) {
   const removed = store.dismissedShoppingItemIds || [];
   store.updatePreferences({ ...opts.alsoPreferences, recurringItems: staples });
   store.updateShoppingList((list, now) =>
-    listWithStaples(now.mealPlans || [], opts.alsoChangeList ? opts.alsoChangeList(list) : list, staples, removed, opts.takeOver));
+    listWithStaples(
+      now.mealPlans || [],
+      opts.alsoChangeList ? opts.alsoChangeList(list) : list,
+      staples,
+      removed,
+      opts.takeOver,
+    ),
+  );
 }

@@ -6,7 +6,11 @@ import { listSnapshot } from './planning';
 import type { AppStore } from './store';
 
 export function weekLabelFor(startDate: string): string {
-  return startDate === getCurrentMondayStr() ? 'This Week' : startDate === getNextMondayStr() ? 'Next Week' : formatWeekRange(startDate);
+  return startDate === getCurrentMondayStr()
+    ? 'This Week'
+    : startDate === getNextMondayStr()
+      ? 'Next Week'
+      : formatWeekRange(startDate);
 }
 
 /**
@@ -20,12 +24,18 @@ export function sendWeekToShoppingList(store: AppStore, plan: MealPlan) {
   const sentPlan: MealPlan = { ...latest, status: 'finalized', lastFinalizedSnapshot: listSnapshot(latest) };
   store.updateMealPlan(sentPlan);
   const removed: string[] = store.dismissedShoppingItemIds || [];
-  store.updateShoppingList((list, s) => listWithWeek(list, sentPlan, s.recipes, s.preferences?.recurringItems || [], removed));
+  store.updateShoppingList((list, s) =>
+    listWithWeek(list, sentPlan, s.recipes, s.preferences?.recurringItems || [], removed),
+  );
 }
 
 /** The shopping list with this week's staples and meal ingredients brought up to date (see above). */
 export function listWithWeek(
-  list: ShoppingListItem[], plan: MealPlan, recipes: Recipe[], staples: RecurringItem[], dismissedItemIds: string[],
+  list: ShoppingListItem[],
+  plan: MealPlan,
+  recipes: Recipe[],
+  staples: RecurringItem[],
+  dismissedItemIds: string[],
 ): ShoppingListItem[] {
   const targetItems = generateShoppingListForPlan(plan, recipes);
   const existingItemsForPlan = list.filter((i) => i.planId === plan.id);
@@ -41,12 +51,25 @@ export function listWithWeek(
     const existing = existingRecurring.find((i) => i.id === itemId);
     if (!existing) {
       recurringItemsToKeep.push({
-        id: itemId, name: rec.name, amount: rec.amount, unit: rec.unit, category: rec.category,
-        checked: false, isAdhoc: false, isRecurring: true, planId: plan.id,
+        id: itemId,
+        name: rec.name,
+        amount: rec.amount,
+        unit: rec.unit,
+        category: rec.category,
+        checked: false,
+        isAdhoc: false,
+        isRecurring: true,
+        planId: plan.id,
         weekLabel: `Week of ${weekLabelFor(plan.startDate)}`,
       } as ShoppingListItem);
     } else if (!existing.userAdjusted) {
-      recurringItemsToKeep.push({ ...existing, name: rec.name, amount: rec.amount, unit: rec.unit, category: rec.category });
+      recurringItemsToKeep.push({
+        ...existing,
+        name: rec.name,
+        amount: rec.amount,
+        unit: rec.unit,
+        category: rec.category,
+      });
     } else {
       recurringItemsToKeep.push(existing);
     }
@@ -59,7 +82,13 @@ export function listWithWeek(
     const existing = existingMealItems.find((e) => e.name.toLowerCase().trim() === key);
     if (existing) {
       const keep = existing.userAdjusted;
-      syncedMealItems.push({ ...existing, amount: keep ? existing.amount : target.amount, unit: keep ? existing.unit : target.unit, recipeNames: target.recipeNames, neededText: target.neededText });
+      syncedMealItems.push({
+        ...existing,
+        amount: keep ? existing.amount : target.amount,
+        unit: keep ? existing.unit : target.unit,
+        recipeNames: target.recipeNames,
+        neededText: target.neededText,
+      });
     } else if (!dismissedItemIds.includes(target.id)) {
       syncedMealItems.push(target);
     }

@@ -4,8 +4,27 @@ import { ratingsFor, withRating } from '../ratings';
 import PersonMark, { noteLook } from './PersonMark';
 
 import {
-  X, Pencil, Sparkles, Minus, Plus, Check, Clock, Users, Flame, Zap, Leaf, Snowflake, CalendarCheck,
-  CalendarPlus, ChefHat, ExternalLink, History, Star, Share2, ThumbsUp, ThumbsDown,
+  X,
+  Pencil,
+  Sparkles,
+  Minus,
+  Plus,
+  Check,
+  Clock,
+  Users,
+  Flame,
+  Zap,
+  Leaf,
+  Snowflake,
+  CalendarCheck,
+  CalendarPlus,
+  ChefHat,
+  ExternalLink,
+  History,
+  Star,
+  Share2,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { Recipe, CookingMethod, TabName } from '../types';
 import { RecipeEditor, methodSteps } from './RecipeEditor';
@@ -13,11 +32,25 @@ import { formatCookingAmount } from '../shopping';
 import { scaleRecipeStepQuantities } from '../utils';
 import { editRecipeApi, generateAlternativeInstructionsApi } from '../services/geminiService';
 import {
-  recipeMethods, totalMinutes, formatMinutes, isVegetarianRecipe, isVeganRecipe, recipeHistories,
-  freezerPortions, formatAgo, formatPlannedDay, formatShortDate, todayISO, siteName, recipeIntro, recipeShareText,
-  METHOD_LABEL, METHOD_ORDER, changedFields } from '../recipeInfo';
+  recipeMethods,
+  totalMinutes,
+  formatMinutes,
+  isVegetarianRecipe,
+  isVeganRecipe,
+  recipeHistories,
+  freezerPortions,
+  formatAgo,
+  formatPlannedDay,
+  formatShortDate,
+  todayISO,
+  siteName,
+  recipeIntro,
+  recipeShareText,
+  METHOD_LABEL,
+  METHOD_ORDER,
+  changedFields,
+} from '../recipeInfo';
 import type { AppStore } from '../store';
-
 
 const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-500';
 
@@ -82,10 +115,14 @@ export function RecipeModal({
   const [pickedMethod, setMethod] = useState<CookingMethod>(methods[0] || 'oven_hob');
   // The method shown: the one you picked, or the recipe's first if it no longer has that one.
   const method = methods.length > 0 && !methods.includes(pickedMethod) ? methods[0] : pickedMethod;
-  useEffect(() => { setDoneSteps({}); }, [method]);
+  useEffect(() => {
+    setDoneSteps({});
+  }, [method]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !isEditing && !showDeleteConfirm) onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isEditing && !showDeleteConfirm) onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, isEditing, showDeleteConfirm]);
@@ -122,18 +159,28 @@ export function RecipeModal({
     });
     const nav: any = typeof navigator !== 'undefined' ? navigator : null;
     if (nav?.share) {
-      try { await nav.share({ title: edited.name, text }); return; }
-      catch (e: any) { if (e?.name === 'AbortError') return; }
+      try {
+        await nav.share({ title: edited.name, text });
+        return;
+      } catch (e: any) {
+        if (e?.name === 'AbortError') return;
+      }
     }
-    try { await nav?.clipboard?.writeText(text); setShareNote('Copied: paste it into a message.'); }
-    catch { setShareNote("Sharing isn't available here."); }
+    try {
+      await nav?.clipboard?.writeText(text);
+      setShareNote('Copied: paste it into a message.');
+    } catch {
+      setShareNote("Sharing isn't available here.");
+    }
     setTimeout(() => setShareNote(''), 3500);
   };
 
   // Both of your star ratings; tapping yours saves it straight away (synced one rating at a time).
   const myRatings = ratingsFor(store?.state?.preferences?.ratings, recipe.id);
   const rate = (stars: number) => {
-    store?.updatePreferences?.((p) => ({ ratings: withRating(p.ratings, recipe.id, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) }));
+    store?.updatePreferences?.((p) => ({
+      ratings: withRating(p.ratings, recipe.id, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)),
+    }));
   };
 
   // "Our notes", changed right here without editing the whole recipe.
@@ -141,7 +188,8 @@ export function RecipeModal({
   const saveNotes = () => {
     const notes = (notesDraft || '').trim() || undefined;
     const next: Recipe = { ...edited, notes };
-    if (notes) next.notesBy = store?.currentUser || next.notesBy; else delete next.notesBy;
+    if (notes) next.notesBy = store?.currentUser || next.notesBy;
+    else delete next.notesBy;
     setEdited(next);
     setNotesDraft(null);
     saveChanges(edited, next);
@@ -174,9 +222,11 @@ export function RecipeModal({
       setShowAiPrompt(false);
       setIsEditing(false);
     } catch (err: any) {
-      setAiError(err?.message === 'GEMINI_API_KEY_MISSING'
-        ? 'Gemini needs its key: add it in Settings.'
-        : (err?.message || 'Gemini could not change the recipe. Try again.'));
+      setAiError(
+        err?.message === 'GEMINI_API_KEY_MISSING'
+          ? 'Gemini needs its key: add it in Settings.'
+          : err?.message || 'Gemini could not change the recipe. Try again.',
+      );
     } finally {
       setAiBusy(false);
     }
@@ -192,7 +242,11 @@ export function RecipeModal({
       const next: Recipe = {
         ...edited,
         cookingMethods: Array.from(new Set([...(edited.cookingMethods || methods), target])) as CookingMethod[],
-        methodInstructions: { ...(edited.methodInstructions || {}), ...(methods.length === 0 && edited.instructions?.length ? { [from]: edited.instructions } : {}), [target]: data.instructions || [] },
+        methodInstructions: {
+          ...(edited.methodInstructions || {}),
+          ...(methods.length === 0 && edited.instructions?.length ? { [from]: edited.instructions } : {}),
+          [target]: data.instructions || [],
+        },
         methodPrepTime: { ...(edited.methodPrepTime || {}), [target]: data.prepTime || edited.prepTime },
         methodCookTime: { ...(edited.methodCookTime || {}), [target]: data.cookTime || edited.cookTime },
       };
@@ -200,9 +254,11 @@ export function RecipeModal({
       setEdited(next);
       setMethod(target);
     } catch (err: any) {
-      setWriteError(err?.message === 'GEMINI_API_KEY_MISSING'
-        ? 'Gemini needs its key: add it in Settings.'
-        : (err?.message || 'Gemini could not write the steps. Try again.'));
+      setWriteError(
+        err?.message === 'GEMINI_API_KEY_MISSING'
+          ? 'Gemini needs its key: add it in Settings.'
+          : err?.message || 'Gemini could not write the steps. Try again.',
+      );
     } finally {
       setWriting(null);
     }
@@ -210,23 +266,42 @@ export function RecipeModal({
 
   const tickedCount = Object.values(ticked).filter(Boolean).length;
   const contextBits: React.ReactNode[] = [];
-  if (history?.nextPlanned) contextBits.push(
-    <span key="planned" className="inline-flex items-center gap-1 text-emerald-800"><CalendarCheck className="w-4 h-4" />Planned for {formatPlannedDay(history.nextPlanned, today)}</span>,
-  );
-  if (history?.lastHad) contextBits.push(
-    <span key="last" className="inline-flex items-center gap-1"><History className="w-4 h-4 text-zinc-400" />Last had {formatShortDate(history.lastHad, today)} ({formatAgo(history.lastHad, today)})</span>,
-  );
-  if (frozen > 0) contextBits.push(
-    <span key="frozen" className="inline-flex items-center gap-1 text-cyan-900"><Snowflake className="w-4 h-4 text-cyan-600" />{frozen} {frozen === 1 ? 'portion' : 'portions'} in the freezer</span>,
-  );
-  if (store?.state?.mealPlans && !history) contextBits.push(<span key="new" className="text-zinc-500">Not had yet</span>);
+  if (history?.nextPlanned)
+    contextBits.push(
+      <span key="planned" className="inline-flex items-center gap-1 text-emerald-800">
+        <CalendarCheck className="w-4 h-4" />
+        Planned for {formatPlannedDay(history.nextPlanned, today)}
+      </span>,
+    );
+  if (history?.lastHad)
+    contextBits.push(
+      <span key="last" className="inline-flex items-center gap-1">
+        <History className="w-4 h-4 text-zinc-400" />
+        Last had {formatShortDate(history.lastHad, today)} ({formatAgo(history.lastHad, today)})
+      </span>,
+    );
+  if (frozen > 0)
+    contextBits.push(
+      <span key="frozen" className="inline-flex items-center gap-1 text-cyan-900">
+        <Snowflake className="w-4 h-4 text-cyan-600" />
+        {frozen} {frozen === 1 ? 'portion' : 'portions'} in the freezer
+      </span>,
+    );
+  if (store?.state?.mealPlans && !history)
+    contextBits.push(
+      <span key="new" className="text-zinc-500">
+        Not had yet
+      </span>,
+    );
 
   const footer = isEditing || onAddToDay || onStartCook;
 
   return (
     <div
       className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150"
-      onClick={(e) => { if (e.target === e.currentTarget && !isEditing) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isEditing) onClose();
+      }}
     >
       <div
         role="dialog"
@@ -253,7 +328,10 @@ export function RecipeModal({
             {isEditing && (
               <button
                 type="button"
-                onClick={() => { setShowAiPrompt(!showAiPrompt); setAiError(''); }}
+                onClick={() => {
+                  setShowAiPrompt(!showAiPrompt);
+                  setAiError('');
+                }}
                 className={`w-11 h-11 rounded-full border flex items-center justify-center shrink-0 cursor-pointer ${showAiPrompt ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
                 aria-label="Change it with Gemini"
                 title="Change it with Gemini"
@@ -264,7 +342,10 @@ export function RecipeModal({
             {!isEditing && (
               <button
                 type="button"
-                onClick={() => { editStart.current = edited; setIsEditing(true); }}
+                onClick={() => {
+                  editStart.current = edited;
+                  setIsEditing(true);
+                }}
                 className="w-11 h-11 rounded-full border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 flex items-center justify-center shrink-0 cursor-pointer"
                 aria-label="Edit recipe"
                 title="Edit recipe"
@@ -274,7 +355,13 @@ export function RecipeModal({
             )}
             <button
               type="button"
-              onClick={() => { if (isEditing) { setEdited(recipe); setIsEditing(false); setShowAiPrompt(false); } else onClose(); }}
+              onClick={() => {
+                if (isEditing) {
+                  setEdited(recipe);
+                  setIsEditing(false);
+                  setShowAiPrompt(false);
+                } else onClose();
+              }}
               className="w-11 h-11 rounded-full border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 flex items-center justify-center shrink-0 cursor-pointer"
               aria-label={isEditing ? 'Stop editing without saving' : 'Close'}
               title={isEditing ? 'Stop editing without saving' : 'Close'}
@@ -285,25 +372,49 @@ export function RecipeModal({
 
           {!isEditing && (
             <>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-zinc-700" data-recipe-summary>
+              <div
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-zinc-700"
+                data-recipe-summary
+              >
                 {mins && (
                   <span className="inline-flex items-center gap-1">
-                    <Clock className="w-4 h-4 text-zinc-400" />{formatMinutes(mins)}
+                    <Clock className="w-4 h-4 text-zinc-400" />
+                    {formatMinutes(mins)}
                     {(edited.prepTime || 0) > 0 && (edited.cookTime || 0) > 0 && (
-                      <span className="text-zinc-500">({edited.prepTime} prep, {edited.cookTime} cook)</span>
+                      <span className="text-zinc-500">
+                        ({edited.prepTime} prep, {edited.cookTime} cook)
+                      </span>
                     )}
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1"><Users className="w-4 h-4 text-zinc-400" />Serves {edited.servings || 2}</span>
+                <span className="inline-flex items-center gap-1">
+                  <Users className="w-4 h-4 text-zinc-400" />
+                  Serves {edited.servings || 2}
+                </span>
                 {methods.map((m) => (
                   <span key={m} className="inline-flex items-center gap-1">
-                    {m === 'ninja' ? <Zap className="w-4 h-4 text-amber-500" /> : <Flame className="w-4 h-4 text-rose-500" />}{METHOD_LABEL[m]}
+                    {m === 'ninja' ? (
+                      <Zap className="w-4 h-4 text-amber-500" />
+                    ) : (
+                      <Flame className="w-4 h-4 text-rose-500" />
+                    )}
+                    {METHOD_LABEL[m]}
                   </span>
                 ))}
-                {veg && <span className="inline-flex items-center gap-1 text-emerald-800"><Leaf className="w-4 h-4 text-emerald-600" />{veg}</span>}
+                {veg && (
+                  <span className="inline-flex items-center gap-1 text-emerald-800">
+                    <Leaf className="w-4 h-4 text-emerald-600" />
+                    {veg}
+                  </span>
+                )}
               </div>
               {contextBits.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[13px] text-zinc-600" data-recipe-context>{contextBits}</div>
+                <div
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[13px] text-zinc-600"
+                  data-recipe-context
+                >
+                  {contextBits}
+                </div>
               )}
               <div className="flex flex-wrap items-center gap-2 mt-2.5">
                 {store?.updateRecipe && (
@@ -313,10 +424,14 @@ export function RecipeModal({
                     aria-pressed={!!edited.favourite}
                     data-favourite-toggle
                     className={`h-9 px-3 rounded-full border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
-                      edited.favourite ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-white border-zinc-300 text-zinc-700'
+                      edited.favourite
+                        ? 'bg-amber-50 border-amber-300 text-amber-900'
+                        : 'bg-white border-zinc-300 text-zinc-700'
                     }`}
                   >
-                    <Star className={`w-4 h-4 ${edited.favourite ? 'fill-amber-400 text-amber-500' : 'text-zinc-500'}`} />
+                    <Star
+                      className={`w-4 h-4 ${edited.favourite ? 'fill-amber-400 text-amber-500' : 'text-zinc-500'}`}
+                    />
                     {edited.favourite ? 'Favourite' : 'Add to favourites'}
                   </button>
                 )}
@@ -331,7 +446,9 @@ export function RecipeModal({
                     title="What you said after cooking it. Tap to clear."
                     data-recipe-verdict={edited.verdict}
                     className={`h-9 px-3 rounded-full border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
-                      edited.verdict === 'again' ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-rose-50 border-rose-300 text-rose-900'
+                      edited.verdict === 'again'
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                        : 'bg-rose-50 border-rose-300 text-rose-900'
                     }`}
                   >
                     {edited.verdict === 'again' ? <ThumbsUp className="w-4 h-4" /> : <ThumbsDown className="w-4 h-4" />}
@@ -345,9 +462,14 @@ export function RecipeModal({
                   data-share-recipe
                   className="h-9 px-3 rounded-full border border-zinc-300 bg-white text-zinc-700 text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Share2 className="w-4 h-4 text-zinc-500" />Share
+                  <Share2 className="w-4 h-4 text-zinc-500" />
+                  Share
                 </button>
-                {shareNote && <span className="text-[13px] text-emerald-800" role="status">{shareNote}</span>}
+                {shareNote && (
+                  <span className="text-[13px] text-emerald-800" role="status">
+                    {shareNote}
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -358,7 +480,9 @@ export function RecipeModal({
                 <input
                   value={aiInstruction}
                   onChange={(e) => setAiInstruction(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleAiEdit(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAiEdit();
+                  }}
                   placeholder="e.g. make it dairy-free"
                   aria-label="What should Gemini change?"
                   disabled={aiBusy}
@@ -377,7 +501,16 @@ export function RecipeModal({
                 <p className="text-sm text-rose-700">
                   {aiError}{' '}
                   {/key/.test(aiError) && onNavigateTab && (
-                    <button type="button" className="underline font-semibold cursor-pointer" onClick={() => { onClose(); onNavigateTab('settings'); }}>Open Settings</button>
+                    <button
+                      type="button"
+                      className="underline font-semibold cursor-pointer"
+                      onClick={() => {
+                        onClose();
+                        onNavigateTab('settings');
+                      }}
+                    >
+                      Open Settings
+                    </button>
                   )}
                 </p>
               )}
@@ -390,7 +523,9 @@ export function RecipeModal({
         <div className="flex-1 overflow-y-auto overscroll-contain bg-zinc-50/60">
           <div className="px-4 py-4 space-y-6">
             {!isEditing && recipeIntro(edited) && (
-              <p className="text-[15px] text-zinc-600 leading-relaxed" data-recipe-intro>{recipeIntro(edited)}</p>
+              <p className="text-[15px] text-zinc-600 leading-relaxed" data-recipe-intro>
+                {recipeIntro(edited)}
+              </p>
             )}
 
             {isEditing ? (
@@ -407,26 +542,66 @@ export function RecipeModal({
                 {/* Our notes first, so they're seen before cooking. Always here: add, change or read them. */}
                 <section data-recipe-notes>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <h3 className={`${sectionTitle} flex items-center gap-1.5`}>Our notes{(edited.notes || '').trim() && <PersonMark who={edited.notesBy} what="Notes written" />}</h3>
+                    <h3 className={`${sectionTitle} flex items-center gap-1.5`}>
+                      Our notes{(edited.notes || '').trim() && <PersonMark who={edited.notesBy} what="Notes written" />}
+                    </h3>
                     {(edited.notes || '').trim() && notesDraft === null && store?.updateRecipe && (
-                      <button type="button" onClick={() => setNotesDraft(edited.notes || '')} className="h-8 px-2.5 rounded-lg text-sm font-semibold text-emerald-700 hover:bg-emerald-50 cursor-pointer" data-recipe-notes-edit>Change</button>
+                      <button
+                        type="button"
+                        onClick={() => setNotesDraft(edited.notes || '')}
+                        className="h-8 px-2.5 rounded-lg text-sm font-semibold text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                        data-recipe-notes-edit
+                      >
+                        Change
+                      </button>
                     )}
                   </div>
                   {notesDraft !== null ? (
                     <div className="space-y-2">
-                      <textarea value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} rows={3} autoFocus
+                      <textarea
+                        value={notesDraft}
+                        onChange={(e) => setNotesDraft(e.target.value)}
+                        rows={3}
+                        autoFocus
                         placeholder="e.g. we use half the chilli, good with rice"
-                        className="w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-[15px] leading-relaxed outline-none focus:border-emerald-500" aria-label="Our notes" data-recipe-notes-input />
+                        className="w-full rounded-2xl border border-zinc-300 bg-white px-3 py-2 text-[15px] leading-relaxed outline-none focus:border-emerald-500"
+                        aria-label="Our notes"
+                        data-recipe-notes-input
+                      />
                       <div className="flex gap-2">
-                        <button type="button" onClick={saveNotes} className="h-10 px-4 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer" data-recipe-notes-save>Save notes</button>
-                        <button type="button" onClick={() => setNotesDraft(null)} className="h-10 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer">Cancel</button>
+                        <button
+                          type="button"
+                          onClick={saveNotes}
+                          className="h-10 px-4 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer"
+                          data-recipe-notes-save
+                        >
+                          Save notes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNotesDraft(null)}
+                          className="h-10 px-3 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
                       </div>
                     </div>
                   ) : (edited.notes || '').trim() ? (
-                    <p className={`border rounded-2xl p-3 text-[15px] text-zinc-800 leading-relaxed whitespace-pre-line ${noteLook(edited.notesBy).box}`} data-notes-by={edited.notesBy || undefined}>{edited.notes}</p>
+                    <p
+                      className={`border rounded-2xl p-3 text-[15px] text-zinc-800 leading-relaxed whitespace-pre-line ${noteLook(edited.notesBy).box}`}
+                      data-notes-by={edited.notesBy || undefined}
+                    >
+                      {edited.notes}
+                    </p>
                   ) : store?.updateRecipe ? (
-                    <button type="button" onClick={() => setNotesDraft('')} className="w-full rounded-2xl border border-dashed border-zinc-300 bg-white px-3 py-2.5 text-left text-[15px] text-zinc-500 hover:bg-zinc-50 cursor-pointer inline-flex items-center gap-1.5" data-recipe-notes-add>
-                      <Plus className="w-4 h-4 shrink-0" />Add a note, e.g. "we use half the chilli"
+                    <button
+                      type="button"
+                      onClick={() => setNotesDraft('')}
+                      className="w-full rounded-2xl border border-dashed border-zinc-300 bg-white px-3 py-2.5 text-left text-[15px] text-zinc-500 hover:bg-zinc-50 cursor-pointer inline-flex items-center gap-1.5"
+                      data-recipe-notes-add
+                    >
+                      <Plus className="w-4 h-4 shrink-0" />
+                      Add a note, e.g. "we use half the chilli"
                     </button>
                   ) : (
                     <p className="text-sm text-zinc-500">No notes yet.</p>
@@ -444,11 +619,16 @@ export function RecipeModal({
                 )}
 
                 {/* People */}
-                <section className="bg-white rounded-2xl border border-zinc-200 p-3 flex items-center justify-between gap-3" data-recipe-people>
+                <section
+                  className="bg-white rounded-2xl border border-zinc-200 p-3 flex items-center justify-between gap-3"
+                  data-recipe-people
+                >
                   <div>
                     <span className="text-base font-semibold text-zinc-900 block">Cooking for</span>
                     {portions !== (edited.servings || 2) && (
-                      <span className="text-[13px] text-zinc-500">Recipe makes {edited.servings || 2}; amounts adjusted</span>
+                      <span className="text-[13px] text-zinc-500">
+                        Recipe makes {edited.servings || 2}; amounts adjusted
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -461,7 +641,9 @@ export function RecipeModal({
                     >
                       <Minus className="w-5 h-5" />
                     </button>
-                    <span className="w-10 text-center text-xl font-bold tabular-nums" aria-live="polite" data-portions>{portions}</span>
+                    <span className="w-10 text-center text-xl font-bold tabular-nums" aria-live="polite" data-portions>
+                      {portions}
+                    </span>
                     <button
                       type="button"
                       onClick={() => setPortions((p) => Math.min(24, p + 1))}
@@ -477,9 +659,18 @@ export function RecipeModal({
                 {/* Ingredients */}
                 <section data-recipe-ingredients>
                   <div className="flex items-baseline justify-between mb-2">
-                    <h3 className={sectionTitle}>Ingredients <span className="normal-case font-medium tracking-normal">({edited.ingredients.length})</span></h3>
+                    <h3 className={sectionTitle}>
+                      Ingredients{' '}
+                      <span className="normal-case font-medium tracking-normal">({edited.ingredients.length})</span>
+                    </h3>
                     {tickedCount > 0 && (
-                      <button type="button" onClick={() => setTicked({})} className="text-[13px] font-semibold text-emerald-700 cursor-pointer">Clear ticks</button>
+                      <button
+                        type="button"
+                        onClick={() => setTicked({})}
+                        className="text-[13px] font-semibold text-emerald-700 cursor-pointer"
+                      >
+                        Clear ticks
+                      </button>
                     )}
                   </div>
                   <ul className="bg-white rounded-2xl border border-zinc-200 divide-y divide-zinc-100">
@@ -495,19 +686,34 @@ export function RecipeModal({
                             aria-pressed={on}
                             className="w-full text-left px-3 py-2.5 flex items-start gap-3 cursor-pointer"
                           >
-                            <span className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-300 bg-white'}`}>
+                            <span
+                              className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${on ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-300 bg-white'}`}
+                            >
                               {on && <Check className="w-3.5 h-3.5" />}
                             </span>
-                            <span className={`min-w-0 flex-1 text-[15px] leading-snug ${on ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}>
-                              {amount && <span className="font-semibold tabular-nums">{amount}{ing.unit ? ` ${ing.unit}` : ''} </span>}
+                            <span
+                              className={`min-w-0 flex-1 text-[15px] leading-snug ${on ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}
+                            >
+                              {amount && (
+                                <span className="font-semibold tabular-nums">
+                                  {amount}
+                                  {ing.unit ? ` ${ing.unit}` : ''}{' '}
+                                </span>
+                              )}
                               {ing.name}
-                              {ing.note && <span className={`block text-[13px] ${on ? 'text-zinc-400' : 'text-zinc-500'}`}>{ing.note}</span>}
+                              {ing.note && (
+                                <span className={`block text-[13px] ${on ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                                  {ing.note}
+                                </span>
+                              )}
                             </span>
                           </button>
                         </li>
                       );
                     })}
-                    {edited.ingredients.length === 0 && <li className="px-3 py-3 text-sm text-zinc-500">No ingredients yet.</li>}
+                    {edited.ingredients.length === 0 && (
+                      <li className="px-3 py-3 text-sm text-zinc-500">No ingredients yet.</li>
+                    )}
                   </ul>
                 </section>
 
@@ -526,7 +732,12 @@ export function RecipeModal({
                             onClick={() => setMethod(m)}
                             className={`h-9 px-3 rounded-lg text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${method === m ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600'}`}
                           >
-                            {m === 'ninja' ? <Zap className="w-4 h-4 text-amber-500" /> : <Flame className="w-4 h-4 text-rose-500" />}{METHOD_LABEL[m]}
+                            {m === 'ninja' ? (
+                              <Zap className="w-4 h-4 text-amber-500" />
+                            ) : (
+                              <Flame className="w-4 h-4 text-rose-500" />
+                            )}
+                            {METHOD_LABEL[m]}
                           </button>
                         ))}
                       </div>
@@ -543,17 +754,23 @@ export function RecipeModal({
                             aria-pressed={done}
                             className="w-full text-left bg-white rounded-2xl border border-zinc-200 p-3 flex gap-3 cursor-pointer"
                           >
-                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${done ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-700'}`}>
+                            <span
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${done ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-700'}`}
+                            >
                               {done ? <Check className="w-4 h-4" /> : idx + 1}
                             </span>
-                            <span className={`text-base leading-relaxed pt-0.5 ${done ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}>
+                            <span
+                              className={`text-base leading-relaxed pt-0.5 ${done ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}
+                            >
                               {scaleRecipeStepQuantities(step, edited.ingredients, scale)}
                             </span>
                           </button>
                         </li>
                       );
                     })}
-                    {steps.length === 0 && <li className="text-sm text-zinc-500">No steps yet. Tap the pencil to add them.</li>}
+                    {steps.length === 0 && (
+                      <li className="text-sm text-zinc-500">No steps yet. Tap the pencil to add them.</li>
+                    )}
                   </ol>
 
                   {missingMethod && edited.ingredients.length > 0 && (
@@ -566,16 +783,31 @@ export function RecipeModal({
                         data-write-method={missingMethod}
                       >
                         {writing ? (
-                          <><span className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-700 rounded-full animate-spin" />Writing {METHOD_LABEL[missingMethod]} steps…</>
+                          <>
+                            <span className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-700 rounded-full animate-spin" />
+                            Writing {METHOD_LABEL[missingMethod]} steps…
+                          </>
                         ) : (
-                          <><Sparkles className="w-4 h-4 text-emerald-600" />Write {METHOD_LABEL[missingMethod]} instructions with Gemini</>
+                          <>
+                            <Sparkles className="w-4 h-4 text-emerald-600" />
+                            Write {METHOD_LABEL[missingMethod]} instructions with Gemini
+                          </>
                         )}
                       </button>
                       {writeError && (
                         <p className="text-sm text-rose-700 mt-1.5">
                           {writeError}{' '}
                           {/key/.test(writeError) && onNavigateTab && (
-                            <button type="button" className="underline font-semibold cursor-pointer" onClick={() => { onClose(); onNavigateTab('settings'); }}>Open Settings</button>
+                            <button
+                              type="button"
+                              className="underline font-semibold cursor-pointer"
+                              onClick={() => {
+                                onClose();
+                                onNavigateTab('settings');
+                              }}
+                            >
+                              Open Settings
+                            </button>
                           )}
                         </p>
                       )}
@@ -591,7 +823,8 @@ export function RecipeModal({
                     className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-emerald-800 underline underline-offset-2"
                     data-recipe-source
                   >
-                    From {siteName(edited.sourceUrl)}<ExternalLink className="w-4 h-4" />
+                    From {siteName(edited.sourceUrl)}
+                    <ExternalLink className="w-4 h-4" />
                   </a>
                 )}
               </>
@@ -601,12 +834,19 @@ export function RecipeModal({
 
         {/* Footer: only when there's something to do */}
         {footer && (
-          <div className="px-4 py-3 border-t border-zinc-200 bg-white flex gap-2 shrink-0" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <div
+            className="px-4 py-3 border-t border-zinc-200 bg-white flex gap-2 shrink-0"
+            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+          >
             {isEditing ? (
               <>
                 <button
                   type="button"
-                  onClick={() => { setEdited(recipe); setIsEditing(false); setShowAiPrompt(false); }}
+                  onClick={() => {
+                    setEdited(recipe);
+                    setIsEditing(false);
+                    setShowAiPrompt(false);
+                  }}
                   className="flex-1 h-12 rounded-xl border border-zinc-300 bg-white text-zinc-800 text-base font-semibold cursor-pointer"
                 >
                   Cancel
@@ -627,7 +867,8 @@ export function RecipeModal({
                     onClick={() => onAddToDay(edited)}
                     className={`flex-1 h-12 rounded-xl text-base font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${onStartCook ? 'border border-zinc-300 bg-white text-zinc-900' : 'bg-emerald-700 text-white'}`}
                   >
-                    <CalendarPlus className="w-5 h-5" />Add to a day…
+                    <CalendarPlus className="w-5 h-5" />
+                    Add to a day…
                   </button>
                 )}
                 {onStartCook && (
@@ -636,7 +877,8 @@ export function RecipeModal({
                     onClick={() => onStartCook(portions)}
                     className="flex-1 h-12 rounded-xl bg-emerald-700 text-white text-base font-semibold inline-flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <ChefHat className="w-5 h-5" />Start cooking
+                    <ChefHat className="w-5 h-5" />
+                    Start cooking
                   </button>
                 )}
               </>
@@ -645,17 +887,37 @@ export function RecipeModal({
         )}
 
         {showDeleteConfirm && (
-          <div className="fixed inset-0 z-60 bg-black/40 flex items-center justify-center p-4" onClick={() => setShowDeleteConfirm(false)}>
-            <div role="alertdialog" aria-label="Delete this recipe?" className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="fixed inset-0 z-60 bg-black/40 flex items-center justify-center p-4"
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            <div
+              role="alertdialog"
+              aria-label="Delete this recipe?"
+              className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div>
                 <h4 className="text-base font-bold text-zinc-900">Delete {edited.name}?</h4>
-                <p className="text-sm text-zinc-600 mt-1">It's removed from the cookbook on both phones. This can't be undone.</p>
+                <p className="text-sm text-zinc-600 mt-1">
+                  It's removed from the cookbook on both phones. This can't be undone.
+                </p>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setShowDeleteConfirm(false)} className="flex-1 h-11 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer">Keep it</button>
                 <button
                   type="button"
-                  onClick={() => { store?.deleteRecipe?.(edited.id); setShowDeleteConfirm(false); onClose(); }}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 h-11 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer"
+                >
+                  Keep it
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    store?.deleteRecipe?.(edited.id);
+                    setShowDeleteConfirm(false);
+                    onClose();
+                  }}
                   className="flex-1 h-11 rounded-xl bg-rose-600 text-white text-sm font-semibold cursor-pointer"
                 >
                   Delete

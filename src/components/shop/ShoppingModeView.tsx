@@ -23,7 +23,13 @@ import {
 import { ShoppingListItem, MealPlan, ShopRoute } from '../../types';
 import { useJustTicked } from '../../hooks/useJustTicked';
 import ShopAisleGroup from '../ShopAisleGroup';
-import { AggregatedShoppingListItem, aggregateShoppingItems, formatWeekSpan, sortByRoute, milestoneCrossed } from '../../shopList';
+import {
+  AggregatedShoppingListItem,
+  aggregateShoppingItems,
+  formatWeekSpan,
+  sortByRoute,
+  milestoneCrossed,
+} from '../../shopList';
 import {
   formatWeekRange,
   getMonday,
@@ -107,21 +113,27 @@ export function ShoppingModeView({
     planned: false,
     batch: false,
     adhoc: false,
-    recurring: false
+    recurring: false,
   });
 
   const toggleSection = (section: string) => {
-    setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
+    setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   // One row per product, exactly as on the Shop list (so the counts match).
   const aggregatedItems = useMemo(() => aggregateShoppingItems(items, neededOf), [items, neededOf]);
-  const weekTitle = activePlan ? (activePlan.startDate === currentMondayStr ? 'This week' : activePlan.startDate === nextMondayStr ? 'Next week' : formatWeekSpan(activePlan.startDate)) : 'This week';
+  const weekTitle = activePlan
+    ? activePlan.startDate === currentMondayStr
+      ? 'This week'
+      : activePlan.startDate === nextMondayStr
+        ? 'Next week'
+        : formatWeekSpan(activePlan.startDate)
+    : 'This week';
 
   // Out of stock doesn't count against you: the % is of what the shop actually had.
-  const countable = aggregatedItems.filter(i => !i.outOfStock);
+  const countable = aggregatedItems.filter((i) => !i.outOfStock);
   const totalCount = countable.length;
-  const checkedCount = countable.filter(i => i.checked).length;
+  const checkedCount = countable.filter((i) => i.checked).length;
   const pendingCount = totalCount - checkedCount;
   const completionPercent = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
 
@@ -130,7 +142,12 @@ export function ShoppingModeView({
   const isDone = (i: AggregatedShoppingListItem) => (i.checked && !justTicked[i.key]) || !!i.outOfStock;
 
   // The last thing you did, with Undo in the bottom bar until you do something else.
-  const [lastAction, setLastAction] = useState<{ kind: 'tick' | 'out'; key: string; name: string; ids: string[] } | null>(null);
+  const [lastAction, setLastAction] = useState<{
+    kind: 'tick' | 'out';
+    key: string;
+    name: string;
+    ids: string[];
+  } | null>(null);
 
   // 25 / 50 / 75%: a moment in the header (and a buzz on Android); 100% gets the big one.
   const [milestone, setMilestone] = useState<string | null>(null);
@@ -154,32 +171,32 @@ export function ShoppingModeView({
 
   // Filter items
   const filteredItems = useMemo(() => {
-    if (filter === 'to_buy') return aggregatedItems.filter(i => !isDone(i));
-    if (filter === 'bought') return aggregatedItems.filter(i => i.checked);
+    if (filter === 'to_buy') return aggregatedItems.filter((i) => !isDone(i));
+    if (filter === 'bought') return aggregatedItems.filter((i) => i.checked);
     return aggregatedItems;
   }, [aggregatedItems, filter, justTicked]);
 
   // Sections sorting & grouping helpers
   const plannedModeItems = useMemo(() => {
-    return filteredItems.filter(i => !i.isAdhoc && !i.isBatch && !i.isRecurring);
+    return filteredItems.filter((i) => !i.isAdhoc && !i.isBatch && !i.isRecurring);
   }, [filteredItems]);
 
   const batchModeItems = useMemo(() => {
-    return filteredItems.filter(i => i.isBatch);
+    return filteredItems.filter((i) => i.isBatch);
   }, [filteredItems]);
 
   const recurringModeItems = useMemo(() => {
-    return filteredItems.filter(i => i.isRecurring);
+    return filteredItems.filter((i) => i.isRecurring);
   }, [filteredItems]);
 
   const adhocModeItems = useMemo(() => {
-    return filteredItems.filter(i => i.isAdhoc && !i.isRecurring);
+    return filteredItems.filter((i) => i.isAdhoc && !i.isRecurring);
   }, [filteredItems]);
 
   // Group by aisle for easy supermarket navigation
   const groupedAisles = useMemo(() => {
     const map = new Map<FoodAisle, AggregatedShoppingListItem[]>();
-    filteredItems.forEach(item => {
+    filteredItems.forEach((item) => {
       const aisle = getGroceryAisle(item);
       const list = map.get(aisle) || [];
       list.push(item);
@@ -191,7 +208,7 @@ export function ShoppingModeView({
       .map(([aisle, list]) => ({
         aisle,
         info: GROCERY_AISLES[aisle],
-        items: list
+        items: list,
       }))
       .sort((a, b) => pos[a.aisle] - pos[b.aisle]);
   }, [filteredItems, aisleOrder]);
@@ -204,16 +221,13 @@ export function ShoppingModeView({
     // In the order you usually pick things up (learned), else A–Z.
     const sorted = sortByRoute(itemList, route);
     if (dropCompletedToBottom) {
-      return [
-        ...sorted.filter(i => !isDone(i)),
-        ...sorted.filter(i => isDone(i))
-      ];
+      return [...sorted.filter((i) => !isDone(i)), ...sorted.filter((i) => isDone(i))];
     }
     return sorted;
   };
 
   const onToggle = (itemId: string) => {
-    const aggItem = aggregatedItems.find(i => i.id === itemId);
+    const aggItem = aggregatedItems.find((i) => i.id === itemId);
     if (!aggItem) return;
     // Out of stock but there after all: tapping it ticks it.
     const targetState = aggItem.outOfStock ? true : !aggItem.checked;
@@ -224,13 +238,13 @@ export function ShoppingModeView({
       setLastAction({ kind: 'tick', key: aggItem.key, name: aggItem.name, ids: aggItem.underlyingIds });
     } else {
       release(aggItem.key);
-      setLastAction(a => (a?.key === aggItem.key ? null : a));
+      setLastAction((a) => (a?.key === aggItem.key ? null : a));
     }
   };
 
   /** Press and hold: out of stock (or back in stock). */
   const onHoldRow = (itemId: string) => {
-    const aggItem = aggregatedItems.find(i => i.id === itemId);
+    const aggItem = aggregatedItems.find((i) => i.id === itemId);
     if (!aggItem) return;
     const value = !aggItem.outOfStock;
     onOutOfStock(aggItem.underlyingIds, value);
@@ -264,14 +278,19 @@ export function ShoppingModeView({
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-100">Shopping mode</span>
               </div>
               {milestone ? (
-                <p className="text-sm text-white mt-0.5 font-bold animate-in fade-in zoom-in-95" data-milestone>{milestone}</p>
+                <p className="text-sm text-white mt-0.5 font-bold animate-in fade-in zoom-in-95" data-milestone>
+                  {milestone}
+                </p>
               ) : (
                 <p className="text-xs text-emerald-100 mt-0.5 font-medium truncate" data-shop-mode-sub>
                   {weekTitle} · {checkedCount} of {totalCount} ticked
                 </p>
               )}
             </div>
-            <span className="shrink-0 text-lg font-black tracking-tight tabular-nums bg-white/20 px-2.5 py-0.5 rounded-xl text-white" data-percent>
+            <span
+              className="shrink-0 text-lg font-black tracking-tight tabular-nums bg-white/20 px-2.5 py-0.5 rounded-xl text-white"
+              data-percent
+            >
               {completionPercent}%
             </span>
             <div className="relative shrink-0">
@@ -289,13 +308,24 @@ export function ShoppingModeView({
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowViewOptions(false)} />
                   <div className="absolute right-0 top-full mt-2 w-64 bg-white text-zinc-800 rounded-2xl border border-zinc-200 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
-                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-1 pb-1.5">Show</span>
+                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-1 pb-1.5">
+                      Show
+                    </span>
                     <div className="flex gap-1 px-1 pb-1">
-                      {([['all', `All ${totalCount}`], ['to_buy', `To buy ${pendingCount}`], ['bought', `Bought ${checkedCount}`]] as const).map(([f, label]) => (
+                      {(
+                        [
+                          ['all', `All ${totalCount}`],
+                          ['to_buy', `To buy ${pendingCount}`],
+                          ['bought', `Bought ${checkedCount}`],
+                        ] as const
+                      ).map(([f, label]) => (
                         <button
                           key={f}
                           type="button"
-                          onClick={() => { setFilter(f); setShowViewOptions(false); }}
+                          onClick={() => {
+                            setFilter(f);
+                            setShowViewOptions(false);
+                          }}
                           className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${filter === f ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'}`}
                           data-filter={f}
                         >
@@ -303,34 +333,76 @@ export function ShoppingModeView({
                         </button>
                       ))}
                     </div>
-                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-2 pb-1.5 border-t border-zinc-100 mt-1">Layout</span>
-                    {([['food_type', 'By aisle', Store], ['sections', "By where it's from", Layers], ['all', 'A–Z', ShoppingBag]] as const).map(([mode, label, Icon]) => (
+                    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-2 pb-1.5 border-t border-zinc-100 mt-1">
+                      Layout
+                    </span>
+                    {(
+                      [
+                        ['food_type', 'By aisle', Store],
+                        ['sections', "By where it's from", Layers],
+                        ['all', 'A–Z', ShoppingBag],
+                      ] as const
+                    ).map(([mode, label, Icon]) => (
                       <button
                         key={mode}
                         type="button"
-                        onClick={() => { setViewMode(mode); setShowViewOptions(false); }}
+                        onClick={() => {
+                          setViewMode(mode);
+                          setShowViewOptions(false);
+                        }}
                         className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-sm cursor-pointer ${viewMode === mode ? 'bg-zinc-100 font-semibold text-zinc-900' : 'text-zinc-700 hover:bg-zinc-50'}`}
                       >
-                        <span className="flex items-center gap-2"><Icon className="w-4 h-4 text-zinc-500" />{label}</span>
+                        <span className="flex items-center gap-2">
+                          <Icon className="w-4 h-4 text-zinc-500" />
+                          {label}
+                        </span>
                         {viewMode === mode && <Check className="w-4 h-4 text-emerald-600" />}
                       </button>
                     ))}
                     <div className="border-t border-zinc-100 mt-1.5 pt-1.5 space-y-0.5">
                       <label className="flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700 select-none">
-                        <input type="checkbox" checked={dropCompletedToBottom} onChange={(e) => onToggleDropCompleted(e.target.checked)} className="rounded border-zinc-300 text-emerald-600 w-4 h-4 cursor-pointer" />
+                        <input
+                          type="checkbox"
+                          checked={dropCompletedToBottom}
+                          onChange={(e) => onToggleDropCompleted(e.target.checked)}
+                          className="rounded border-zinc-300 text-emerald-600 w-4 h-4 cursor-pointer"
+                        />
                         <span>Ticked items go to the bottom</span>
                       </label>
                       <label className="flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700 select-none">
-                        <input type="checkbox" id="toggle-compact-rows" checked={compactRows} onChange={(e) => onCompactRows(e.target.checked)} className="rounded border-zinc-300 text-emerald-600 w-4 h-4 cursor-pointer" />
+                        <input
+                          type="checkbox"
+                          id="toggle-compact-rows"
+                          checked={compactRows}
+                          onChange={(e) => onCompactRows(e.target.checked)}
+                          className="rounded border-zinc-300 text-emerald-600 w-4 h-4 cursor-pointer"
+                        />
                         <span>Compact rows</span>
                       </label>
-                      <button type="button" onClick={() => { setShowViewOptions(false); onArrangeAisles(); }} className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowViewOptions(false);
+                          onArrangeAisles();
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700"
+                      >
                         <ListOrdered className="w-4 h-4 text-zinc-500" /> Arrange aisles…
                       </button>
-                      <button type="button" onClick={() => { setShowViewOptions(false); onShowHistory(); }} className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700" data-open-history>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowViewOptions(false);
+                          onShowHistory();
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-zinc-50 rounded-xl cursor-pointer text-sm text-zinc-700"
+                        data-open-history
+                      >
                         <Trophy className="w-4 h-4 text-zinc-500" /> Past shops…
                       </button>
-                      <p className="px-2.5 pt-1 pb-1 text-xs text-zinc-500">Press and hold an item if it's out of stock.</p>
+                      <p className="px-2.5 pt-1 pb-1 text-xs text-zinc-500">
+                        Press and hold an item if it's out of stock.
+                      </p>
                     </div>
                   </div>
                 </>
@@ -349,17 +421,32 @@ export function ShoppingModeView({
           </div>
           {/* Progress bar */}
           <div className="max-w-2xl mx-auto mt-2.5 w-full h-2 bg-black/20 rounded-full overflow-hidden p-0.5">
-            <div className="h-full bg-white rounded-full transition-all duration-300 ease-out" style={{ width: `${completionPercent}%` }} />
+            <div
+              className="h-full bg-white rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${completionPercent}%` }}
+            />
           </div>
         </div>
         {filter !== 'all' && (
-          <div className="bg-white border-b border-zinc-200 px-4 py-1.5 text-sm text-zinc-600 flex items-center justify-between" data-filter-note>
+          <div
+            className="bg-white border-b border-zinc-200 px-4 py-1.5 text-sm text-zinc-600 flex items-center justify-between"
+            data-filter-note
+          >
             <span>Showing {filter === 'to_buy' ? 'what’s left to buy' : 'what you’ve bought'}</span>
-            <button type="button" onClick={() => setFilter('all')} className="font-semibold text-emerald-700 cursor-pointer">Show all</button>
+            <button
+              type="button"
+              onClick={() => setFilter('all')}
+              className="font-semibold text-emerald-700 cursor-pointer"
+            >
+              Show all
+            </button>
           </div>
         )}
         {!online && (
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-sm text-amber-900 flex items-center gap-2" data-offline>
+          <div
+            className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-sm text-amber-900 flex items-center gap-2"
+            data-offline
+          >
             <WifiOff className="w-4 h-4 shrink-0" />
             <span>No signal: your ticks are saved on this phone and will sync when you're back online.</span>
           </div>
@@ -367,7 +454,9 @@ export function ShoppingModeView({
       </header>
 
       {/* Main Simplified Shopping List Area */}
-      <div className={`flex-1 overflow-y-auto ${compactRows ? 'p-2.5 sm:p-5' : 'p-4 sm:p-6'} pb-6 max-w-2xl mx-auto w-full ${compactRows ? 'space-y-2.5' : 'space-y-4'}`}>
+      <div
+        className={`flex-1 overflow-y-auto ${compactRows ? 'p-2.5 sm:p-5' : 'p-4 sm:p-6'} pb-6 max-w-2xl mx-auto w-full ${compactRows ? 'space-y-2.5' : 'space-y-4'}`}
+      >
         {cupboardToCheckCount > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between gap-3">
             <span className="text-sm text-amber-950">
@@ -389,7 +478,9 @@ export function ShoppingModeView({
             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto animate-bounce">
               <PartyPopper className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-emerald-950" data-shop-complete>Shop 100% complete!</h3>
+            <h3 className="text-lg font-bold text-emerald-950" data-shop-complete>
+              Shop 100% complete!
+            </h3>
             <p className="text-sm text-emerald-800 max-w-xs mx-auto">
               All {totalCount} items on your list have been ticked.
             </p>
@@ -439,7 +530,7 @@ export function ShoppingModeView({
             </button>
           </div>
         ) : viewMode === 'food_type' ? (
-          groupedAisles.map(group => (
+          groupedAisles.map((group) => (
             <ShopAisleGroup
               key={group.aisle}
               aisle={group.aisle}
@@ -453,8 +544,13 @@ export function ShoppingModeView({
                   item={item}
                   onToggle={onToggle}
                   justTicked={!!justTicked[item.key]}
-                  onHold={onHoldRow} onInfo={onInfo}
-                  tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
+                  onHold={onHoldRow}
+                  onInfo={onInfo}
+                  tickedBy={
+                    item.checked && item.checkedBy && item.checkedBy !== currentUser
+                      ? personName(item.checkedBy)
+                      : undefined
+                  }
                   compact={compactRows}
                 />
               )}
@@ -463,176 +559,208 @@ export function ShoppingModeView({
         ) : viewMode === 'sections' ? (
           <div className="space-y-4">
             {/* Items */}
-            {adhocModeItems.length > 0 && (() => {
-              const isCollapsed = !!collapsedSections['adhoc'];
-              return (
-                <div className="space-y-2 border border-zinc-100 rounded-2xl bg-white p-3 shadow-3xs">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('adhoc')}
-                    className="w-full flex items-center justify-between hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left select-none"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
-                        Added by you
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-semibold text-zinc-400">
-                      {adhocModeItems.filter(i => !i.checked).length} left
-                    </span>
-                  </button>
-                  {!isCollapsed && (
-                    <div className={`${rowsClass} pt-1`}>
-                      {arrangeListItems(adhocModeItems).map(item => (
-                        <ShoppingModeItemRow
-                          key={item.id}
-                          item={item}
-                          onToggle={onToggle}
-                          justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow} onInfo={onInfo}
-                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
-                          compact={compactRows}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Recurring Staples */}
-            {recurringModeItems.length > 0 && (() => {
-              const isCollapsed = !!collapsedSections['recurring'];
-              return (
-                <div className="space-y-2 border border-zinc-100 rounded-2xl bg-white p-3 shadow-3xs">
-                  <div className="w-full flex items-center justify-between p-1 rounded-xl select-none">
+            {adhocModeItems.length > 0 &&
+              (() => {
+                const isCollapsed = !!collapsedSections['adhoc'];
+                return (
+                  <div className="space-y-2 border border-zinc-100 rounded-2xl bg-white p-3 shadow-3xs">
                     <button
                       type="button"
-                      onClick={() => toggleSection('recurring')}
-                      className="flex items-center gap-1.5 hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left min-w-0"
+                      onClick={() => toggleSection('adhoc')}
+                      className="w-full flex items-center justify-between hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left select-none"
                     >
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400 truncate max-w-[130px] sm:max-w-none">
-                        Weekly staples
+                      <div className="flex items-center gap-1.5">
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
+                        />
+                        <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
+                          Added by you
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-zinc-400">
+                        {adhocModeItems.filter((i) => !i.checked).length} left
                       </span>
                     </button>
-                    
-                    <div className="flex items-center gap-2 shrink-0">
+                    {!isCollapsed && (
+                      <div className={`${rowsClass} pt-1`}>
+                        {arrangeListItems(adhocModeItems).map((item) => (
+                          <ShoppingModeItemRow
+                            key={item.id}
+                            item={item}
+                            onToggle={onToggle}
+                            justTicked={!!justTicked[item.key]}
+                            onHold={onHoldRow}
+                            onInfo={onInfo}
+                            tickedBy={
+                              item.checked && item.checkedBy && item.checkedBy !== currentUser
+                                ? personName(item.checkedBy)
+                                : undefined
+                            }
+                            compact={compactRows}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+            {/* Recurring Staples */}
+            {recurringModeItems.length > 0 &&
+              (() => {
+                const isCollapsed = !!collapsedSections['recurring'];
+                return (
+                  <div className="space-y-2 border border-zinc-100 rounded-2xl bg-white p-3 shadow-3xs">
+                    <div className="w-full flex items-center justify-between p-1 rounded-xl select-none">
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEditStaples();
-                        }}
-                        className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
-                        title="Manage Staples"
+                        onClick={() => toggleSection('recurring')}
+                        className="flex items-center gap-1.5 hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left min-w-0"
                       >
-                        <Sliders className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
-                        <span>Manage</span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`}
+                        />
+                        <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400 truncate max-w-[130px] sm:max-w-none">
+                          Weekly staples
+                        </span>
                       </button>
 
-                      <span className="text-[11px] font-semibold text-zinc-400 shrink-0">
-                        {recurringModeItems.filter(i => !i.checked).length} left
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditStaples();
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-lg transition-all cursor-pointer shrink-0"
+                          title="Manage Staples"
+                        >
+                          <Sliders className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
+                          <span>Manage</span>
+                        </button>
+
+                        <span className="text-[11px] font-semibold text-zinc-400 shrink-0">
+                          {recurringModeItems.filter((i) => !i.checked).length} left
+                        </span>
+                      </div>
                     </div>
+                    {!isCollapsed && (
+                      <div className={`${rowsClass} pt-1`}>
+                        {arrangeListItems(recurringModeItems).map((item) => (
+                          <ShoppingModeItemRow
+                            key={item.id}
+                            item={item}
+                            onToggle={onToggle}
+                            justTicked={!!justTicked[item.key]}
+                            onHold={onHoldRow}
+                            onInfo={onInfo}
+                            tickedBy={
+                              item.checked && item.checkedBy && item.checkedBy !== currentUser
+                                ? personName(item.checkedBy)
+                                : undefined
+                            }
+                            compact={compactRows}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {!isCollapsed && (
-                    <div className={`${rowsClass} pt-1`}>
-                      {arrangeListItems(recurringModeItems).map(item => (
-                        <ShoppingModeItemRow
-                          key={item.id}
-                          item={item}
-                          onToggle={onToggle}
-                          justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow} onInfo={onInfo}
-                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
-                          compact={compactRows}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                );
+              })()}
 
             {/* Meal Ingredients */}
-            {plannedModeItems.length > 0 && (() => {
-              const isCollapsed = !!collapsedSections['planned'];
-              return (
-                <div className="space-y-2 border border-zinc-100 rounded-2xl bg-white p-3 shadow-3xs">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('planned')}
-                    className="w-full flex items-center justify-between hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left select-none"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
-                        For your meals
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-semibold text-zinc-400">
-                      {plannedModeItems.filter(i => !i.checked).length} left
-                    </span>
-                  </button>
-                  {!isCollapsed && (
-                    <div className={`${rowsClass} pt-1`}>
-                      {arrangeListItems(plannedModeItems).map(item => (
-                        <ShoppingModeItemRow
-                          key={item.id}
-                          item={item}
-                          onToggle={onToggle}
-                          justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow} onInfo={onInfo}
-                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
-                          compact={compactRows}
+            {plannedModeItems.length > 0 &&
+              (() => {
+                const isCollapsed = !!collapsedSections['planned'];
+                return (
+                  <div className="space-y-2 border border-zinc-100 rounded-2xl bg-white p-3 shadow-3xs">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection('planned')}
+                      className="w-full flex items-center justify-between hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left select-none"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
                         />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                        <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
+                          For your meals
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-zinc-400">
+                        {plannedModeItems.filter((i) => !i.checked).length} left
+                      </span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className={`${rowsClass} pt-1`}>
+                        {arrangeListItems(plannedModeItems).map((item) => (
+                          <ShoppingModeItemRow
+                            key={item.id}
+                            item={item}
+                            onToggle={onToggle}
+                            justTicked={!!justTicked[item.key]}
+                            onHold={onHoldRow}
+                            onInfo={onInfo}
+                            tickedBy={
+                              item.checked && item.checkedBy && item.checkedBy !== currentUser
+                                ? personName(item.checkedBy)
+                                : undefined
+                            }
+                            compact={compactRows}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
             {/* Batch Meals */}
-            {batchModeItems.length > 0 && (() => {
-              const isCollapsed = !!collapsedSections['batch'];
-              return (
-                <div className="space-y-2 border border-zinc-100 rounded-2xl bg-white p-3 shadow-3xs">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('batch')}
-                    className="w-full flex items-center justify-between hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left select-none"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-                      <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
-                        Extra recipes
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-semibold text-zinc-400">
-                      {batchModeItems.filter(i => !i.checked).length} left
-                    </span>
-                  </button>
-                  {!isCollapsed && (
-                    <div className={`${rowsClass} pt-1`}>
-                      {arrangeListItems(batchModeItems).map(item => (
-                        <ShoppingModeItemRow
-                          key={item.id}
-                          item={item}
-                          onToggle={onToggle}
-                          justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow} onInfo={onInfo}
-                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
-                          compact={compactRows}
+            {batchModeItems.length > 0 &&
+              (() => {
+                const isCollapsed = !!collapsedSections['batch'];
+                return (
+                  <div className="space-y-2 border border-zinc-100 rounded-2xl bg-white p-3 shadow-3xs">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection('batch')}
+                      className="w-full flex items-center justify-between hover:bg-zinc-50/50 p-1.5 rounded-xl transition-all cursor-pointer text-left select-none"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
                         />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                        <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-400">
+                          Extra recipes
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-zinc-400">
+                        {batchModeItems.filter((i) => !i.checked).length} left
+                      </span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className={`${rowsClass} pt-1`}>
+                        {arrangeListItems(batchModeItems).map((item) => (
+                          <ShoppingModeItemRow
+                            key={item.id}
+                            item={item}
+                            onToggle={onToggle}
+                            justTicked={!!justTicked[item.key]}
+                            onHold={onHoldRow}
+                            onInfo={onInfo}
+                            tickedBy={
+                              item.checked && item.checkedBy && item.checkedBy !== currentUser
+                                ? personName(item.checkedBy)
+                                : undefined
+                            }
+                            compact={compactRows}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
           </div>
         ) : (
           <div className="space-y-3">
@@ -643,18 +771,23 @@ export function ShoppingModeView({
                     All Items
                   </span>
                   <span className="text-[11px] text-zinc-400 font-medium">
-                    {filteredItems.filter(i => !i.checked).length} to buy
+                    {filteredItems.filter((i) => !i.checked).length} to buy
                   </span>
                 </div>
                 <div className={rowsClass}>
-                  {arrangeListItems(filteredItems).map(item => (
+                  {arrangeListItems(filteredItems).map((item) => (
                     <ShoppingModeItemRow
                       key={item.id}
                       item={item}
                       onToggle={onToggle}
                       justTicked={!!justTicked[item.key]}
-                      onHold={onHoldRow} onInfo={onInfo}
-                      tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
+                      onHold={onHoldRow}
+                      onInfo={onInfo}
+                      tickedBy={
+                        item.checked && item.checkedBy && item.checkedBy !== currentUser
+                          ? personName(item.checkedBy)
+                          : undefined
+                      }
                       compact={compactRows}
                     />
                   ))}
@@ -662,20 +795,25 @@ export function ShoppingModeView({
               </div>
             ) : (
               <>
-                {filteredItems.filter(i => !isDone(i)).length > 0 && (
+                {filteredItems.filter((i) => !isDone(i)).length > 0 && (
                   <div className="space-y-2">
                     <span className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
-                      To Buy ({filteredItems.filter(i => !i.checked).length})
+                      To Buy ({filteredItems.filter((i) => !i.checked).length})
                     </span>
                     <div className={rowsClass}>
-                      {arrangeListItems(filteredItems.filter(i => !isDone(i))).map(item => (
+                      {arrangeListItems(filteredItems.filter((i) => !isDone(i))).map((item) => (
                         <ShoppingModeItemRow
                           key={item.id}
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow} onInfo={onInfo}
-                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
+                          onHold={onHoldRow}
+                          onInfo={onInfo}
+                          tickedBy={
+                            item.checked && item.checkedBy && item.checkedBy !== currentUser
+                              ? personName(item.checkedBy)
+                              : undefined
+                          }
                           compact={compactRows}
                         />
                       ))}
@@ -683,20 +821,25 @@ export function ShoppingModeView({
                   </div>
                 )}
 
-                {filteredItems.filter(i => isDone(i)).length > 0 && (
+                {filteredItems.filter((i) => isDone(i)).length > 0 && (
                   <div className="space-y-2 pt-2">
                     <span className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] block px-1">
-                      Checked Off ({filteredItems.filter(i => isDone(i)).length})
+                      Checked Off ({filteredItems.filter((i) => isDone(i)).length})
                     </span>
                     <div className={rowsClass}>
-                      {arrangeListItems(filteredItems.filter(i => isDone(i))).map(item => (
+                      {arrangeListItems(filteredItems.filter((i) => isDone(i))).map((item) => (
                         <ShoppingModeItemRow
                           key={item.id}
                           item={item}
                           onToggle={onToggle}
                           justTicked={!!justTicked[item.key]}
-                          onHold={onHoldRow} onInfo={onInfo}
-                          tickedBy={item.checked && item.checkedBy && item.checkedBy !== currentUser ? personName(item.checkedBy) : undefined}
+                          onHold={onHoldRow}
+                          onInfo={onInfo}
+                          tickedBy={
+                            item.checked && item.checkedBy && item.checkedBy !== currentUser
+                              ? personName(item.checkedBy)
+                              : undefined
+                          }
                           compact={compactRows}
                         />
                       ))}
@@ -707,7 +850,11 @@ export function ShoppingModeView({
             )}
           </div>
         )}
-        {quickAdd && totalCount > 0 && <div className="pt-1" data-shopping-quick-add>{quickAdd}</div>}
+        {quickAdd && totalCount > 0 && (
+          <div className="pt-1" data-shopping-quick-add>
+            {quickAdd}
+          </div>
+        )}
         {totalCount > 0 && (
           <p className="text-xs text-zinc-500 text-center pt-1">Tip: press and hold an item if it's out of stock.</p>
         )}
@@ -725,7 +872,10 @@ export function ShoppingModeView({
                 data-undo-last
               >
                 <Undo2 className="w-4 h-4 shrink-0" />
-                <span className="truncate">Undo {lastAction.kind === 'out' ? 'out of stock: ' : ''}{lastAction.name}</span>
+                <span className="truncate">
+                  Undo {lastAction.kind === 'out' ? 'out of stock: ' : ''}
+                  {lastAction.name}
+                </span>
               </button>
             ) : (
               <span className="text-sm text-zinc-600 tabular-nums">{pendingCount} left</span>
@@ -734,7 +884,9 @@ export function ShoppingModeView({
               type="button"
               onClick={onDone}
               className={`ml-auto shrink-0 px-5 py-2.5 rounded-xl text-[15px] font-semibold cursor-pointer ${
-                pendingCount === 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                pendingCount === 0
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
               }`}
               data-done-shopping
             >

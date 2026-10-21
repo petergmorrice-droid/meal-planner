@@ -9,14 +9,21 @@ export function useOnline() {
     const down = () => setOnline(false);
     window.addEventListener('online', up);
     window.addEventListener('offline', down);
-    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
+    return () => {
+      window.removeEventListener('online', up);
+      window.removeEventListener('offline', down);
+    };
   }, []);
   return online;
 }
 
 /** A little buzz on phones that can (Android); nothing elsewhere. */
 export const buzz = (pattern: number | number[]) => {
-  try { navigator.vibrate?.(pattern); } catch { /* not supported */ }
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* not supported */
+  }
 };
 
 /** Keep the phone's screen on while shopping or cooking (where the browser allows it). */
@@ -30,15 +37,23 @@ export function useScreenAwake() {
       try {
         if (document.visibilityState !== 'visible' || stopped) return;
         lock = await nav.wakeLock.request('screen');
-      } catch { /* not allowed here: the screen just sleeps as usual */ }
+      } catch {
+        /* not allowed here: the screen just sleeps as usual */
+      }
     };
-    const onVisible = () => { if (document.visibilityState === 'visible') void grab(); };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void grab();
+    };
     void grab();
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       stopped = true;
       document.removeEventListener('visibilitychange', onVisible);
-      try { lock?.release?.(); } catch { /* ignore */ }
+      try {
+        lock?.release?.();
+      } catch {
+        /* ignore */
+      }
     };
   }, []);
 }

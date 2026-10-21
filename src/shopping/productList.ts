@@ -10,8 +10,17 @@ import type { AppState, GroceryItem, ShoppingListItem, UserPreferences } from '.
 import { getSyncMeta, stableStringify } from '../services/syncMerge';
 import { aisleCategory, isAisleName } from './aisles';
 import {
-  EXTRA_PRODUCTS, builtInProducts, builtInSameAs, isBuiltInProduct, matchProduct, alsoCalled,
-  applyDefaultChanges, listRenames, CATALOG_VERSION, type Catalog, type Product,
+  EXTRA_PRODUCTS,
+  builtInProducts,
+  builtInSameAs,
+  isBuiltInProduct,
+  matchProduct,
+  alsoCalled,
+  applyDefaultChanges,
+  listRenames,
+  CATALOG_VERSION,
+  type Catalog,
+  type Product,
 } from './catalog';
 import { matchKey, nameWords } from './names';
 import { canonicalUnit } from './units';
@@ -45,7 +54,11 @@ export function normaliseProducts(state: AppState, now: number): AppState {
   const out = list.slice();
   const index = new Map(out.map((g, i) => [g.id, i]));
   let changed = false;
-  const add = (item: GroceryItem) => { index.set(item.id, out.length); out.push(item); changed = true; };
+  const add = (item: GroceryItem) => {
+    index.set(item.id, out.length);
+    out.push(item);
+    changed = true;
+  };
   const deletedAt = (id: string) => meta.tombstones[`groceryDatabase:${id}`];
 
   // 1. Built-in products deleted outright by an older version.
@@ -69,7 +82,10 @@ export function normaliseProducts(state: AppState, now: number): AppState {
       if (at !== undefined) {
         const cur = out[at];
         const next = { ...cur, ...fields, id: cur.id };
-        if (!same(next, cur)) { out[at] = { ...next, lastModifiedAt: Math.max(ts(cur), t) + 1 }; changed = true; }
+        if (!same(next, cur)) {
+          out[at] = { ...next, lastModifiedAt: Math.max(ts(cur), t) + 1 };
+          changed = true;
+        }
       } else if (typeof fields.name === 'string' && fields.name.trim()) {
         add({ unit: 'each', increment: 1, category: '', ...fields, id: k, lastModifiedAt: t + 1 });
       } else {
@@ -102,7 +118,10 @@ export function normaliseProducts(state: AppState, now: number): AppState {
     const target = builtInSameAs(cur.id);
     const at = target ? index.get(target) : undefined;
     if (target && at !== undefined && !out[at].removed) next = { ...next, removed: true, mergedInto: target };
-    if (next !== cur) { out[i] = { ...next, lastModifiedAt: bump(ts(cur)) }; changed = true; }
+    if (next !== cur) {
+      out[i] = { ...next, lastModifiedAt: bump(ts(cur)) };
+      changed = true;
+    }
   }
 
   if (!changed) return state;
@@ -127,7 +146,11 @@ export function upgradeProductDefaults(state: AppState, defaultPrefs: UserPrefer
   });
   const renames = listRenames();
   const rename = <T extends { name: string }>(x: T): T => {
-    const to = renames.get(String(x?.name ?? '').trim().toLowerCase());
+    const to = renames.get(
+      String(x?.name ?? '')
+        .trim()
+        .toLowerCase(),
+    );
     return to ? { ...x, name: to } : x;
   };
   const prefs = state.preferences || defaultPrefs;
@@ -135,12 +158,15 @@ export function upgradeProductDefaults(state: AppState, defaultPrefs: UserPrefer
   const staplesChanged = staples.some((x, i) => x !== prefs.recurringItems![i]);
   const seen = new Set<string>();
   const favs = (prefs.favouriteItems || []).map(rename).filter((f) => {
-    const k = String(f?.name ?? '').trim().toLowerCase();
+    const k = String(f?.name ?? '')
+      .trim()
+      .toLowerCase();
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
-  const favsChanged = favs.length !== (prefs.favouriteItems || []).length || favs.some((x, i) => x !== prefs.favouriteItems![i]);
+  const favsChanged =
+    favs.length !== (prefs.favouriteItems || []).length || favs.some((x, i) => x !== prefs.favouriteItems![i]);
   return {
     ...state,
     groceryDatabase: listChanged ? groceryDatabase : state.groceryDatabase,
@@ -166,7 +192,8 @@ export interface ProductUsage {
   list: number;
 }
 
-export const isUnused = (u: ProductUsage | undefined) => !u || (u.recipes.length === 0 && u.staples === 0 && u.favourites === 0 && u.list === 0);
+export const isUnused = (u: ProductUsage | undefined) =>
+  !u || (u.recipes.length === 0 && u.staples === 0 && u.favourites === 0 && u.list === 0);
 
 /** The parts of the data that can use a product (the whole AppState will do). */
 export interface UsageSources {
@@ -180,15 +207,25 @@ export function productUsage(state: UsageSources, catalog: Catalog): Map<string,
   const map = new Map<string, ProductUsage>();
   const get = (id: string) => {
     let u = map.get(id);
-    if (!u) { u = { recipes: [], staples: 0, favourites: 0, list: 0 }; map.set(id, u); }
+    if (!u) {
+      u = { recipes: [], staples: 0, favourites: 0, list: 0 };
+      map.set(id, u);
+    }
     return u;
   };
   for (const r of state.recipes || []) {
     const seen = new Set<string>();
     for (const ing of r.ingredients || []) {
       if (!ing || typeof ing.name !== 'string' || !ing.name.trim()) continue;
-      const p = matchProduct(catalog, ing.name, { groceryId: ing.groceryId, unit: ing.unit, amount: Number(ing.amount) });
-      if (p && !seen.has(p.id)) { seen.add(p.id); get(p.id).recipes.push(r.id); }
+      const p = matchProduct(catalog, ing.name, {
+        groceryId: ing.groceryId,
+        unit: ing.unit,
+        amount: Number(ing.amount),
+      });
+      if (p && !seen.has(p.id)) {
+        seen.add(p.id);
+        get(p.id).recipes.push(r.id);
+      }
     }
   }
   for (const s of state.preferences?.recurringItems || []) {
@@ -224,7 +261,18 @@ export function usageText(u: ProductUsage | undefined): string {
 // ---------------------------------------------------------------------------
 
 /** Words that never make a different product ("Fresh Basil" is Basil). Kept short on purpose. */
-const SOFT_WORDS = new Set(['fresh', 'freshly', 'large', 'small', 'medium', 'big', 'organic', 'british', 'ripe', 'whole']);
+const SOFT_WORDS = new Set([
+  'fresh',
+  'freshly',
+  'large',
+  'small',
+  'medium',
+  'big',
+  'organic',
+  'british',
+  'ripe',
+  'whole',
+]);
 const coreKey = (name: string) => {
   const words = nameWords(name);
   const kept = words.filter((w) => !SOFT_WORDS.has(w));
@@ -238,11 +286,18 @@ function oneEditApart(a: string, b: string): boolean {
   let j = 0;
   let edits = 0;
   while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) { i++; j++; continue; }
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+      continue;
+    }
     if (++edits > 1) return false;
     if (a.length > b.length) i++;
     else if (b.length > a.length) j++;
-    else { i++; j++; }
+    else {
+      i++;
+      j++;
+    }
   }
   return edits + (a.length - i) + (b.length - j) <= 1;
 }
@@ -250,7 +305,8 @@ function oneEditApart(a: string, b: string): boolean {
 /** Built-in products that share a name on purpose ("pepper": peppers by the each, black pepper by the pinch). */
 const KNOWN_DIFFERENT = new Set(['gdb-132|gdb-8']);
 const saidDifferent = (a: Product, b: Product) =>
-  KNOWN_DIFFERENT.has([a.id, b.id].sort().join('|')) || Boolean(a.item.notSameAs?.includes(b.id) || b.item.notSameAs?.includes(a.id));
+  KNOWN_DIFFERENT.has([a.id, b.id].sort().join('|')) ||
+  Boolean(a.item.notSameAs?.includes(b.id) || b.item.notSameAs?.includes(a.id));
 
 /**
  * Pairs of products that look like the same thing: the same name apart from words like "fresh"
@@ -273,7 +329,8 @@ export function likelyDuplicates(catalog: Catalog): [Product, Product][] {
     const own = matchKey(p.name);
     for (const k of p.keys) if (k !== own) byOtherName.set(k, [...(byOtherName.get(k) || []), p]);
   }
-  for (const group of byCore.values()) for (let i = 0; i < group.length; i++) for (let j = i + 1; j < group.length; j++) addPair(group[i], group[j]);
+  for (const group of byCore.values())
+    for (let i = 0; i < group.length; i++) for (let j = i + 1; j < group.length; j++) addPair(group[i], group[j]);
   for (const p of products) for (const q of byOtherName.get(matchKey(p.name)) || []) addPair(q, p);
   const keyed = products.map((p) => ({ p, k: matchKey(p.name).replace(/ /g, '') }));
   for (let i = 0; i < keyed.length; i++) {
@@ -380,13 +437,19 @@ export function restoreProductIn(state: AppState, undo: RemovedProduct): AppStat
     ? list.map((g) => (g.id === undo.item.id ? { ...undo.item } : g))
     : [...list, { ...undo.item }];
   const byRecipe = new Map<string, Set<string>>();
-  for (const l of undo.recipeLinks) byRecipe.set(l.recipeId, (byRecipe.get(l.recipeId) || new Set()).add(l.ingredientId));
+  for (const l of undo.recipeLinks)
+    byRecipe.set(l.recipeId, (byRecipe.get(l.recipeId) || new Set()).add(l.ingredientId));
   const recipes = byRecipe.size
     ? (state.recipes || []).map((r) => {
-      const ingIds = byRecipe.get(r.id);
-      if (!ingIds) return r;
-      return { ...r, ingredients: r.ingredients.map((ing) => (ingIds.has(ing.id) && !ing.groceryId ? { ...ing, groceryId: undo.item.id } : ing)) };
-    })
+        const ingIds = byRecipe.get(r.id);
+        if (!ingIds) return r;
+        return {
+          ...r,
+          ingredients: r.ingredients.map((ing) =>
+            ingIds.has(ing.id) && !ing.groceryId ? { ...ing, groceryId: undo.item.id } : ing,
+          ),
+        };
+      })
     : state.recipes;
   const lines = new Set(undo.listLinks);
   const shoppingList = lines.size
@@ -396,9 +459,18 @@ export function restoreProductIn(state: AppState, undo: RemovedProduct): AppStat
 }
 
 /** What merging would change, for the confirm message. */
-export function mergeSummary(state: AppState, catalog: Catalog, goneId: string): { recipes: number; staples: number; favourites: number; list: number } {
+export function mergeSummary(
+  state: AppState,
+  catalog: Catalog,
+  goneId: string,
+): { recipes: number; staples: number; favourites: number; list: number } {
   const u = productUsage(state, catalog).get(goneId);
-  return { recipes: u?.recipes.length || 0, staples: u?.staples || 0, favourites: u?.favourites || 0, list: u?.list || 0 };
+  return {
+    recipes: u?.recipes.length || 0,
+    staples: u?.staples || 0,
+    favourites: u?.favourites || 0,
+    list: u?.list || 0,
+  };
 }
 
 /**
@@ -431,7 +503,9 @@ export function mergeProductsIn(state: AppState, catalog: Catalog, keepId: strin
   };
   const merged: GroceryItem = { ...gone, removed: true, mergedInto: keepId };
   const inList = (id: string) => list.some((g) => g.id === id);
-  let groceryDatabase = list.map((g) => (g.id === keepId ? kept : g.id === goneId ? merged : g.mergedInto === goneId ? { ...g, mergedInto: keepId } : g));
+  let groceryDatabase = list.map((g) =>
+    g.id === keepId ? kept : g.id === goneId ? merged : g.mergedInto === goneId ? { ...g, mergedInto: keepId } : g,
+  );
   if (!inList(keepId)) groceryDatabase = [...groceryDatabase, kept];
   if (!inList(goneId)) groceryDatabase = [...groceryDatabase, merged];
 
@@ -443,7 +517,10 @@ export function mergeProductsIn(state: AppState, catalog: Catalog, keepId: strin
   const recipes = (state.recipes || []).map((r) => {
     if (!(r.ingredients || []).some((ing) => ing?.groceryId === goneId)) return r;
     recipesTouched = true;
-    return { ...r, ingredients: r.ingredients.map((ing) => (ing?.groceryId === goneId ? { ...ing, groceryId: keepId } : ing)) };
+    return {
+      ...r,
+      ingredients: r.ingredients.map((ing) => (ing?.groceryId === goneId ? { ...ing, groceryId: keepId } : ing)),
+    };
   });
 
   // Shopping list: lines move over; two unticked lines for the same week and unit become one.
@@ -452,18 +529,32 @@ export function mergeProductsIn(state: AppState, catalog: Catalog, keepId: strin
   let shoppingList: ShoppingListItem[] = (state.shoppingList || []).map((i) => {
     if (!isGone(i.name, i.groceryId)) return i;
     listTouched = true;
-    return { ...i, groceryId: keepId, name: matchKey(i.name) === goneNameKey ? keep.name : i.name, category: keep.category || i.category };
+    return {
+      ...i,
+      groceryId: keepId,
+      name: matchKey(i.name) === goneNameKey ? keep.name : i.name,
+      category: keep.category || i.category,
+    };
   });
   if (listTouched) {
     const dropped = new Set<string>();
     const result: ShoppingListItem[] = [];
     const keptLine = new Map<string, number>();
     for (const i of shoppingList) {
-      const isKeep = !i.checked && (i.groceryId === keepId || matchProduct(catalog, i.name, { groceryId: i.groceryId })?.id === keepId);
-      if (!isKeep) { result.push(i); continue; }
+      const isKeep =
+        !i.checked &&
+        (i.groceryId === keepId || matchProduct(catalog, i.name, { groceryId: i.groceryId })?.id === keepId);
+      if (!isKeep) {
+        result.push(i);
+        continue;
+      }
       const key = `${i.planId || ''}|${canonicalUnit(i.unit)}|${i.isRecurring ? 'r' : ''}`;
       const at = keptLine.get(key);
-      if (at === undefined) { keptLine.set(key, result.length); result.push(i); continue; }
+      if (at === undefined) {
+        keptLine.set(key, result.length);
+        result.push(i);
+        continue;
+      }
       const into = result[at];
       result[at] = {
         ...into,
@@ -481,7 +572,9 @@ export function mergeProductsIn(state: AppState, catalog: Catalog, keepId: strin
   let preferences = prefs;
   if (prefs) {
     const staples = prefs.recurringItems || [];
-    const newStaples = staples.map((s) => (s?.name && isGone(s.name) ? { ...s, name: keep.name, category: keep.category || s.category } : s));
+    const newStaples = staples.map((s) =>
+      s?.name && isGone(s.name) ? { ...s, name: keep.name, category: keep.category || s.category } : s,
+    );
     const favs = prefs.favouriteItems || [];
     let favsTouched = false;
     const seen = new Set<string>();
@@ -489,14 +582,23 @@ export function mergeProductsIn(state: AppState, catalog: Catalog, keepId: strin
     for (const f of favs) {
       const moved = f?.name && isGone(f.name) ? { ...f, name: keep.name, category: keep.category || f.category } : f;
       if (moved !== f) favsTouched = true;
-      const k = String(moved?.name || '').trim().toLowerCase();
-      if (seen.has(k)) { favsTouched = true; continue; }
+      const k = String(moved?.name || '')
+        .trim()
+        .toLowerCase();
+      if (seen.has(k)) {
+        favsTouched = true;
+        continue;
+      }
       seen.add(k);
       newFavs.push(moved);
     }
     const staplesTouched = newStaples.some((s, i) => s !== staples[i]);
     if (staplesTouched || favsTouched) {
-      preferences = { ...prefs, ...(staplesTouched ? { recurringItems: newStaples } : {}), ...(favsTouched ? { favouriteItems: newFavs } : {}) };
+      preferences = {
+        ...prefs,
+        ...(staplesTouched ? { recurringItems: newStaples } : {}),
+        ...(favsTouched ? { favouriteItems: newFavs } : {}),
+      };
     }
   }
 
@@ -512,7 +614,10 @@ export function mergeProductsIn(state: AppState, catalog: Catalog, keepId: strin
 /** "These two aren't the same": remembered on both, so the tidy-up check stops asking. */
 export function markDifferentIn(state: AppState, aId: string, bId: string): AppState {
   let next = state;
-  for (const [x, y] of [[aId, bId], [bId, aId]]) {
+  for (const [x, y] of [
+    [aId, bId],
+    [bId, aId],
+  ]) {
     const list = next.groceryDatabase || [];
     const cur = list.find((g) => g.id === x) ?? builtIn(x);
     if (!cur || (cur.notSameAs || []).includes(y)) continue;
@@ -545,7 +650,11 @@ export function resetProductsIn(state: AppState): AppState {
   return {
     ...state,
     groceryDatabase,
-    recipes: (state.recipes || []).map((r) => (r.ingredients?.some((i) => i.groceryId && gone.has(i.groceryId)) ? { ...r, ingredients: r.ingredients.map(unlink) } : r)),
+    recipes: (state.recipes || []).map((r) =>
+      r.ingredients?.some((i) => i.groceryId && gone.has(i.groceryId))
+        ? { ...r, ingredients: r.ingredients.map(unlink) }
+        : r,
+    ),
     shoppingList: (state.shoppingList || []).map(unlink),
   };
 }
@@ -560,8 +669,10 @@ export function replaceProductsIn(state: AppState, items: GroceryItem[]): AppSta
   const out: GroceryItem[] = [];
   for (const g of list) {
     const inc = incoming.get(g.id);
-    if (inc) { out.push(inc); incoming.delete(g.id); }
-    else out.push(g.removed ? g : { ...g, removed: true });
+    if (inc) {
+      out.push(inc);
+      incoming.delete(g.id);
+    } else out.push(g.removed ? g : { ...g, removed: true });
   }
   for (const i of incoming.values()) out.push(i);
   return { ...state, groceryDatabase: out };

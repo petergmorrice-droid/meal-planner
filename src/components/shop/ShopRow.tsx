@@ -60,29 +60,44 @@ export default function ShopRow({
       >
         <span className="flex-1 min-w-0">
           <span className="flex items-center gap-1.5 min-w-0">
-            <span className={`text-[15px] font-semibold truncate ${row.checked ? 'line-through text-zinc-400 font-medium' : 'text-zinc-900'}`}>
+            <span
+              className={`text-[15px] font-semibold truncate ${row.checked ? 'line-through text-zinc-400 font-medium' : 'text-zinc-900'}`}
+            >
               {row.name}
             </span>
             {addedBy && <PersonMark who={addedBy} what="Added or changed" />}
             {row.checkCupboard && !row.checked && (
-              <span className="shrink-0 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-px" title="Store-cupboard item: check you have it">
+              <span
+                className="shrink-0 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-px"
+                title="Store-cupboard item: check you have it"
+              >
                 check cupboard
               </span>
             )}
             {row.outOfStock && (
-              <span className="shrink-0 text-[11px] font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded px-1 py-px" data-out-of-stock>
+              <span
+                className="shrink-0 text-[11px] font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded px-1 py-px"
+                data-out-of-stock
+              >
                 out of stock
               </span>
             )}
             {row.needsCheck && !row.checked && (
-              <span className="shrink-0 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 py-px" title={row.quantityNote}>
+              <span
+                className="shrink-0 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 py-px"
+                title={row.quantityNote}
+              >
                 check amount
               </span>
             )}
           </span>
           {(meals || row.note) && (
             <span className="block min-w-0" data-item-sub>
-              {meals && <span className="block text-xs text-zinc-500 truncate" data-item-meals>{meals}</span>}
+              {meals && (
+                <span className="block text-xs text-zinc-500 truncate" data-item-meals>
+                  {meals}
+                </span>
+              )}
               {row.note && (
                 <span className={`flex items-center gap-1 text-xs min-w-0 ${note.text}`} data-item-note-line>
                   <StickyNote className={`w-3 h-3 shrink-0 ${note.icon}`} />
@@ -94,11 +109,16 @@ export default function ShopRow({
         </span>
         {!justTicked && (
           <span className="shrink-0 flex flex-col items-end leading-tight">
-            <span className={`text-sm font-semibold tabular-nums ${row.checked ? 'text-zinc-400' : 'text-zinc-700'}`} data-item-qty>
+            <span
+              className={`text-sm font-semibold tabular-nums ${row.checked ? 'text-zinc-400' : 'text-zinc-700'}`}
+              data-item-qty
+            >
               {shopQuantityText(row)}
             </span>
             {row.neededText && !row.checked && (
-              <span className="text-[11px] text-zinc-500 tabular-nums" data-item-need title="What your meals use">need {row.neededText}</span>
+              <span className="text-[11px] text-zinc-500 tabular-nums" data-item-need title="What your meals use">
+                need {row.neededText}
+              </span>
             )}
           </span>
         )}

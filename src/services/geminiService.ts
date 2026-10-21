@@ -8,10 +8,7 @@ import { getCatalog } from '../utils/shoppingConversion';
  * Falls back gracefully to local rule-based parsing and generation.
  */
 
-const CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
-  'gemini-3.1-flash-lite'
-];
+const CANDIDATE_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
 
 export function getGeminiApiKey(): string | null {
   try {
@@ -46,14 +43,14 @@ async function callGeminiRest(
   prompt: string,
   systemInstruction?: string,
   responseSchema?: any,
-  options: { temperature?: number } = {}
+  options: { temperature?: number } = {},
 ): Promise<any> {
   let lastError: any = null;
 
   for (const model of CANDIDATE_MODELS) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      
+
       const payload: any = {
         contents: [{ parts: [{ text: prompt }] }],
       };
@@ -80,10 +77,10 @@ async function callGeminiRest(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Goog-Api-Client': 'aistudio-build'
+          'X-Goog-Api-Client': 'aistudio-build',
         },
         body: JSON.stringify(payload),
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       clearTimeout(id);
@@ -115,7 +112,7 @@ async function callGeminiRest(
 async function callGeminiParts(
   apiKey: string,
   parts: any[],
-  options: { systemInstruction?: string; tools?: any[]; temperature?: number; timeoutMs?: number } = {}
+  options: { systemInstruction?: string; tools?: any[]; temperature?: number; timeoutMs?: number } = {},
 ): Promise<{ text: string; response: any }> {
   let lastError: any = null;
   for (const model of CANDIDATE_MODELS) {
@@ -154,7 +151,12 @@ async function callGeminiParts(
 
 /** Thrown when Gemini can't open a recipe page or read a photo, so the screen can say what to do instead. */
 export class RecipeSourceError extends Error {
-  constructor(public kind: 'page' | 'photo', message: string) { super(message); }
+  constructor(
+    public kind: 'page' | 'photo',
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 const NO_RECIPE = 'NO_RECIPE';
@@ -182,16 +184,23 @@ export async function readRecipePageApi(url: string): Promise<string> {
   if (!apiKey) throw new Error('GEMINI_API_KEY_MISSING');
   let result: { text: string; response: any };
   try {
-    result = await callGeminiParts(apiKey, [{ text: `Open this web page and find the recipe on it.\n${COPY_OUT_RULES}\n\nPage: ${url}` }], {
-      tools: [{ url_context: {} }],
-      temperature: 0,
-    });
+    result = await callGeminiParts(
+      apiKey,
+      [{ text: `Open this web page and find the recipe on it.\n${COPY_OUT_RULES}\n\nPage: ${url}` }],
+      {
+        tools: [{ url_context: {} }],
+        temperature: 0,
+      },
+    );
   } catch (err) {
     console.error('Gemini readRecipePageApi failed:', err);
     throw geminiFailure(err, 'open that page');
   }
   if (!pageWasRead(result.response) || result.text.includes(NO_RECIPE) || result.text.length < 40) {
-    throw new RecipeSourceError('page', "Gemini couldn't read a recipe from that page (some sites block it, or the recipe is behind a login). Open the page, copy the recipe and paste it here instead.");
+    throw new RecipeSourceError(
+      'page',
+      "Gemini couldn't read a recipe from that page (some sites block it, or the recipe is behind a login). Open the page, copy the recipe and paste it here instead.",
+    );
   }
   return result.text;
 }
@@ -202,16 +211,23 @@ export async function readRecipePhotoApi(base64: string, mimeType: string): Prom
   if (!apiKey) throw new Error('GEMINI_API_KEY_MISSING');
   let result: { text: string; response: any };
   try {
-    result = await callGeminiParts(apiKey, [
-      { inlineData: { mimeType, data: base64 } },
-      { text: `This is a photo of a recipe (a cookbook page, a card or a screen).\n${COPY_OUT_RULES}` },
-    ], { temperature: 0 });
+    result = await callGeminiParts(
+      apiKey,
+      [
+        { inlineData: { mimeType, data: base64 } },
+        { text: `This is a photo of a recipe (a cookbook page, a card or a screen).\n${COPY_OUT_RULES}` },
+      ],
+      { temperature: 0 },
+    );
   } catch (err) {
     console.error('Gemini readRecipePhotoApi failed:', err);
     throw geminiFailure(err, 'read the photo');
   }
   if (result.text.includes(NO_RECIPE) || result.text.length < 40) {
-    throw new RecipeSourceError('photo', "Gemini couldn't find a recipe in that photo. Try a sharper photo with the whole recipe in view, flat and in good light.");
+    throw new RecipeSourceError(
+      'photo',
+      "Gemini couldn't find a recipe in that photo. Try a sharper photo with the whole recipe in view, flat and in good light.",
+    );
   }
   return result.text;
 }
@@ -224,13 +240,26 @@ export async function readRecipePhotoApi(base64: string, mimeType: string): Prom
 
 function categorizeIngredient(name: string): string {
   const lower = name.toLowerCase();
-  if (/chicken|beef|pork|steak|bacon|pancetta|fish|salmon|tuna|cod|prawn|shrimp|turkey|lamb|sausage|meat|duck|veal|venison|chorizo|prosciutto|scallop|mussel|clam|squid|calamari/.test(lower)) {
+  if (
+    /chicken|beef|pork|steak|bacon|pancetta|fish|salmon|tuna|cod|prawn|shrimp|turkey|lamb|sausage|meat|duck|veal|venison|chorizo|prosciutto|scallop|mussel|clam|squid|calamari/.test(
+      lower,
+    )
+  ) {
     return 'Meat & Seafood';
   }
-  if (/(?:milk|cheese|butter|cream|yogurt|yoghurt|parmesan|cheddar|mozzarella|feta|ricotta|egg|eggs|ghee|sour cream)\b/.test(lower) && !/(?:almond|oat|soy|coconut|vegan|plant-based)\s+(?:milk|cheese|butter|yogurt)/.test(lower)) {
+  if (
+    /(?:milk|cheese|butter|cream|yogurt|yoghurt|parmesan|cheddar|mozzarella|feta|ricotta|egg|eggs|ghee|sour cream)\b/.test(
+      lower,
+    ) &&
+    !/(?:almond|oat|soy|coconut|vegan|plant-based)\s+(?:milk|cheese|butter|yogurt)/.test(lower)
+  ) {
     return 'Dairy';
   }
-  if (/onion|garlic|potato|tomato|carrot|broccoli|spinach|lettuce|cucumber|pepper|mushroom|lemon|lime|avocado|apple|herb|basil|parsley|ginger|chilli|coriander|zucchini|courgette|aubergine|eggplant|cabbage|cauliflower|celery|leek|asparagus|beans|kale|peas|scallion|spring onion|shallot/.test(lower)) {
+  if (
+    /onion|garlic|potato|tomato|carrot|broccoli|spinach|lettuce|cucumber|pepper|mushroom|lemon|lime|avocado|apple|herb|basil|parsley|ginger|chilli|coriander|zucchini|courgette|aubergine|eggplant|cabbage|cauliflower|celery|leek|asparagus|beans|kale|peas|scallion|spring onion|shallot/.test(
+      lower,
+    )
+  ) {
     return 'Produce';
   }
   if (/bread|bun|bagel|tortilla|wrap|roll|brioche|croissant|pita|naan|crust|baguette/.test(lower)) {
@@ -242,7 +271,11 @@ function categorizeIngredient(name: string): string {
   return 'Pantry';
 }
 
-function normalizeIngredientAmountAndUnit(rawAmount: any, rawUnit: any, rawName: string): {
+function normalizeIngredientAmountAndUnit(
+  rawAmount: any,
+  rawUnit: any,
+  rawName: string,
+): {
   name: string;
   amount: number;
   unit: string;
@@ -288,13 +321,15 @@ function normalizeIngredientAmountAndUnit(rawAmount: any, rawUnit: any, rawName:
     amount: Math.max(0.1, Number(amount.toFixed(2))),
     unit: unit || 'piece',
     category,
-    suggestedAisle: category
+    suggestedAisle: category,
   };
 }
 
 function analyzeDietaryFlags(ingredients: Array<{ name: string }>): { isVegetarian: boolean; isVegan: boolean } {
-  const meatKeywords = /chicken|beef|pork|steak|bacon|pancetta|fish|salmon|tuna|cod|prawn|shrimp|turkey|lamb|sausage|meat|duck|veal|venison|chorizo|prosciutto|scallop|mussel|clam|squid|calamari|broth|gelatin|lard/i;
-  const animalKeywords = /milk|cheese|butter|cream|yogurt|yoghurt|parmesan|cheddar|mozzarella|feta|ricotta|egg|eggs|ghee|sour cream|honey|mayo/i;
+  const meatKeywords =
+    /chicken|beef|pork|steak|bacon|pancetta|fish|salmon|tuna|cod|prawn|shrimp|turkey|lamb|sausage|meat|duck|veal|venison|chorizo|prosciutto|scallop|mussel|clam|squid|calamari|broth|gelatin|lard/i;
+  const animalKeywords =
+    /milk|cheese|butter|cream|yogurt|yoghurt|parmesan|cheddar|mozzarella|feta|ricotta|egg|eggs|ghee|sour cream|honey|mayo/i;
 
   let hasMeat = false;
   let hasAnimal = false;
@@ -311,21 +346,25 @@ function analyzeDietaryFlags(ingredients: Array<{ name: string }>): { isVegetari
 
   return {
     isVegetarian: !hasMeat,
-    isVegan: !hasMeat && !hasAnimal
+    isVegan: !hasMeat && !hasAnimal,
   };
 }
 
-function estimateDynamicTimes(ingredients: any[], instructions: string[], _targetMethod: string): { prepTime: number; cookTime: number } {
+function estimateDynamicTimes(
+  ingredients: any[],
+  instructions: string[],
+  _targetMethod: string,
+): { prepTime: number; cookTime: number } {
   let prepTime = 5;
   let cookTime = 5;
 
-  ingredients.forEach(ing => {
+  ingredients.forEach((ing) => {
     const name = ing.name.toLowerCase();
     if (/chicken|beef|pork|steak|lamb/.test(name)) prepTime += 5;
     if (/onion|garlic|pepper|potato|carrot|broccoli|vegetable/.test(name)) prepTime += 3;
   });
 
-  instructions.forEach(step => {
+  instructions.forEach((step) => {
     const lower = step.toLowerCase();
     if (lower.includes('bake') || lower.includes('roast')) cookTime += 15;
     else if (lower.includes('simmer') || lower.includes('slow cook')) cookTime += 20;
@@ -334,15 +373,18 @@ function estimateDynamicTimes(ingredients: any[], instructions: string[], _targe
 
   return {
     prepTime: Math.min(60, Math.max(5, prepTime)),
-    cookTime: Math.min(120, Math.max(5, cookTime))
+    cookTime: Math.min(120, Math.max(5, cookTime)),
   };
 }
 
 // Words that mean an ingredient contains gluten / dairy, and the exceptions ("coconut milk", "butter beans").
-const GLUTEN_WORDS = /\b(flour|bread|breadcrumbs?|panko|pasta|penne|spaghetti|fusilli|farfalle|linguine|tagliatelle|pappardelle|lasagne|lasagna|macaroni|rigatoni|conchiglie|orzo|gnocchi|noodles?|couscous|bulgur|bulgar|barley|semolina|wheat|spelt|rye|pastry|filo|phyllo|tortillas?|wraps?|pittas?|pitas?|naans?|buns?|rolls?|baguette|ciabatta|focaccia|sourdough|crackers?|biscuits?|cake|crumble|batter|dumplings?|beer|ale|soy sauce|seitan|stuffing|yorkshire|croutons?)\b/;
+const GLUTEN_WORDS =
+  /\b(flour|bread|breadcrumbs?|panko|pasta|penne|spaghetti|fusilli|farfalle|linguine|tagliatelle|pappardelle|lasagne|lasagna|macaroni|rigatoni|conchiglie|orzo|gnocchi|noodles?|couscous|bulgur|bulgar|barley|semolina|wheat|spelt|rye|pastry|filo|phyllo|tortillas?|wraps?|pittas?|pitas?|naans?|buns?|rolls?|baguette|ciabatta|focaccia|sourdough|crackers?|biscuits?|cake|crumble|batter|dumplings?|beer|ale|soy sauce|seitan|stuffing|yorkshire|croutons?)\b/;
 const NOT_GLUTEN = /\b(gluten[- ]free|rice noodles?|rice flour|cornflour|corn flour|gram flour|buckwheat|tamari)\b/;
-const DAIRY_WORDS = /\b(milk|cheese|cheddar|parmesan|mozzarella|feta|halloumi|ricotta|mascarpone|paneer|brie|camembert|gruy[eè]re|pecorino|burrata|stilton|butter|ghee|cream|cr[eè]me fra[iî]che|yogh?urt|custard|quark|kefir|whey)\b/;
-const NOT_DAIRY = /\b(coconut|oat|almond|soy|soya|rice|cashew|peanut|vegan|dairy[- ]free|plant[- ]based|butter ?beans?|butternut|cream of tartar)\b/;
+const DAIRY_WORDS =
+  /\b(milk|cheese|cheddar|parmesan|mozzarella|feta|halloumi|ricotta|mascarpone|paneer|brie|camembert|gruy[eè]re|pecorino|burrata|stilton|butter|ghee|cream|cr[eè]me fra[iî]che|yogh?urt|custard|quark|kefir|whey)\b/;
+const NOT_DAIRY =
+  /\b(coconut|oat|almond|soy|soya|rice|cashew|peanut|vegan|dairy[- ]free|plant[- ]based|butter ?beans?|butternut|cream of tartar)\b/;
 
 /**
  * Recipe tags. "Gluten-Free" / "Dairy-Free" are only added when no ingredient looks like
@@ -350,8 +392,11 @@ const NOT_DAIRY = /\b(coconut|oat|almond|soy|soya|rice|cashew|peanut|vegan|dairy
  * worse than a missing one.
  */
 function generateFunctionalTags(
-  ingredients: any[], isVegetarian: boolean, isVegan: boolean, method: string,
-  ai?: { glutenFree?: unknown; dairyFree?: unknown }
+  ingredients: any[],
+  isVegetarian: boolean,
+  isVegan: boolean,
+  method: string,
+  ai?: { glutenFree?: unknown; dairyFree?: unknown },
 ): string[] {
   const tags: string[] = [];
   if (isVegan) tags.push('Vegan');
@@ -360,7 +405,7 @@ function generateFunctionalTags(
   let hasGluten = false;
   let hasDairy = false;
 
-  ingredients.forEach(ing => {
+  ingredients.forEach((ing) => {
     const name = String(ing?.name ?? '').toLowerCase();
     if (GLUTEN_WORDS.test(name) && !NOT_GLUTEN.test(name)) hasGluten = true;
     if (DAIRY_WORDS.test(name) && !NOT_DAIRY.test(name)) hasDairy = true;
@@ -392,7 +437,9 @@ function validateAndNormalizeRecipe(data: any, selectedMethod: 'ninja' | 'oven_h
   // Normalize instructions
   clean.instructions = Array.isArray(clean.instructions)
     ? clean.instructions.filter(Boolean)
-    : (rawText ? rawText.split('\n').filter(Boolean) : []);
+    : rawText
+      ? rawText.split('\n').filter(Boolean)
+      : [];
 
   // Set method instructions
   clean.methodInstructions = clean.methodInstructions || {};
@@ -446,7 +493,7 @@ function cleanGroceryDatabaseLocally(items: any[]): any[] {
     [/^courgette$/i, /^zucchini$/i],
     [/^aubergine$/i, /^eggplant$/i],
     [/^spring onions?$/i, /^scallions?$/i],
-    [/^bell peppers?$/i, /^sweet peppers?$/i]
+    [/^bell peppers?$/i, /^sweet peppers?$/i],
   ];
 
   for (let i = 0; i < items.length; i++) {
@@ -471,7 +518,11 @@ function cleanGroceryDatabaseLocally(items: any[]): any[] {
       if (!isDuplicate) {
         const stemA = getStem(itemA.name);
         const stemB = getStem(itemB.name);
-        if (stemA === stemB || stemA === (itemB.name || '').toLowerCase() || stemB === (itemA.name || '').toLowerCase()) {
+        if (
+          stemA === stemB ||
+          stemA === (itemB.name || '').toLowerCase() ||
+          stemB === (itemA.name || '').toLowerCase()
+        ) {
           isDuplicate = true;
           reason = `Merge singular/plural variations "${itemA.name}" and "${itemB.name}".`;
         }
@@ -482,7 +533,7 @@ function cleanGroceryDatabaseLocally(items: any[]): any[] {
           actionType: 'merge',
           primaryItemId: itemA.id,
           secondaryItemId: itemB.id,
-          reason
+          reason,
         });
         absorbedIds.add(itemB.id);
       }
@@ -498,7 +549,7 @@ function cleanGroceryDatabaseLocally(items: any[]): any[] {
         actionType: 'rename',
         primaryItemId: item.id,
         newName: cleanName,
-        reason: `Standardize uppercase "${name}" to clean lowercase "${cleanName}".`
+        reason: `Standardize uppercase "${name}" to clean lowercase "${cleanName}".`,
       });
     }
   }
@@ -508,12 +559,15 @@ function cleanGroceryDatabaseLocally(items: any[]): any[] {
     const lowerName = (item.name || '').toLowerCase();
     const cat = (item.category || '').toLowerCase();
 
-    if (/cream|butter|milk|cheese|yogurt|yoghurt|parmesan|cheddar|mozzarella|ricotta/i.test(lowerName) && cat === 'pantry') {
+    if (
+      /cream|butter|milk|cheese|yogurt|yoghurt|parmesan|cheddar|mozzarella|ricotta/i.test(lowerName) &&
+      cat === 'pantry'
+    ) {
       actions.push({
         actionType: 'recategorize',
         primaryItemId: item.id,
         newAisle: 'Dairy',
-        reason: `Move dairy product "${item.name}" from Pantry to Dairy.`
+        reason: `Move dairy product "${item.name}" from Pantry to Dairy.`,
       });
     }
   }
@@ -528,98 +582,121 @@ function cleanGroceryDatabaseLocally(items: any[]): any[] {
  */
 
 const RECIPE_RESPONSE_SCHEMA = {
-  type: "OBJECT",
+  type: 'OBJECT',
   properties: {
-    name: { type: "STRING", description: "Recipe title" },
-    description: { type: "STRING", description: "Engaging concise description of the meal portioned for 2 adults" },
+    name: { type: 'STRING', description: 'Recipe title' },
+    description: { type: 'STRING', description: 'Engaging concise description of the meal portioned for 2 adults' },
     ingredients: {
-      type: "ARRAY",
-      description: "List of ingredients with normalized decimal quantities and standard units",
+      type: 'ARRAY',
+      description: 'List of ingredients with normalized decimal quantities and standard units',
       items: {
-        type: "OBJECT",
+        type: 'OBJECT',
         properties: {
-          name: { type: "STRING", description: "Product name in the singular, exactly as on the grocery list when it is one of those products; no quantities or preparation" },
-          amount: { type: "NUMBER", description: "Standardized positive decimal number (e.g. 1.0, 0.5, 0.25, 200). Never fractions or strings." },
-          unit: { type: "STRING", description: "One of: g, kg, ml, l, tsp, tbsp, cup, piece, clove, can, bunch, pack, slice, rasher, fillet, sprig, stick, pinch, handful" },
-          category: { type: "STRING", description: "Produce, Meat & Seafood, Dairy, Bakery, Frozen, or Pantry" },
-          suggestedAisle: { type: "STRING", description: "Produce, Meat & Seafood, Dairy, Bakery, Frozen, or Pantry" }
+          name: {
+            type: 'STRING',
+            description:
+              'Product name in the singular, exactly as on the grocery list when it is one of those products; no quantities or preparation',
+          },
+          amount: {
+            type: 'NUMBER',
+            description: 'Standardized positive decimal number (e.g. 1.0, 0.5, 0.25, 200). Never fractions or strings.',
+          },
+          unit: {
+            type: 'STRING',
+            description:
+              'One of: g, kg, ml, l, tsp, tbsp, cup, piece, clove, can, bunch, pack, slice, rasher, fillet, sprig, stick, pinch, handful',
+          },
+          category: { type: 'STRING', description: 'Produce, Meat & Seafood, Dairy, Bakery, Frozen, or Pantry' },
+          suggestedAisle: { type: 'STRING', description: 'Produce, Meat & Seafood, Dairy, Bakery, Frozen, or Pantry' },
         },
-        required: ["name", "amount", "unit", "category", "suggestedAisle"]
-      }
+        required: ['name', 'amount', 'unit', 'category', 'suggestedAisle'],
+      },
     },
     instructions: {
-      type: "ARRAY",
-      items: { type: "STRING" },
-      description: "Step-by-step instructions with exact decimal amounts matching the ingredients list"
+      type: 'ARRAY',
+      items: { type: 'STRING' },
+      description: 'Step-by-step instructions with exact decimal amounts matching the ingredients list',
     },
     methodInstructions: {
-      type: "OBJECT",
+      type: 'OBJECT',
       properties: {
-        ninja: { type: "ARRAY", items: { type: "STRING" } },
-        oven_hob: { type: "ARRAY", items: { type: "STRING" } }
-      }
+        ninja: { type: 'ARRAY', items: { type: 'STRING' } },
+        oven_hob: { type: 'ARRAY', items: { type: 'STRING' } },
+      },
     },
     prepTime: {
-      type: "INTEGER",
-      description: "Realistic preparation time in minutes calculated dynamically from chopping, peeling, and assembly complexity. Integer only."
+      type: 'INTEGER',
+      description:
+        'Realistic preparation time in minutes calculated dynamically from chopping, peeling, and assembly complexity. Integer only.',
     },
     cookTime: {
-      type: "INTEGER",
-      description: "Realistic cooking time in minutes calculated dynamically from cooking methods, heat, and duration. Integer only."
+      type: 'INTEGER',
+      description:
+        'Realistic cooking time in minutes calculated dynamically from cooking methods, heat, and duration. Integer only.',
     },
     methodPrepTime: {
-      type: "OBJECT",
+      type: 'OBJECT',
       properties: {
-        ninja: { type: "INTEGER" },
-        oven_hob: { type: "INTEGER" }
-      }
+        ninja: { type: 'INTEGER' },
+        oven_hob: { type: 'INTEGER' },
+      },
     },
     methodCookTime: {
-      type: "OBJECT",
+      type: 'OBJECT',
       properties: {
-        ninja: { type: "INTEGER" },
-        oven_hob: { type: "INTEGER" }
-      }
+        ninja: { type: 'INTEGER' },
+        oven_hob: { type: 'INTEGER' },
+      },
     },
-    servings: { type: "INTEGER", description: "Must be 2" },
+    servings: { type: 'INTEGER', description: 'Must be 2' },
     tags: {
-      type: "ARRAY",
-      items: { type: "STRING" },
-      description: "Rich, functional tags based on ingredients and method"
+      type: 'ARRAY',
+      items: { type: 'STRING' },
+      description: 'Rich, functional tags based on ingredients and method',
     },
     cookingMethods: {
-      type: "ARRAY",
-      items: { type: "STRING" },
-      description: "Array containing the selected appliance: ['ninja'] or ['oven_hob']"
+      type: 'ARRAY',
+      items: { type: 'STRING' },
+      description: "Array containing the selected appliance: ['ninja'] or ['oven_hob']",
     },
-    isVegetarian: { type: "BOOLEAN" },
-    isVegan: { type: "BOOLEAN" }
+    isVegetarian: { type: 'BOOLEAN' },
+    isVegan: { type: 'BOOLEAN' },
   },
   required: [
-    "name", "description", "ingredients", "instructions", "prepTime", "cookTime", "servings", "tags", "cookingMethods", "isVegetarian", "isVegan"
-  ]
+    'name',
+    'description',
+    'ingredients',
+    'instructions',
+    'prepTime',
+    'cookTime',
+    'servings',
+    'tags',
+    'cookingMethods',
+    'isVegetarian',
+    'isVegan',
+  ],
 };
 
 const CLEAN_DATABASE_SCHEMA = {
-  type: "OBJECT",
+  type: 'OBJECT',
   properties: {
     actions: {
-      type: "ARRAY",
+      type: 'ARRAY',
       items: {
-        type: "OBJECT",
+        type: 'OBJECT',
         properties: {
-          actionType: { type: "STRING", enum: ["merge", "rename", "recategorize"] },
-          primaryItemId: { type: "STRING", description: "The ID of the item to keep or update." },
-          secondaryItemId: { type: "STRING", description: "For merges: duplicate item ID to absorb." },
-          newName: { type: "STRING", description: "For renames: standardize name." },
-          newAisle: { type: "STRING", description: "For recategorizations: corrected aisle name." },
-          reason: { type: "STRING", description: "Explanation of suggested action." }
+          actionType: { type: 'STRING', enum: ['merge', 'rename', 'recategorize'] },
+          primaryItemId: { type: 'STRING', description: 'The ID of the item to keep or update.' },
+          secondaryItemId: { type: 'STRING', description: 'For merges: duplicate item ID to absorb.' },
+          newName: { type: 'STRING', description: 'For renames: standardize name.' },
+          newAisle: { type: 'STRING', description: 'For recategorizations: corrected aisle name.' },
+          reason: { type: 'STRING', description: 'Explanation of suggested action.' },
         },
-        required: ["actionType", "primaryItemId", "reason"]
-      }
-    }
+        required: ['actionType', 'primaryItemId', 'reason'],
+      },
+    },
   },
-  required: ["actions"]
+  required: ['actions'],
 };
 
 /**
@@ -644,14 +721,16 @@ function geminiFailure(err: any, task: string): Error {
   const raw = String(err?.message || err || '');
   let reason = 'it may be busy or unreachable';
   if (/quota|exhaust|rate|429/i.test(raw)) reason = "today's free Gemini limit may have been reached";
-  else if (/api key|permission|401|403/i.test(raw)) reason = 'the Gemini API key was not accepted (check Settings → This phone)';
+  else if (/api key|permission|401|403/i.test(raw))
+    reason = 'the Gemini API key was not accepted (check Settings → This phone)';
   else if (/abort|timeout|network|fetch/i.test(raw)) reason = 'there was no connection, or it took too long';
   else if (/json|unexpected token/i.test(raw)) reason = 'its answer could not be read';
   return new Error(`Gemini couldn't ${task}: ${reason}. Nothing has been saved, so please try again in a minute.`);
 }
 
 /** Allowed ingredient units, so every recipe uses the same vocabulary. */
-const STANDARD_UNITS = 'g, kg, ml, l, tsp, tbsp, cup, piece, clove, can, bunch, pack, slice, rasher, fillet, sprig, stick, pinch, handful';
+const STANDARD_UNITS =
+  'g, kg, ml, l, tsp, tbsp, cup, piece, clove, can, bunch, pack, slice, rasher, fillet, sprig, stick, pinch, handful';
 
 /**
  * Instructions for every recipe request: the usual rules plus the household's
@@ -660,7 +739,9 @@ const STANDARD_UNITS = 'g, kg, ml, l, tsp, tbsp, cup, piece, clove, can, bunch, 
 function recipeSystemInstruction(): string {
   let names: string[] = [];
   try {
-    names = getCatalog().products.filter(p => !p.sameAs).map(p => p.name);
+    names = getCatalog()
+      .products.filter((p) => !p.sameAs)
+      .map((p) => p.name);
   } catch {
     names = [];
   }
@@ -687,34 +768,59 @@ Rules:
 - Return JSON matching the schema.`;
 
 const COPY_RECIPE_SCHEMA = {
-  type: "OBJECT",
+  type: 'OBJECT',
   properties: {
-    name: { type: "STRING", description: "Recipe title as written" },
-    description: { type: "STRING", description: "The recipe's own introduction sentence if it has one, otherwise a plain one-sentence summary" },
-    servings: { type: "INTEGER", description: "Number of servings as stated in the recipe; 0 if not stated" },
-    prepTime: { type: "INTEGER", description: "Preparation time in minutes as stated; 0 if not stated" },
-    cookTime: { type: "INTEGER", description: "Cooking time in minutes as stated; 0 if not stated" },
-    ingredients: {
-      type: "ARRAY",
-      description: "Every ingredient line, in order, copied as written",
-      items: {
-        type: "OBJECT",
-        properties: {
-          name: { type: "STRING", description: "The ingredient as written, without the quantity, unit or preparation (e.g. 'skinless chicken breasts')" },
-          amount: { type: "NUMBER", description: "The quantity exactly as written; 0 if none (e.g. 'salt to taste')" },
-          unit: { type: "STRING", description: "The unit exactly as written (e.g. 'g', 'tbsp', 'tins', 'cloves'); empty if none" },
-          note: { type: "STRING", description: "Preparation or extra detail from the line (e.g. 'finely chopped', 'cut into chunks', 'drained'); empty if none" }
-        },
-        required: ["name", "amount", "unit", "note"]
-      }
+    name: { type: 'STRING', description: 'Recipe title as written' },
+    description: {
+      type: 'STRING',
+      description: "The recipe's own introduction sentence if it has one, otherwise a plain one-sentence summary",
     },
-    instructions: { type: "ARRAY", items: { type: "STRING" }, description: "Method steps copied word for word" },
-    isVegetarian: { type: "BOOLEAN", description: "True only if there is no meat, poultry, fish, seafood, animal stock or gelatine (including hidden ones such as anchovies in Worcestershire sauce)" },
-    isVegan: { type: "BOOLEAN", description: "True only if there are no animal products at all" },
-    isGlutenFree: { type: "BOOLEAN", description: "True only if no ingredient contains gluten (wheat, barley, rye, most pasta, bread, soy sauce, stock cubes that contain wheat...)" },
-    isDairyFree: { type: "BOOLEAN", description: "True only if no ingredient contains milk or milk products (butter, cheese, cream, yogurt...)" }
+    servings: { type: 'INTEGER', description: 'Number of servings as stated in the recipe; 0 if not stated' },
+    prepTime: { type: 'INTEGER', description: 'Preparation time in minutes as stated; 0 if not stated' },
+    cookTime: { type: 'INTEGER', description: 'Cooking time in minutes as stated; 0 if not stated' },
+    ingredients: {
+      type: 'ARRAY',
+      description: 'Every ingredient line, in order, copied as written',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: {
+            type: 'STRING',
+            description:
+              "The ingredient as written, without the quantity, unit or preparation (e.g. 'skinless chicken breasts')",
+          },
+          amount: { type: 'NUMBER', description: "The quantity exactly as written; 0 if none (e.g. 'salt to taste')" },
+          unit: {
+            type: 'STRING',
+            description: "The unit exactly as written (e.g. 'g', 'tbsp', 'tins', 'cloves'); empty if none",
+          },
+          note: {
+            type: 'STRING',
+            description:
+              "Preparation or extra detail from the line (e.g. 'finely chopped', 'cut into chunks', 'drained'); empty if none",
+          },
+        },
+        required: ['name', 'amount', 'unit', 'note'],
+      },
+    },
+    instructions: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Method steps copied word for word' },
+    isVegetarian: {
+      type: 'BOOLEAN',
+      description:
+        'True only if there is no meat, poultry, fish, seafood, animal stock or gelatine (including hidden ones such as anchovies in Worcestershire sauce)',
+    },
+    isVegan: { type: 'BOOLEAN', description: 'True only if there are no animal products at all' },
+    isGlutenFree: {
+      type: 'BOOLEAN',
+      description:
+        'True only if no ingredient contains gluten (wheat, barley, rye, most pasta, bread, soy sauce, stock cubes that contain wheat...)',
+    },
+    isDairyFree: {
+      type: 'BOOLEAN',
+      description: 'True only if no ingredient contains milk or milk products (butter, cheese, cream, yogurt...)',
+    },
   },
-  required: ["name", "servings", "ingredients", "instructions", "isVegetarian", "isVegan"]
+  required: ['name', 'servings', 'ingredients', 'instructions', 'isVegetarian', 'isVegan'],
 };
 
 /**
@@ -769,7 +875,10 @@ export function normalizeParsedRecipe(data: any, selectedMethod: 'ninja' | 'oven
     cookTime,
     methodPrepTime: { [selectedMethod]: prepTime },
     methodCookTime: { [selectedMethod]: cookTime },
-    tags: generateFunctionalTags(ingredients, isVegetarian, isVegan, selectedMethod, { glutenFree: data?.isGlutenFree, dairyFree: data?.isDairyFree }),
+    tags: generateFunctionalTags(ingredients, isVegetarian, isVegan, selectedMethod, {
+      glutenFree: data?.isGlutenFree,
+      dairyFree: data?.isDairyFree,
+    }),
     cookingMethods: [selectedMethod],
     isVegetarian,
     isVegan,
@@ -787,8 +896,13 @@ export async function parseRecipeApi(text: string, cookingMethod: 'ninja' | 'ove
 
   let data: any;
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, COPY_SYSTEM_INSTRUCTION, COPY_RECIPE_SCHEMA, { temperature: 0 });
-    const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const rawText = await callGeminiRest(apiKey, prompt, COPY_SYSTEM_INSTRUCTION, COPY_RECIPE_SCHEMA, {
+      temperature: 0,
+    });
+    const cleanText = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
     data = JSON.parse(cleanText);
   } catch (err) {
     console.error('Gemini parseRecipeApi failed:', err);
@@ -796,7 +910,9 @@ export async function parseRecipeApi(text: string, cookingMethod: 'ninja' | 'ove
   }
   const recipe = normalizeParsedRecipe(data, selectedMethod);
   if (recipe.ingredients.length === 0) {
-    throw new Error("Gemini couldn't find any ingredients in that text. Check the whole recipe was pasted, including the ingredients list, and try again.");
+    throw new Error(
+      "Gemini couldn't find any ingredients in that text. Check the whole recipe was pasted, including the ingredients list, and try again.",
+    );
   }
   return recipe;
 }
@@ -806,7 +922,10 @@ export async function parseRecipeApi(text: string, cookingMethod: 'ninja' | 'ove
  * grocery-list product each one is. Returns ingredient name -> product name ('' = none).
  * Failure is harmless: those ingredients just go to the Map Ingredient step.
  */
-export async function suggestGroceryProductsApi(ingredientNames: string[], productNames: string[]): Promise<Record<string, string>> {
+export async function suggestGroceryProductsApi(
+  ingredientNames: string[],
+  productNames: string[],
+): Promise<Record<string, string>> {
   const apiKey = getGeminiApiKey();
   if (!apiKey || ingredientNames.length === 0 || productNames.length === 0) return {};
   const prompt = `For each recipe ingredient below, give the grocery-list product it is, using the product's name EXACTLY as listed.
@@ -819,25 +938,34 @@ ${ingredientNames.map((n) => `- ${n}`).join('\n')}
 Grocery-list products:
 ${productNames.join('; ')}`;
   const schema = {
-    type: "OBJECT",
+    type: 'OBJECT',
     properties: {
       matches: {
-        type: "ARRAY",
+        type: 'ARRAY',
         items: {
-          type: "OBJECT",
+          type: 'OBJECT',
           properties: {
-            ingredient: { type: "STRING", description: "The recipe ingredient exactly as given" },
-            product: { type: "STRING", description: "Grocery-list product name exactly as listed, or empty" }
+            ingredient: { type: 'STRING', description: 'The recipe ingredient exactly as given' },
+            product: { type: 'STRING', description: 'Grocery-list product name exactly as listed, or empty' },
           },
-          required: ["ingredient", "product"]
-        }
-      }
+          required: ['ingredient', 'product'],
+        },
+      },
     },
-    required: ["matches"]
+    required: ['matches'],
   };
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, 'You match recipe ingredients to a fixed grocery list. Never invent product names.', schema, { temperature: 0 });
-    const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const rawText = await callGeminiRest(
+      apiKey,
+      prompt,
+      'You match recipe ingredients to a fixed grocery list. Never invent product names.',
+      schema,
+      { temperature: 0 },
+    );
+    const cleanText = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
     const data = JSON.parse(cleanText);
     const out: Record<string, string> = {};
     for (const m of Array.isArray(data?.matches) ? data.matches : []) {
@@ -857,7 +985,8 @@ export async function generateRecipeApi(promptText: string, cookingMethod: 'ninj
   }
 
   const selectedMethod = cookingMethod === 'ninja' ? 'ninja' : 'oven_hob';
-  const methodNameLabel = selectedMethod === 'ninja' ? 'Ninja Combi Multi-cooker / Air Fryer' : 'Stove / Oven (Traditional Hob / Oven)';
+  const methodNameLabel =
+    selectedMethod === 'ninja' ? 'Ninja Combi Multi-cooker / Air Fryer' : 'Stove / Oven (Traditional Hob / Oven)';
 
   const prompt = `Create an original, delicious, complete recipe from scratch based on the following idea:
 "${promptText.trim()}"
@@ -885,7 +1014,10 @@ CRITICAL INSTRUCTIONS:
 
   try {
     const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), RECIPE_RESPONSE_SCHEMA);
-    const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const cleanText = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
     const data = JSON.parse(cleanText);
     return validateAndNormalizeRecipe(data, selectedMethod, promptText);
   } catch (err) {
@@ -900,7 +1032,8 @@ export async function editRecipeApi(recipe: Recipe, instruction: string): Promis
     throw new Error('GEMINI_API_KEY_MISSING');
   }
 
-  const selectedMethod: 'ninja' | 'oven_hob' = (recipe.cookingMethods && recipe.cookingMethods[0] === 'ninja') ? 'ninja' : 'oven_hob';
+  const selectedMethod: 'ninja' | 'oven_hob' =
+    recipe.cookingMethods && recipe.cookingMethods[0] === 'ninja' ? 'ninja' : 'oven_hob';
 
   const prompt = `You are a culinary AI assistant. Modify the following recipe according to the user instruction:
 "${instruction}"
@@ -917,7 +1050,10 @@ CRITICAL INSTRUCTIONS:
 
   try {
     const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), RECIPE_RESPONSE_SCHEMA);
-    const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const cleanText = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
     const data = JSON.parse(cleanText);
     const validated = validateAndNormalizeRecipe(data, selectedMethod);
     validated.id = recipe.id;
@@ -934,7 +1070,7 @@ export async function generateAlternativeInstructionsApi(
   ingredients: Ingredient[],
   targetMethod: CookingMethod,
   existingInstructions: string[],
-  existingMethods?: string[]
+  existingMethods?: string[],
 ): Promise<{ instructions: string[]; prepTime: number; cookTime: number }> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -958,28 +1094,36 @@ Dynamically calculate prepTime and cookTime in minutes (as integers) for this ta
 Do not include macros or cost estimates.`;
 
   const responseSchema = {
-    type: "OBJECT",
+    type: 'OBJECT',
     properties: {
       instructions: {
-        type: "ARRAY",
-        items: { type: "STRING" },
-        description: "Step-by-step instructions specifically formatted for target appliance"
+        type: 'ARRAY',
+        items: { type: 'STRING' },
+        description: 'Step-by-step instructions specifically formatted for target appliance',
       },
       prepTime: {
-        type: "INTEGER",
-        description: "Realistic preparation time in minutes for target appliance. Integer only."
+        type: 'INTEGER',
+        description: 'Realistic preparation time in minutes for target appliance. Integer only.',
       },
       cookTime: {
-        type: "INTEGER",
-        description: "Realistic cooking time in minutes for target appliance. Integer only."
-      }
+        type: 'INTEGER',
+        description: 'Realistic cooking time in minutes for target appliance. Integer only.',
+      },
     },
-    required: ["instructions", "prepTime", "cookTime"]
+    required: ['instructions', 'prepTime', 'cookTime'],
   };
 
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, 'You are an expert appliance chef. Translate recipes to specific appliances.', responseSchema);
-    const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const rawText = await callGeminiRest(
+      apiKey,
+      prompt,
+      'You are an expert appliance chef. Translate recipes to specific appliances.',
+      responseSchema,
+    );
+    const cleanText = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
     return JSON.parse(cleanText);
   } catch (err) {
     console.error('Gemini generateAlternativeInstructionsApi failed:', err);
@@ -996,19 +1140,31 @@ export async function cleanGroceryDatabaseApi(items: GroceryItem[]): Promise<any
   const prompt = `Review the following household grocery database items and identify duplicates, naming inconsistencies, and miscategorized aisles.
 
 Item Catalog:
-${JSON.stringify(items.map((i: any) => ({
-  id: i.id,
-  name: i.name,
-  category: i.category,
-  unit: i.unit,
-  aliases: i.aliases || []
-})), null, 2)}
+${JSON.stringify(
+  items.map((i: any) => ({
+    id: i.id,
+    name: i.name,
+    category: i.category,
+    unit: i.unit,
+    aliases: i.aliases || [],
+  })),
+  null,
+  2,
+)}
 
 Return a structured JSON object with the "actions" array detailing any recommended merges, renames, and recategorizations. If clean, return {"actions": []}.`;
 
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, 'You are a database normalization specialist.', CLEAN_DATABASE_SCHEMA);
-    const cleanText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const rawText = await callGeminiRest(
+      apiKey,
+      prompt,
+      'You are a database normalization specialist.',
+      CLEAN_DATABASE_SCHEMA,
+    );
+    const cleanText = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
     const data = JSON.parse(cleanText);
     return data?.actions || [];
   } catch (err) {
@@ -1019,7 +1175,9 @@ Return a structured JSON object with the "actions" array detailing any recommend
 
 /** No Gemini key on this phone: questions about a recipe can't be answered. */
 export class NoGeminiKeyError extends Error {
-  constructor() { super('No Gemini key'); }
+  constructor() {
+    super('No Gemini key');
+  }
 }
 
 /**
@@ -1034,9 +1192,10 @@ export async function askAboutRecipeApi(
 ): Promise<string> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new NoGeminiKeyError();
-  const where = context.step === 0
-    ? 'They are getting the ingredients out, before step 1.'
-    : `They are on step ${context.step} of ${context.steps.length}: "${context.steps[context.step - 1] || ''}"`;
+  const where =
+    context.step === 0
+      ? 'They are getting the ingredients out, before step 1.'
+      : `They are on step ${context.step} of ${context.steps.length}: "${context.steps[context.step - 1] || ''}"`;
   const prompt = [
     `Recipe: ${recipe.name}`,
     `Cooking for ${context.servings} people, using the ${context.method === 'ninja' ? 'Ninja multi-cooker' : 'oven and hob'}.`,
@@ -1048,7 +1207,9 @@ export async function askAboutRecipeApi(
     where,
     '',
     `Question: ${question}`,
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
   const system = [
     'You are a calm, practical cooking helper in a UK family kitchen. Someone is cooking this recipe right now and asked a question, often by voice.',
     'Answer in one to three short sentences of plain text that read well aloud: no lists, no markdown, no headings.',
@@ -1057,7 +1218,10 @@ export async function askAboutRecipeApi(
     'Be accurate about food safety (cooking meat through, reheating, allergens). If you are not sure, say so.',
   ].join(' ');
   const text = await callGeminiRest(apiKey, prompt, system, undefined, { temperature: 0.4 });
-  return String(text || '').replace(/[*#_`]+/g, '').replace(/\s+/g, ' ').trim();
+  return String(text || '')
+    .replace(/[*#_`]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Check a Gemini key works (Settings → This phone → Test it), with a plain answer. */
@@ -1069,10 +1233,14 @@ export async function testGeminiKeyApi(key: string): Promise<{ ok: boolean; mess
     return { ok: true, message: 'It works.' };
   } catch (e: any) {
     const m = String(e?.message || e || '');
-    if (/api key not valid|api_key_invalid|invalid api key|api key expired/i.test(m)) return { ok: false, message: "Google says that key isn't valid. Copy it again from Google AI Studio." };
-    if (/quota|exhausted|rate limit|429/i.test(m)) return { ok: true, message: "The key works, but today's free limit has been used. It'll work again tomorrow." };
-    if (/permission|forbidden|403/i.test(m)) return { ok: false, message: "That key isn't allowed to use Gemini. Make a new one in Google AI Studio." };
-    if (/failed to fetch|network|load failed|abort/i.test(m)) return { ok: false, message: "Couldn't reach Gemini. Check the phone is online." };
+    if (/api key not valid|api_key_invalid|invalid api key|api key expired/i.test(m))
+      return { ok: false, message: "Google says that key isn't valid. Copy it again from Google AI Studio." };
+    if (/quota|exhausted|rate limit|429/i.test(m))
+      return { ok: true, message: "The key works, but today's free limit has been used. It'll work again tomorrow." };
+    if (/permission|forbidden|403/i.test(m))
+      return { ok: false, message: "That key isn't allowed to use Gemini. Make a new one in Google AI Studio." };
+    if (/failed to fetch|network|load failed|abort/i.test(m))
+      return { ok: false, message: "Couldn't reach Gemini. Check the phone is online." };
     return { ok: false, message: m || "Gemini didn't answer." };
   }
 }

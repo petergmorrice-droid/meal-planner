@@ -34,7 +34,13 @@ export function averagesById(list: RecipeRating[] | undefined): Map<string, numb
 }
 
 /** The list with this person's rating set (0 takes it off). */
-export function withRating(list: RecipeRating[] | undefined, recipeId: string, who: string, stars: number, todayIso?: string): RecipeRating[] {
+export function withRating(
+  list: RecipeRating[] | undefined,
+  recipeId: string,
+  who: string,
+  stars: number,
+  todayIso?: string,
+): RecipeRating[] {
   const id = `${recipeId}:${who}`;
   const rest = (list || []).filter((r) => r?.id !== id);
   if (!(stars >= 1)) return rest;

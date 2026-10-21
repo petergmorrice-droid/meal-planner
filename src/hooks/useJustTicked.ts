@@ -11,7 +11,12 @@ export function useJustTicked(ms: number = JUST_TICKED_MS) {
   const [justTicked, setJustTicked] = useState<Record<string, true>>({});
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout); }, []);
+  useEffect(
+    () => () => {
+      Object.values(timers.current).forEach(clearTimeout);
+    },
+    [],
+  );
 
   const drop = useCallback((key: string) => {
     clearTimeout(timers.current[key]);
@@ -25,11 +30,14 @@ export function useJustTicked(ms: number = JUST_TICKED_MS) {
   }, []);
 
   /** Ticked: hold it in place for a few seconds. */
-  const hold = useCallback((key: string) => {
-    clearTimeout(timers.current[key]);
-    setJustTicked((s) => ({ ...s, [key]: true }));
-    timers.current[key] = setTimeout(() => drop(key), ms);
-  }, [drop, ms]);
+  const hold = useCallback(
+    (key: string) => {
+      clearTimeout(timers.current[key]);
+      setJustTicked((s) => ({ ...s, [key]: true }));
+      timers.current[key] = setTimeout(() => drop(key), ms);
+    },
+    [drop, ms],
+  );
 
   return { justTicked, hold, release: drop };
 }

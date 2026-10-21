@@ -7,8 +7,14 @@ import { MealPlan } from '../../types';
 import { carryItemsToWeek, defaultShopWeek, weekStartShort } from '../../shopList';
 import { preferredWeekStart } from '../../planning';
 import {
-  canPlanFollowingWeek, createEmptyPlan, formatDateISO, formatWeekRange, getMonday, getNextMonday,
-  isWeekWithinForwardLimit, syncRecurringStaplesForPlan,
+  canPlanFollowingWeek,
+  createEmptyPlan,
+  formatDateISO,
+  formatWeekRange,
+  getMonday,
+  getNextMonday,
+  isWeekWithinForwardLimit,
+  syncRecurringStaplesForPlan,
 } from '../../utils';
 import { readOpenShop } from './openShop';
 import type { AppStore } from '../../store';
@@ -29,7 +35,12 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
   // (this week Mon–Thu, next week Fri–Sun), else the earliest sent week with things to buy.
   const defaultWeekId = () => {
     const plans = (store.state.mealPlans || []).filter((p: MealPlan) => isWeekWithinForwardLimit(p.startDate));
-    return defaultShopWeek(plans, store.state.shoppingList || [], preferredWeekStart(new Date(), currentMondayStr, nextMondayStr), nextMondayStr);
+    return defaultShopWeek(
+      plans,
+      store.state.shoppingList || [],
+      preferredWeekStart(new Date(), currentMondayStr, nextMondayStr),
+      nextMondayStr,
+    );
   };
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
     const plans: MealPlan[] = store.state.mealPlans || [];
@@ -40,8 +51,12 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
   });
   // "See the list" for a week is only ever asked as the Shop opens: the week above is chosen from
   // it, then the request is cleared.
-  const requestTaken = useEffectEvent(() => { if (openPlanId) onOpenPlanHandled?.(); });
-  useEffect(() => { requestTaken(); }, []);
+  const requestTaken = useEffectEvent(() => {
+    if (openPlanId) onOpenPlanHandled?.();
+  });
+  useEffect(() => {
+    requestTaken();
+  }, []);
 
   // Keep the selected week valid (e.g. a week removed on the other phone)
   useEffect(() => {
@@ -69,7 +84,13 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
 
   /** "This week", "Next week" or "w/c 3 Nov". */
   const weekName = (startDate?: string) =>
-    !startDate ? '' : startDate === currentMondayStr ? 'This week' : startDate === nextMondayStr ? 'Next week' : `w/c ${weekStartShort(startDate)}`;
+    !startDate
+      ? ''
+      : startDate === currentMondayStr
+        ? 'This week'
+        : startDate === nextMondayStr
+          ? 'Next week'
+          : `w/c ${weekStartShort(startDate)}`;
   const planIndex = activePlan ? allPlans.findIndex((p) => p.id === activePlan.id) : -1;
   const prevPlan = planIndex > 0 ? allPlans[planIndex - 1] : null;
   const nextPlan = planIndex >= 0 && planIndex < allPlans.length - 1 ? allPlans[planIndex + 1] : null;
@@ -81,14 +102,28 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
     d.setDate(d.getDate() + 7);
     return formatDateISO(d);
   })();
-  const followingPlan: MealPlan | null = followingStart ? (store.state.mealPlans || []).find((p: MealPlan) => p.startDate === followingStart) || null : null;
+  const followingPlan: MealPlan | null = followingStart
+    ? (store.state.mealPlans || []).find((p: MealPlan) => p.startDate === followingStart) || null
+    : null;
   const canCarry = !!followingStart && (!!followingPlan || canPlanFollowingWeek(activePlan?.startDate));
   /** "next week" or "w/c 10 Nov" (null when nothing can be moved on). */
-  const followingShort = !canCarry || !followingStart ? null : followingStart === nextMondayStr ? 'next week' : `w/c ${weekStartShort(followingStart)}`;
-  const followingListPhrase = !followingShort ? null : followingStart === nextMondayStr ? "next week's list" : `the ${followingShort} list`;
+  const followingShort =
+    !canCarry || !followingStart
+      ? null
+      : followingStart === nextMondayStr
+        ? 'next week'
+        : `w/c ${weekStartShort(followingStart)}`;
+  const followingListPhrase = !followingShort
+    ? null
+    : followingStart === nextMondayStr
+      ? "next week's list"
+      : `the ${followingShort} list`;
 
   /** Move these lines to the following week's list (making that week if it isn't there yet). */
-  const carryToFollowingWeek = (ids: string[], removeFirst: string[] = []): { moved: string[]; alreadyThere: string[] } | null => {
+  const carryToFollowingWeek = (
+    ids: string[],
+    removeFirst: string[] = [],
+  ): { moved: string[]; alreadyThere: string[] } | null => {
     if (!activePlan || !followingStart || !canCarry || ids.length === 0) return null;
     const gone = new Set(removeFirst);
     const existing = store.getState().mealPlans.find((p: MealPlan) => p.startDate === followingStart) || null;
@@ -109,7 +144,17 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
   };
 
   return {
-    nextMonday, nextMondayStr, allPlans, selectedPlanId, setSelectedPlanId, activePlan,
-    weekName, prevPlan, nextPlan, followingShort, followingListPhrase, carryToFollowingWeek,
+    nextMonday,
+    nextMondayStr,
+    allPlans,
+    selectedPlanId,
+    setSelectedPlanId,
+    activePlan,
+    weekName,
+    prevPlan,
+    nextPlan,
+    followingShort,
+    followingListPhrase,
+    carryToFollowingWeek,
   };
 }

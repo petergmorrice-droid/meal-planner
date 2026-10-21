@@ -19,20 +19,41 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HELPERS = new Set(['pw.cjs', 'review-seed.cjs', 'flow-lib.cjs', 'mockgist.cjs']);
 const args = process.argv.slice(2);
-const opt = (name, fallback) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : fallback; };
-const appDir = path.resolve(args.find((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--'))) || 'dist-single');
-const only = (opt('--only', '') || '').split(',').map((s) => s.trim()).filter(Boolean);
+const opt = (name, fallback) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : fallback;
+};
+const appDir = path.resolve(
+  args.find((a, i) => !a.startsWith('--') && !(i > 0 && args[i - 1].startsWith('--'))) || 'dist-single',
+);
+const only = (opt('--only', '') || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const jobs = Math.max(1, Number(opt('--jobs', '4')) || 4);
 const outRoot = path.resolve(opt('--out', path.join(HERE, '.out')));
 
-const tests = fs.readdirSync(HERE)
+const tests = fs
+  .readdirSync(HERE)
   .filter((f) => f.endsWith('.cjs') && !HELPERS.has(f))
   .map((f) => f.replace(/\.cjs$/, ''))
   .filter((n) => !only.length || only.includes(n))
   .sort();
-if (!tests.length) { console.error('No tests matched.'); process.exit(1); }
+if (!tests.length) {
+  console.error('No tests matched.');
+  process.exit(1);
+}
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.css': 'text/css', '.ico': 'image/x-icon' };
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript',
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.css': 'text/css',
+  '.ico': 'image/x-icon',
+};
 function serve(dir) {
   if (!fs.existsSync(path.join(dir, 'index.html'))) {
     console.error(`No built app in ${dir}. Run "npm run build:single" first (or pass the folder).`);
@@ -41,8 +62,12 @@ function serve(dir) {
   const server = http.createServer((req, res) => {
     const url = decodeURIComponent((req.url || '/').split('?')[0]);
     let file = path.join(dir, url === '/' ? 'index.html' : url);
-    if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dir, 'index.html');
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+    if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory())
+      file = path.join(dir, 'index.html');
+    res.writeHead(200, {
+      'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
+      'Cache-Control': 'no-store',
+    });
     fs.createReadStream(file).pipe(res);
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
@@ -53,17 +78,31 @@ function runOne(name, url) {
   fs.mkdirSync(out, { recursive: true });
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(process.execPath, [path.join(HERE, `${name}.cjs`), out], { env: { ...process.env, APP_URL: url }, cwd: HERE });
+    const child = spawn(process.execPath, [path.join(HERE, `${name}.cjs`), out], {
+      env: { ...process.env, APP_URL: url },
+      cwd: HERE,
+    });
     let log = '';
-    child.stdout.on('data', (d) => { log += d; });
-    child.stderr.on('data', (d) => { log += d; });
+    child.stdout.on('data', (d) => {
+      log += d;
+    });
+    child.stderr.on('data', (d) => {
+      log += d;
+    });
     const timer = setTimeout(() => child.kill('SIGKILL'), 8 * 60 * 1000);
     child.on('close', (code) => {
       clearTimeout(timer);
       fs.writeFileSync(path.join(out, 'log.txt'), log);
       const passed = (log.match(/^PASS /gm) || []).length;
       const failed = log.split('\n').filter((l) => l.startsWith('FAIL '));
-      resolve({ name, ok: code === 0, passed, failed, seconds: Math.round((Date.now() - started) / 1000), tail: log.trim().split('\n').slice(-6).join('\n') });
+      resolve({
+        name,
+        ok: code === 0,
+        passed,
+        failed,
+        seconds: Math.round((Date.now() - started) / 1000),
+        tail: log.trim().split('\n').slice(-6).join('\n'),
+      });
     });
   });
 }
@@ -71,9 +110,14 @@ function runOne(name, url) {
 async function pool(items, n, fn) {
   const results = [];
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (next < items.length) { const i = next++; results[i] = await fn(items[i]); }
-  }));
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i]);
+      }
+    }),
+  );
   return results;
 }
 
@@ -94,13 +138,25 @@ server?.close();
 let failures = 0;
 for (const r of results) {
   const mark = r.ok ? 'ok  ' : 'FAIL';
-  console.log(`${mark} ${r.name.padEnd(22)} ${String(r.passed).padStart(4)} checks  ${r.seconds}s${r.retried && r.ok ? '  (passed on a second run)' : ''}`);
+  console.log(
+    `${mark} ${r.name.padEnd(22)} ${String(r.passed).padStart(4)} checks  ${r.seconds}s${r.retried && r.ok ? '  (passed on a second run)' : ''}`,
+  );
   if (!r.ok) {
     failures++;
     for (const f of r.failed.slice(0, 8)) console.log(`       ${f.slice(0, 200)}`);
-    if (!r.failed.length) console.log(r.tail.split('\n').map((l) => `       ${l}`).join('\n'));
+    if (!r.failed.length)
+      console.log(
+        r.tail
+          .split('\n')
+          .map((l) => `       ${l}`)
+          .join('\n'),
+      );
   }
 }
 const total = results.reduce((s, r) => s + r.passed, 0);
-console.log(failures ? `\n${failures} of ${results.length} tests FAILED (${total} checks passed). Logs and screenshots: ${outRoot}` : `\nAll ${results.length} browser tests passed (${total} checks).`);
+console.log(
+  failures
+    ? `\n${failures} of ${results.length} tests FAILED (${total} checks passed). Logs and screenshots: ${outRoot}`
+    : `\nAll ${results.length} browser tests passed (${total} checks).`,
+);
 process.exit(failures ? 1 : 0);

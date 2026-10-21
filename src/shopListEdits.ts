@@ -5,13 +5,25 @@
 import { ShoppingListItem, MealPlan, Recipe, RecurringItem } from './types';
 import { canonicalUnit, formatUnit } from './shopping';
 import type { Product } from './shopping/catalog';
-import { formatWeekRange, generateShoppingListForPlan, syncRecurringStaplesForPlan, quantityForAddedItem, convertToShoppingQuantity } from './utils';
+import {
+  formatWeekRange,
+  generateShoppingListForPlan,
+  syncRecurringStaplesForPlan,
+  quantityForAddedItem,
+  convertToShoppingQuantity,
+} from './utils';
 import { productKey, inProductUnit } from './shopList';
 
 type List = ShoppingListItem[];
 
 /** A line typed in the add box or picked from a product. */
-export interface HandLine { name: string; amount: number; unit: string; category?: string; groceryId?: string }
+export interface HandLine {
+  name: string;
+  amount: number;
+  unit: string;
+  category?: string;
+  groceryId?: string;
+}
 
 /** Change these lines. */
 export function patchLines(list: List, ids: string[], patch: (i: ShoppingListItem) => ShoppingListItem): List {
@@ -76,7 +88,11 @@ export function stepLine(list: List, id: string, step: number, dir: number): Lis
     if (i.id !== id) return i;
     const newAmount = Math.max(step, (i.amount || 1) + change);
     const rawUnit = (i.unit || '').toLowerCase().trim();
-    const unit = /^items?$/.test(rawUnit) ? (newAmount === 1 ? 'item' : 'items') : formatUnit(canonicalUnit(i.unit), newAmount);
+    const unit = /^items?$/.test(rawUnit)
+      ? newAmount === 1
+        ? 'item'
+        : 'items'
+      : formatUnit(canonicalUnit(i.unit), newAmount);
     return { ...i, amount: newAmount, unit, userAdjusted: true };
   });
 }
@@ -86,21 +102,38 @@ export function stepLine(list: List, id: string, step: number, dir: number): Lis
  * new lines. Something added before as a bare number ("1") and now as the product ("1 pack") is the
  * same thing, so it's put the product's way first. Gives back the lines' ids.
  */
-export function addHandLines(list: List, plan: MealPlan, lines: HandLine[], productFor: (line: HandLine) => Product | null): { list: List; ids: string[] } {
+export function addHandLines(
+  list: List,
+  plan: MealPlan,
+  lines: HandLine[],
+  productFor: (line: HandLine) => Product | null,
+): { list: List; ids: string[] } {
   const out: List = [...list];
   const ids: string[] = [];
   for (const line of lines) {
     const key = productKey(line);
-    const idx = out.findIndex((i) => i.planId === plan.id && i.isAdhoc && !i.isRecurring && !i.checked && productKey(i) === key);
+    const idx = out.findIndex(
+      (i) => i.planId === plan.id && i.isAdhoc && !i.isRecurring && !i.checked && productKey(i) === key,
+    );
     if (idx > -1 && line.groceryId && canonicalUnit(out[idx].unit) !== canonicalUnit(line.unit)) {
       const product = productFor(line);
-      const fitted = product ? inProductUnit(out[idx], line.unit, product.buyUnit === canonicalUnit(line.unit) ? product.step : 1) : null;
+      const fitted = product
+        ? inProductUnit(out[idx], line.unit, product.buyUnit === canonicalUnit(line.unit) ? product.step : 1)
+        : null;
       if (fitted) out[idx] = { ...out[idx], ...fitted, groceryId: line.groceryId };
     }
     if (idx > -1 && canonicalUnit(out[idx].unit) === canonicalUnit(line.unit)) {
       ids.push(out[idx].id);
       const amount = Math.round((out[idx].amount + line.amount) * 100) / 100;
-      out[idx] = { ...out[idx], amount, unit: /^items?$/i.test(out[idx].unit || '') ? (amount === 1 ? 'item' : 'items') : formatUnit(canonicalUnit(line.unit), amount) };
+      out[idx] = {
+        ...out[idx],
+        amount,
+        unit: /^items?$/i.test(out[idx].unit || '')
+          ? amount === 1
+            ? 'item'
+            : 'items'
+          : formatUnit(canonicalUnit(line.unit), amount),
+      };
     } else {
       const id = crypto.randomUUID();
       ids.push(id);
@@ -123,13 +156,18 @@ export function addHandLines(list: List, plan: MealPlan, lines: HandLine[], prod
 }
 
 /** From the products list: more of something already on this week's list (same unit), or a new line. */
-export function addCatalogItems(list: List, plan: MealPlan, items: { name: string; amount: number; category?: string }[]): { list: List; total: number } {
+export function addCatalogItems(
+  list: List,
+  plan: MealPlan,
+  items: { name: string; amount: number; category?: string }[],
+): { list: List; total: number } {
   const weekLabel = `Week of ${formatWeekRange(plan.startDate)}`;
   const out: List = [...list];
   let total = 0;
   items.forEach((newItem) => {
-    const existingIndex = out.findIndex((item) =>
-      !item.checked && item.planId === plan.id && item.name.toLowerCase() === newItem.name.toLowerCase());
+    const existingIndex = out.findIndex(
+      (item) => !item.checked && item.planId === plan.id && item.name.toLowerCase() === newItem.name.toLowerCase(),
+    );
     const converted = quantityForAddedItem(newItem.name, newItem.amount);
     if (existingIndex > -1) {
       const existing = out[existingIndex];
@@ -173,15 +211,20 @@ export function addRecipeIngredients(
   let count = 0;
   ingredients.forEach((ing) => {
     const converted = convertToShoppingQuantity(ing.name, ing.amount, ing.unit, ing.category);
-    const existingIdx = out.findIndex((item) =>
-      item.planId === plan.id &&
-      item.isBatch &&
-      item.batchRecipeName?.toLowerCase() === mealName.toLowerCase() &&
-      item.name.toLowerCase().trim() === ing.name.toLowerCase().trim() &&
-      !item.checked &&
-      item.unit === converted.unit);
+    const existingIdx = out.findIndex(
+      (item) =>
+        item.planId === plan.id &&
+        item.isBatch &&
+        item.batchRecipeName?.toLowerCase() === mealName.toLowerCase() &&
+        item.name.toLowerCase().trim() === ing.name.toLowerCase().trim() &&
+        !item.checked &&
+        item.unit === converted.unit,
+    );
     if (existingIdx > -1) {
-      out[existingIdx] = { ...out[existingIdx], amount: Math.round((out[existingIdx].amount + converted.amount) * 10) / 10 };
+      out[existingIdx] = {
+        ...out[existingIdx],
+        amount: Math.round((out[existingIdx].amount + converted.amount) * 10) / 10,
+      };
     } else {
       out.push({
         id: crypto.randomUUID(),

@@ -4,20 +4,30 @@ import { Plus, Minus, Trash2, X, RotateCcw, Search, Edit3 } from 'lucide-react';
 import { matchProduct, catalogForState, aisleCategory, productMatchesSearch } from '../../shopping';
 import { GROCERY_AISLES, getGroceryAisle } from '../../utils';
 import { productKey } from '../../shopList';
-import { addStaple, changeStaple, currentStaples, removeStaple, saveStaples, stapleFor, stepStaple } from '../../staples';
-import type  { AppStore } from '../../store';
+import {
+  addStaple,
+  changeStaple,
+  currentStaples,
+  removeStaple,
+  saveStaples,
+  stapleFor,
+  stepStaple,
+} from '../../staples';
+import type { AppStore } from '../../store';
 
 export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore; onClose: () => void }) {
   const prefs = store.state.preferences || { recurringItems: [] };
   const recurringItems = prefs.recurringItems || [];
   // The shared product list (what the Shop knows how to buy).
   const catalog = catalogForState(store.state);
-  const aisleNames = Object.values(GROCERY_AISLES).sort((a, b) => a.order - b.order).map((a) => a.name);
+  const aisleNames = Object.values(GROCERY_AISLES)
+    .sort((a, b) => a.order - b.order)
+    .map((a) => a.name);
 
   const [newItemName, setNewItemName] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [editingStapleId, setEditingStapleId] = useState<string | null>(null);
-  
+
   // Editing state for detailed edit popup inside the main modal
   const [editingStapleName, setEditingStapleName] = useState('');
   const [editingStapleAmount, setEditingStapleAmount] = useState<number>(1);
@@ -43,7 +53,8 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
     if (!name.trim()) return;
     const { staples, staple, added } = addStaple(currentStaples(store), stapleFor(catalog, name));
     // If it's on a list already because you added it by hand, the staple's line takes over.
-    if (added) saveStaples(store, staples, { takeOver: { staple, isSame: (i) => productKey(i) === productKey(staple) } });
+    if (added)
+      saveStaples(store, staples, { takeOver: { staple, isSame: (i) => productKey(i) === productKey(staple) } });
     setNewItemName('');
     setShowSuggestions(false);
   };
@@ -64,11 +75,14 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
 
   const saveStapleDetails = () => {
     if (editingStapleId) {
-      saveStaples(store, changeStaple(currentStaples(store), editingStapleId, {
-        amount: Math.max(0.1, editingStapleAmount),
-        unit: editingStapleUnit.trim() || 'item',
-        category: editingStapleCategory,
-      }));
+      saveStaples(
+        store,
+        changeStaple(currentStaples(store), editingStapleId, {
+          amount: Math.max(0.1, editingStapleAmount),
+          unit: editingStapleUnit.trim() || 'item',
+          category: editingStapleCategory,
+        }),
+      );
     }
     setEditingStapleId(null);
   };
@@ -82,8 +96,8 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
             <RotateCcw className="w-4 h-4 text-emerald-600" />
             <h3 className="font-bold text-base text-zinc-900">Weekly staples</h3>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
             className="text-zinc-400 hover:text-zinc-600 p-1.5 rounded-lg transition-colors cursor-pointer"
@@ -102,7 +116,7 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
           <div className="relative z-30">
             <div className="flex items-center gap-2 bg-white border border-zinc-200/85 rounded-xl px-3 py-2 shadow-sm focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-all">
               <Search className="w-4 h-4 text-zinc-400" />
-              <input 
+              <input
                 type="text"
                 placeholder="Quick add staple item (e.g. Milk, Eggs)"
                 className="flex-1 bg-transparent text-xs text-zinc-900 placeholder:text-zinc-400 outline-none font-medium"
@@ -119,7 +133,7 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
                 }}
               />
             </div>
-            
+
             {showSuggestions && stapleSuggestions.length > 0 && (
               <>
                 <div className="fixed inset-0 z-45" onClick={() => setShowSuggestions(false)} />
@@ -153,19 +167,29 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
                 const aisle = getGroceryAisle(item);
                 const aisleInfo = GROCERY_AISLES[aisle];
                 return (
-                  <div key={item.id} data-staple={item.name} className="flex items-center justify-between px-3 py-2 rounded-xl border transition-all bg-white border-zinc-200/80 shadow-2xs hover:border-zinc-300">
+                  <div
+                    key={item.id}
+                    data-staple={item.name}
+                    className="flex items-center justify-between px-3 py-2 rounded-xl border transition-all bg-white border-zinc-200/80 shadow-2xs hover:border-zinc-300"
+                  >
                     <div className="flex-1 min-w-0 pr-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="font-semibold text-xs text-zinc-900 truncate">
-                          {item.name}
-                        </p>
-                        <span className={`text-[11px] font-medium px-1.5 py-0.2 rounded border ${aisleInfo.colorClass}`}>
+                        <p className="font-semibold text-xs text-zinc-900 truncate">{item.name}</p>
+                        <span
+                          className={`text-[11px] font-medium px-1.5 py-0.2 rounded border ${aisleInfo.colorClass}`}
+                        >
                           {aisleInfo.name}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5">
                         <span className="font-semibold text-zinc-700">
-                          {item.amount}{item.unit && !['whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', ''].includes(item.unit.toLowerCase().trim()) ? ` ${item.unit}` : ''}
+                          {item.amount}
+                          {item.unit &&
+                          !['whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', ''].includes(
+                            item.unit.toLowerCase().trim(),
+                          )
+                            ? ` ${item.unit}`
+                            : ''}
                         </span>
                       </div>
                     </div>
@@ -205,7 +229,10 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
                           setEditingStapleName(item.name);
                           setEditingStapleAmount(item.amount);
                           setEditingStapleUnit(item.unit);
-                          setEditingStapleCategory(aisleCategory({ name: item.name, category: item.category }) || GROCERY_AISLES[getGroceryAisle({ name: item.name, category: item.category })].name);
+                          setEditingStapleCategory(
+                            aisleCategory({ name: item.name, category: item.category }) ||
+                              GROCERY_AISLES[getGroceryAisle({ name: item.name, category: item.category })].name,
+                          );
                         }}
                         className="p-1 text-zinc-400 hover:text-emerald-600 rounded-lg transition-colors cursor-pointer"
                         title="Edit Details"
@@ -250,8 +277,8 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-zinc-200/90 overflow-hidden animate-in slide-in-from-bottom-4 duration-150">
             <div className="px-4 py-3.5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
               <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">edit staple details</h3>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setEditingStapleId(null)}
                 className="text-zinc-400 hover:text-zinc-600 p-1 rounded-lg cursor-pointer transition-colors"
               >
@@ -261,7 +288,9 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
 
             <div className="p-4 space-y-3.5">
               <div>
-                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Item Name</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                  Item Name
+                </label>
                 <input
                   type="text"
                   disabled
@@ -272,7 +301,9 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Quantity</label>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                    Quantity
+                  </label>
                   <input
                     type="number"
                     min="0.1"
@@ -284,7 +315,9 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Unit (override)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                    Unit (override)
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. litre, pack"
@@ -296,13 +329,19 @@ export function EditRecurringStaplesModal({ store, onClose }: { store: AppStore;
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Aisle Category</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                  Aisle Category
+                </label>
                 <select
                   value={editingStapleCategory}
                   onChange={(e) => setEditingStapleCategory(e.target.value)}
                   className="w-full text-xs px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-400 focus:bg-white transition-all font-semibold text-zinc-700 cursor-pointer shadow-3xs"
                 >
-                  {aisleNames.map((a) => <option key={a} value={a}>{a}</option>)}
+                  {aisleNames.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
                 </select>
               </div>
 

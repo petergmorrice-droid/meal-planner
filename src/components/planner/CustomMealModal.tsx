@@ -1,10 +1,20 @@
 /** Takeaway, eating out or no meal on a day, with a note (and how many people, for the first two). */
 import { FileText, Minus, Plus, ShoppingBag, Utensils, X } from 'lucide-react';
-import type  { QuickMeal } from './DayPickerModal';
+import type { QuickMeal } from './DayPickerModal';
 
-export interface CustomMealDraft { dayName: string; type: QuickMeal; note: string; servings: number }
+export interface CustomMealDraft {
+  dayName: string;
+  type: QuickMeal;
+  note: string;
+  servings: number;
+}
 
-export default function CustomMealModal({ draft, onChange, onAdd, onClose }: {
+export default function CustomMealModal({
+  draft,
+  onChange,
+  onAdd,
+  onClose,
+}: {
   draft: CustomMealDraft;
   onChange: (draft: CustomMealDraft) => void;
   onAdd: () => void;
@@ -17,26 +27,32 @@ export default function CustomMealModal({ draft, onChange, onAdd, onClose }: {
     >
       <div
         className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
           <div className="flex items-center gap-2.5">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-2xs ${
-              draft.type === 'takeout' ? 'bg-orange-50 border-orange-100 text-orange-600' :
-              draft.type === 'eating_out' ? 'bg-blue-50 border-blue-100 text-blue-600' :
-              'bg-zinc-100 border-zinc-200 text-zinc-700'
-            }`}>
-              {draft.type === 'takeout' ? <ShoppingBag className="w-5 h-5 text-orange-600" /> :
-               draft.type === 'eating_out' ? <Utensils className="w-5 h-5 text-blue-600" /> :
-               <X className="w-5 h-5 text-zinc-600" />}
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-2xs ${
+                draft.type === 'takeout'
+                  ? 'bg-orange-50 border-orange-100 text-orange-600'
+                  : draft.type === 'eating_out'
+                    ? 'bg-blue-50 border-blue-100 text-blue-600'
+                    : 'bg-zinc-100 border-zinc-200 text-zinc-700'
+              }`}
+            >
+              {draft.type === 'takeout' ? (
+                <ShoppingBag className="w-5 h-5 text-orange-600" />
+              ) : draft.type === 'eating_out' ? (
+                <Utensils className="w-5 h-5 text-blue-600" />
+              ) : (
+                <X className="w-5 h-5 text-zinc-600" />
+              )}
             </div>
             <div>
               <h3 className="font-semibold text-sm text-zinc-900">
                 {draft.type === 'takeout' ? 'Takeaway' : draft.type === 'eating_out' ? 'Eating out' : 'No meal'}
               </h3>
-              <p className="text-[11px] text-zinc-400">
-                {draft.dayName}
-              </p>
+              <p className="text-[11px] text-zinc-400">{draft.dayName}</p>
             </div>
           </div>
           <button
@@ -60,8 +76,8 @@ export default function CustomMealModal({ draft, onChange, onAdd, onClose }: {
                 draft.type === 'takeout'
                   ? 'e.g. Pizza from Franco Manca, order by 6:30pm...'
                   : draft.type === 'eating_out'
-                  ? 'e.g. Reservation at Dishoom, 7:30pm under Peter...'
-                  : 'e.g. Late work meeting, dinner provided / visiting family...'
+                    ? 'e.g. Reservation at Dishoom, 7:30pm under Peter...'
+                    : 'e.g. Late work meeting, dinner provided / visiting family...'
               }
               rows={3}
               className="w-full text-xs p-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors resize-none placeholder:text-zinc-400 text-zinc-800"
@@ -88,9 +104,7 @@ export default function CustomMealModal({ draft, onChange, onAdd, onClose }: {
                 >
                   <Minus className="w-3 h-3" />
                 </button>
-                <span className="w-6 text-center text-xs font-bold text-zinc-900 tabular-nums">
-                  {draft.servings}
-                </span>
+                <span className="w-6 text-center text-xs font-bold text-zinc-900 tabular-nums">{draft.servings}</span>
                 <button
                   type="button"
                   onClick={() => onChange({ ...draft, servings: Math.min(24, draft.servings + 1) })}

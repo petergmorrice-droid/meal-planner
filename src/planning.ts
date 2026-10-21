@@ -6,12 +6,16 @@ export const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'
 export const isLeftoverMeal = (m: PlannedMeal) => m.type === 'leftover' || /^leftovers?:\s*/i.test(m.name || '');
 export const cleanMealName = (name: string) => (name || '').replace(/^(leftovers?|batch):\s*/i, '').trim();
 /** A day that cooks this recipe from scratch (so later days can have its leftovers). */
-const cooksFresh = (x: PlannedMeal, recipeId: string) => x.recipeId === recipeId && !isLeftoverMeal(x) && x.type !== 'batch';
+const cooksFresh = (x: PlannedMeal, recipeId: string) =>
+  x.recipeId === recipeId && !isLeftoverMeal(x) && x.type !== 'batch';
 
 /** What a day's meal adds to the shopping list (notes don't). */
 export function mealSignature(m?: PlannedMeal | null): string {
   if (!m) return '';
-  const sides = (m.sides || []).map((s) => `${s.name}:${s.amount ?? ''}${s.unit ?? ''}`).sort().join(',');
+  const sides = (m.sides || [])
+    .map((s) => `${s.name}:${s.amount ?? ''}${s.unit ?? ''}`)
+    .sort()
+    .join(',');
   return [m.type, m.recipeId || m.batchId || cleanMealName(m.name).toLowerCase(), m.servings || 0, sides].join('|');
 }
 
@@ -29,7 +33,11 @@ export function listSnapshot(plan: MealPlan): string {
 export function changedDaysSinceList(plan?: MealPlan | null): string[] {
   if (!plan || plan.status !== 'finalized' || !plan.lastFinalizedSnapshot) return [];
   let before: Record<string, string>;
-  try { before = JSON.parse(plan.lastFinalizedSnapshot); } catch { return []; }
+  try {
+    before = JSON.parse(plan.lastFinalizedSnapshot);
+  } catch {
+    return [];
+  }
   if (!before || typeof before !== 'object') return [];
   const now = JSON.parse(listSnapshot(plan));
   return WEEK_DAYS.filter((d) => (before[d] ?? '') !== (now[d] ?? ''));
@@ -67,7 +75,11 @@ export function relinkLeftovers(days: Record<string, DayPlan>): { days: Record<s
 /**
  * Move a day's meal to another day; if that day has a meal, they swap. Leftovers follow their cook.
  */
-export function moveMeal(days: Record<string, DayPlan>, from: string, to: string): { days: Record<string, DayPlan>; swapped: boolean; freshDays: string[] } {
+export function moveMeal(
+  days: Record<string, DayPlan>,
+  from: string,
+  to: string,
+): { days: Record<string, DayPlan>; swapped: boolean; freshDays: string[] } {
   if (from === to) return { days, swapped: false, freshDays: [] };
   const a = days[from]?.meals || [];
   const b = days[to]?.meals || [];
@@ -97,7 +109,10 @@ export function cooksForText(days: Record<string, DayPlan>, day: string, meal: P
   for (let i = WEEK_DAYS.indexOf(day) + 1; i < WEEK_DAYS.length; i++) {
     const m = days[WEEK_DAYS[i]]?.meals?.[0];
     if (!m || m.recipeId !== meal.recipeId) continue;
-    if (isLeftoverMeal(m)) { later.push(WEEK_DAYS[i].slice(0, 3)); extra += m.servings || 2; } else break;
+    if (isLeftoverMeal(m)) {
+      later.push(WEEK_DAYS[i].slice(0, 3));
+      extra += m.servings || 2;
+    } else break;
   }
   return later.length ? `Cook for ${(meal.servings || 2) + extra}: leftovers ${later.join(', ')}` : null;
 }
@@ -119,8 +134,14 @@ export function isLeftoverOf(main: PlannedMeal, candidate: PlannedMeal): boolean
   if (main.recipeId && candidate.recipeId && main.recipeId === candidate.recipeId) return true;
   if (main.batchId && candidate.batchId && main.batchId === candidate.batchId) return true;
   // By name (ignoring "Leftovers: ").
-  const cleanMain = (main.name || '').toLowerCase().replace(/^leftovers?:\s*/i, '').trim();
-  const cleanCandidate = (candidate.name || '').toLowerCase().replace(/^leftovers?:\s*/i, '').trim();
+  const cleanMain = (main.name || '')
+    .toLowerCase()
+    .replace(/^leftovers?:\s*/i, '')
+    .trim();
+  const cleanCandidate = (candidate.name || '')
+    .toLowerCase()
+    .replace(/^leftovers?:\s*/i, '')
+    .trim();
   if (cleanMain && cleanCandidate) {
     if (cleanMain === cleanCandidate) return true;
     if (cleanCandidate.includes(cleanMain) || cleanMain.includes(cleanCandidate)) return true;
@@ -129,7 +150,11 @@ export function isLeftoverOf(main: PlannedMeal, candidate: PlannedMeal): boolean
 }
 
 /** Days whose leftovers come from this meal (and no other earlier cook of it): they'd go if it went. */
-export function orphanedLeftoverDays(days: Record<string, DayPlan>, targetDayName: string, mealToRemove: PlannedMeal): string[] {
+export function orphanedLeftoverDays(
+  days: Record<string, DayPlan>,
+  targetDayName: string,
+  mealToRemove: PlannedMeal,
+): string[] {
   if (!days || !mealToRemove) return [];
   const leftoverDays: string[] = [];
   WEEK_DAYS.forEach((dName, dIndex) => {
@@ -142,12 +167,17 @@ export function orphanedLeftoverDays(days: Record<string, DayPlan>, targetDayNam
       const prevDayName = WEEK_DAYS[i];
       if (prevDayName === targetDayName) continue;
       const prevMeals = days[prevDayName]?.meals || [];
-      const hasFreshCook = prevMeals.some((m) =>
-        (m.type === 'recipe' || m.type === 'batch') &&
-        !isLeftoverOf(mealToRemove, m) &&
-        ((mealToRemove.recipeId && m.recipeId === mealToRemove.recipeId) ||
-         ((m.name || '').toLowerCase().trim() === (mealToRemove.name || '').toLowerCase().trim())));
-      if (hasFreshCook) { hasAlternativeCook = true; break; }
+      const hasFreshCook = prevMeals.some(
+        (m) =>
+          (m.type === 'recipe' || m.type === 'batch') &&
+          !isLeftoverOf(mealToRemove, m) &&
+          ((mealToRemove.recipeId && m.recipeId === mealToRemove.recipeId) ||
+            (m.name || '').toLowerCase().trim() === (mealToRemove.name || '').toLowerCase().trim()),
+      );
+      if (hasFreshCook) {
+        hasAlternativeCook = true;
+        break;
+      }
     }
     if (!hasAlternativeCook) leftoverDays.push(dName);
   });
@@ -165,7 +195,10 @@ export function mealOnDay(days: Record<string, DayPlan>, day: string): PlannedMe
  * meal taken away go too (orphanedDays says which, so you can be asked first).
  */
 export function changeDayMeal(
-  days: Record<string, DayPlan>, dayName: string, mealToRemove: PlannedMeal | null, newMeal: PlannedMeal | null,
+  days: Record<string, DayPlan>,
+  dayName: string,
+  mealToRemove: PlannedMeal | null,
+  newMeal: PlannedMeal | null,
 ): { days: Record<string, DayPlan>; orphanedDays: string[] } {
   const orphanedDays = mealToRemove ? orphanedLeftoverDays(days, dayName, mealToRemove) : [];
   const nextDays: Record<string, DayPlan> = {};
@@ -186,7 +219,8 @@ export function changeDayMeal(
 /** "Replaced X with Y (leftovers) on Tuesday", "Removed X from Tuesday", "Added X to Tuesday for 4". */
 export function describeMealChange(dayName: string, removed: PlannedMeal | null, added: PlannedMeal | null): string {
   const plain = (m: PlannedMeal) => (m.name || '').replace(/^(leftovers?|batch):\s*/i, '');
-  const how = (m: PlannedMeal) => (m.type === 'batch' ? ' from the freezer' : m.type === 'leftover' ? ' (leftovers)' : '');
+  const how = (m: PlannedMeal) =>
+    m.type === 'batch' ? ' from the freezer' : m.type === 'leftover' ? ' (leftovers)' : '';
   if (removed && added) return `Replaced ${plain(removed)} with ${plain(added)}${how(added)} on ${dayName}`;
   if (removed) return `Removed ${plain(removed)} from ${dayName}`;
   if (added) return `Added ${plain(added)}${how(added)} to ${dayName}${added.servings ? ` for ${added.servings}` : ''}`;
@@ -194,15 +228,22 @@ export function describeMealChange(dayName: string, removed: PlannedMeal | null,
 }
 
 /** Earlier days this week with this recipe on (cooked, or as leftovers): it could be leftovers from them. */
-export function earlierDaysWithRecipe(days: Record<string, DayPlan>, dayName: string, recipe: { id: string; name: string }): string[] {
+export function earlierDaysWithRecipe(
+  days: Record<string, DayPlan>,
+  dayName: string,
+  recipe: { id: string; name: string },
+): string[] {
   const existingDays: string[] = [];
   const targetDayIndex = WEEK_DAYS.indexOf(dayName);
   Object.entries(days).forEach(([dName, dayPlan]) => {
     const dIndex = WEEK_DAYS.indexOf(dName);
     if (dName !== dayName && dIndex < targetDayIndex) {
-      const hasRecipe = dayPlan.meals.some((m) =>
-        (m.type === 'recipe' || m.type === 'leftover') &&
-        (m.recipeId === recipe.id || (m.name && recipe.name && m.name.toLowerCase().includes(recipe.name.toLowerCase()))));
+      const hasRecipe = dayPlan.meals.some(
+        (m) =>
+          (m.type === 'recipe' || m.type === 'leftover') &&
+          (m.recipeId === recipe.id ||
+            (m.name && recipe.name && m.name.toLowerCase().includes(recipe.name.toLowerCase()))),
+      );
       if (hasRecipe) existingDays.push(dName);
     }
   });
@@ -210,7 +251,10 @@ export function earlierDaysWithRecipe(days: Record<string, DayPlan>, dayName: st
 }
 
 /** Another week's meals, day by day, as new meals (not marked cooked) on this week's days. */
-export function copyWeekMeals(days: Record<string, DayPlan>, source: MealPlan): { days: Record<string, DayPlan>; copied: number } {
+export function copyWeekMeals(
+  days: Record<string, DayPlan>,
+  source: MealPlan,
+): { days: Record<string, DayPlan>; copied: number } {
   let copied = 0;
   const nextDays: Record<string, DayPlan> = {};
   WEEK_DAYS.forEach((d) => {
@@ -230,7 +274,9 @@ export function copyWeekMeals(days: Record<string, DayPlan>, source: MealPlan): 
  * what's happened to it since (on this phone or the other one).
  */
 export function undoDays(
-  latest: Record<string, DayPlan>, before: Record<string, DayPlan>, after: Record<string, DayPlan>,
+  latest: Record<string, DayPlan>,
+  before: Record<string, DayPlan>,
+  after: Record<string, DayPlan>,
 ): Record<string, DayPlan> {
   const out = { ...latest };
   for (const d of new Set([...Object.keys(before), ...Object.keys(after)])) {

@@ -6,10 +6,14 @@ import { getIngredientStep } from '../../utils';
 import { catalogForState } from '../../shopping';
 import { addStaple, currentStaples, newStaple, saveStaples } from '../../staples';
 import StapleSuggestSheet from './StapleSuggestSheet';
-import type  { ShopToastState } from './ShopToast';
-import type  { AppStore } from '../../store';
+import type { ShopToastState } from './ShopToast';
+import type { AppStore } from '../../store';
 
-export function useStapleSuggestions({ store, activePlan, setToastMessage }: {
+export function useStapleSuggestions({
+  store,
+  activePlan,
+  setToastMessage,
+}: {
   store: AppStore;
   activePlan: MealPlan | null;
   setToastMessage: (message: string | null, action?: ShopToastState['action']) => void;
@@ -21,22 +25,37 @@ export function useStapleSuggestions({ store, activePlan, setToastMessage }: {
   // The products as they are now (the same object until a product changes).
   const catalog = catalogForState(store.state);
   const suggestions = useMemo(
-    () => (thisWeek ? suggestedStaples(shoppingList || [], { thisWeek, staples: stapleList || [], declined: declinedStaples, catalog }) : []),
+    () =>
+      thisWeek
+        ? suggestedStaples(shoppingList || [], {
+            thisWeek,
+            staples: stapleList || [],
+            declined: declinedStaples,
+            catalog,
+          })
+        : [],
     [shoppingList, thisWeek, stapleList, declinedStaples, catalog],
   );
   const [stapleOffer, setStapleOffer] = useState<StapleSuggestion | null>(null);
 
   const acceptStaple = (s: StapleSuggestion, amount: number) => {
-    const { staples, staple } = addStaple(currentStaples(store), newStaple({ name: s.name, amount, unit: s.unit, category: s.category }));
+    const { staples, staple } = addStaple(
+      currentStaples(store),
+      newStaple({ name: s.name, amount, unit: s.unit, category: s.category }),
+    );
     // This week's (and later weeks') line you added by hand becomes the staple's line.
     saveStaples(store, staples, { takeOver: { staple, isSame: (i) => productKey(i) === s.key } });
     setStapleOffer(null);
-    setToastMessage(`${s.name} is now a weekly staple: ${shopQuantityText({ amount: staple.amount, unit: staple.unit })} every week`);
+    setToastMessage(
+      `${s.name} is now a weekly staple: ${shopQuantityText({ amount: staple.amount, unit: staple.unit })} every week`,
+    );
   };
 
   const declineStaple = (s: StapleSuggestion) => {
     const key = s.name.trim().toLowerCase();
-    store.updatePreferences((p) => (p.notStaples || []).includes(key) ? null : { notStaples: [...(p.notStaples || []), key] });
+    store.updatePreferences((p) =>
+      (p.notStaples || []).includes(key) ? null : { notStaples: [...(p.notStaples || []), key] },
+    );
     setStapleOffer(null);
     setToastMessage(`OK, won't suggest ${s.name} as a staple again`);
   };

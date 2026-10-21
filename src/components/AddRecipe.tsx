@@ -13,13 +13,17 @@ import {
 } from '../services/geminiService';
 import { RecipeEditor } from './RecipeEditor';
 import { firstUrl, isJustAUrl, findDuplicate, siteName, recipeMethods, METHOD_LABEL } from '../recipeInfo';
-import type  { AppStore } from '../store';
+import type { AppStore } from '../store';
 
 type Busy = null | 'page' | 'photo' | 'copy' | 'match' | 'write';
 
 const APPLIANCE_KEY = 'add_recipe_appliance';
 const readAppliance = (): CookingMethod => {
-  try { return localStorage.getItem(APPLIANCE_KEY) === 'ninja' ? 'ninja' : 'oven_hob'; } catch { return 'oven_hob'; }
+  try {
+    return localStorage.getItem(APPLIANCE_KEY) === 'ninja' ? 'ninja' : 'oven_hob';
+  } catch {
+    return 'oven_hob';
+  }
 };
 
 const BUSY_TEXT: Record<Exclude<Busy, null>, string> = {
@@ -88,11 +92,17 @@ export function AddRecipe({
 
   const setAppliance = (m: CookingMethod) => {
     setApplianceState(m);
-    try { localStorage.setItem(APPLIANCE_KEY, m); } catch { /* per-phone convenience only */ }
+    try {
+      localStorage.setItem(APPLIANCE_KEY, m);
+    } catch {
+      /* per-phone convenience only */
+    }
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && step === 'input' && !busy) onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && step === 'input' && !busy) onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [step, busy, onClose]);
@@ -110,14 +120,24 @@ export function AddRecipe({
     const allItems = catalog.products.filter((p) => !p.sameAs).map((p) => p.item);
     const ingredientsIn: any[] = Array.isArray(data?.ingredients) ? data.ingredients : [];
     const pending = namesNeedingSuggestion(ingredientsIn, catalog);
-    const suggestions = pending.length > 0 ? await suggestGroceryProductsApi(pending, allItems.map((i) => i.name)) : {};
+    const suggestions =
+      pending.length > 0
+        ? await suggestGroceryProductsApi(
+            pending,
+            allItems.map((i) => i.name),
+          )
+        : {};
     const linked = linkIngredients(ingredientsIn, catalog, suggestions);
     return {
       ...data,
       id: data.id || crypto.randomUUID(),
       servings: data.servings || 2,
       sourceUrl: sourceUrl || data.sourceUrl,
-      ingredients: linked.ingredients.map((i: any) => ({ ...i, id: i?.id || crypto.randomUUID(), name: i?.name || 'Unknown ingredient' })),
+      ingredients: linked.ingredients.map((i: any) => ({
+        ...i,
+        id: i?.id || crypto.randomUUID(),
+        name: i?.name || 'Unknown ingredient',
+      })),
     };
   };
 
@@ -137,7 +157,9 @@ export function AddRecipe({
     setError('');
     const t = text.trim();
     if (!t) {
-      setError(mode === 'generate' ? 'Say what you would like Gemini to write.' : 'Paste a recipe, or a link to one, first.');
+      setError(
+        mode === 'generate' ? 'Say what you would like Gemini to write.' : 'Paste a recipe, or a link to one, first.',
+      );
       return;
     }
     try {
@@ -227,19 +249,23 @@ export function AddRecipe({
     }
   };
 
-  const cleaned = (): Recipe | null => draft && ({
-    ...draft,
-    name: draft.name.trim() || 'Untitled recipe',
-    sourceUrl: draft.sourceUrl?.trim() || undefined,
-    notes: draft.notes?.trim() || undefined,
-    ingredients: draft.ingredients.filter((i) => i.name.trim() !== ''),
-  });
+  const cleaned = (): Recipe | null =>
+    draft && {
+      ...draft,
+      name: draft.name.trim() || 'Untitled recipe',
+      sourceUrl: draft.sourceUrl?.trim() || undefined,
+      notes: draft.notes?.trim() || undefined,
+      ingredients: draft.ingredients.filter((i) => i.name.trim() !== ''),
+    };
 
   const save = (how: 'check' | 'both' | 'replace') => {
     const recipe = cleaned();
     if (!recipe) return;
     const dup = findDuplicate(store.state.recipes || [], recipe);
-    if (how === 'check' && dup) { setDupOf(dup); return; }
+    if (how === 'check' && dup) {
+      setDupOf(dup);
+      return;
+    }
     if (how === 'replace' && dup) {
       const replaced: Recipe = {
         ...recipe,
@@ -262,7 +288,9 @@ export function AddRecipe({
   return (
     <div
       className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150"
-      onClick={(e) => { if (e.target === e.currentTarget && step === 'input' && !busy) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && step === 'input' && !busy) onClose();
+      }}
     >
       <div
         role="dialog"
@@ -275,19 +303,33 @@ export function AddRecipe({
           <>
             <div className="px-4 pt-4 pb-3 flex items-center justify-between gap-2 shrink-0">
               <h2 className="text-xl font-bold text-zinc-900">Add a recipe</h2>
-              <button type="button" onClick={onClose} disabled={!!busy} className="w-11 h-11 rounded-full border border-zinc-200 flex items-center justify-center cursor-pointer disabled:opacity-50" aria-label="Close">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={!!busy}
+                className="w-11 h-11 rounded-full border border-zinc-200 flex items-center justify-center cursor-pointer disabled:opacity-50"
+                aria-label="Close"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="px-4 pb-4 overflow-y-auto space-y-4">
               <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-xl" role="tablist">
-                {([['paste', 'Paste a recipe'], ['generate', 'Ask Gemini to write one']] as const).map(([m, label]) => (
+                {(
+                  [
+                    ['paste', 'Paste a recipe'],
+                    ['generate', 'Ask Gemini to write one'],
+                  ] as const
+                ).map(([m, label]) => (
                   <button
                     key={m}
                     type="button"
                     role="tab"
                     aria-selected={mode === m}
-                    onClick={() => { setMode(m); setError(''); }}
+                    onClick={() => {
+                      setMode(m);
+                      setError('');
+                    }}
                     disabled={!!busy}
                     className={`h-10 rounded-lg text-sm font-semibold cursor-pointer ${mode === m ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600'}`}
                   >
@@ -299,7 +341,9 @@ export function AddRecipe({
               {mode === 'paste' ? (
                 <div className="space-y-2">
                   <label className="block">
-                    <span className="text-sm font-semibold text-zinc-800 block mb-1.5">The recipe, or a link to it</span>
+                    <span className="text-sm font-semibold text-zinc-800 block mb-1.5">
+                      The recipe, or a link to it
+                    </span>
                     <textarea
                       value={text}
                       onChange={(e) => setText(e.target.value)}
@@ -312,12 +356,25 @@ export function AddRecipe({
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {canPaste && (
-                      <button type="button" onClick={handlePaste} disabled={!!busy} className="h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-                        <ClipboardPaste className="w-4 h-4" />Paste
+                      <button
+                        type="button"
+                        onClick={handlePaste}
+                        disabled={!!busy}
+                        className="h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <ClipboardPaste className="w-4 h-4" />
+                        Paste
                       </button>
                     )}
-                    <button type="button" onClick={() => photoRef.current?.click()} disabled={!!busy} data-photo-button className="h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-                      <Camera className="w-4 h-4" />Photo of a recipe
+                    <button
+                      type="button"
+                      onClick={() => photoRef.current?.click()}
+                      disabled={!!busy}
+                      data-photo-button
+                      className="h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <Camera className="w-4 h-4" />
+                      Photo of a recipe
                     </button>
                     <input
                       ref={photoRef}
@@ -329,7 +386,10 @@ export function AddRecipe({
                     />
                   </div>
                   {linkOnly && (
-                    <p className="text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 inline-flex items-start gap-2" data-link-hint>
+                    <p
+                      className="text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 inline-flex items-start gap-2"
+                      data-link-hint
+                    >
                       <Link2 className="w-4 h-4 mt-0.5 shrink-0 text-zinc-500" />
                       Gemini will open {siteName(text.trim())} and copy the recipe from it.
                     </p>
@@ -363,22 +423,40 @@ export function AddRecipe({
                       disabled={!!busy}
                       data-appliance={m}
                       className={`h-12 rounded-xl border text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${
-                        appliance === m ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-300'
+                        appliance === m
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-white text-zinc-700 border-zinc-300'
                       }`}
                     >
-                      {m === 'ninja' ? <Zap className="w-4 h-4" /> : <Flame className="w-4 h-4" />}{METHOD_LABEL[m]}
+                      {m === 'ninja' ? <Zap className="w-4 h-4" /> : <Flame className="w-4 h-4" />}
+                      {METHOD_LABEL[m]}
                     </button>
                   ))}
                 </div>
               </div>
-
             </div>
-            <div className="px-4 py-3 border-t border-zinc-200 shrink-0" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+            <div
+              className="px-4 py-3 border-t border-zinc-200 shrink-0"
+              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            >
               {error && (
-                <div className="text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 mb-2" role="alert" data-add-error>
+                <div
+                  className="text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 mb-2"
+                  role="alert"
+                  data-add-error
+                >
                   {error}{' '}
                   {/Settings/.test(error) && onNavigateTab && (
-                    <button type="button" className="underline font-semibold cursor-pointer" onClick={() => { onClose(); onNavigateTab('settings'); }}>Open Settings</button>
+                    <button
+                      type="button"
+                      className="underline font-semibold cursor-pointer"
+                      onClick={() => {
+                        onClose();
+                        onNavigateTab('settings');
+                      }}
+                    >
+                      Open Settings
+                    </button>
                   )}
                 </div>
               )}
@@ -390,104 +468,175 @@ export function AddRecipe({
                 className="w-full h-12 rounded-xl bg-emerald-700 text-white text-base font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-80 cursor-pointer"
               >
                 {busy ? (
-                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />{BUSY_TEXT[busy]}</>
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    {BUSY_TEXT[busy]}
+                  </>
                 ) : mode === 'generate' ? (
-                  <><Sparkles className="w-5 h-5" />Write the recipe</>
-                ) : linkOnly ? 'Get the recipe from this page' : 'Copy this recipe'}
-              </button>
-            </div>
-          </>
-        ) : draft && (
-          <>
-            <div className="px-4 pt-4 pb-3 border-b border-zinc-200 flex items-start gap-2 shrink-0">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-zinc-900">Check the recipe</h2>
-                <p className="text-sm text-zinc-600">Nothing is saved until you tap Save.</p>
-              </div>
-              <button type="button" onClick={onClose} className="w-11 h-11 rounded-full border border-zinc-200 flex items-center justify-center shrink-0 cursor-pointer" aria-label="Close without saving">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto overscroll-contain bg-zinc-50/60">
-              <div className="px-4 py-4 space-y-4">
-                {dupNow && (
-                  <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2" data-dup-note>
-                    You already have “{dupNow.name}”. When you save, you can keep both or replace it.
-                  </p>
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    Write the recipe
+                  </>
+                ) : linkOnly ? (
+                  'Get the recipe from this page'
+                ) : (
+                  'Copy this recipe'
                 )}
-                <RecipeEditor
-                  recipe={draft}
-                  onChange={setDraft}
-                  method={method}
-                  onMethod={setMethod}
-                  store={store}
-                  showName
-                  onWriteMethod={handleWriteMethod}
-                  writing={writing}
-                />
-                <section className="bg-white rounded-2xl border border-zinc-200">
-                  <button
-                    type="button"
-                    onClick={() => setShowRefine(!showRefine)}
-                    aria-expanded={showRefine}
-                    className="w-full px-4 py-3 flex items-center justify-between text-left cursor-pointer"
-                  >
-                    <span className="inline-flex items-center gap-2 text-[15px] font-semibold text-zinc-900"><Sparkles className="w-4 h-4 text-emerald-600" />Ask Gemini to change it</span>
-                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${showRefine ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showRefine && (
-                    <div className="px-4 pb-4 space-y-2">
-                      <p className="text-sm text-zinc-600">For example “make it dairy-free” or “add garlic bread”.</p>
-                      <div className="flex gap-2">
-                        <input
-                          value={refineText}
-                          onChange={(e) => setRefineText(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleRefine(); }}
-                          disabled={refineBusy}
-                          aria-label="What should Gemini change?"
-                          className="flex-1 min-w-0 h-11 rounded-xl border border-zinc-300 px-3 text-base sm:text-sm"
-                        />
-                        <button type="button" onClick={handleRefine} disabled={!refineText.trim() || refineBusy} className="h-11 px-4 rounded-xl bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50 cursor-pointer shrink-0">
-                          {refineBusy ? 'Changing…' : 'Change'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {refineError && <p className="px-4 pb-3 text-sm text-rose-700">{refineError}</p>}
-                </section>
-              </div>
-            </div>
-            <div className="px-4 py-3 border-t border-zinc-200 bg-white flex gap-2 shrink-0" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-              <button
-                type="button"
-                onClick={() => setStep('input')}
-                className="h-12 px-4 rounded-xl border border-zinc-300 bg-white text-zinc-800 text-base font-semibold inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />Back
-              </button>
-              <button
-                type="button"
-                onClick={() => save('check')}
-                data-save-recipe
-                className="flex-1 h-12 rounded-xl bg-emerald-700 text-white text-base font-semibold cursor-pointer"
-              >
-                Save to cookbook
               </button>
             </div>
           </>
+        ) : (
+          draft && (
+            <>
+              <div className="px-4 pt-4 pb-3 border-b border-zinc-200 flex items-start gap-2 shrink-0">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-zinc-900">Check the recipe</h2>
+                  <p className="text-sm text-zinc-600">Nothing is saved until you tap Save.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-11 h-11 rounded-full border border-zinc-200 flex items-center justify-center shrink-0 cursor-pointer"
+                  aria-label="Close without saving"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto overscroll-contain bg-zinc-50/60">
+                <div className="px-4 py-4 space-y-4">
+                  {dupNow && (
+                    <p
+                      className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2"
+                      data-dup-note
+                    >
+                      You already have “{dupNow.name}”. When you save, you can keep both or replace it.
+                    </p>
+                  )}
+                  <RecipeEditor
+                    recipe={draft}
+                    onChange={setDraft}
+                    method={method}
+                    onMethod={setMethod}
+                    store={store}
+                    showName
+                    onWriteMethod={handleWriteMethod}
+                    writing={writing}
+                  />
+                  <section className="bg-white rounded-2xl border border-zinc-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowRefine(!showRefine)}
+                      aria-expanded={showRefine}
+                      className="w-full px-4 py-3 flex items-center justify-between text-left cursor-pointer"
+                    >
+                      <span className="inline-flex items-center gap-2 text-[15px] font-semibold text-zinc-900">
+                        <Sparkles className="w-4 h-4 text-emerald-600" />
+                        Ask Gemini to change it
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-zinc-500 transition-transform ${showRefine ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {showRefine && (
+                      <div className="px-4 pb-4 space-y-2">
+                        <p className="text-sm text-zinc-600">For example “make it dairy-free” or “add garlic bread”.</p>
+                        <div className="flex gap-2">
+                          <input
+                            value={refineText}
+                            onChange={(e) => setRefineText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRefine();
+                            }}
+                            disabled={refineBusy}
+                            aria-label="What should Gemini change?"
+                            className="flex-1 min-w-0 h-11 rounded-xl border border-zinc-300 px-3 text-base sm:text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRefine}
+                            disabled={!refineText.trim() || refineBusy}
+                            className="h-11 px-4 rounded-xl bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50 cursor-pointer shrink-0"
+                          >
+                            {refineBusy ? 'Changing…' : 'Change'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {refineError && <p className="px-4 pb-3 text-sm text-rose-700">{refineError}</p>}
+                  </section>
+                </div>
+              </div>
+              <div
+                className="px-4 py-3 border-t border-zinc-200 bg-white flex gap-2 shrink-0"
+                style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setStep('input')}
+                  className="h-12 px-4 rounded-xl border border-zinc-300 bg-white text-zinc-800 text-base font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => save('check')}
+                  data-save-recipe
+                  className="flex-1 h-12 rounded-xl bg-emerald-700 text-white text-base font-semibold cursor-pointer"
+                >
+                  Save to cookbook
+                </button>
+              </div>
+            </>
+          )
         )}
 
         {dupOf && (
-          <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" onClick={() => setDupOf(null)}>
-            <div role="alertdialog" aria-label="Already in your cookbook" className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()} data-dup-dialog>
+          <div
+            className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4"
+            onClick={() => setDupOf(null)}
+          >
+            <div
+              role="alertdialog"
+              aria-label="Already in your cookbook"
+              className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4"
+              onClick={(e) => e.stopPropagation()}
+              data-dup-dialog
+            >
               <div>
                 <h4 className="text-base font-bold text-zinc-900">You already have “{dupOf.name}”</h4>
-                <p className="text-sm text-zinc-600 mt-1">Replace it with this one (your notes, star and plans stay), or keep both?</p>
+                <p className="text-sm text-zinc-600 mt-1">
+                  Replace it with this one (your notes, star and plans stay), or keep both?
+                </p>
               </div>
               <div className="space-y-2">
-                <button type="button" onClick={() => { setDupOf(null); save('replace'); }} className="w-full h-11 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer">Replace it</button>
-                <button type="button" onClick={() => { setDupOf(null); save('both'); }} className="w-full h-11 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer">Keep both</button>
-                <button type="button" onClick={() => setDupOf(null)} className="w-full h-11 rounded-xl text-sm font-semibold text-zinc-600 cursor-pointer">Go back</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDupOf(null);
+                    save('replace');
+                  }}
+                  className="w-full h-11 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer"
+                >
+                  Replace it
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDupOf(null);
+                    save('both');
+                  }}
+                  className="w-full h-11 rounded-xl border border-zinc-300 text-sm font-semibold cursor-pointer"
+                >
+                  Keep both
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDupOf(null)}
+                  className="w-full h-11 rounded-xl text-sm font-semibold text-zinc-600 cursor-pointer"
+                >
+                  Go back
+                </button>
               </div>
             </div>
           </div>
@@ -496,4 +645,3 @@ export function AddRecipe({
     </div>
   );
 }
-

@@ -4,7 +4,11 @@ import { useState } from 'react';
 export type ShopViewMode = 'sections' | 'food_type' | 'all';
 
 const save = (key: string, value: string) => {
-  try { localStorage.setItem(key, value); } catch { /* per-phone convenience only */ }
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* per-phone convenience only */
+  }
 };
 
 export function useShopLayout() {
@@ -13,7 +17,9 @@ export function useShopLayout() {
     try {
       const v = localStorage.getItem('shop_view');
       return v === 'sections' || v === 'all' || v === 'food_type' ? v : 'food_type';
-    } catch { return 'food_type'; }
+    } catch {
+      return 'food_type';
+    }
   });
   const setViewMode = (v: ShopViewMode) => {
     setViewModeState(v);
@@ -36,7 +42,11 @@ export function useShopLayout() {
 
   // Shopping mode: one-line rows.
   const [compactRows, setCompactRows] = useState<boolean>(() => {
-    try { return localStorage.getItem('shop_compact_rows') !== '0'; } catch { return true; }
+    try {
+      return localStorage.getItem('shop_compact_rows') !== '0';
+    } catch {
+      return true;
+    }
   });
   const handleCompactRows = (val: boolean) => {
     setCompactRows(val);

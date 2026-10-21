@@ -16,28 +16,52 @@ type RowActions = {
 };
 
 /** One group of rows still to buy, with its heading (an aisle's colour and icon). */
-export function RowGroup({ group, justTicked, onChangeStaples, onTick, onOpen, onInfo }: RowActions & {
+export function RowGroup({
+  group,
+  justTicked,
+  onChangeStaples,
+  onTick,
+  onOpen,
+  onInfo,
+}: RowActions & {
   group: { id: string; title: string; rows: AggregatedShoppingListItem[] };
   justTicked: Record<string, unknown>;
   onChangeStaples: () => void;
 }) {
   return (
     <section className="bg-white rounded-xl border border-zinc-200/80 overflow-hidden" data-group={group.id}>
-      <div className={`flex items-center justify-between gap-2 px-3 py-1.5 border-b ${isAisleId(group.id) ? AISLE_LOOK[group.id].header : 'bg-zinc-50/80 border-zinc-100'}`}>
-        <h3 className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isAisleId(group.id) ? AISLE_LOOK[group.id].title : 'text-zinc-600'}`}>
+      <div
+        className={`flex items-center justify-between gap-2 px-3 py-1.5 border-b ${isAisleId(group.id) ? AISLE_LOOK[group.id].header : 'bg-zinc-50/80 border-zinc-100'}`}
+      >
+        <h3
+          className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isAisleId(group.id) ? AISLE_LOOK[group.id].title : 'text-zinc-600'}`}
+        >
           {isAisleId(group.id) && <AisleIcon aisle={group.id} />}
           {group.title}
         </h3>
         <span className="flex items-center gap-2">
           {group.id === 'recurring' && (
-            <button type="button" onClick={onChangeStaples} className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer">Change</button>
+            <button
+              type="button"
+              onClick={onChangeStaples}
+              className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+            >
+              Change
+            </button>
           )}
           <span className="text-xs text-zinc-500 tabular-nums">{group.rows.length}</span>
         </span>
       </div>
       <div className="divide-y divide-zinc-100">
-        {group.rows.map(row => (
-          <ShopRow key={row.key} row={row} justTicked={!!justTicked[row.key]} onTick={onTick} onOpen={onOpen} onInfo={onInfo} />
+        {group.rows.map((row) => (
+          <ShopRow
+            key={row.key}
+            row={row}
+            justTicked={!!justTicked[row.key]}
+            onTick={onTick}
+            onOpen={onOpen}
+            onInfo={onInfo}
+          />
         ))}
       </div>
     </section>
@@ -45,7 +69,12 @@ export function RowGroup({ group, justTicked, onChangeStaples, onTick, onOpen, o
 }
 
 /** Out of stock at the shop: not counted, tap the circle if you get it after all. */
-export function OutOfStockSection({ rows, onTick, onOpen, onInfo }: RowActions & { rows: AggregatedShoppingListItem[] }) {
+export function OutOfStockSection({
+  rows,
+  onTick,
+  onOpen,
+  onInfo,
+}: RowActions & { rows: AggregatedShoppingListItem[] }) {
   if (!rows.length) return null;
   return (
     <section className="bg-white rounded-xl border border-amber-200 overflow-hidden" data-group="out-of-stock">
@@ -54,7 +83,7 @@ export function OutOfStockSection({ rows, onTick, onOpen, onInfo }: RowActions &
         <span className="text-xs text-amber-800 tabular-nums">{rows.length}</span>
       </div>
       <div className="divide-y divide-zinc-100">
-        {rows.map(row => (
+        {rows.map((row) => (
           <ShopRow key={row.key} row={row} onTick={onTick} onOpen={onOpen} onInfo={onInfo} />
         ))}
       </div>
@@ -63,7 +92,15 @@ export function OutOfStockSection({ rows, onTick, onOpen, onInfo }: RowActions &
 }
 
 /** Bought: out of the way at the end, one tap to look. */
-export function BoughtSection({ rows, open, onToggle, justTicked, onTick, onOpen, onInfo }: RowActions & {
+export function BoughtSection({
+  rows,
+  open,
+  onToggle,
+  justTicked,
+  onTick,
+  onOpen,
+  onInfo,
+}: RowActions & {
   rows: AggregatedShoppingListItem[];
   open: boolean;
   onToggle: () => void;
@@ -87,8 +124,15 @@ export function BoughtSection({ rows, open, onToggle, justTicked, onTick, onOpen
       </button>
       {open && (
         <div className="divide-y divide-zinc-100 border-t border-zinc-100">
-          {rows.map(row => (
-            <ShopRow key={row.key} row={row} justTicked={!!justTicked[row.key]} onTick={onTick} onOpen={onOpen} onInfo={onInfo} />
+          {rows.map((row) => (
+            <ShopRow
+              key={row.key}
+              row={row}
+              justTicked={!!justTicked[row.key]}
+              onTick={onTick}
+              onOpen={onOpen}
+              onInfo={onInfo}
+            />
           ))}
         </div>
       )}
@@ -97,7 +141,17 @@ export function BoughtSection({ rows, open, onToggle, justTicked, onTick, onOpen
 }
 
 /** Things you said you already have: off the list, one tap to put back. */
-export function InCupboardSection({ items, open, onToggle, onNeed }: { items: ShoppingListItem[]; open: boolean; onToggle: () => void; onNeed: (id: string) => void }) {
+export function InCupboardSection({
+  items,
+  open,
+  onToggle,
+  onNeed,
+}: {
+  items: ShoppingListItem[];
+  open: boolean;
+  onToggle: () => void;
+  onNeed: (id: string) => void;
+}) {
   if (!items.length) return null;
   return (
     <div className="bg-white rounded-xl border border-zinc-200/80 overflow-hidden">

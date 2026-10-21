@@ -38,14 +38,29 @@ export const personName = (id?: string | null) => personLook(id)?.name ?? '';
 
 /** Note colours: the writer's colour, or the usual amber when nobody's known. */
 export function noteLook(id?: string | null): { text: string; icon: string; box: string; bg: string } {
-  return personLook(id) || { text: 'text-amber-800', icon: 'text-amber-600', box: 'bg-amber-50/70 border-amber-200', bg: 'bg-amber-50' };
+  return (
+    personLook(id) || {
+      text: 'text-amber-800',
+      icon: 'text-amber-600',
+      box: 'bg-amber-50/70 border-amber-200',
+      bg: 'bg-amber-50',
+    }
+  );
 }
 
 /**
  * A small blue (Peter) or pink (Rachel) tick with their initial: who last added or changed it.
  * Nothing when nobody's known.
  */
-export default function PersonMark({ who, what = 'Last changed', className = '' }: { who?: string | null; what?: string; className?: string }) {
+export default function PersonMark({
+  who,
+  what = 'Last changed',
+  className = '',
+}: {
+  who?: string | null;
+  what?: string;
+  className?: string;
+}) {
   const look = personLook(who);
   if (!look) return null;
   const label = `${what} by ${look.name}`;

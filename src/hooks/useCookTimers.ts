@@ -12,14 +12,20 @@ const load = (): CookTimer[] => {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || '[]');
     return Array.isArray(v) ? v.filter((t) => t && typeof t.id === 'string') : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 };
 
 let timers: CookTimer[] = load();
 const listeners = new Set<() => void>();
 const save = (next: CookTimer[]) => {
   timers = next;
-  try { localStorage.setItem(KEY, JSON.stringify(timers)); } catch { /* still works this session */ }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(timers));
+  } catch {
+    /* still works this session */
+  }
   listeners.forEach((l) => l());
 };
 const update = (id: string, fn: (t: CookTimer) => CookTimer) => save(timers.map((t) => (t.id === id ? fn(t) : t)));
@@ -31,7 +37,9 @@ export function unlockTimerSound() {
     const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!audio && Ctx) audio = new Ctx();
     void audio?.resume?.();
-  } catch { /* no sound on this device */ }
+  } catch {
+    /* no sound on this device */
+  }
 }
 function ringOnce() {
   try {
@@ -44,12 +52,20 @@ function ringOnce() {
         osc.frequency.value = f;
         gain.gain.setValueAtTime(0.35, now + i * 0.28);
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.28 + 0.25);
-        osc.connect(gain); gain.connect(audio!.destination);
-        osc.start(now + i * 0.28); osc.stop(now + i * 0.28 + 0.26);
+        osc.connect(gain);
+        gain.connect(audio!.destination);
+        osc.start(now + i * 0.28);
+        osc.stop(now + i * 0.28 + 0.26);
       });
     }
-  } catch { /* ignore */ }
-  try { navigator.vibrate?.([300, 150, 300]); } catch { /* not supported */ }
+  } catch {
+    /* ignore */
+  }
+  try {
+    navigator.vibrate?.([300, 150, 300]);
+  } catch {
+    /* not supported */
+  }
 }
 
 export const timerActions = {
@@ -60,8 +76,14 @@ export const timerActions = {
     return id;
   },
   pause: (id: string) => update(id, (t) => pauseTimer(t, Date.now())),
-  resume: (id: string) => { unlockTimerSound(); update(id, (t) => resumeTimer(t, Date.now())); },
-  addMinute: (id: string) => { unlockTimerSound(); update(id, (t) => addMinute(t, Date.now())); },
+  resume: (id: string) => {
+    unlockTimerSound();
+    update(id, (t) => resumeTimer(t, Date.now()));
+  },
+  addMinute: (id: string) => {
+    unlockTimerSound();
+    update(id, (t) => addMinute(t, Date.now()));
+  },
   stop: (id: string) => save(timers.filter((t) => t.id !== id)),
 };
 
@@ -72,7 +94,9 @@ export function useCookTimers() {
   useEffect(() => {
     const l = () => setVersion((v) => v + 1);
     listeners.add(l);
-    return () => { listeners.delete(l); };
+    return () => {
+      listeners.delete(l);
+    };
   }, []);
   const active = timers.some((t) => t.state !== 'paused');
   useEffect(() => {

@@ -8,7 +8,7 @@ export function AisleOrderSheet({
   order,
   learnedFrom = 0,
   onSave,
-  onClose
+  onClose,
 }: {
   order?: string[];
   /** The order shown was learned from this many shops (0 = you arranged it, or the usual). */
@@ -28,24 +28,36 @@ export function AisleOrderSheet({
   const isUsual = list.every((id, i) => id === usual[i]);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
       <div
         className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[88vh] flex flex-col shadow-xl border border-zinc-200 animate-in slide-in-from-bottom-4 duration-150"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Arrange aisles"
       >
         <div className="px-5 pt-5 pb-3 border-b border-zinc-100 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-zinc-900">Arrange aisles</h3>
-            <p className="text-sm text-zinc-500 mt-0.5">Put them in the order you walk round your usual shop. The list and shopping mode follow this order on both phones.</p>
+            <p className="text-sm text-zinc-500 mt-0.5">
+              Put them in the order you walk round your usual shop. The list and shopping mode follow this order on both
+              phones.
+            </p>
             {learnedFrom > 0 && (
               <p className="text-sm text-emerald-800 bg-emerald-50 rounded-lg px-2.5 py-1.5 mt-2" data-learned-note>
-                This is the order you usually shop in, learned from {learnedFrom} {learnedFrom === 1 ? 'shop' : 'shops'}. Saving an order here uses yours instead.
+                This is the order you usually shop in, learned from {learnedFrom} {learnedFrom === 1 ? 'shop' : 'shops'}
+                . Saving an order here uses yours instead.
               </p>
             )}
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer" aria-label="Close">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer"
+            aria-label="Close"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -94,12 +106,19 @@ export function AisleOrderSheet({
             Usual order
           </button>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-semibold cursor-pointer">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-semibold cursor-pointer"
+            >
               Cancel
             </button>
             <button
               type="button"
-              onClick={() => { onSave(isUsual ? null : list); onClose(); }}
+              onClick={() => {
+                onSave(isUsual ? null : list);
+                onClose();
+              }}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold cursor-pointer"
             >
               Save order

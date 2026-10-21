@@ -15,9 +15,23 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stri
 const noteOf = (x: { note?: string } | undefined | null) => (x?.note || '').trim();
 
 /** Changes that aren't "editing" a shopping line: ticking it, out of stock, the cupboard answer, and the bookkeeping. */
-const SHOP_QUIET = new Set(['checked', 'checkedBy', 'outOfStock', 'cupboard', 'addedBy', 'lastModifiedBy', 'lastModifiedAt', 'editedBy', 'noteBy']);
+const SHOP_QUIET = new Set([
+  'checked',
+  'checkedBy',
+  'outOfStock',
+  'cupboard',
+  'addedBy',
+  'lastModifiedBy',
+  'lastModifiedAt',
+  'editedBy',
+  'noteBy',
+]);
 
-export function stampShoppingItem(item: ShoppingListItem, before: ShoppingListItem | undefined, who: string): ShoppingListItem {
+export function stampShoppingItem(
+  item: ShoppingListItem,
+  before: ShoppingListItem | undefined,
+  who: string,
+): ShoppingListItem {
   if (!before) {
     const out: ShoppingListItem = { ...item, editedBy: item.editedBy || item.addedBy || who };
     if (noteOf(item)) out.noteBy = item.noteBy || who;
@@ -28,7 +42,10 @@ export function stampShoppingItem(item: ShoppingListItem, before: ShoppingListIt
   let edited = false;
   for (const k of keys) {
     if (SHOP_QUIET.has(k)) continue;
-    if (!same((item as any)[k], (before as any)[k])) { edited = true; break; }
+    if (!same((item as any)[k], (before as any)[k])) {
+      edited = true;
+      break;
+    }
   }
   if (edited) out.editedBy = who;
   else if (!out.editedBy && before.editedBy) out.editedBy = before.editedBy;
@@ -44,7 +61,11 @@ const dayContent = (d: DayPlan | undefined) =>
   d ? { ...d, updatedBy: undefined, meals: (d.meals || []).map(({ noteBy: _n, ...m }) => m) } : null;
 
 /** The days of a week as saved on this phone: changed days get `updatedBy`, changed notes `noteBy`. */
-export function stampPlanDays(days: Record<string, DayPlan>, before: Record<string, DayPlan> | undefined, who: string): Record<string, DayPlan> {
+export function stampPlanDays(
+  days: Record<string, DayPlan>,
+  before: Record<string, DayPlan> | undefined,
+  who: string,
+): Record<string, DayPlan> {
   const out: Record<string, DayPlan> = {};
   for (const [d, day] of Object.entries(days || {})) {
     const prev = before?.[d];
@@ -55,7 +76,13 @@ export function stampPlanDays(days: Record<string, DayPlan>, before: Record<stri
     out[d] = {
       ...day,
       updatedBy: who,
-      meals: day.meals.map((m) => stampMealNote(m, prev?.meals?.find((x) => x.id === m.id), who)),
+      meals: day.meals.map((m) =>
+        stampMealNote(
+          m,
+          prev?.meals?.find((x) => x.id === m.id),
+          who,
+        ),
+      ),
     };
   }
   return out;

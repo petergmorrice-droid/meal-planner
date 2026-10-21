@@ -2,7 +2,11 @@ import { useMemo, useRef, useState } from 'react';
 import { Plus, LayoutGrid } from 'lucide-react';
 import { parseQuickAdd } from '../../shopList';
 
-export interface QuickAddSuggestion { name: string; aisle: string; favourite?: boolean }
+export interface QuickAddSuggestion {
+  name: string;
+  aisle: string;
+  favourite?: boolean;
+}
 
 /**
  * "Add an item…": type and press Enter ("2 pints milk", "6 eggs", "bin bags"), or pick a
@@ -60,10 +64,19 @@ export default function QuickAdd({
           <input
             ref={inputRef}
             value={text}
-            onChange={(e) => { setText(e.target.value); setOpen(true); }}
+            onChange={(e) => {
+              setText(e.target.value);
+              setOpen(true);
+            }}
             onFocus={() => setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } if (e.key === 'Escape') setOpen(false); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                add();
+              }
+              if (e.key === 'Escape') setOpen(false);
+            }}
             placeholder={compact ? 'Forgot something? Add it…' : 'Add an item… e.g. 2 pints milk'}
             enterKeyHint="done"
             autoComplete="off"
@@ -86,7 +99,10 @@ export default function QuickAdd({
         )}
       </div>
       {open && text.trim() && (
-        <ul className="absolute left-0 right-0 top-full mt-1 z-30 bg-white rounded-xl border border-zinc-200 shadow-lg overflow-hidden divide-y divide-zinc-100" data-suggestions>
+        <ul
+          className="absolute left-0 right-0 top-full mt-1 z-30 bg-white rounded-xl border border-zinc-200 shadow-lg overflow-hidden divide-y divide-zinc-100"
+          data-suggestions
+        >
           {matches.map((m) => {
             const onList = onTheList(m.name);
             return (
@@ -103,7 +119,9 @@ export default function QuickAdd({
                     <span className="block text-xs text-zinc-500 truncate">{m.aisle}</span>
                   </span>
                   {onList ? (
-                    <span className="shrink-0 text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">On the list: {onList} · add more</span>
+                    <span className="shrink-0 text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">
+                      On the list: {onList} · add more
+                    </span>
                   ) : (
                     <Plus className="w-4 h-4 text-zinc-400 shrink-0" />
                   )}

@@ -6,7 +6,14 @@ import { cooksForText, leftoverSourceDay } from '../../planning';
 import PersonMark, { noteLook } from '../PersonMark';
 import { describeMeal, mealTitle, dayTone } from './DayListRow';
 
-export default function SendToListModal({ plan, recipes, emptyDays, onEditDay, onSend, onClose }: {
+export default function SendToListModal({
+  plan,
+  recipes,
+  emptyDays,
+  onEditDay,
+  onSend,
+  onClose,
+}: {
   plan: MealPlan;
   recipes: Recipe[];
   /** Days with nothing planned. */
@@ -23,7 +30,7 @@ export default function SendToListModal({ plan, recipes, emptyDays, onEditDay, o
     >
       <div
         className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] shadow-xl border border-zinc-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-white shrink-0">
@@ -35,9 +42,7 @@ export default function SendToListModal({ plan, recipes, emptyDays, onEditDay, o
               <h3 className="text-base font-semibold text-zinc-900 leading-tight">
                 Send this week to the shopping list
               </h3>
-              <p className="text-xs text-zinc-400 truncate">
-                Week of {formatWeekRange(plan.startDate)}
-              </p>
+              <p className="text-xs text-zinc-400 truncate">Week of {formatWeekRange(plan.startDate)}</p>
             </div>
           </div>
           <button
@@ -80,9 +85,7 @@ export default function SendToListModal({ plan, recipes, emptyDays, onEditDay, o
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                The week's meals
-              </span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">The week's meals</span>
               <span className="text-[11px] font-medium text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-full">
                 {DAYS_OF_WEEK.length - emptyDays.length} / 7 days filled
               </span>
@@ -90,7 +93,7 @@ export default function SendToListModal({ plan, recipes, emptyDays, onEditDay, o
 
             {/* Every day in full: the meal, what kind, people, sides, who it cooks for, and the notes. */}
             <div className="space-y-1.5" data-send-breakdown>
-              {DAYS_OF_WEEK.map(day => {
+              {DAYS_OF_WEEK.map((day) => {
                 const dayPlan = plan.days[day];
                 const meal = dayPlan?.meals?.[0] || null;
                 const dayDate = dayPlan?.date
@@ -105,7 +108,11 @@ export default function SendToListModal({ plan, recipes, emptyDays, onEditDay, o
                   <div
                     key={day}
                     className={`p-2.5 rounded-xl border flex items-start gap-2.5 ${
-                      meal ? (tone ? tone.card : 'bg-white border-zinc-200') : 'bg-zinc-50/60 border-dashed border-zinc-200/80'
+                      meal
+                        ? tone
+                          ? tone.card
+                          : 'bg-white border-zinc-200'
+                        : 'bg-zinc-50/60 border-dashed border-zinc-200/80'
                     }`}
                     data-send-day={day}
                   >
@@ -116,26 +123,48 @@ export default function SendToListModal({ plan, recipes, emptyDays, onEditDay, o
                     <div className="flex-1 min-w-0">
                       {meal && d ? (
                         <>
-                          <span className="font-semibold text-sm text-zinc-900 block break-words leading-snug">{mealTitle(meal)}</span>
+                          <span className="font-semibold text-sm text-zinc-900 block break-words leading-snug">
+                            {mealTitle(meal)}
+                          </span>
                           <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-zinc-600">
                             {d.label && d.label.text && (
-                              <span className={`inline-flex items-center gap-1 font-semibold border rounded-md px-1.5 py-px [&>svg]:w-3 [&>svg]:h-3 ${d.label.tone}`}>{d.label.icon}{d.label.text}</span>
+                              <span
+                                className={`inline-flex items-center gap-1 font-semibold border rounded-md px-1.5 py-px [&>svg]:w-3 [&>svg]:h-3 ${d.label.tone}`}
+                              >
+                                {d.label.icon}
+                                {d.label.text}
+                              </span>
                             )}
-                            {meal.type !== 'no_meal' && <span>{meal.servings || 2} {(meal.servings || 2) === 1 ? 'person' : 'people'}</span>}
+                            {meal.type !== 'no_meal' && (
+                              <span>
+                                {meal.servings || 2} {(meal.servings || 2) === 1 ? 'person' : 'people'}
+                              </span>
+                            )}
                             {cooks && <span>{cooks}</span>}
-                            {meal.sides && meal.sides.length > 0 && <span>+ {meal.sides.map((x) => x.name).join(', ')}</span>}
+                            {meal.sides && meal.sides.length > 0 && (
+                              <span>+ {meal.sides.map((x) => x.name).join(', ')}</span>
+                            )}
                           </span>
                           {d.note && (
-                            <span className={`mt-1 flex items-start gap-1 text-xs break-words ${noteLook(meal.noteBy).text}`} data-send-note>
+                            <span
+                              className={`mt-1 flex items-start gap-1 text-xs break-words ${noteLook(meal.noteBy).text}`}
+                              data-send-note
+                            >
                               <StickyNote className={`w-3 h-3 shrink-0 mt-0.5 ${noteLook(meal.noteBy).icon}`} />
                               <span className="min-w-0">{d.note}</span>
                               <PersonMark who={meal.noteBy} what="Note written" />
                             </span>
                           )}
                           {recipeNotes && (
-                            <span className={`mt-1 flex items-start gap-1 text-xs break-words whitespace-pre-line ${noteLook(recipe?.notesBy).text}`} data-send-recipe-note>
+                            <span
+                              className={`mt-1 flex items-start gap-1 text-xs break-words whitespace-pre-line ${noteLook(recipe?.notesBy).text}`}
+                              data-send-recipe-note
+                            >
                               <BookOpen className={`w-3 h-3 shrink-0 mt-0.5 ${noteLook(recipe?.notesBy).icon}`} />
-                              <span className="min-w-0"><span className="font-semibold">Recipe notes: </span>{recipeNotes}</span>
+                              <span className="min-w-0">
+                                <span className="font-semibold">Recipe notes: </span>
+                                {recipeNotes}
+                              </span>
                             </span>
                           )}
                         </>
@@ -164,7 +193,9 @@ export default function SendToListModal({ plan, recipes, emptyDays, onEditDay, o
               <span>What happens when you send it?</span>
             </div>
             <p className="text-zinc-500 leading-relaxed">
-              The week's ingredients go on the <strong>shopping list</strong> and the meals appear in the <strong>Cook</strong> tab. You can still change the week afterwards: an <strong>Update list</strong> button appears.
+              The week's ingredients go on the <strong>shopping list</strong> and the meals appear in the{' '}
+              <strong>Cook</strong> tab. You can still change the week afterwards: an <strong>Update list</strong>{' '}
+              button appears.
             </p>
           </div>
         </div>
@@ -200,15 +231,13 @@ export function NoMealsModal({ onClose }: { onClose: () => void }) {
     >
       <div
         className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-150 text-center"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-200/70 text-amber-600 flex items-center justify-center mx-auto mb-3.5 shadow-2xs">
           <AlertCircle className="w-5 h-5" />
         </div>
 
-        <h3 className="text-base font-bold text-zinc-900 mb-1.5">
-          Add a meal first
-        </h3>
+        <h3 className="text-base font-bold text-zinc-900 mb-1.5">Add a meal first</h3>
 
         <p className="text-xs text-zinc-500 mb-5 leading-relaxed">
           Add a meal to at least one day first, then send the week to the shopping list.

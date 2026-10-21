@@ -1,8 +1,14 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @layer base {
   body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family:
+      'Plus Jakarta Sans',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
     color: var(--color-zinc-900);
     background-color: var(--app-page);
     -webkit-font-smoothing: antialiased;
@@ -12,7 +18,10 @@
 
 /* Text (recipes, notes, lists) can be selected and copied; controls can't,
    so a long press on a button doesn't start selecting its label. */
-button, nav, [role="button"], input[type="checkbox"] {
+button,
+nav,
+[role='button'],
+input[type='checkbox'] {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -45,21 +54,54 @@ button, nav, [role="button"], input[type="checkbox"] {
   --app-bar-line: rgb(228 228 231 / 0.8);
   --app-nav: rgb(255 255 255 / 0.95);
 }
-.app-page { background-color: var(--app-page); }
-.app-bar { background-color: var(--app-bar); border-color: var(--app-bar-line); }
-.app-nav { background-color: var(--app-nav); }
+.app-page {
+  background-color: var(--app-page);
+}
+.app-bar {
+  background-color: var(--app-bar);
+  border-color: var(--app-bar-line);
+}
+.app-nav {
+  background-color: var(--app-nav);
+}
 
 /* Tab colours: each screen in its tab's colour */
-html[data-theme="tabs"] { --app-nav: #ffffff; }
-html[data-theme="tabs"][data-tab="cookbook"] { --app-page: #fffbeb; --app-bar: #fef3c7; --app-bar-line: #fde68a; }
-html[data-theme="tabs"][data-tab="planning"] { --app-page: #f0fdf4; --app-bar: #d1fae5; --app-bar-line: #a7f3d0; }
-html[data-theme="tabs"][data-tab="shop"] { --app-page: #eff6ff; --app-bar: #dbeafe; --app-bar-line: #bfdbfe; }
-html[data-theme="tabs"][data-tab="this_week"] { --app-page: #fff7ed; --app-bar: #ffedd5; --app-bar-line: #fed7aa; }
-html[data-theme="tabs"][data-tab="batch"] { --app-page: #ecfeff; --app-bar: #cffafe; --app-bar-line: #a5f3fc; }
-html[data-theme="tabs"][data-tab="settings"] { --app-page: #f4f4f5; --app-bar: #e4e4e7; --app-bar-line: #d4d4d8; }
+html[data-theme='tabs'] {
+  --app-nav: #ffffff;
+}
+html[data-theme='tabs'][data-tab='cookbook'] {
+  --app-page: #fffbeb;
+  --app-bar: #fef3c7;
+  --app-bar-line: #fde68a;
+}
+html[data-theme='tabs'][data-tab='planning'] {
+  --app-page: #f0fdf4;
+  --app-bar: #d1fae5;
+  --app-bar-line: #a7f3d0;
+}
+html[data-theme='tabs'][data-tab='shop'] {
+  --app-page: #eff6ff;
+  --app-bar: #dbeafe;
+  --app-bar-line: #bfdbfe;
+}
+html[data-theme='tabs'][data-tab='this_week'] {
+  --app-page: #fff7ed;
+  --app-bar: #ffedd5;
+  --app-bar-line: #fed7aa;
+}
+html[data-theme='tabs'][data-tab='batch'] {
+  --app-page: #ecfeff;
+  --app-bar: #cffafe;
+  --app-bar-line: #a5f3fc;
+}
+html[data-theme='tabs'][data-tab='settings'] {
+  --app-page: #f4f4f5;
+  --app-bar: #e4e4e7;
+  --app-bar-line: #d4d4d8;
+}
 
 /* Warm kitchen: oat and cream, terracotta bars, warm greys */
-html[data-theme="warm"] {
+html[data-theme='warm'] {
   --color-white: #fffdf8;
   --color-zinc-50: #f8f3ea;
   --color-zinc-100: #f1e9dc;
@@ -79,7 +121,7 @@ html[data-theme="warm"] {
 }
 
 /* Sage garden: soft green page and bars, green-tinted greys */
-html[data-theme="sage"] {
+html[data-theme='sage'] {
   --color-zinc-50: #f3f7f1;
   --color-zinc-100: #e8efe5;
   --color-zinc-200: #d6e1d2;

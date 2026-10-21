@@ -27,7 +27,9 @@ export function useListUpkeep(store: AppStore, activePlan: MealPlan | null, dism
       return hasDiff ? syncedList : currentList;
     });
   });
-  useEffect(() => { syncStaples(); }, [activePlan?.id, staples, dismissedItemIds]);
+  useEffect(() => {
+    syncStaples();
+  }, [activePlan?.id, staples, dismissedItemIds]);
 
   // Things added as a bare number before they were saved as products ("1" Belvita) are put in the
   // unit the product is sold in ("1 pack"), so they add up with the next one ("2 packs", not "1 + 1 pack").
@@ -42,5 +44,7 @@ export function useListUpkeep(store: AppStore, activePlan: MealPlan | null, dism
       });
     });
   });
-  useEffect(() => { fitToProducts(); }, [shoppingList, groceryDatabase]);
+  useEffect(() => {
+    fitToProducts();
+  }, [shoppingList, groceryDatabase]);
 }

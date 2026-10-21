@@ -10,7 +10,9 @@ export const USE_SOON_DAYS = 90;
 const dayMs = 86_400_000;
 const dateOnly = (iso: string | undefined) => String(iso || '').slice(0, 10);
 const daysBetween = (fromIso: string, toIso: string) =>
-  Math.round((new Date(dateOnly(toIso) + 'T12:00:00').getTime() - new Date(dateOnly(fromIso) + 'T12:00:00').getTime()) / dayMs);
+  Math.round(
+    (new Date(dateOnly(toIso) + 'T12:00:00').getTime() - new Date(dateOnly(fromIso) + 'T12:00:00').getTime()) / dayMs,
+  );
 
 /** "today", "yesterday", "5 days ago", "3 weeks ago", "2 months ago", "over a year ago". */
 export function frozenAgo(dateIso: string | undefined, todayIso: string): string {
@@ -73,14 +75,31 @@ export function planDayDate(plan: MealPlan, day: string): string {
  * The freezer grouped by dish (two chilli batches are one "Chilli con carne"), oldest dish first,
  * with what the plan wants from each.
  */
-export function freezerGroups(batches: BatchItem[], recipes: Recipe[], plans: MealPlan[], todayIso: string): FreezerGroup[] {
+export function freezerGroups(
+  batches: BatchItem[],
+  recipes: Recipe[],
+  plans: MealPlan[],
+  todayIso: string,
+): FreezerGroup[] {
   const groups = new Map<string, FreezerGroup>();
   for (const b of batches || []) {
     const k = keyFor(b);
     const recipe = b.recipeId ? recipes.find((r) => r.id === b.recipeId) : undefined;
     let g = groups.get(k);
     if (!g) {
-      g = { key: k, name: (b.name || recipe?.name || 'Something frozen').trim(), recipeId: b.recipeId || undefined, batches: [], portions: 0, oldest: '', ageDays: 0, useSoon: false, planned: [], plannedPortions: 0, spare: 0 };
+      g = {
+        key: k,
+        name: (b.name || recipe?.name || 'Something frozen').trim(),
+        recipeId: b.recipeId || undefined,
+        batches: [],
+        portions: 0,
+        oldest: '',
+        ageDays: 0,
+        useSoon: false,
+        planned: [],
+        plannedPortions: 0,
+        spare: 0,
+      };
       groups.set(k, g);
     }
     g.batches.push(b);

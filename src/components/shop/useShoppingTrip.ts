@@ -12,7 +12,11 @@ import type { AppStore } from '../../store';
 export function useShoppingTrip(store: AppStore, activePlan: MealPlan | null, openPlanId?: string | null) {
   const [isShoppingMode, setIsShoppingModeState] = useState<boolean>(() => {
     const open = readOpenShop();
-    return !!open && (!openPlanId || openPlanId === open.planId) && (store.state.mealPlans || []).some((p: MealPlan) => p.id === open.planId);
+    return (
+      !!open &&
+      (!openPlanId || openPlanId === open.planId) &&
+      (store.state.mealPlans || []).some((p: MealPlan) => p.id === open.planId)
+    );
   });
 
   // When this shop started (this phone).
@@ -22,7 +26,11 @@ export function useShoppingTrip(store: AppStore, activePlan: MealPlan | null, op
     setIsShoppingModeState(open);
   };
   const startShopping = () => {
-    try { if (startKey && !localStorage.getItem(startKey)) localStorage.setItem(startKey, String(Date.now())); } catch { /* timing is a nicety */ }
+    try {
+      if (startKey && !localStorage.getItem(startKey)) localStorage.setItem(startKey, String(Date.now()));
+    } catch {
+      /* timing is a nicety */
+    }
     setIsShoppingMode(true);
   };
 
@@ -41,12 +49,22 @@ export function useShoppingTrip(store: AppStore, activePlan: MealPlan | null, op
     if (!routeKey) return;
     try {
       const seq: { key: string; aisle: string }[] = JSON.parse(localStorage.getItem(routeKey) || '[]');
-      const next = ticked ? (seq.some((t) => t.key === key) ? seq : [...seq, { key, aisle }]) : seq.filter((t) => t.key !== key);
+      const next = ticked
+        ? seq.some((t) => t.key === key)
+          ? seq
+          : [...seq, { key, aisle }]
+        : seq.filter((t) => t.key !== key);
       localStorage.setItem(routeKey, JSON.stringify(next));
-    } catch { /* learning the route is a nicety */ }
+    } catch {
+      /* learning the route is a nicety */
+    }
   };
   const readTicks = (): { key: string; aisle: string }[] => {
-    try { return JSON.parse(localStorage.getItem(routeKey) || '[]'); } catch { return []; }
+    try {
+      return JSON.parse(localStorage.getItem(routeKey) || '[]');
+    } catch {
+      return [];
+    }
   };
 
   /** Whole minutes so far (null when it's too short or too long to count). */
@@ -55,21 +73,33 @@ export function useShoppingTrip(store: AppStore, activePlan: MealPlan | null, op
       const t = Number(localStorage.getItem(startKey));
       const ms = t ? Date.now() - t : NaN;
       return shopDurationText(ms) ? Math.max(1, Math.round(ms / 60_000)) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   };
   /** "25 min" so far, or null. */
   const shopTook = (): string | null => {
     try {
       const t = Number(localStorage.getItem(startKey));
       return t ? shopDurationText(Date.now() - t) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   };
 
   const history: ShopRecord[] = store.state.preferences?.shopHistory || [];
   const stats = shopStats(history);
 
   /** Remember the shop (shared): history, best time, and the route you took. True if it's a new best. */
-  const recordShop = ({ bought, total, minutes }: { bought: number; total: number; minutes: number | null }): boolean => {
+  const recordShop = ({
+    bought,
+    total,
+    minutes,
+  }: {
+    bought: number;
+    total: number;
+    minutes: number | null;
+  }): boolean => {
     const isBest = minutes !== null && bought >= BIG_SHOP && (stats.best === null || minutes < stats.best);
     const record: ShopRecord = {
       id: crypto.randomUUID(),
@@ -84,11 +114,29 @@ export function useShoppingTrip(store: AppStore, activePlan: MealPlan | null, op
     const ticks = readTicks();
     store.updatePreferences((p) => {
       const learned = learnRoute(p.shopRoute, ticks);
-      return { shopHistory: addShopRecord(p.shopHistory || [], record), ...(learned && learned !== p.shopRoute ? { shopRoute: learned } : {}) };
+      return {
+        shopHistory: addShopRecord(p.shopHistory || [], record),
+        ...(learned && learned !== p.shopRoute ? { shopRoute: learned } : {}),
+      };
     });
-    try { if (startKey) localStorage.removeItem(startKey); if (routeKey) localStorage.removeItem(routeKey); } catch { /* ignore */ }
+    try {
+      if (startKey) localStorage.removeItem(startKey);
+      if (routeKey) localStorage.removeItem(routeKey);
+    } catch {
+      /* ignore */
+    }
     return isBest;
   };
 
-  return { isShoppingMode, setIsShoppingMode, startShopping, recordTick, tookMinutes, shopTook, history, stats, recordShop };
+  return {
+    isShoppingMode,
+    setIsShoppingMode,
+    startShopping,
+    recordTick,
+    tookMinutes,
+    shopTook,
+    history,
+    stats,
+    recordShop,
+  };
 }

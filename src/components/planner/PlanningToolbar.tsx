@@ -7,11 +7,27 @@ import { Columns2, Eye, Rows, Search, X } from 'lucide-react';
 import { UserPreferences } from '../../types';
 import { CARD_FIELD_OPTIONS, CardPref } from '../RecipeCard';
 import { RECIPE_SORTS, RecipeSort, QUICK_FILTERS, QuickFilter } from '../../recipeInfo';
-import type  { PlanningView } from './useMealBrowser';
+import type { PlanningView } from './useMealBrowser';
 
 export default function PlanningToolbar({
-  planningView, onPlanningView, searchOpen, onSearchOpen, search, onSearch, quickFilters, onToggleFilter,
-  optionsOpen, onOptionsOpen, mealRowsLayout, onMealRowsLayout, recipeSort, onRecipeSort, favFirst, onFavFirst, prefs, onCardPref,
+  planningView,
+  onPlanningView,
+  searchOpen,
+  onSearchOpen,
+  search,
+  onSearch,
+  quickFilters,
+  onToggleFilter,
+  optionsOpen,
+  onOptionsOpen,
+  mealRowsLayout,
+  onMealRowsLayout,
+  recipeSort,
+  onRecipeSort,
+  favFirst,
+  onFavFirst,
+  prefs,
+  onCardPref,
 }: {
   planningView: PlanningView;
   onPlanningView: (view: PlanningView) => void;
@@ -55,12 +71,25 @@ export default function PlanningToolbar({
                   className="w-full h-9 pl-9 pr-8 rounded-xl border border-zinc-300 bg-zinc-50 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white"
                 />
                 {search && (
-                  <button type="button" onClick={() => onSearch('')} className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg text-zinc-500 flex items-center justify-center cursor-pointer" aria-label="Clear search">
+                  <button
+                    type="button"
+                    onClick={() => onSearch('')}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg text-zinc-500 flex items-center justify-center cursor-pointer"
+                    aria-label="Clear search"
+                  >
                     <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
-              <button type="button" onClick={() => { onSearch(''); onSearchOpen(false); }} className="h-9 px-1.5 text-sm font-semibold text-zinc-700 cursor-pointer" aria-label="Close search">
+              <button
+                type="button"
+                onClick={() => {
+                  onSearch('');
+                  onSearchOpen(false);
+                }}
+                className="h-9 px-1.5 text-sm font-semibold text-zinc-700 cursor-pointer"
+                aria-label="Close search"
+              >
                 Cancel
               </button>
             </div>
@@ -68,14 +97,22 @@ export default function PlanningToolbar({
             <>
               <button
                 type="button"
-                onClick={() => { onSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+                onClick={() => {
+                  onSearchOpen(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 50);
+                }}
                 className="w-9 h-9 rounded-xl border border-zinc-200 bg-white text-zinc-700 flex items-center justify-center shrink-0 cursor-pointer"
                 title="Search meals"
                 aria-label="Search meals"
               >
                 <Search className="w-4 h-4" />
               </button>
-              <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="Filters" data-quick-filters>
+              <div
+                className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto scrollbar-none"
+                role="group"
+                aria-label="Filters"
+                data-quick-filters
+              >
                 {QUICK_FILTERS.map(({ id, label }) => {
                   const on = quickFilters.includes(id);
                   return (
@@ -121,14 +158,19 @@ export default function PlanningToolbar({
               <div className="absolute right-0 top-full mt-2 w-56 max-h-[calc(100vh-140px)] overflow-y-auto bg-white rounded-2xl border border-zinc-200/90 shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
                 {/* View: Classic (drag and drop) or List (tap a day) */}
                 <div className="px-1 mb-3">
-                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">View</span>
+                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                    View
+                  </span>
                   <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-xl">
-                    {(['classic', 'list'] as const).map(v => (
+                    {(['classic', 'list'] as const).map((v) => (
                       <button
                         key={v}
                         type="button"
                         id={`planning-view-${v}`}
-                        onClick={() => { onPlanningView(v); onOptionsOpen(false); }}
+                        onClick={() => {
+                          onPlanningView(v);
+                          onOptionsOpen(false);
+                        }}
                         className={`py-2 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                           planningView === v ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-600 hover:text-zinc-900'
                         }`}
@@ -142,87 +184,102 @@ export default function PlanningToolbar({
                   </p>
                 </div>
 
-                {planningView === 'classic' && (<>
-                {/* Rows of 2 or 1 */}
-                <div className="px-1 mb-2">
-                  <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
-                    Display Rows
-                  </span>
-                  <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => onMealRowsLayout(2)}
-                      className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                        mealRowsLayout === 2
-                          ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
-                          : 'text-zinc-500 hover:text-zinc-900'
-                      }`}
-                      title="Rows of 2"
-                    >
-                      <Columns2 className="w-3.5 h-3.5" />
-                      <span>Rows of 2</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onMealRowsLayout(1)}
-                      className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                        mealRowsLayout === 1
-                          ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
-                          : 'text-zinc-500 hover:text-zinc-900'
-                      }`}
-                      title="Rows of 1"
-                    >
-                      <Rows className="w-3.5 h-3.5" />
-                      <span>Rows of 1</span>
-                    </button>
-                  </div>
-                </div>
+                {planningView === 'classic' && (
+                  <>
+                    {/* Rows of 2 or 1 */}
+                    <div className="px-1 mb-2">
+                      <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                        Display Rows
+                      </span>
+                      <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => onMealRowsLayout(2)}
+                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                            mealRowsLayout === 2
+                              ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                              : 'text-zinc-500 hover:text-zinc-900'
+                          }`}
+                          title="Rows of 2"
+                        >
+                          <Columns2 className="w-3.5 h-3.5" />
+                          <span>Rows of 2</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onMealRowsLayout(1)}
+                          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                            mealRowsLayout === 1
+                              ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                              : 'text-zinc-500 hover:text-zinc-900'
+                          }`}
+                          title="Rows of 1"
+                        >
+                          <Rows className="w-3.5 h-3.5" />
+                          <span>Rows of 1</span>
+                        </button>
+                      </div>
+                    </div>
 
-                <div className="px-1 mb-2 pt-2 border-t border-zinc-100">
-                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">Sort</span>
-                  <div className="grid grid-cols-2 gap-1">
-                    {RECIPE_SORTS.map(o => (
-                      <button
-                        key={o.id}
-                        type="button"
-                        data-sort={o.id}
-                        onClick={() => onRecipeSort(o.id)}
-                        className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                          recipeSort === o.id ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
-                        }`}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="flex items-center gap-2 mt-1.5 px-1 py-1 text-xs font-medium text-zinc-700 cursor-pointer">
-                    <input type="checkbox" checked={favFirst} onChange={(e) => onFavFirst(e.target.checked)} className="rounded border-zinc-300" />
-                    Favourites first
-                  </label>
-                </div>
+                    <div className="px-1 mb-2 pt-2 border-t border-zinc-100">
+                      <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                        Sort
+                      </span>
+                      <div className="grid grid-cols-2 gap-1">
+                        {RECIPE_SORTS.map((o) => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            data-sort={o.id}
+                            onClick={() => onRecipeSort(o.id)}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                              recipeSort === o.id
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="flex items-center gap-2 mt-1.5 px-1 py-1 text-xs font-medium text-zinc-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={favFirst}
+                          onChange={(e) => onFavFirst(e.target.checked)}
+                          className="rounded border-zinc-300"
+                        />
+                        Favourites first
+                      </label>
+                    </div>
 
-                <div className="px-1 py-1 mb-1 border-t border-zinc-100">
-                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block">Show on cards</span>
-                </div>
-                <div className="space-y-0.5">
-                  {CARD_FIELD_OPTIONS.map(({ pref, label }) => (
-                    <label key={pref} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={prefs[pref] !== false}
-                        onChange={() => onCardPref(pref)}
-                        className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
-                      />
-                      <span className="text-xs font-medium text-zinc-700">{label}</span>
-                    </label>
-                  ))}
-                </div>
-                </>)}
+                    <div className="px-1 py-1 mb-1 border-t border-zinc-100">
+                      <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                        Show on cards
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {CARD_FIELD_OPTIONS.map(({ pref, label }) => (
+                        <label
+                          key={pref}
+                          className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 rounded-lg cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={prefs[pref] !== false}
+                            onChange={() => onCardPref(pref)}
+                            className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                          />
+                          <span className="text-xs font-medium text-zinc-700">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}
         </div>
-
       </div>
     </div>
   );

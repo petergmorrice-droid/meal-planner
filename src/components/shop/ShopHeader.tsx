@@ -1,13 +1,38 @@
 /** The Shop's top bar: ‹ week › like Planning; share, list options and Go shopping on the right. */
 import { useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Eye, Layers, ListOrdered, RotateCcw, Share2, ShoppingBag, ShoppingCart, Store, Trophy } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Layers,
+  ListOrdered,
+  RotateCcw,
+  Share2,
+  ShoppingBag,
+  ShoppingCart,
+  Store,
+  Trophy,
+} from 'lucide-react';
 import { MealPlan } from '../../types';
 import { formatWeekSpan } from '../../shopList';
-import type  { ShopViewMode } from './useShopLayout';
+import type { ShopViewMode } from './useShopLayout';
 
 export default function ShopHeader({
-  title, activePlan, sent, prevPlan, nextPlan, onSelectPlan, canShare, onShare, viewMode, onViewMode,
-  onArrangeAisles, onStaples, onHistory, onGoShopping,
+  title,
+  activePlan,
+  sent,
+  prevPlan,
+  nextPlan,
+  onSelectPlan,
+  canShare,
+  onShare,
+  viewMode,
+  onViewMode,
+  onArrangeAisles,
+  onStaples,
+  onHistory,
+  onGoShopping,
 }: {
   /** "This week", "Next week", "w/c 3 Nov". */
   title: string;
@@ -42,10 +67,13 @@ export default function ShopHeader({
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="min-w-0 px-0.5 text-center" data-shop-week>
-            <div className="text-[15px] font-bold text-zinc-900 whitespace-nowrap leading-tight" data-shop-week-name>{title}</div>
+            <div className="text-[15px] font-bold text-zinc-900 whitespace-nowrap leading-tight" data-shop-week-name>
+              {title}
+            </div>
             {activePlan && (
               <div className="text-xs text-zinc-500 whitespace-nowrap leading-tight" data-shop-week-status>
-                {formatWeekSpan(activePlan.startDate)} · {sent ? <span className="text-emerald-700 font-semibold">Sent</span> : 'Not sent yet'}
+                {formatWeekSpan(activePlan.startDate)} ·{' '}
+                {sent ? <span className="text-emerald-700 font-semibold">Sent</span> : 'Not sent yet'}
               </div>
             )}
           </div>
@@ -80,7 +108,9 @@ export default function ShopHeader({
               id="btn-shop-view-options"
               onClick={() => setShowViewOptions(!showViewOptions)}
               className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer ${
-                showViewOptions ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600'
+                showViewOptions
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-600'
               }`}
               title="List options"
               aria-label="View options"
@@ -91,20 +121,30 @@ export default function ShopHeader({
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowViewOptions(false)} />
                 <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl border border-zinc-200 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
-                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-1 pb-1.5">Show the list</span>
-                  {([
-                    ['food_type', 'view-option-foodtype', 'By aisle', Store],
-                    ['sections', 'view-option-sections', "By where it's from", Layers],
-                    ['all', 'view-option-all', 'A–Z', ShoppingBag],
-                  ] as const).map(([mode, id, label, Icon]) => (
+                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider block px-2 pt-1 pb-1.5">
+                    Show the list
+                  </span>
+                  {(
+                    [
+                      ['food_type', 'view-option-foodtype', 'By aisle', Store],
+                      ['sections', 'view-option-sections', "By where it's from", Layers],
+                      ['all', 'view-option-all', 'A–Z', ShoppingBag],
+                    ] as const
+                  ).map(([mode, id, label, Icon]) => (
                     <button
                       key={mode}
                       type="button"
                       id={id}
-                      onClick={() => { onViewMode(mode); setShowViewOptions(false); }}
+                      onClick={() => {
+                        onViewMode(mode);
+                        setShowViewOptions(false);
+                      }}
                       className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-sm cursor-pointer ${viewMode === mode ? 'bg-zinc-100 font-semibold text-zinc-900' : 'text-zinc-700 hover:bg-zinc-50'}`}
                     >
-                      <span className="flex items-center gap-2"><Icon className="w-4 h-4 text-zinc-500" />{label}</span>
+                      <span className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-zinc-500" />
+                        {label}
+                      </span>
                       {viewMode === mode && <Check className="w-4 h-4 text-emerald-600" />}
                     </button>
                   ))}
@@ -112,7 +152,10 @@ export default function ShopHeader({
                     <button
                       type="button"
                       id="btn-arrange-aisles"
-                      onClick={() => { setShowViewOptions(false); onArrangeAisles(); }}
+                      onClick={() => {
+                        setShowViewOptions(false);
+                        onArrangeAisles();
+                      }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                     >
                       <ListOrdered className="w-4 h-4 text-zinc-500" /> Arrange aisles…
@@ -120,7 +163,10 @@ export default function ShopHeader({
                     <button
                       type="button"
                       id="btn-weekly-staples"
-                      onClick={() => { setShowViewOptions(false); onStaples(); }}
+                      onClick={() => {
+                        setShowViewOptions(false);
+                        onStaples();
+                      }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                     >
                       <RotateCcw className="w-4 h-4 text-zinc-500" /> Weekly staples…
@@ -128,7 +174,10 @@ export default function ShopHeader({
                     <button
                       type="button"
                       id="btn-shop-history"
-                      onClick={() => { setShowViewOptions(false); onHistory(); }}
+                      onClick={() => {
+                        setShowViewOptions(false);
+                        onHistory();
+                      }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                     >
                       <Trophy className="w-4 h-4 text-zinc-500" /> Past shops…

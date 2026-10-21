@@ -3,28 +3,54 @@ import { oldShoppingLineIds } from './shopList';
 import { setCurrentProducts } from './shopping/current';
 import { stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes } from './whoChanged';
 import {
-  Recipe, MealPlan, PlannedMeal, BatchItem,
-  ShoppingListItem, UserPreferences, GroceryItem, AppState, DayPlan,
-  DatabaseCleanAction
+  Recipe,
+  MealPlan,
+  PlannedMeal,
+  BatchItem,
+  ShoppingListItem,
+  UserPreferences,
+  GroceryItem,
+  AppState,
+  DayPlan,
+  DatabaseCleanAction,
 } from './types';
-import {
-  getMonday, formatDateISO, isPastWeek, isWeekBeyondForwardLimit,
-  cleanDays, DAYS_OF_WEEK
-} from './utils';
+import { getMonday, formatDateISO, isPastWeek, isWeekBeyondForwardLimit, cleanDays, DAYS_OF_WEEK } from './utils';
 import { createEmptyPlan } from './utils';
 import { useDeviceIdentity } from './hooks/useDeviceIdentity';
 import {
-  getGistConfig, saveGistConfig, clearGistConfig,
-  fetchGist, saveGist, createPrivateGist, GistConfig
+  getGistConfig,
+  saveGistConfig,
+  clearGistConfig,
+  fetchGist,
+  saveGist,
+  createPrivateGist,
+  GistConfig,
 } from './services/gistStorage';
 import {
-  mergeAppStates, applyLocalChange, statesEqual, getDismissedShoppingIds, addTombstones, dropDefaultsMissingFrom,
-  keepOnlyChangesSince, LONG_ABSENCE_MS
+  mergeAppStates,
+  applyLocalChange,
+  statesEqual,
+  getDismissedShoppingIds,
+  addTombstones,
+  dropDefaultsMissingFrom,
+  keepOnlyChangesSince,
+  LONG_ABSENCE_MS,
 } from './services/syncMerge';
 import {
-  CATALOG_VERSION, builtInProducts, catalogForState, upgradeProductDefaults,
-  normaliseProducts, saveProductIn, updateProductIn, removeProductIn, restoreProductIn, mergeProductsIn,
-  markDifferentIn, resetProductsIn, replaceProductsIn, type RemovedProduct,
+  CATALOG_VERSION,
+  builtInProducts,
+  catalogForState,
+  upgradeProductDefaults,
+  normaliseProducts,
+  saveProductIn,
+  updateProductIn,
+  removeProductIn,
+  restoreProductIn,
+  mergeProductsIn,
+  markDifferentIn,
+  resetProductsIn,
+  replaceProductsIn,
+  type RemovedProduct,
 } from './shopping';
 
 /** How often to check GitHub for the other phone's changes while the app is open. */
@@ -38,9 +64,20 @@ const LS_PENDING = 'mealPlannerSyncPending';
 /** When this phone last synced successfully (per phone). */
 const LS_LAST_SYNC_OK = 'last_sync_ok_at';
 const readLastSyncOk = (): number | null => {
-  try { const v = Number(localStorage.getItem(LS_LAST_SYNC_OK)); return v > 0 ? v : null; } catch { return null; }
+  try {
+    const v = Number(localStorage.getItem(LS_LAST_SYNC_OK));
+    return v > 0 ? v : null;
+  } catch {
+    return null;
+  }
 };
-const writeLastSyncOk = (t: number) => { try { localStorage.setItem(LS_LAST_SYNC_OK, String(t)); } catch { /* fine */ } };
+const writeLastSyncOk = (t: number) => {
+  try {
+    localStorage.setItem(LS_LAST_SYNC_OK, String(t));
+  } catch {
+    /* fine */
+  }
+};
 const LS_LEGACY_DISMISSED = 'mealPlannerDismissedShoppingItems';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -67,15 +104,15 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     { name: 'Coffee', category: 'Pantry, Oils & Spices' },
     { name: 'Tea', category: 'Pantry, Oils & Spices' },
     { name: 'Toilet Roll', category: 'Household & Other' },
-    { name: 'Olive Oil', category: 'Pantry, Oils & Spices' }
-  ]
+    { name: 'Olive Oil', category: 'Pantry, Oils & Spices' },
+  ],
 };
 
 /**
  * Mark things a phone starts with (empty weeks, the built-in grocery list) as
  * defaults, so when it first syncs they never replace the household's real data.
  */
-const asDefaults = <T extends object>(items: T[]): T[] => items.map(i => ({ ...i, lastModifiedAt: -1 }));
+const asDefaults = <T extends object>(items: T[]): T[] => items.map((i) => ({ ...i, lastModifiedAt: -1 }));
 
 const getInitialMealPlans = (): MealPlan[] => {
   try {
@@ -92,10 +129,7 @@ const getInitialMealPlans = (): MealPlan[] => {
   const nextMonday = new Date(currentMonday);
   nextMonday.setDate(currentMonday.getDate() + 7);
 
-  return asDefaults([
-    createEmptyPlan(currentMonday),
-    createEmptyPlan(nextMonday)
-  ]);
+  return asDefaults([createEmptyPlan(currentMonday), createEmptyPlan(nextMonday)]);
 };
 
 /** Make sure every list exists, whatever shape the data arrived in. */
@@ -146,8 +180,8 @@ const migrateLegacyDismissed = (s: AppState): AppState => {
     const raw = localStorage.getItem(LS_LEGACY_DISMISSED);
     if (!raw) return s;
     const ids: string[] = JSON.parse(raw);
-    const live = new Set(s.shoppingList.map(i => i.id));
-    const toAdd = Array.isArray(ids) ? ids.filter(id => typeof id === 'string' && !live.has(id)) : [];
+    const live = new Set(s.shoppingList.map((i) => i.id));
+    const toAdd = Array.isArray(ids) ? ids.filter((id) => typeof id === 'string' && !live.has(id)) : [];
     const migrated = addTombstones(s, 'shoppingList', toAdd, Date.now());
     persistLocal(migrated);
     localStorage.removeItem(LS_LEGACY_DISMISSED);
@@ -164,10 +198,12 @@ const getInitialState = (): AppState => {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed && typeof parsed === 'object') {
-        return migrateLegacyDismissed(normalizeState({
-          ...parsed,
-          mealPlans: parsed.mealPlans || getInitialMealPlans(),
-        }));
+        return migrateLegacyDismissed(
+          normalizeState({
+            ...parsed,
+            mealPlans: parsed.mealPlans || getInitialMealPlans(),
+          }),
+        );
       }
     }
   } catch (e) {}
@@ -180,8 +216,14 @@ const getInitialState = (): AppState => {
     const legacyStateStr = localStorage.getItem('mealPlannerState');
     if (legacyStateStr) {
       const parsed = JSON.parse(legacyStateStr);
-      if (parsed.groceryDatabase) { legacyDb = parsed.groceryDatabase; hasLegacyData = true; }
-      if (parsed.groceryOverrides) { legacyOverrides = parsed.groceryOverrides; hasLegacyData = true; }
+      if (parsed.groceryDatabase) {
+        legacyDb = parsed.groceryDatabase;
+        hasLegacyData = true;
+      }
+      if (parsed.groceryOverrides) {
+        legacyOverrides = parsed.groceryOverrides;
+        hasLegacyData = true;
+      }
     }
   } catch (e) {}
 
@@ -224,8 +266,8 @@ export function useStore() {
 
   // GitHub Sync States
   const [githubConfig, setGithubConfigState] = useState<GistConfig | null>(getGistConfig);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'synced' | 'error'>(
-    () => (getGistConfig() ? 'loading' : 'idle')
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'synced' | 'error'>(() =>
+    getGistConfig() ? 'loading' : 'idle',
   );
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   // Shopping mode asks for quicker checks, so two people shopping see each other's ticks.
@@ -242,13 +284,21 @@ export function useStore() {
   const inFlightRef = useRef<Promise<void> | null>(null);
   const rerunRef = useRef(false);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingRef = useRef<boolean>((() => {
-    try { return localStorage.getItem(LS_PENDING) === '1'; } catch { return false; }
-  })());
+  const pendingRef = useRef<boolean>(
+    (() => {
+      try {
+        return localStorage.getItem(LS_PENDING) === '1';
+      } catch {
+        return false;
+      }
+    })(),
+  );
 
   const setPending = (value: boolean) => {
     pendingRef.current = value;
-    try { localStorage.setItem(LS_PENDING, value ? '1' : '0'); } catch {}
+    try {
+      localStorage.setItem(LS_PENDING, value ? '1' : '0');
+    } catch {}
   };
 
   /** Replace the data on this phone (screen + local storage). */
@@ -317,9 +367,14 @@ export function useStore() {
           // was changed on this phone since it last synced, so things deleted meanwhile stay deleted.
           const lastOk = readLastSyncOk();
           const away = lastOk !== null && Date.now() - lastOk > LONG_ABSENCE_MS;
-          const local = away ? keepOnlyChangesSince(stateRef.current, lastOk!) : dropDefaultsMissingFrom(stateRef.current, remote);
+          const local = away
+            ? keepOnlyChangesSince(stateRef.current, lastOk!)
+            : dropDefaultsMissingFrom(stateRef.current, remote);
           merged = mergeAppStates(local, remote);
-          if (away) setSyncNotice("This phone hadn't synced for over 3 months, so it took the shared copy and kept only the changes made on it since.");
+          if (away)
+            setSyncNotice(
+              "This phone hadn't synced for over 3 months, so it took the shared copy and kept only the changes made on it since.",
+            );
           if (!statesEqual(merged, stateRef.current)) {
             replaceState(normalizeState(merged));
             merged = stateRef.current;
@@ -393,9 +448,12 @@ export function useStore() {
   useEffect(() => {
     if (!syncGistId || !syncPat) return;
     syncNow('initial');
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') syncNow('poll');
-    }, (fastSync ? FAST_SYNC_SECONDS : SYNC_POLL_SECONDS) * 1000);
+    const interval = setInterval(
+      () => {
+        if (document.visibilityState === 'visible') syncNow('poll');
+      },
+      (fastSync ? FAST_SYNC_SECONDS : SYNC_POLL_SECONDS) * 1000,
+    );
     const onVisible = () => {
       if (document.visibilityState === 'visible') syncNow('focus');
     };
@@ -426,24 +484,31 @@ export function useStore() {
     if (tidied !== current) replaceState(normalizeState(tidied));
     upgradeProductsIfDue();
   });
-  useEffect(() => { tidyProductsOnOpen(); }, []);
+  useEffect(() => {
+    tidyProductsOnOpen();
+  }, []);
 
   // Shopping items that either of you removed, so they aren't regenerated automatically.
   const dismissedKey = getDismissedShoppingIds(state).join('|');
-  const dismissedShoppingItemIds = useMemo(
-    () => (dismissedKey ? dismissedKey.split('|') : []),
-    [dismissedKey]
-  );
+  const dismissedShoppingItemIds = useMemo(() => (dismissedKey ? dismissedKey.split('|') : []), [dismissedKey]);
 
   const addRecipe = async (recipe: Recipe) => {
-    const toSave = stampRecipeNotes({ ...recipe, addedBy: currentUser }, state.recipes.find(r => r.id === recipe.id), currentUser);
-    const nextRecipes = [...state.recipes.filter(r => r.id !== toSave.id), toSave];
+    const toSave = stampRecipeNotes(
+      { ...recipe, addedBy: currentUser },
+      state.recipes.find((r) => r.id === recipe.id),
+      currentUser,
+    );
+    const nextRecipes = [...state.recipes.filter((r) => r.id !== toSave.id), toSave];
     commit(state, { ...state, recipes: nextRecipes });
   };
 
   const writeRecipe = (base: AppState, recipe: Recipe) => {
-    const toSave = stampRecipeNotes({ ...recipe, lastModifiedBy: currentUser }, base.recipes.find(r => r.id === recipe.id), currentUser);
-    const nextRecipes = base.recipes.map(r => r.id === toSave.id ? toSave : r);
+    const toSave = stampRecipeNotes(
+      { ...recipe, lastModifiedBy: currentUser },
+      base.recipes.find((r) => r.id === recipe.id),
+      currentUser,
+    );
+    const nextRecipes = base.recipes.map((r) => (r.id === toSave.id ? toSave : r));
     commit(base, { ...base, recipes: nextRecipes });
   };
 
@@ -455,14 +520,14 @@ export function useStore() {
    */
   const changeRecipe = (id: string, change: (latest: Recipe) => Recipe) => {
     const s = stateRef.current;
-    const latest = s.recipes.find(r => r.id === id);
+    const latest = s.recipes.find((r) => r.id === id);
     if (!latest) return;
     const next = change(latest);
     if (next !== latest) writeRecipe(s, next);
   };
 
   const deleteRecipe = async (recipeId: string) => {
-    const nextRecipes = state.recipes.filter(r => r.id !== recipeId);
+    const nextRecipes = state.recipes.filter((r) => r.id !== recipeId);
     commit(state, { ...state, recipes: nextRecipes });
   };
 
@@ -470,7 +535,8 @@ export function useStore() {
     // Weeks are merged day by day, so the change is worked out against the copy the caller
     // started from: the latest one if that's what it read (an Undo, say), otherwise this screen's.
     const latest = stateRef.current;
-    const readLatest = latest.mealPlans.find((p) => p.startDate === plan.startDate)?.lastModifiedAt === plan.lastModifiedAt;
+    const readLatest =
+      latest.mealPlans.find((p) => p.startDate === plan.startDate)?.lastModifiedAt === plan.lastModifiedAt;
     writeMealPlan(readLatest ? latest : stateRaw, plan);
   };
 
@@ -490,7 +556,7 @@ export function useStore() {
       ...plan,
       id: expectedId,
       isCurrent: plan.startDate === currentMondayStr,
-      days: cleanDays(plan.days)
+      days: cleanDays(plan.days),
     };
 
     const maxWeeks = state.preferences?.maxForwardWeeks || DEFAULT_PREFERENCES.maxForwardWeeks || 4;
@@ -507,10 +573,12 @@ export function useStore() {
     processedPlan.lastModifiedAt = Date.now();
     processedPlan.lastModifiedBy = currentUser;
     // Who changed which day (and wrote which note), for the blue / pink marks.
-    const beforePlan = state.mealPlans.find(p => p.id === expectedId || p.startDate === processedPlan.startDate);
+    const beforePlan = state.mealPlans.find((p) => p.id === expectedId || p.startDate === processedPlan.startDate);
     processedPlan.days = stampPlanDays(processedPlan.days, beforePlan?.days, currentUser);
 
-    const existingIdx = state.mealPlans.findIndex(p => p.id === expectedId || p.startDate === processedPlan.startDate);
+    const existingIdx = state.mealPlans.findIndex(
+      (p) => p.id === expectedId || p.startDate === processedPlan.startDate,
+    );
     let nextMealPlans: MealPlan[] = [...state.mealPlans];
     if (existingIdx >= 0) {
       nextMealPlans[existingIdx] = processedPlan;
@@ -520,7 +588,7 @@ export function useStore() {
 
     // Filter and deduplicate meal plans
     const plansByDate = new Map<string, MealPlan>();
-    nextMealPlans.forEach(p => {
+    nextMealPlans.forEach((p) => {
       const existing = plansByDate.get(p.startDate);
       if (!existing || (p.lastModifiedAt || 0) > (existing.lastModifiedAt || 0)) {
         plansByDate.set(p.startDate, p);
@@ -532,7 +600,7 @@ export function useStore() {
   };
 
   const duplicatePlanToWeek = async (sourcePlanId: string, targetStartDate: string) => {
-    const source = state.mealPlans.find(p => p.id === sourcePlanId);
+    const source = state.mealPlans.find((p) => p.id === sourcePlanId);
     if (!source) return;
 
     const targetMonday = new Date(targetStartDate + 'T00:00:00');
@@ -544,13 +612,13 @@ export function useStore() {
       const dDate = new Date(targetMonday);
       dDate.setDate(targetMonday.getDate() + i);
       const sourceDay = source.days[d];
-      const clonedMeals: PlannedMeal[] = (sourceDay?.meals || []).map(m => {
+      const clonedMeals: PlannedMeal[] = (sourceDay?.meals || []).map((m) => {
         const { cooked, ...rest } = m; // a copied meal hasn't been cooked yet
         return { ...rest, id: crypto.randomUUID() };
       });
       targetDays[d] = {
         date: formatDateISO(dDate),
-        meals: clonedMeals
+        meals: clonedMeals,
       };
     });
 
@@ -561,46 +629,50 @@ export function useStore() {
       days: targetDays,
       status: 'draft',
       isCurrent: targetMondayStr === currentMondayStr,
-      lastModifiedAt: Date.now()
+      lastModifiedAt: Date.now(),
     };
 
-    const nextMealPlans = state.mealPlans.filter(p => p.startDate !== targetMondayStr);
+    const nextMealPlans = state.mealPlans.filter((p) => p.startDate !== targetMondayStr);
     nextMealPlans.push(newPlan);
 
     commit(state, { ...state, mealPlans: nextMealPlans });
   };
 
   const clearPastWeeks = async () => {
-    const nextMealPlans = state.mealPlans.filter(p => !isPastWeek(p.startDate));
+    const nextMealPlans = state.mealPlans.filter((p) => !isPastWeek(p.startDate));
     commit(state, { ...state, mealPlans: nextMealPlans });
   };
 
   const addBatch = async (batch: BatchItem) => {
-    const stamped = stampBatch(batch, state.batches.find(b => b.id === batch.id), currentUser);
-    const nextBatches = [...state.batches.filter(b => b.id !== batch.id), stamped];
+    const stamped = stampBatch(
+      batch,
+      state.batches.find((b) => b.id === batch.id),
+      currentUser,
+    );
+    const nextBatches = [...state.batches.filter((b) => b.id !== batch.id), stamped];
     commit(state, { ...state, batches: nextBatches });
   };
 
   const updateBatch = async (batch: BatchItem) => {
-    const nextBatches = state.batches.map(b => b.id === batch.id ? stampBatch(batch, b, currentUser) : b);
+    const nextBatches = state.batches.map((b) => (b.id === batch.id ? stampBatch(batch, b, currentUser) : b));
     commit(state, { ...state, batches: nextBatches });
   };
 
   const removeBatch = async (batchId: string) => {
-    const nextBatches = state.batches.filter(b => b.id !== batchId);
+    const nextBatches = state.batches.filter((b) => b.id !== batchId);
     commit(state, { ...state, batches: nextBatches });
   };
 
   /** Change one freezer batch, starting from its latest copy (null takes it out of the freezer). */
   const changeBatch = (id: string, change: (latest: BatchItem) => BatchItem | null) => {
     const s = stateRef.current;
-    const latest = s.batches.find(b => b.id === id);
+    const latest = s.batches.find((b) => b.id === id);
     if (!latest) return;
     const next = change(latest);
     if (next === latest) return;
     const nextBatches = next
-      ? s.batches.map(b => (b.id === id ? stampBatch(next, b, currentUser) : b))
-      : s.batches.filter(b => b.id !== id);
+      ? s.batches.map((b) => (b.id === id ? stampBatch(next, b, currentUser) : b))
+      : s.batches.filter((b) => b.id !== id);
     commit(s, { ...s, batches: nextBatches });
   };
 
@@ -629,19 +701,21 @@ export function useStore() {
    * worked out from what's on screen can be a moment behind (two changes in one tap, a window
    * left open while the other phone syncs).
    */
-  const updateShoppingList = async (listOrChange: ShoppingListItem[] | ((latest: ShoppingListItem[], latestState: AppState) => ShoppingListItem[])) => {
+  const updateShoppingList = async (
+    listOrChange: ShoppingListItem[] | ((latest: ShoppingListItem[], latestState: AppState) => ShoppingListItem[]),
+  ) => {
     const fromLatest = typeof listOrChange === 'function';
     const state = fromLatest ? stateRef.current : stateRaw;
     const list = fromLatest ? listOrChange(state.shoppingList, state) : listOrChange;
     if (fromLatest && list === state.shoppingList) return;
-    const processedList = list.map(item => {
-      const existingItem = state.shoppingList.find(i => i.id === item.id);
+    const processedList = list.map((item) => {
+      const existingItem = state.shoppingList.find((i) => i.id === item.id);
       if (!existingItem) {
         return {
           ...stampShoppingItem(item, undefined, currentUser),
           addedBy: item.addedBy || currentUser,
           lastModifiedBy: item.lastModifiedBy || currentUser,
-          lastModifiedAt: item.lastModifiedAt || Date.now()
+          lastModifiedAt: item.lastModifiedAt || Date.now(),
         };
       }
 
@@ -653,7 +727,7 @@ export function useStore() {
         ...stampShoppingItem(item, existingItem, currentUser),
         addedBy: existingItem.addedBy || item.addedBy || currentUser,
         lastModifiedBy: currentUser,
-        lastModifiedAt: Date.now()
+        lastModifiedAt: Date.now(),
       };
     });
 
@@ -691,7 +765,8 @@ export function useStore() {
   const restoreProduct = (undo: RemovedProduct) => editLatest((s) => restoreProductIn(s, undo));
 
   /** "Same as…": merge one product into another. */
-  const mergeProducts = (keepId: string, goneId: string) => editLatest((s) => mergeProductsIn(s, catalogForState(s), keepId, goneId));
+  const mergeProducts = (keepId: string, goneId: string) =>
+    editLatest((s) => mergeProductsIn(s, catalogForState(s), keepId, goneId));
   /** "Not the same": the tidy-up check stops pairing these two. */
   const markProductsDifferent = (aId: string, bId: string) => editLatest((s) => markDifferentIn(s, aId, bId));
   /** Back to the app's own products. */
@@ -723,13 +798,16 @@ export function useStore() {
     });
   };
 
-  const getHydratedGroceryItem = (id: string): GroceryItem | undefined => catalogForState(stateRef.current).byId.get(id)?.item;
+  const getHydratedGroceryItem = (id: string): GroceryItem | undefined =>
+    catalogForState(stateRef.current).byId.get(id)?.item;
 
   /**
    * Change settings. Pass a function to work out the change from the latest settings (adding
    * to a list such as ratings or past shops); return null to change nothing.
    */
-  const updatePreferences = async (prefsOrChange: Partial<UserPreferences> | ((latest: UserPreferences) => Partial<UserPreferences> | null)) => {
+  const updatePreferences = async (
+    prefsOrChange: Partial<UserPreferences> | ((latest: UserPreferences) => Partial<UserPreferences> | null),
+  ) => {
     const base = typeof prefsOrChange === 'function' ? stateRef.current : state;
     const current = base.preferences || DEFAULT_PREFERENCES;
     const prefs = typeof prefsOrChange === 'function' ? prefsOrChange(current) : prefsOrChange;
@@ -739,9 +817,20 @@ export function useStore() {
 
   /** Settings back to how they started; keeps your staples, favourites, aisle order and shop history. */
   const resetPreferences = async () => {
-    const keep = ['recurringItems', 'favouriteItems', 'aisleOrder', 'shopRoute', 'shopHistory', 'catalogVersion', 'ratings', 'notStaples', 'notProducts'] as const;
+    const keep = [
+      'recurringItems',
+      'favouriteItems',
+      'aisleOrder',
+      'shopRoute',
+      'shopHistory',
+      'catalogVersion',
+      'ratings',
+      'notStaples',
+      'notProducts',
+    ] as const;
     const kept: Partial<UserPreferences> = {};
-    for (const k of keep) if ((state.preferences as any)?.[k] !== undefined) (kept as any)[k] = (state.preferences as any)[k];
+    for (const k of keep)
+      if ((state.preferences as any)?.[k] !== undefined) (kept as any)[k] = (state.preferences as any)[k];
     commit(state, { ...state, preferences: { ...DEFAULT_PREFERENCES, ...kept } });
   };
 
@@ -787,7 +876,9 @@ export function useStore() {
         gistFilesRef.current = saved.files;
       } else if (syncMode === 'merge') {
         if (remoteState) {
-          replaceState(normalizeState(mergeAppStates(dropDefaultsMissingFrom(stateRef.current, remoteState), remoteState)));
+          replaceState(
+            normalizeState(mergeAppStates(dropDefaultsMissingFrom(stateRef.current, remoteState), remoteState)),
+          );
         }
         const saved = await saveGist(config, stateRef.current, gistFilesRef.current);
         etagRef.current = saved.etag;
@@ -895,6 +986,6 @@ export function useStore() {
     saveGithubConfig,
     createGistFromLocal,
     clearGithubConfig,
-    manualSync
+    manualSync,
   };
 }

@@ -9,7 +9,16 @@
 import { currentCatalog } from './current';
 import { matchProduct, sizeOfUnit, type Catalog, type Product } from './catalog';
 import { groupingKey, displayName, matchKey } from './names';
-import { canonicalUnit, unitInfo, vagueUnit, formatUnit, formatAmount, parseAmount, formatCookingAmount, largeUnitQuantity } from './units';
+import {
+  canonicalUnit,
+  unitInfo,
+  vagueUnit,
+  formatUnit,
+  formatAmount,
+  parseAmount,
+  formatCookingAmount,
+  largeUnitQuantity,
+} from './units';
 
 export interface IngredientInput {
   name: string;
@@ -83,7 +92,12 @@ const describe = (amount: number, unit: string) => {
 
 const SMALL_ONLY = new Set(['tsp', 'pinch', 'dash', 'splash', 'drizzle']);
 
-interface Part { amount: number; unit: string; source?: string; valid: boolean }
+interface Part {
+  amount: number;
+  unit: string;
+  source?: string;
+  valid: boolean;
+}
 
 /**
  * Combine ingredients (already scaled to the servings you're cooking) into
@@ -98,13 +112,17 @@ export function buildShoppingLines(inputs: IngredientInput[], catalog: Catalog):
     const amount = parseAmount(input.amount);
     const valid = isFinite(amount) && amount > 0;
     const unit = String(input.unit ?? '');
-    const product = matchProduct(catalog, input.name, { groceryId: input.groceryId ?? undefined, unit, amount: valid ? amount : undefined });
+    const product = matchProduct(catalog, input.name, {
+      groceryId: input.groceryId ?? undefined,
+      unit,
+      amount: valid ? amount : undefined,
+    });
     const key = product ? `p:${product.id}` : `n:${groupingKey(input.name) || matchKey(input.name)}`;
     if (!groups.has(key)) {
       groups.set(key, {
         product,
         name: product ? product.name : displayName(input.name),
-        category: product ? product.category : (input.category || 'Other'),
+        category: product ? product.category : input.category || 'Other',
         parts: [],
       });
       order.push(key);
@@ -116,7 +134,11 @@ export function buildShoppingLines(inputs: IngredientInput[], catalog: Catalog):
   for (const key of order) {
     const g = groups.get(key)!;
     const sources = [...new Set(g.parts.map((p) => p.source).filter((s): s is string => Boolean(s)))];
-    lines.push(g.product ? productLine(key, g.product, g.parts, sources) : unknownLine(key, g.name, g.category, g.parts, sources));
+    lines.push(
+      g.product
+        ? productLine(key, g.product, g.parts, sources)
+        : unknownLine(key, g.name, g.category, g.parts, sources),
+    );
   }
   return lines;
 }
@@ -181,15 +203,29 @@ function productLine(key: string, product: Product, parts: Part[], sources: stri
 
   // Couldn't convert some of it (e.g. "1 handful" of something sold by the each).
   const needsCheck = leftovers.length > 0 && !product.cupboard;
-  const note = leftovers.length > 0
-    ? (converted > 0 ? `also needs ${leftovers.join(', ')}` : `recipe says ${leftovers.join(', ')}`)
-    : undefined;
+  const note =
+    leftovers.length > 0
+      ? converted > 0
+        ? `also needs ${leftovers.join(', ')}`
+        : `recipe says ${leftovers.join(', ')}`
+      : undefined;
 
   const step = bought ? product.step : 1;
-  const needed = bought && product.buySize ? neededText(product, parts, total, bought.amount * product.buySize) : undefined;
+  const needed =
+    bought && product.buySize ? neededText(product, parts, total, bought.amount * product.buySize) : undefined;
   return {
-    key, name: product.name, amount, unit, category: product.category, productId: product.id,
-    step, cupboard: product.cupboard, needsCheck, note, sources, ...(needed ? { needed } : {}),
+    key,
+    name: product.name,
+    amount,
+    unit,
+    category: product.category,
+    productId: product.id,
+    step,
+    cupboard: product.cupboard,
+    needsCheck,
+    note,
+    sources,
+    ...(needed ? { needed } : {}),
   };
 }
 
@@ -205,18 +241,43 @@ function unknownLine(key: string, name: string, category: string, parts: Part[],
     if (!SMALL_ONLY.has(u)) allSmall = false;
     const info = unitInfo(u);
     const vague = vagueUnit(u);
-    let kind: string; let amount: number; let unit: string;
-    if (info.dimension === 'mass' || vague?.dimension === 'mass') { kind = 'mass'; amount = part.amount * (vague ? vague.factor : info.factor); unit = 'g'; }
-    else if (info.dimension === 'volume' || vague?.dimension === 'volume') { kind = 'volume'; amount = part.amount * (vague ? vague.factor : info.factor); unit = 'ml'; }
-    else { kind = `count:${u}`; amount = part.amount; unit = u; }
+    let kind: string;
+    let amount: number;
+    let unit: string;
+    if (info.dimension === 'mass' || vague?.dimension === 'mass') {
+      kind = 'mass';
+      amount = part.amount * (vague ? vague.factor : info.factor);
+      unit = 'g';
+    } else if (info.dimension === 'volume' || vague?.dimension === 'volume') {
+      kind = 'volume';
+      amount = part.amount * (vague ? vague.factor : info.factor);
+      unit = 'ml';
+    } else {
+      kind = `count:${u}`;
+      amount = part.amount;
+      unit = u;
+    }
     const cur = byKind.get(kind);
     byKind.set(kind, { amount: (cur?.amount ?? 0) + amount, unit });
   }
 
   // Only teaspoons/pinches of something unknown: almost certainly a spice or seasoning.
   if (anyValid && allSmall) {
-    return { key, name, amount: 1, unit: '', category: category || 'Pantry', step: 1, cupboard: true, needsCheck: false,
-      note: `recipe uses ${parts.filter((p) => p.valid).map((p) => describe(p.amount, p.unit)).join(' + ')}`, sources };
+    return {
+      key,
+      name,
+      amount: 1,
+      unit: '',
+      category: category || 'Pantry',
+      step: 1,
+      cupboard: true,
+      needsCheck: false,
+      note: `recipe uses ${parts
+        .filter((p) => p.valid)
+        .map((p) => describe(p.amount, p.unit))
+        .join(' + ')}`,
+      sources,
+    };
   }
   if (byKind.size === 0) {
     return { key, name, amount: 1, unit: '', category, step: 1, cupboard: false, needsCheck: false, sources };
@@ -228,8 +289,14 @@ function unknownLine(key: string, name: string, category: string, parts: Part[],
   const amount = neatRoundUp(preferred.amount, preferred.unit);
   const others = kinds.filter((k) => k !== preferred).map((k) => describe(round2(k.amount), k.unit));
   return {
-    key, name, amount, unit: formatUnit(preferred.unit, amount), category, step: 1,
-    cupboard: false, needsCheck: others.length > 0,
+    key,
+    name,
+    amount,
+    unit: formatUnit(preferred.unit, amount),
+    category,
+    step: 1,
+    cupboard: false,
+    needsCheck: others.length > 0,
     note: others.length > 0 ? `also needs ${others.join(', ')}` : undefined,
     sources,
   };
@@ -244,23 +311,54 @@ export function shoppingQuantityFor(
   name: string,
   amount: number | string,
   unit?: string,
-  category?: string
-): { amount: number; unit: string; step: number; category?: string; cupboard: boolean; needsCheck: boolean; note?: string; name: string; productId?: string } {
+  category?: string,
+): {
+  amount: number;
+  unit: string;
+  step: number;
+  category?: string;
+  cupboard: boolean;
+  needsCheck: boolean;
+  note?: string;
+  name: string;
+  productId?: string;
+} {
   const [line] = buildShoppingLines([{ name, amount, unit, category }], catalog);
   if (!line) return { amount: 1, unit: '', step: 1, category, cupboard: false, needsCheck: false, name };
-  return { amount: line.amount, unit: line.unit, step: line.step, category: line.category, cupboard: line.cupboard, needsCheck: line.needsCheck, note: line.note, name: line.name, productId: line.productId };
+  return {
+    amount: line.amount,
+    unit: line.unit,
+    step: line.step,
+    category: line.category,
+    cupboard: line.cupboard,
+    needsCheck: line.needsCheck,
+    note: line.note,
+    name: line.name,
+    productId: line.productId,
+  };
 }
 
 /**
  * Quantity for something added to the list by hand ("Milk" x 2): `steps` is how
  * many of the product's buying steps, e.g. 2 x 500 ml, 1 x 6 eggs, 3 cans.
  */
-export function quantityForAddedItem(catalog: Catalog, name: string, steps = 1): { amount: number; unit: string; step: number; category?: string; name: string; productId?: string } {
+export function quantityForAddedItem(
+  catalog: Catalog,
+  name: string,
+  steps = 1,
+): { amount: number; unit: string; step: number; category?: string; name: string; productId?: string } {
   const product = matchProduct(catalog, name);
   const n = Math.max(1, Math.round(isFinite(steps) ? steps : 1));
   if (!product) return { amount: n, unit: n === 1 ? 'item' : 'items', step: 1, name };
   const amount = round2(n * product.step);
-  return { amount, unit: formatUnit(product.buyUnit, amount), step: product.step, category: product.category, name: product.name, productId: product.id };
+  return {
+    amount,
+    unit: formatUnit(product.buyUnit, amount),
+    step: product.step,
+    category: product.category,
+    name: product.name,
+    productId: product.id,
+  };
 }
 
 /** The +/- step for an item already on the list. */

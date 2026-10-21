@@ -71,16 +71,13 @@ const partName = (n: number) => `${PART_PREFIX}${n}${PART_SUFFIX}`;
 
 /** Compact JSON with every non-ASCII character escaped, so 1 character = 1 byte. */
 function toAsciiJson(state: AppState): string {
-  return JSON.stringify(state).replace(
-    /[\u007f-￿]/g,
-    (ch) => '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0')
-  );
+  return JSON.stringify(state).replace(/[\u007f-￿]/g, (ch) => '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0'));
 }
 
 /** Turn app data into the Gist files to write (null = delete that file). */
 export function encodeStateToGistFiles(
   state: AppState,
-  existingFiles: string[] = []
+  existingFiles: string[] = [],
 ): Record<string, { content: string } | null> {
   const json = toAsciiJson(state);
   const files: Record<string, { content: string } | null> = {};
@@ -157,7 +154,9 @@ async function request(url: string, init: RequestInit, _action: string): Promise
   try {
     return await fetch(url, { cache: 'no-store', ...init });
   } catch {
-    throw new Error("Can't reach GitHub (offline?). Changes are saved on this phone and will sync when you're back online.");
+    throw new Error(
+      "Can't reach GitHub (offline?). Changes are saved on this phone and will sync when you're back online.",
+    );
   }
 }
 
@@ -213,7 +212,7 @@ export async function fetchGist(config: GistConfig, etag?: string | null): Promi
 export async function saveGist(
   config: GistConfig,
   state: AppState,
-  existingFiles: string[] = []
+  existingFiles: string[] = [],
 ): Promise<{ etag: string | null; files: string[] }> {
   const response = await request(
     `${API}/gists/${config.gistId}`,
@@ -225,7 +224,7 @@ export async function saveGist(
         files: encodeStateToGistFiles(state, existingFiles),
       }),
     },
-    'update'
+    'update',
   );
 
   if (!response.ok) {
@@ -239,7 +238,7 @@ export async function saveGist(
 /** Create a new private Gist holding the given state. */
 export async function createPrivateGist(
   pat: string,
-  initialState: AppState
+  initialState: AppState,
 ): Promise<{ id: string; etag: string | null; files: string[] }> {
   const files = encodeStateToGistFiles(initialState);
   const response = await request(
@@ -249,7 +248,7 @@ export async function createPrivateGist(
       headers: authHeaders(pat, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ description: 'Family Meal Planner App Data', public: false, files }),
     },
-    'create'
+    'create',
   );
 
   if (!response.ok) {

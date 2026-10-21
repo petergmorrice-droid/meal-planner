@@ -5,7 +5,18 @@ import { BatchItem, Recipe } from '../../types';
 export type QuickMeal = 'takeout' | 'eating_out' | 'no_meal';
 
 export default function DayPickerModal({
-  day, replacing, recipes, search, onSearch, earlier, others, batches, onRecipe, onQuick, onBatch, onClose,
+  day,
+  replacing,
+  recipes,
+  search,
+  onSearch,
+  earlier,
+  others,
+  batches,
+  onRecipe,
+  onQuick,
+  onBatch,
+  onClose,
 }: {
   day: string;
   /** The day has a meal already (this replaces it). */
@@ -31,7 +42,7 @@ export default function DayPickerModal({
     >
       <div
         className="bg-white rounded-2xl p-5 max-w-md w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150 max-h-[86vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-zinc-100 shrink-0">
           <div>
@@ -58,7 +69,7 @@ export default function DayPickerModal({
                 inputMode="search"
                 autoComplete="off"
                 value={search}
-                onChange={e => onSearch(e.target.value)}
+                onChange={(e) => onSearch(e.target.value)}
                 placeholder="Search recipes or ingredients"
                 aria-label="Search recipes"
                 enterKeyHint="search"
@@ -79,7 +90,9 @@ export default function DayPickerModal({
 
           {earlier.length > 0 && (
             <div data-picker-earlier>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800 block mb-1.5">Cooked earlier this week</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800 block mb-1.5">
+                Cooked earlier this week
+              </span>
               <div className="space-y-1.5">
                 {earlier.map(({ recipe: r, day: cookedOn }) => (
                   <button
@@ -106,50 +119,54 @@ export default function DayPickerModal({
 
           {/* Quick choices */}
           {!search.trim() && (
-          <div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">Quick Options</span>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => onQuick('takeout')}
-                className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 font-medium text-xs text-zinc-800 flex flex-col items-center justify-center gap-1.5 transition-colors text-center cursor-pointer shadow-2xs group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-orange-100/80 text-orange-600 flex items-center justify-center transition-transform group-hover:scale-110">
-                  <ShoppingBag className="w-4 h-4" />
-                </div>
-                <span className="font-semibold text-xs text-zinc-900 leading-tight">Takeaway</span>
-                <span className="text-[11px] text-zinc-400">Add note</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onQuick('eating_out')}
-                className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 font-medium text-xs text-zinc-800 flex flex-col items-center justify-center gap-1.5 transition-colors text-center cursor-pointer shadow-2xs group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-blue-100/80 text-blue-600 flex items-center justify-center transition-transform group-hover:scale-110">
-                  <Utensils className="w-4 h-4" />
-                </div>
-                <span className="font-semibold text-xs text-zinc-900 leading-tight">Eating out</span>
-                <span className="text-[11px] text-zinc-400">Add note</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onQuick('no_meal')}
-                className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 font-medium text-xs text-zinc-800 flex flex-col items-center justify-center gap-1.5 transition-colors text-center cursor-pointer shadow-2xs group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-zinc-200/80 text-zinc-600 flex items-center justify-center transition-transform group-hover:scale-110">
-                  <X className="w-4 h-4" />
-                </div>
-                <span className="font-semibold text-xs text-zinc-900 leading-tight">No Meal</span>
-                <span className="text-[11px] text-zinc-400">Add note</span>
-              </button>
+            <div>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block mb-1.5">
+                Quick Options
+              </span>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onQuick('takeout')}
+                  className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 font-medium text-xs text-zinc-800 flex flex-col items-center justify-center gap-1.5 transition-colors text-center cursor-pointer shadow-2xs group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-orange-100/80 text-orange-600 flex items-center justify-center transition-transform group-hover:scale-110">
+                    <ShoppingBag className="w-4 h-4" />
+                  </div>
+                  <span className="font-semibold text-xs text-zinc-900 leading-tight">Takeaway</span>
+                  <span className="text-[11px] text-zinc-400">Add note</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onQuick('eating_out')}
+                  className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 font-medium text-xs text-zinc-800 flex flex-col items-center justify-center gap-1.5 transition-colors text-center cursor-pointer shadow-2xs group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-100/80 text-blue-600 flex items-center justify-center transition-transform group-hover:scale-110">
+                    <Utensils className="w-4 h-4" />
+                  </div>
+                  <span className="font-semibold text-xs text-zinc-900 leading-tight">Eating out</span>
+                  <span className="text-[11px] text-zinc-400">Add note</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onQuick('no_meal')}
+                  className="p-2.5 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 font-medium text-xs text-zinc-800 flex flex-col items-center justify-center gap-1.5 transition-colors text-center cursor-pointer shadow-2xs group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-zinc-200/80 text-zinc-600 flex items-center justify-center transition-transform group-hover:scale-110">
+                    <X className="w-4 h-4" />
+                  </div>
+                  <span className="font-semibold text-xs text-zinc-900 leading-tight">No Meal</span>
+                  <span className="text-[11px] text-zinc-400">Add note</span>
+                </button>
+              </div>
             </div>
-          </div>
           )}
 
           {/* Freezer batches, if any */}
           {batches.length > 0 && (
             <div>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1.5">Freezer Batches</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1.5">
+                Freezer Batches
+              </span>
               <div className="border border-zinc-200 rounded-xl overflow-hidden divide-y divide-zinc-100 bg-white">
                 {batches.map((batch: BatchItem) => {
                   const recipe = batch.recipeId ? recipes.find((r: Recipe) => r.id === batch.recipeId) : null;
@@ -182,7 +199,9 @@ export default function DayPickerModal({
 
           {/* The cook book */}
           <div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1.5">Cook Book Recipes</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1.5">
+              Cook Book Recipes
+            </span>
             <div className="space-y-1.5" data-picker-recipes>
               {others.map((r: Recipe) => (
                 <button

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { AISLE_LOOK, AisleIcon } from './AisleLook';
-import type  { FoodAisle } from '../utils';
+import type { FoodAisle } from '../utils';
 
 /** What a row needs for the aisle's "left" count. */
 type Countable = { checked?: boolean; outOfStock?: boolean };
@@ -18,19 +18,32 @@ interface ShopAisleGroupProps<T extends Countable> {
   allDone?: boolean;
 }
 
-export default function ShopAisleGroup<T extends Countable>({ aisle, info, items, renderItem, compact = false, allDone = false }: ShopAisleGroupProps<T>) {
+export default function ShopAisleGroup<T extends Countable>({
+  aisle,
+  info,
+  items,
+  renderItem,
+  compact = false,
+  allDone = false,
+}: ShopAisleGroupProps<T>) {
   // Folded when finished, unless you open it again; your own choice wins until it's finished.
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
-  useEffect(() => { if (allDone) setUserOpen(null); }, [allDone]);
+  useEffect(() => {
+    if (allDone) setUserOpen(null);
+  }, [allDone]);
   const isCollapsed = userOpen === null ? allDone : !userOpen;
   const setIsCollapsed = (collapsed: boolean) => setUserOpen(!collapsed);
-  const itemsLeft = items.filter(i => !i.checked && !i.outOfStock).length;
+  const itemsLeft = items.filter((i) => !i.checked && !i.outOfStock).length;
   const look = AISLE_LOOK[aisle as FoodAisle];
 
   if (compact) {
     // Slim one-line header that stays in view while you scroll its aisle.
     return (
-      <section className={`rounded-xl border overflow-clip ${allDone ? 'bg-emerald-50/60 border-emerald-200/70' : 'bg-white border-zinc-200/70'}`} data-aisle={aisle} data-aisle-done={allDone || undefined}>
+      <section
+        className={`rounded-xl border overflow-clip ${allDone ? 'bg-emerald-50/60 border-emerald-200/70' : 'bg-white border-zinc-200/70'}`}
+        data-aisle={aisle}
+        data-aisle-done={allDone || undefined}
+      >
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -39,21 +52,25 @@ export default function ShopAisleGroup<T extends Countable>({ aisle, info, items
           data-aisle-header={info.name}
         >
           <span className="flex items-center gap-1.5 min-w-0">
-            <ChevronDown className={`w-4 h-4 text-zinc-500 shrink-0 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+            <ChevronDown
+              className={`w-4 h-4 text-zinc-500 shrink-0 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
+            />
             {look && <AisleIcon aisle={aisle as FoodAisle} />}
-            <span className={`text-xs font-bold uppercase tracking-wider truncate ${allDone ? 'text-emerald-800' : look ? look.title : 'text-zinc-700'}`}>{info.name}</span>
+            <span
+              className={`text-xs font-bold uppercase tracking-wider truncate ${allDone ? 'text-emerald-800' : look ? look.title : 'text-zinc-700'}`}
+            >
+              {info.name}
+            </span>
           </span>
           {allDone ? (
-            <span className="text-xs font-semibold text-emerald-700 shrink-0 inline-flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> done · {items.length}</span>
+            <span className="text-xs font-semibold text-emerald-700 shrink-0 inline-flex items-center gap-1">
+              <CheckCircle2 className="w-4 h-4" /> done · {items.length}
+            </span>
           ) : (
             <span className="text-xs font-semibold text-zinc-500 tabular-nums shrink-0">{itemsLeft} left</span>
           )}
         </button>
-        {!isCollapsed && (
-          <div className="divide-y divide-zinc-100 px-2">
-            {items.map(renderItem)}
-          </div>
-        )}
+        {!isCollapsed && <div className="divide-y divide-zinc-100 px-2">{items.map(renderItem)}</div>}
       </section>
     );
   }
@@ -68,7 +85,9 @@ export default function ShopAisleGroup<T extends Countable>({ aisle, info, items
           data-aisle-header={info.name}
         >
           <div className="flex items-center gap-2">
-            <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+            <ChevronDown
+              className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
+            />
             {look && <AisleIcon aisle={aisle as FoodAisle} />}
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${info.colorClass}`}>
               {info.name}
@@ -80,11 +99,7 @@ export default function ShopAisleGroup<T extends Countable>({ aisle, info, items
         </button>
       </div>
 
-      {!isCollapsed && (
-        <div className="space-y-1.5 pt-1">
-          {items.map(renderItem)}
-        </div>
-      )}
+      {!isCollapsed && <div className="space-y-1.5 pt-1">{items.map(renderItem)}</div>}
     </div>
   );
 }

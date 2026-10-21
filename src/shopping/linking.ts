@@ -37,7 +37,7 @@ export function namesNeedingSuggestion(ingredients: LinkableIngredient[], catalo
 export function linkIngredients<T extends LinkableIngredient>(
   ingredients: T[],
   catalog: Catalog,
-  suggestions: Record<string, string> = {}
+  suggestions: Record<string, string> = {},
 ): { ingredients: (T & { groceryId?: string; linkSource?: LinkSource })[]; unmapped: T[] } {
   const unmapped: T[] = [];
   const out = ingredients.map((ing) => {
@@ -46,11 +46,17 @@ export function linkIngredients<T extends LinkableIngredient>(
     let product: Product | null = null;
     let source: LinkSource | undefined;
     if (m?.how === 'exact') {
-      product = m.product; source = 'exact';
+      product = m.product;
+      source = 'exact';
     } else {
       const suggested = suggestions[ing.name] ? productByName(catalog, suggestions[ing.name]) : null;
-      if (suggested) { product = suggested; source = 'gemini'; }
-      else if (m?.how === 'partial') { product = m.product; source = 'partial'; }
+      if (suggested) {
+        product = suggested;
+        source = 'gemini';
+      } else if (m?.how === 'partial') {
+        product = m.product;
+        source = 'partial';
+      }
     }
     if (!product) {
       const { groceryId: _drop, ...rest } = ing;

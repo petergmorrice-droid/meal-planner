@@ -6,8 +6,14 @@
  */
 import type { GroceryItem } from '../types';
 import {
-  buildCatalog, matchProduct, shoppingQuantityFor, quantityForAddedItem as addedItemQuantity,
-  stepForItem, matchKey, currentCatalog, type Catalog,
+  buildCatalog,
+  matchProduct,
+  shoppingQuantityFor,
+  quantityForAddedItem as addedItemQuantity,
+  stepForItem,
+  matchKey,
+  currentCatalog,
+  type Catalog,
 } from '../shopping';
 
 export interface ConvertedIngredient {
@@ -56,7 +62,13 @@ export function findGroceryDatabaseMatch(ingredientName: string, db: any[]): any
 }
 
 /** +/- step for an item on the shopping list. */
-export function getIngredientStep(item: { name: string; unit?: string; amount?: number; category?: string; groceryId?: string }): number {
+export function getIngredientStep(item: {
+  name: string;
+  unit?: string;
+  amount?: number;
+  category?: string;
+  groceryId?: string;
+}): number {
   return stepForItem(getCatalog(), item);
 }
 
@@ -68,8 +80,17 @@ export function convertToShoppingQuantity(
   name: string,
   rawAmount: number,
   rawUnit: string = '',
-  category: string = ''
-): { amount: number; unit: string; step: number; category?: string; checkCupboard?: boolean; needsCheck?: boolean; quantityNote?: string; groceryId?: string } {
+  category: string = '',
+): {
+  amount: number;
+  unit: string;
+  step: number;
+  category?: string;
+  checkCupboard?: boolean;
+  needsCheck?: boolean;
+  quantityNote?: string;
+  groceryId?: string;
+} {
   const r = shoppingQuantityFor(getCatalog(), name, rawAmount, rawUnit, category);
   return {
     amount: r.amount,
@@ -84,7 +105,10 @@ export function convertToShoppingQuantity(
 }
 
 /** Something added to the list by hand: `count` packs of it (1 = one pack of milk, one 400 g can, six eggs...). */
-export function quantityForAddedItem(name: string, count = 1): { amount: number; unit: string; step: number; category?: string; name: string; groceryId?: string } {
+export function quantityForAddedItem(
+  name: string,
+  count = 1,
+): { amount: number; unit: string; step: number; category?: string; name: string; groceryId?: string } {
   const r = addedItemQuantity(getCatalog(), name, count);
   return { amount: r.amount, unit: r.unit, step: r.step, category: r.category, name: r.name, groceryId: r.productId };
 }

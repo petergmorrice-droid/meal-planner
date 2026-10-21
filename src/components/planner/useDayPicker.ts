@@ -9,25 +9,30 @@ import type { AppStore } from '../../store';
 
 export function useDayPicker(store: AppStore, currentPlan: MealPlan | undefined, selectedDay: string | null) {
   const [pickerSearch, setPickerSearch] = useState('');
-  useEffect(() => { setPickerSearch(''); }, [selectedDay]);
+  useEffect(() => {
+    setPickerSearch('');
+  }, [selectedDay]);
 
   const pickerRecipes = useMemo(() => {
     const q = pickerSearch.trim().toLowerCase();
-    const matches = (r: Recipe) => !q ||
+    const matches = (r: Recipe) =>
+      !q ||
       r.name.toLowerCase().includes(q) ||
-      r.tags?.some(t => t.toLowerCase().includes(q)) ||
-      r.ingredients?.some(i => (i?.name || '').toLowerCase().includes(q));
-    let all: Recipe[] = store.state.recipes.filter(matches).sort((a: Recipe, b: Recipe) => a.name.localeCompare(b.name));
+      r.tags?.some((t) => t.toLowerCase().includes(q)) ||
+      r.ingredients?.some((i) => (i?.name || '').toLowerCase().includes(q));
+    let all: Recipe[] = store.state.recipes
+      .filter(matches)
+      .sort((a: Recipe, b: Recipe) => a.name.localeCompare(b.name));
     const earlier: { recipe: Recipe; day: string }[] = [];
     if (currentPlan && selectedDay) {
       const at = DAYS_OF_WEEK.indexOf(selectedDay);
       for (let i = at - 1; i >= Math.max(0, at - 3); i--) {
         const m = currentPlan.days[DAYS_OF_WEEK[i]]?.meals?.[0];
-        if (!m || m.type !== 'recipe' || !m.recipeId || earlier.some(e => e.recipe.id === m.recipeId)) continue;
+        if (!m || m.type !== 'recipe' || !m.recipeId || earlier.some((e) => e.recipe.id === m.recipeId)) continue;
         const r = all.find((x: Recipe) => x.id === m.recipeId);
         if (r) earlier.push({ recipe: r, day: DAYS_OF_WEEK[i] });
       }
-      all = all.filter((r: Recipe) => !earlier.some(e => e.recipe.id === r.id));
+      all = all.filter((r: Recipe) => !earlier.some((e) => e.recipe.id === r.id));
     }
     return { all, earlier };
   }, [store.state.recipes, pickerSearch, currentPlan, selectedDay]);

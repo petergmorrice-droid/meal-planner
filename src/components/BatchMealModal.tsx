@@ -1,20 +1,8 @@
 import { useState, useMemo } from 'react';
-import {
-  X,
-  Search,
-  Plus,
-  Minus,
-  Check,
-  Clock,
-  ArrowLeft,
-  Utensils,
-  ChefHat,
-  Sparkles,
-  BookOpen,
-} from 'lucide-react';
+import { X, Search, Plus, Minus, Check, Clock, ArrowLeft, Utensils, ChefHat, Sparkles, BookOpen } from 'lucide-react';
 import { Recipe } from '../types';
 import { convertToShoppingQuantity } from '../utils';
-import type  { AppStore } from '../store';
+import type { AppStore } from '../store';
 
 interface BatchMealModalProps {
   store: AppStore;
@@ -26,7 +14,7 @@ interface BatchMealModalProps {
       recipeId?: string;
       portions?: number;
       alsoAddToFreezer?: boolean;
-    }
+    },
   ) => void;
   weekLabel: string;
 }
@@ -46,12 +34,12 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
   const [activeTab, setActiveTab] = useState<'cookbook' | 'custom'>('cookbook');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
-  
+
   // Selected recipe state
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [portions, setPortions] = useState<number>(4);
   const [alsoAddToFreezer, setAlsoAddToFreezer] = useState<boolean>(false);
-  
+
   // Scaled ingredients editable list
   const [ingredientList, setIngredientList] = useState<ScaledIngredientItem[]>([]);
 
@@ -60,34 +48,34 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
   const [customPortions, setCustomPortions] = useState(4);
   const [customIngredientLines, setCustomIngredientLines] = useState<
     { id: string; name: string; amount: number; unit: string; category: string }[]
-  >([
-    { id: '1', name: '', amount: 1, unit: 'item', category: 'Produce' }
-  ]);
+  >([{ id: '1', name: '', amount: 1, unit: 'item', category: 'Produce' }]);
 
   const recipes: Recipe[] = store?.state?.recipes || [];
 
   // Extract all unique tags from recipes
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    recipes.forEach(r => {
-      r.tags?.forEach(t => tags.add(t));
+    recipes.forEach((r) => {
+      r.tags?.forEach((t) => tags.add(t));
     });
     return Array.from(tags);
   }, [recipes]);
 
   // Filter recipes based on search and tag
   const filteredRecipes = useMemo(() => {
-    return recipes.filter(recipe => {
+    return recipes.filter((recipe) => {
       const q = searchTerm.trim().toLowerCase();
-      const matchesSearch = !q || 
+      const matchesSearch =
+        !q ||
         recipe.name.toLowerCase().includes(q) ||
         (recipe.description && recipe.description.toLowerCase().includes(q)) ||
-        recipe.ingredients.some(ing => ing.name.toLowerCase().includes(q));
+        recipe.ingredients.some((ing) => ing.name.toLowerCase().includes(q));
 
-      const matchesTag = selectedTag === 'all' || 
+      const matchesTag =
+        selectedTag === 'all' ||
         (selectedTag === 'vegetarian' && (recipe.isVegetarian || recipe.isVegan)) ||
-        (selectedTag === 'quick' && ((recipe.prepTime || 0) + (recipe.cookTime || 0)) <= 30) ||
-        recipe.tags?.some(t => t.toLowerCase() === selectedTag.toLowerCase());
+        (selectedTag === 'quick' && (recipe.prepTime || 0) + (recipe.cookTime || 0) <= 30) ||
+        recipe.tags?.some((t) => t.toLowerCase() === selectedTag.toLowerCase());
 
       return matchesSearch && matchesTag;
     });
@@ -109,9 +97,10 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
     const scale = currentPortions / baseServings;
 
     const items: ScaledIngredientItem[] = recipe.ingredients.map((ing, idx) => {
-      const baseNum = typeof ing.amount === 'number' && !isNaN(ing.amount) ? ing.amount : parseFloat(String(ing.amount)) || 1;
+      const baseNum =
+        typeof ing.amount === 'number' && !isNaN(ing.amount) ? ing.amount : parseFloat(String(ing.amount)) || 1;
       const rawScaled = Math.max(0.1, Math.round(baseNum * scale * 100) / 100);
-      
+
       const converted = convertToShoppingQuantity(ing.name, rawScaled, ing.unit || '', ing.category || '');
 
       return {
@@ -122,7 +111,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
         category: ing.category || converted.category || 'Other',
         selected: true,
         baseAmount: baseNum,
-        baseUnit: ing.unit || ''
+        baseUnit: ing.unit || '',
       };
     });
 
@@ -137,40 +126,42 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
       const baseServings = selectedRecipe.servings && selectedRecipe.servings > 0 ? selectedRecipe.servings : 2;
       const scale = safePortions / baseServings;
 
-      setIngredientList(prev => prev.map(item => {
-        const rawScaled = Math.max(0.1, Math.round(item.baseAmount * scale * 100) / 100);
-        const converted = convertToShoppingQuantity(item.name, rawScaled, item.baseUnit, item.category);
-        return {
-          ...item,
-          amount: converted.amount,
-          unit: converted.unit || item.baseUnit
-        };
-      }));
+      setIngredientList((prev) =>
+        prev.map((item) => {
+          const rawScaled = Math.max(0.1, Math.round(item.baseAmount * scale * 100) / 100);
+          const converted = convertToShoppingQuantity(item.name, rawScaled, item.baseUnit, item.category);
+          return {
+            ...item,
+            amount: converted.amount,
+            unit: converted.unit || item.baseUnit,
+          };
+        }),
+      );
     }
   };
 
   // Toggle individual ingredient selection
   const toggleIngredientSelection = (id: string) => {
-    setIngredientList(prev => prev.map(item => 
-      item.id === id ? { ...item, selected: !item.selected } : item
-    ));
+    setIngredientList((prev) => prev.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item)));
   };
 
   // Select all or deselect all ingredients
   const toggleSelectAll = (select: boolean) => {
-    setIngredientList(prev => prev.map(item => ({ ...item, selected: select })));
+    setIngredientList((prev) => prev.map((item) => ({ ...item, selected: select })));
   };
 
   // Adjust amount for a specific ingredient
   const handleAdjustIngredientAmount = (id: string, delta: number) => {
-    setIngredientList(prev => prev.map(item => {
-      if (item.id === id) {
-        const step = item.amount >= 100 ? 50 : item.amount >= 10 ? 5 : 1;
-        const nextAmount = Math.max(0.5, Math.round((item.amount + delta * step) * 10) / 10);
-        return { ...item, amount: nextAmount };
-      }
-      return item;
-    }));
+    setIngredientList((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const step = item.amount >= 100 ? 50 : item.amount >= 10 ? 5 : 1;
+          const nextAmount = Math.max(0.5, Math.round((item.amount + delta * step) * 10) / 10);
+          return { ...item, amount: nextAmount };
+        }
+        return item;
+      }),
+    );
   };
 
   // Submit recipe batch ingredients to shopping list
@@ -178,12 +169,12 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
     if (!selectedRecipe) return;
 
     const selectedIngredients = ingredientList
-      .filter(item => item.selected && item.amount > 0)
-      .map(item => ({
+      .filter((item) => item.selected && item.amount > 0)
+      .map((item) => ({
         name: item.name,
         amount: item.amount,
         unit: item.unit,
-        category: item.category
+        category: item.category,
       }));
 
     if (selectedIngredients.length === 0) return;
@@ -191,24 +182,24 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
     onAdd(selectedRecipe.name, selectedIngredients, {
       recipeId: selectedRecipe.id,
       portions,
-      alsoAddToFreezer
+      alsoAddToFreezer,
     });
   };
 
   // Custom meal helpers
   const handleAddCustomIngredientRow = () => {
-    setCustomIngredientLines(prev => [
+    setCustomIngredientLines((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), name: '', amount: 1, unit: 'item', category: 'Produce' }
+      { id: crypto.randomUUID(), name: '', amount: 1, unit: 'item', category: 'Produce' },
     ]);
   };
 
   const handleRemoveCustomIngredientRow = (id: string) => {
-    setCustomIngredientLines(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev);
+    setCustomIngredientLines((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev));
   };
 
   const handleUpdateCustomRow = (id: string, field: string, value: any) => {
-    setCustomIngredientLines(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+    setCustomIngredientLines((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
   const handleSubmitCustomBatch = () => {
@@ -216,35 +207,34 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
     if (!mealName) return;
 
     const validIngredients = customIngredientLines
-      .filter(r => r.name.trim().length > 0 && r.amount > 0)
-      .map(r => ({
+      .filter((r) => r.name.trim().length > 0 && r.amount > 0)
+      .map((r) => ({
         name: r.name.trim(),
         amount: r.amount,
         unit: r.unit.trim(),
-        category: r.category
+        category: r.category,
       }));
 
     if (validIngredients.length === 0) return;
 
     onAdd(mealName, validIngredients, {
       portions: customPortions,
-      alsoAddToFreezer
+      alsoAddToFreezer,
     });
   };
 
-  const selectedCount = ingredientList.filter(i => i.selected).length;
+  const selectedCount = ingredientList.filter((i) => i.selected).length;
 
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/60 z-50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
       />
 
       {/* Modal Dialog */}
       <div className="fixed inset-x-2 bottom-2 top-8 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-2xl sm:h-[88vh] bg-white rounded-2xl sm:rounded-3xl z-50 flex flex-col shadow-2xl overflow-hidden border border-zinc-200/80 animate-in zoom-in-95 duration-200">
-        
         {/* Header */}
         <div className="px-5 py-4 bg-white border-b border-zinc-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -253,9 +243,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-zinc-900 leading-tight">
-                  Add a recipe's ingredients
-                </h2>
+                <h2 className="text-base font-bold text-zinc-900 leading-tight">Add a recipe's ingredients</h2>
                 {weekLabel && (
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 hidden sm:inline-block">
                     {weekLabel}
@@ -263,7 +251,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                 )}
               </div>
               <p className="text-xs text-zinc-400">
-                {selectedRecipe 
+                {selectedRecipe
                   ? `${selectedRecipe.name}: how many portions, and which ingredients to buy`
                   : 'Any recipe, for any number of people: a batch cook, or something not on the plan'}
               </p>
@@ -294,9 +282,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Choose a different recipe</span>
                 </button>
-                <div className="text-[11px] text-zinc-400">
-                  Base recipe: serves {selectedRecipe.servings || 2}
-                </div>
+                <div className="text-[11px] text-zinc-400">Base recipe: serves {selectedRecipe.servings || 2}</div>
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-zinc-200/80 shadow-2xs">
@@ -336,17 +322,17 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                       <Plus className="w-3 h-3" />
                     </button>
                   </div>
-                  
+
                   {/* Quick portion chips */}
                   <div className="hidden sm:flex items-center gap-1">
-                    {[2, 4, 6, 8].map(p => (
+                    {[2, 4, 6, 8].map((p) => (
                       <button
                         key={p}
                         type="button"
                         onClick={() => handlePortionChange(p)}
                         className={`text-[11px] font-semibold px-2 py-1 rounded-lg border transition-colors cursor-pointer ${
-                          portions === p 
-                            ? 'bg-emerald-600 text-white border-emerald-600' 
+                          portions === p
+                            ? 'bg-emerald-600 text-white border-emerald-600'
                             : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
                         }`}
                       >
@@ -391,25 +377,23 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                 Ingredients to Add to List ({selectedCount} of {ingredientList.length} selected)
               </div>
 
-              {ingredientList.map(item => (
+              {ingredientList.map((item) => (
                 <div
                   key={item.id}
                   className={`flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all ${
-                    item.selected 
-                      ? 'bg-white border-zinc-200/90 shadow-2xs' 
+                    item.selected
+                      ? 'bg-white border-zinc-200/90 shadow-2xs'
                       : 'bg-zinc-50/60 border-zinc-200/50 opacity-60'
                   }`}
                 >
-                  <div 
+                  <div
                     className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer select-none"
                     onClick={() => toggleIngredientSelection(item.id)}
                   >
                     <button
                       type="button"
                       className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
-                        item.selected 
-                          ? 'bg-emerald-600 border-emerald-600 text-white' 
-                          : 'border-zinc-300 bg-white'
+                        item.selected ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-300 bg-white'
                       }`}
                     >
                       {item.selected && <Check className="w-3 h-3 stroke-[3]" />}
@@ -417,7 +401,9 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs font-semibold text-zinc-900 truncate ${!item.selected ? 'line-through text-zinc-400' : ''}`}>
+                        <span
+                          className={`text-xs font-semibold text-zinc-900 truncate ${!item.selected ? 'line-through text-zinc-400' : ''}`}
+                        >
                           {item.name}
                         </span>
                         {item.category && (
@@ -470,7 +456,9 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     onChange={(e) => setAlsoAddToFreezer(e.target.checked)}
                     className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
                   />
-                  <span>It's for the freezer: add <strong>{portions} portions</strong> to the Freezer tab</span>
+                  <span>
+                    It's for the freezer: add <strong>{portions} portions</strong> to the Freezer tab
+                  </span>
                 </label>
               </div>
 
@@ -594,7 +582,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     >
                       Quick (&le;30m)
                     </button>
-                    {allTags.slice(0, 4).map(t => (
+                    {allTags.slice(0, 4).map((t) => (
                       <button
                         key={t}
                         type="button"
@@ -622,7 +610,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                         {recipes.length === 0 ? 'No recipes in cookbook' : 'No matching recipes found'}
                       </h4>
                       <p className="text-[11px] text-zinc-400 max-w-xs mx-auto mb-3">
-                        {recipes.length === 0 
+                        {recipes.length === 0
                           ? 'You can add recipes in the Cookbook tab, or type your own list here.'
                           : 'Try changing your search terms or filters.'}
                       </p>
@@ -637,9 +625,12 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {filteredRecipes.map(recipe => {
+                      {filteredRecipes.map((recipe) => {
                         const totalTime = (recipe.prepTime || 0) + (recipe.cookTime || 0);
-                        const ingPreview = recipe.ingredients.slice(0, 3).map(i => i.name).join(', ');
+                        const ingPreview = recipe.ingredients
+                          .slice(0, 3)
+                          .map((i) => i.name)
+                          .join(', ');
 
                         return (
                           <div
@@ -702,9 +693,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                   {/* Meal Name & Portions */}
                   <div className="bg-white p-4 rounded-xl border border-zinc-200/80 shadow-2xs space-y-3">
                     <div>
-                      <label className="block text-xs font-bold text-zinc-700 mb-1">
-                        What's it for?
-                      </label>
+                      <label className="block text-xs font-bold text-zinc-700 mb-1">What's it for?</label>
                       <input
                         type="text"
                         value={customMealName}
@@ -830,7 +819,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
                     <button
                       type="button"
                       onClick={handleSubmitCustomBatch}
-                      disabled={!customMealName.trim() || customIngredientLines.every(l => !l.name.trim())}
+                      disabled={!customMealName.trim() || customIngredientLines.every((l) => !l.name.trim())}
                       className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40 rounded-xl shadow-xs transition-colors cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />

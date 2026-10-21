@@ -2,7 +2,10 @@
 import { useMemo } from 'react';
 import type { AppStore } from '../../store';
 
-export interface Favourite { name: string; category?: string }
+export interface Favourite {
+  name: string;
+  category?: string;
+}
 
 const DEFAULT_FAVOURITES: Favourite[] = [
   { name: 'Milk', category: 'Dairy' },
@@ -31,7 +34,9 @@ export function useFavourites(store: AppStore) {
         const parsed = JSON.parse(legacy);
         if (Array.isArray(parsed)) return parsed.map((p: string) => ({ name: p, category: 'Staples' }));
       }
-    } catch { /* fall back to the usual ones */ }
+    } catch {
+      /* fall back to the usual ones */
+    }
     return DEFAULT_FAVOURITES;
   }, [store?.state?.preferences?.favouriteItems]);
 
@@ -44,7 +49,11 @@ export function useFavourites(store: AppStore) {
       const nextFavs = exists
         ? current.filter((f) => f.name.toLowerCase() !== name.toLowerCase())
         : [...current, { name, category }];
-      try { localStorage.setItem(FAVOURITES_KEY, JSON.stringify(nextFavs)); } catch { /* the synced copy is the one that matters */ }
+      try {
+        localStorage.setItem(FAVOURITES_KEY, JSON.stringify(nextFavs));
+      } catch {
+        /* the synced copy is the one that matters */
+      }
       return { favouriteItems: nextFavs };
     });
   };

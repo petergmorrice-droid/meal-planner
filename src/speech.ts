@@ -10,7 +10,11 @@ type Synth = {
 };
 
 const synth = (): Synth | null => {
-  try { return (typeof window !== 'undefined' && (window as any).speechSynthesis) || null; } catch { return null; }
+  try {
+    return (typeof window !== 'undefined' && (window as any).speechSynthesis) || null;
+  } catch {
+    return null;
+  }
 };
 
 /** Can this phone/browser read aloud? */
@@ -23,7 +27,9 @@ function pickVoice(s: Synth): SpeechSynthesisVoice | null {
   try {
     const voices = s.getVoices?.() || [];
     return voices.find((v) => /^en[-_]GB$/i.test(v.lang)) || voices.find((v) => /^en/i.test(v.lang)) || null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -31,11 +37,18 @@ function pickVoice(s: Synth): SpeechSynthesisVoice | null {
  * through (Chrome cuts off after about 15 seconds).
  */
 export function speechChunks(text: string, max = 180): string[] {
-  const sentences = text.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [];
+  const sentences =
+    text
+      .replace(/\s+/g, ' ')
+      .trim()
+      .match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [];
   const out: string[] = [];
   let cur = '';
   for (const s of sentences) {
-    if (cur && (cur + s).length > max) { out.push(cur.trim()); cur = s; } else cur += s;
+    if (cur && (cur + s).length > max) {
+      out.push(cur.trim());
+      cur = s;
+    } else cur += s;
   }
   if (cur.trim()) out.push(cur.trim());
   return out;
@@ -43,8 +56,11 @@ export function speechChunks(text: string, max = 180): string[] {
 
 const FRACTIONS: Record<string, [string, string]> = {
   // after a whole number, on its own
-  '½': ['and a half', 'half'], '⅓': ['and a third', 'a third'], '⅔': ['and two thirds', 'two thirds'],
-  '¼': ['and a quarter', 'a quarter'], '¾': ['and three quarters', 'three quarters'],
+  '½': ['and a half', 'half'],
+  '⅓': ['and a third', 'a third'],
+  '⅔': ['and two thirds', 'two thirds'],
+  '¼': ['and a quarter', 'a quarter'],
+  '¾': ['and three quarters', 'three quarters'],
 };
 
 /**
@@ -60,12 +76,16 @@ export function forSpeech(text: string): string {
     .replace(/([\d½⅓⅔¼¾])\s*l\b/g, '$1 litres')
     .replace(/(\d)\s*([½⅓⅔¼¾])/g, (_m, d, f) => `${d} ${FRACTIONS[f][0]}`)
     .replace(/([½⅓⅔¼¾])/g, (f) => FRACTIONS[f][1])
-    .replace(/\b1\s*tbsp\b/gi, '1 tablespoon').replace(/\btbsps?\b/gi, 'tablespoons')
-    .replace(/\b1\s*tsp\b/gi, '1 teaspoon').replace(/\btsps?\b/gi, 'teaspoons')
+    .replace(/\b1\s*tbsp\b/gi, '1 tablespoon')
+    .replace(/\btbsps?\b/gi, 'tablespoons')
+    .replace(/\b1\s*tsp\b/gi, '1 teaspoon')
+    .replace(/\btsps?\b/gi, 'teaspoons')
     .replace(/(\d+)\s*°?\s*C\b/g, '$1 degrees')
     .replace(/degrees\s*\/\s*/g, 'degrees, or ')
-    .replace(/\bmins?\b/gi, 'minutes').replace(/\bhrs?\b/gi, 'hours')
-    .replace(/\b1 minutes\b/g, '1 minute').replace(/\b1 hours\b/g, '1 hour');
+    .replace(/\bmins?\b/gi, 'minutes')
+    .replace(/\bhrs?\b/gi, 'hours')
+    .replace(/\b1 minutes\b/g, '1 minute')
+    .replace(/\b1 hours\b/g, '1 hour');
 }
 
 export interface SpeakEvents {
@@ -94,7 +114,10 @@ export function speak(text: string, events: SpeakEvents = {}): boolean {
       u.onerror = (e: any) => {
         const reason = String(e?.error || 'error');
         // Stopping or replacing what's being read isn't a failure.
-        if (reason === 'interrupted' || reason === 'canceled') { events.onEnd?.(); return; }
+        if (reason === 'interrupted' || reason === 'canceled') {
+          events.onEnd?.();
+          return;
+        }
         events.onError?.(reason);
       };
       s.speak(u);
@@ -108,5 +131,9 @@ export function speak(text: string, events: SpeakEvents = {}): boolean {
 }
 
 export function stopSpeaking() {
-  try { synth()?.cancel(); } catch { /* nothing to stop */ }
+  try {
+    synth()?.cancel();
+  } catch {
+    /* nothing to stop */
+  }
 }

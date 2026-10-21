@@ -1,0 +1,15 @@
+# Built or downloaded
+node_modules/
+dist/
+dist-single/
+dist-preview/
+.test-build/
+tests/e2e/.out/
+package-lock.json
+
+# Kept exactly as written: the page shell and the files copied to the site as they are,
+# the written docs, and a copy of old code the tests use as it was.
+index.html
+public/
+*.md
+tests/e2e/fixtures/

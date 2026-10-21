@@ -1,4 +1,4 @@
-import React from "react";
+import React from 'react';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -23,7 +23,6 @@ import ErrorBoundary, { TestBreak } from './components/ErrorBoundary';
 import { getGistConfig } from './services/gistStorage';
 import type { TabName } from './types';
 
-
 export default function App() {
   // A recipe page shared to the app (Android: Share → Meals) arrives as ?share_url / ?share_text.
   const [sharedRecipe, setSharedRecipe] = useState<string | null>(() => {
@@ -42,10 +41,12 @@ export default function App() {
   // Mid-shop (phone locked, app closed)? Open straight back into shopping mode.
   const [activeTab, setActiveTab] = useState<TabName>(sharedRecipe ? 'cookbook' : readOpenShop() ? 'shop' : 'planning');
   // "Tab colours" theme: the screen takes its tab's colour.
-  useEffect(() => { applyTabColour(activeTab); }, [activeTab]);
+  useEffect(() => {
+    applyTabColour(activeTab);
+  }, [activeTab]);
   // "Add to a day…" from a recipe in the Cookbook: Planning opens its day chooser for it.
   const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
-  
+
   const store = useStore();
 
   // Shop opens on its own best week, unless you came from "See the list" for a particular week.
@@ -70,7 +71,10 @@ export default function App() {
             <CookBookTab
               store={store}
               onNavigateTab={handleNavigateTab}
-              onAddToDay={(recipe) => { setPendingAddRecipeId(recipe.id); setActiveTab('planning'); }}
+              onAddToDay={(recipe) => {
+                setPendingAddRecipeId(recipe.id);
+                setActiveTab('planning');
+              }}
               startAddWith={sharedRecipe}
               onStartAddHandled={() => setSharedRecipe(null)}
             />
@@ -88,10 +92,44 @@ export default function App() {
             />
           </ErrorBoundary>
         )}
-        {activeTab === 'this_week' && <ErrorBoundary key="cook" name="Cook"><TestBreak tab="this_week" /><CookTab store={store} onNavigateTab={handleNavigateTab} /></ErrorBoundary>}
-        {activeTab === 'shop' && <ErrorBoundary key="shop" name="Shop"><TestBreak tab="shop" /><ShopTab store={store} onNavigateTab={handleNavigateTab} openPlanId={shopPlanRequest} onOpenPlanHandled={() => setShopPlanRequest(null)} openPanel={shopPanelRequest} onOpenPanelHandled={() => setShopPanelRequest(null)} /></ErrorBoundary>}
-        {activeTab === 'batch' && <ErrorBoundary key="freezer" name="Freezer"><TestBreak tab="batch" /><BatchTab store={store} onNavigateTab={handleNavigateTab} /></ErrorBoundary>}
-        {activeTab === 'settings' && <ErrorBoundary key="settings" name="Settings"><TestBreak tab="settings" /><SettingsTab store={store} onNavigateTab={handleNavigateTab} onOpenShopPanel={(panel) => { setShopPanelRequest(panel); setActiveTab('shop'); }} /></ErrorBoundary>}
+        {activeTab === 'this_week' && (
+          <ErrorBoundary key="cook" name="Cook">
+            <TestBreak tab="this_week" />
+            <CookTab store={store} onNavigateTab={handleNavigateTab} />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'shop' && (
+          <ErrorBoundary key="shop" name="Shop">
+            <TestBreak tab="shop" />
+            <ShopTab
+              store={store}
+              onNavigateTab={handleNavigateTab}
+              openPlanId={shopPlanRequest}
+              onOpenPlanHandled={() => setShopPlanRequest(null)}
+              openPanel={shopPanelRequest}
+              onOpenPanelHandled={() => setShopPanelRequest(null)}
+            />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'batch' && (
+          <ErrorBoundary key="freezer" name="Freezer">
+            <TestBreak tab="batch" />
+            <BatchTab store={store} onNavigateTab={handleNavigateTab} />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'settings' && (
+          <ErrorBoundary key="settings" name="Settings">
+            <TestBreak tab="settings" />
+            <SettingsTab
+              store={store}
+              onNavigateTab={handleNavigateTab}
+              onOpenShopPanel={(panel) => {
+                setShopPanelRequest(panel);
+                setActiveTab('shop');
+              }}
+            />
+          </ErrorBoundary>
+        )}
       </main>
 
       {/* Kitchen timers keep going (and ring) on every tab; the Cook tab shows them at the top. */}
@@ -184,7 +222,9 @@ function TabButton({
       <div className={`flex items-center justify-center h-5 shrink-0 ${t.icon} ${active ? '' : 'opacity-75'}`}>
         {icon}
       </div>
-      <span className="text-[11px] sm:text-[11px] tracking-tight mt-0.5 whitespace-nowrap truncate w-full text-center">{label}</span>
+      <span className="text-[11px] sm:text-[11px] tracking-tight mt-0.5 whitespace-nowrap truncate w-full text-center">
+        {label}
+      </span>
     </button>
   );
 }
@@ -202,16 +242,29 @@ function SaveProblemBanner({ exportAll }: { exportAll: () => string }) {
       a.download = `meal-planner-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    } catch { /* nothing more to try */ }
+    } catch {
+      /* nothing more to try */
+    }
   };
   const syncing = !!getGistConfig();
   return (
-    <div className="shrink-0 bg-rose-50 border-b border-rose-200 text-rose-950 px-4 py-2 flex items-center gap-3 text-sm" role="alert" data-save-problem>
+    <div
+      className="shrink-0 bg-rose-50 border-b border-rose-200 text-rose-950 px-4 py-2 flex items-center gap-3 text-sm"
+      role="alert"
+      data-save-problem
+    >
       <span className="flex-1 min-w-0">
         <strong>This phone couldn't save your latest changes</strong> (its storage is full).{' '}
         {syncing ? "They're still being sent to the other phone." : 'Download a backup so nothing is lost.'}
       </span>
-      <button type="button" onClick={download} className="h-8 px-3 rounded-lg bg-white border border-rose-300 text-rose-800 font-semibold cursor-pointer shrink-0" data-save-problem-backup>Backup</button>
+      <button
+        type="button"
+        onClick={download}
+        className="h-8 px-3 rounded-lg bg-white border border-rose-300 text-rose-800 font-semibold cursor-pointer shrink-0"
+        data-save-problem-backup
+      >
+        Backup
+      </button>
     </div>
   );
 }
@@ -232,16 +285,36 @@ function UpdateBanner() {
       if ((await checkForUpdate()) === 'available') setShow(true);
     };
     void check();
-    const onVisible = () => { if (document.visibilityState === 'visible') void check(); };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void check();
+    };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
   if (!show) return null;
   return (
-    <div className="shrink-0 bg-emerald-700 text-white px-4 py-2 flex items-center gap-3 text-sm" role="status" data-update-banner>
+    <div
+      className="shrink-0 bg-emerald-700 text-white px-4 py-2 flex items-center gap-3 text-sm"
+      role="status"
+      data-update-banner
+    >
       <span className="flex-1 min-w-0">A new version of the app is ready.</span>
-      <button type="button" onClick={() => void updateNow()} className="h-8 px-3 rounded-lg bg-white text-emerald-800 font-bold cursor-pointer" data-update-now>Update</button>
-      <button type="button" onClick={() => setShow(false)} className="h-8 px-2 text-emerald-100 font-semibold cursor-pointer" aria-label="Not now">Later</button>
+      <button
+        type="button"
+        onClick={() => void updateNow()}
+        className="h-8 px-3 rounded-lg bg-white text-emerald-800 font-bold cursor-pointer"
+        data-update-now
+      >
+        Update
+      </button>
+      <button
+        type="button"
+        onClick={() => setShow(false)}
+        className="h-8 px-2 text-emerald-100 font-semibold cursor-pointer"
+        aria-label="Not now"
+      >
+        Later
+      </button>
     </div>
   );
 }

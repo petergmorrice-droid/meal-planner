@@ -2,7 +2,16 @@
 // "2 pints milk" typed into the add box, the list as text, and carrying items to another week.
 import { MealPlan, ShoppingListItem, ShopRoute, ShopRecord } from './types';
 import { aggregateIngredients } from './utils/aggregation';
-import { matchProduct, matchProductDetailed, groupingKey, largeUnitQuantity, formatAmount, canonicalUnit, formatUnit, unitInfo } from './shopping';
+import {
+  matchProduct,
+  matchProductDetailed,
+  groupingKey,
+  largeUnitQuantity,
+  formatAmount,
+  canonicalUnit,
+  formatUnit,
+  unitInfo,
+} from './shopping';
 import type { Catalog } from './shopping';
 import { getCatalog, convertToShoppingQuantity, quantityForAddedItem } from './utils/shoppingConversion';
 
@@ -50,7 +59,10 @@ const isPlanned = (i: ShoppingListItem) => !i.isAdhoc && !i.isBatch && !i.isRecu
  * Add up the list's lines into one row per product. `neededOf` gives what the meals use for a
  * meal line, worked out fresh from the week (otherwise the amount saved when the list was made).
  */
-export function aggregateShoppingItems(items: ShoppingListItem[], neededOf?: (part: ShoppingListItem) => string | undefined): AggregatedShoppingListItem[] {
+export function aggregateShoppingItems(
+  items: ShoppingListItem[],
+  neededOf?: (part: ShoppingListItem) => string | undefined,
+): AggregatedShoppingListItem[] {
   const groups = new Map<string, ShoppingListItem[]>();
   for (const item of items) {
     const key = productKey(item);
@@ -70,9 +82,12 @@ export function aggregateShoppingItems(items: ShoppingListItem[], neededOf?: (pa
     let hasPlanned = false;
     let hasStaple = false;
     for (const i of groupItems) {
-      if (isPlanned(i)) { hasPlanned = true; (i.recipeNames || []).forEach((r) => recipeNames.add(r)); }
-      else if (i.isBatch) { if (i.batchRecipeName) extraRecipes.add(i.batchRecipeName); }
-      else if (i.isRecurring) hasStaple = true;
+      if (isPlanned(i)) {
+        hasPlanned = true;
+        (i.recipeNames || []).forEach((r) => recipeNames.add(r));
+      } else if (i.isBatch) {
+        if (i.batchRecipeName) extraRecipes.add(i.batchRecipeName);
+      } else if (i.isRecurring) hasStaple = true;
       else extraAmount += i.amount || 0;
     }
     const desc: string[] = [];
@@ -83,7 +98,10 @@ export function aggregateShoppingItems(items: ShoppingListItem[], neededOf?: (pa
     if (extraAmount > 0 && desc.length) desc.push('some added by you');
 
     const notes = Array.from(new Set(groupItems.map((i) => (i.note || '').trim()).filter(Boolean)));
-    const needs = groupItems.filter(isPlanned).map((i) => (neededOf ? neededOf(i) : undefined) ?? i.neededText).filter((t): t is string => Boolean(t));
+    const needs = groupItems
+      .filter(isPlanned)
+      .map((i) => (neededOf ? neededOf(i) : undefined) ?? i.neededText)
+      .filter((t): t is string => Boolean(t));
     result.push({
       key,
       id: canonical.id,
@@ -106,7 +124,11 @@ export function aggregateShoppingItems(items: ShoppingListItem[], neededOf?: (pa
       checkedBy: groupItems.find((i) => i.checked && i.checkedBy)?.checkedBy,
       checkCupboard: groupItems.every((i) => i.checkCupboard && i.cupboard !== 'need'),
       needsCheck: groupItems.some((i) => i.needsCheck),
-      quantityNote: groupItems.map((i) => i.quantityNote).filter(Boolean).join('; ') || undefined,
+      quantityNote:
+        groupItems
+          .map((i) => i.quantityNote)
+          .filter(Boolean)
+          .join('; ') || undefined,
       neededText: needs.join(' + ') || undefined,
     });
   }
@@ -117,13 +139,19 @@ export function aggregateShoppingItems(items: ShoppingListItem[], neededOf?: (pa
  * Things you added by hand that aren't saved products yet (so the Shop can offer to save them):
  * one per name, not ones you've said aren't products.
  */
-export function notYetProducts(items: ShoppingListItem[], declined?: string[] | null, catalog: Catalog = getCatalog()): ShoppingListItem[] {
+export function notYetProducts(
+  items: ShoppingListItem[],
+  declined?: string[] | null,
+  catalog: Catalog = getCatalog(),
+): ShoppingListItem[] {
   const no = new Set((declined || []).map((n) => n.trim().toLowerCase()));
   const seen = new Set<string>();
   const out: ShoppingListItem[] = [];
   for (const i of items) {
     if (!i || !i.isAdhoc || i.isRecurring || i.isBatch || i.groceryId) continue;
-    const k = String(i.name || '').trim().toLowerCase();
+    const k = String(i.name || '')
+      .trim()
+      .toLowerCase();
     if (!k || seen.has(k) || no.has(k)) continue;
     seen.add(k);
     if (matchProductDetailed(catalog, i.name)?.how === 'exact') continue;
@@ -143,7 +171,8 @@ export function packsOnLine(item: { amount?: number | string; unit?: string }, u
   const want = unitInfo(canonicalUnit(unit));
   let packs = 1;
   if (have.unit === want.unit) packs = a / step;
-  else if (have.dimension !== 'count' && have.dimension === want.dimension) packs = (a * have.factor) / (step * want.factor);
+  else if (have.dimension !== 'count' && have.dimension === want.dimension)
+    packs = (a * have.factor) / (step * want.factor);
   else if (have.unit === 'each') packs = a; // a bare number is how many you buy
   return Math.min(99, Math.max(1, Math.round(packs)));
 }
@@ -153,7 +182,11 @@ export function packsOnLine(item: { amount?: number | string; unit?: string }, u
  * "1 pack", "2" of something sold in 500 g bags is "1000 g", 1 kg of it stays 1000 g. null when
  * it's already in that unit or can't sensibly be said in it (500 ml of something sold by the jar).
  */
-export function inProductUnit(line: { amount?: number | string; unit?: string }, unit: string, step: number): { amount: number; unit: string } | null {
+export function inProductUnit(
+  line: { amount?: number | string; unit?: string },
+  unit: string,
+  step: number,
+): { amount: number; unit: string } | null {
   const have = unitInfo(canonicalUnit(line.unit));
   const want = unitInfo(canonicalUnit(unit));
   const a = Number(line.amount) || 0;
@@ -163,8 +196,7 @@ export function inProductUnit(line: { amount?: number | string; unit?: string },
     // "1" of something sold by the gram can't mean 1 g
     if (want.dimension !== 'count' && (step > 0 ? step : 1) * want.factor < 10) return null;
     amount = packsOnLine(line, unit, step) * (step > 0 ? step : 1);
-  }
-  else if (have.dimension !== 'count' && have.dimension === want.dimension) amount = (a * have.factor) / want.factor;
+  } else if (have.dimension !== 'count' && have.dimension === want.dimension) amount = (a * have.factor) / want.factor;
   else return null;
   amount = Math.round(amount * 100) / 100;
   return { amount, unit: formatUnit(want.unit, amount) };
@@ -204,7 +236,11 @@ export function stapleQuantity(unit: string, step: number, packs: number): { amo
  * staple's own line, that line takes over from the one you added (so it isn't on the list twice).
  * If you'd already ticked it that week, the staple's line is ticked too; a note comes with it.
  */
-export function stapleTakesOver(list: ShoppingListItem[], recurringId: string, isSame: (i: ShoppingListItem) => boolean): ShoppingListItem[] {
+export function stapleTakesOver(
+  list: ShoppingListItem[],
+  recurringId: string,
+  isSame: (i: ShoppingListItem) => boolean,
+): ShoppingListItem[] {
   const byWeek = new Map<string, ShoppingListItem[]>();
   for (const i of list) {
     if (!i.isAdhoc || i.isRecurring || i.isBatch || !i.planId || !isSame(i)) continue;
@@ -229,7 +265,9 @@ export function stapleTakesOver(list: ShoppingListItem[], recurringId: string, i
       const note = i.note || added.find((a) => a.note)?.note;
       return {
         ...i,
-        ...(ticked && !i.checked ? { checked: true, ...(added[0].checkedBy ? { checkedBy: added[0].checkedBy } : {}) } : {}),
+        ...(ticked && !i.checked
+          ? { checked: true, ...(added[0].checkedBy ? { checkedBy: added[0].checkedBy } : {}) }
+          : {}),
         ...(note ? { note } : {}),
       };
     });
@@ -262,7 +300,14 @@ const weekOfLine = (i: ShoppingListItem): string | null => {
  */
 export function suggestedStaples(
   list: ShoppingListItem[],
-  opts: { thisWeek: string; staples?: { name: string }[]; declined?: string[]; lookBack?: number; minWeeks?: number; catalog?: Catalog },
+  opts: {
+    thisWeek: string;
+    staples?: { name: string }[];
+    declined?: string[];
+    lookBack?: number;
+    minWeeks?: number;
+    catalog?: Catalog;
+  },
 ): StapleSuggestion[] {
   const catalog = opts.catalog ?? getCatalog();
   const lookBack = opts.lookBack ?? 6;
@@ -272,10 +317,14 @@ export function suggestedStaples(
   for (let n = 0; n < lookBack; n++) {
     const w = new Date(d);
     w.setDate(d.getDate() - 7 * n);
-    weeks.add(`${w.getFullYear()}-${String(w.getMonth() + 1).padStart(2, '0')}-${String(w.getDate()).padStart(2, '0')}`);
+    weeks.add(
+      `${w.getFullYear()}-${String(w.getMonth() + 1).padStart(2, '0')}-${String(w.getDate()).padStart(2, '0')}`,
+    );
   }
   const declined = new Set((opts.declined || []).map((x) => x.trim().toLowerCase()));
-  const stapleKeys = new Set((opts.staples || []).flatMap((r) => [productKey({ name: r.name }, catalog), `name:${r.name.trim().toLowerCase()}`]));
+  const stapleKeys = new Set(
+    (opts.staples || []).flatMap((r) => [productKey({ name: r.name }, catalog), `name:${r.name.trim().toLowerCase()}`]),
+  );
   const found = new Map<string, { weeks: Set<string>; latestWeek: string; lines: ShoppingListItem[] }>();
   for (const i of list || []) {
     if (!i || !i.isAdhoc || i.isRecurring || i.isBatch) continue;
@@ -283,10 +332,15 @@ export function suggestedStaples(
     if (!week || !weeks.has(week)) continue;
     const key = productKey(i, catalog);
     let f = found.get(key);
-    if (!f) { f = { weeks: new Set(), latestWeek: '', lines: [] }; found.set(key, f); }
+    if (!f) {
+      f = { weeks: new Set(), latestWeek: '', lines: [] };
+      found.set(key, f);
+    }
     f.weeks.add(week);
-    if (week > f.latestWeek) { f.latestWeek = week; f.lines = [i]; }
-    else if (week === f.latestWeek) f.lines.push(i);
+    if (week > f.latestWeek) {
+      f.latestWeek = week;
+      f.lines = [i];
+    } else if (week === f.latestWeek) f.lines.push(i);
   }
   const out: StapleSuggestion[] = [];
   for (const [key, f] of found) {
@@ -296,8 +350,21 @@ export function suggestedStaples(
     if (stapleKeys.has(key) || stapleKeys.has(`name:${name.trim().toLowerCase()}`)) continue;
     if (declined.has(name.trim().toLowerCase()) || declined.has(key)) continue;
     const unit = canonicalUnit(latest.unit);
-    const amount = Math.round(f.lines.filter((l) => canonicalUnit(l.unit) === unit).reduce((sum, l) => sum + (Number(l.amount) || 0), 0) * 100) / 100 || 1;
-    out.push({ key, name, weeks: f.weeks.size, of: lookBack, amount, unit: latest.unit || '', category: latest.category, groceryId: latest.groceryId });
+    const amount =
+      Math.round(
+        f.lines.filter((l) => canonicalUnit(l.unit) === unit).reduce((sum, l) => sum + (Number(l.amount) || 0), 0) *
+          100,
+      ) / 100 || 1;
+    out.push({
+      key,
+      name,
+      weeks: f.weeks.size,
+      of: lookBack,
+      amount,
+      unit: latest.unit || '',
+      category: latest.category,
+      groceryId: latest.groceryId,
+    });
   }
   return out.sort((a, b) => b.weeks - a.weeks || a.name.localeCompare(b.name));
 }
@@ -314,13 +381,15 @@ export function oldShoppingLineIds(list: ShoppingListItem[], todayIso: string, k
   const monday = new Date(t);
   monday.setDate(t.getDate() - ((t.getDay() + 6) % 7) - 7 * keepWeeks);
   const cutoff = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
-  return (list || []).filter((i) => {
-    const week = i ? weekOfLine(i) : null;
-    return !!week && week < cutoff;
-  }).map((i) => i.id);
+  return (list || [])
+    .filter((i) => {
+      const week = i ? weekOfLine(i) : null;
+      return !!week && week < cutoff;
+    })
+    .map((i) => i.id);
 }
 
-const COUNT_UNITS =['', 'whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', 'each'];
+const COUNT_UNITS = ['', 'whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', 'each'];
 
 /** How much to buy, as it reads in the shop: "1 kg", "2 cans", "6". */
 export function shopQuantityText(item: { amount: number | string; unit?: string; displayQuantity?: string }): string {
@@ -348,7 +417,12 @@ export const isToBuy = (i: ShoppingListItem) => !i.checked && !i.outOfStock && i
  * it with things to buy; otherwise that likely week (or next week, or the first). Weeks before
  * the likely one don't count: on a Saturday, this week's leftovers aren't what you're shopping for.
  */
-export function defaultShopWeek(plans: MealPlan[], list: ShoppingListItem[], likelyStart: string, nextStart: string): string | null {
+export function defaultShopWeek(
+  plans: MealPlan[],
+  list: ShoppingListItem[],
+  likelyStart: string,
+  nextStart: string,
+): string | null {
   const sorted = [...plans].sort((a, b) => a.startDate.localeCompare(b.startDate));
   const hasToBuy = (p: MealPlan) => p.status === 'finalized' && list.some((i) => i.planId === p.id && isToBuy(i));
   const likely = sorted.find((p) => p.startDate === likelyStart);
@@ -378,10 +452,16 @@ export function weekStartShort(startDate: string): string {
 
 // ---------- The "Add an item…" box ----------
 
-const UNIT_WORDS = 'g|grams?|kg|kilos?|ml|l|litres?|liters?|pints?|cans?|tins?|jars?|packs?|packets?|bags?|box(?:es)?|bunch(?:es)?|bulbs?|heads?|balls?|blocks?|fillets?|oz|lbs?';
+const UNIT_WORDS =
+  'g|grams?|kg|kilos?|ml|l|litres?|liters?|pints?|cans?|tins?|jars?|packs?|packets?|bags?|box(?:es)?|bunch(?:es)?|bulbs?|heads?|balls?|blocks?|fillets?|oz|lbs?';
 const UNIT_FIRST = new RegExp(`^(\\d+(?:\\.\\d+)?)\\s*(${UNIT_WORDS})\\.?\\s+(?:of\\s+)?(.+)$`, 'i');
 
-export interface QuickAddText { name: string; amount?: number; unit?: string; packs?: number }
+export interface QuickAddText {
+  name: string;
+  amount?: number;
+  unit?: string;
+  packs?: number;
+}
 
 /** "2 pints milk", "500g mince", "6 eggs", "milk x2", "2x bread", "bin bags". */
 export function parseQuickAdd(text: string): QuickAddText {
@@ -405,7 +485,13 @@ const capitalise = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
  * What goes on the list for what you typed. A plain number is a count of the thing ("6 eggs",
  * "2 lemons") unless that makes no sense for the product, then it's packs ("2 milk" = 2 pints).
  */
-export function quickAddLine(parsed: QuickAddText): { name: string; amount: number; unit: string; category?: string; groceryId?: string } {
+export function quickAddLine(parsed: QuickAddText): {
+  name: string;
+  amount: number;
+  unit: string;
+  category?: string;
+  groceryId?: string;
+} {
   // Only a product with exactly this name (or one of its other names): "tortilla chips" isn't Frozen Chips.
   const found = matchProductDetailed(getCatalog(), parsed.name);
   const product = found?.how === 'exact' ? found.product : null;
@@ -473,7 +559,10 @@ export function carryItemsToWeek(
   const alreadyThere: string[] = [];
   for (const [key, group] of byProduct) {
     const first = group[0];
-    if (waiting.has(key)) { alreadyThere.push(first.name); continue; }
+    if (waiting.has(key)) {
+      alreadyThere.push(first.name);
+      continue;
+    }
     const total = aggregateIngredients(group);
     const numeric = typeof total.amount === 'number';
     const note = Array.from(new Set(group.map((i) => (i.note || '').trim()).filter(Boolean))).join('; ');
@@ -512,7 +601,10 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
  * Learn from one shop: the order things were ticked. Each product and aisle gets a position
  * (0 = first, 1 = last), averaged with what was learned before. Short shops teach nothing.
  */
-export function learnRoute(prev: ShopRoute | undefined, ticks: { key: string; aisle: string }[]): ShopRoute | undefined {
+export function learnRoute(
+  prev: ShopRoute | undefined,
+  ticks: { key: string; aisle: string }[],
+): ShopRoute | undefined {
   const seen = new Set<string>();
   const seq = ticks.filter((t) => (seen.has(t.key) ? false : (seen.add(t.key), true)));
   if (seq.length < 5) return prev;
@@ -538,9 +630,10 @@ export function routeAisleOrder<A extends string>(route: ShopRoute | undefined, 
 
 /** Items in the order you usually pick them up; new ones after, A–Z. */
 export function sortByRoute<T extends { key: string; name: string }>(items: T[], route: ShopRoute | undefined): T[] {
-  const rank = (t: T) => (route?.items[t.key] ?? Infinity);
+  const rank = (t: T) => route?.items[t.key] ?? Infinity;
   return [...items].sort((a, b) => {
-    const ra = rank(a), rb = rank(b);
+    const ra = rank(a),
+      rb = rank(b);
     if (ra !== rb) return ra - rb;
     return a.name.localeCompare(b.name);
   });
@@ -556,11 +649,19 @@ export function addShopRecord(history: ShopRecord[] | undefined, rec: ShopRecord
 /** Only shops of this many items count for your best and average time (a quick top-up isn't a fair race). */
 export const BIG_SHOP = 10;
 
-export function shopStats(history: ShopRecord[] | undefined): { best: number | null; average: number | null; timed: number } {
+export function shopStats(history: ShopRecord[] | undefined): {
+  best: number | null;
+  average: number | null;
+  timed: number;
+} {
   const timed = (history || []).filter((r) => r.minutes !== null && r.minutes > 0 && r.bought >= BIG_SHOP);
   if (!timed.length) return { best: null, average: null, timed: 0 };
   const mins = timed.map((r) => r.minutes as number);
-  return { best: Math.min(...mins), average: Math.round(mins.reduce((a, b) => a + b, 0) / mins.length), timed: timed.length };
+  return {
+    best: Math.min(...mins),
+    average: Math.round(mins.reduce((a, b) => a + b, 0) / mins.length),
+    timed: timed.length,
+  };
 }
 
 /** "Halfway there!" when the % done passes 25, 50 or 75 (null otherwise). */

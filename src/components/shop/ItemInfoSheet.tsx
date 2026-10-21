@@ -29,7 +29,13 @@ const ICONS: Record<ItemInfoLine['kind'], { Icon: React.ComponentType<{ classNam
  * (i) on a row: which meals it's for (and how much each), extra recipes, weekly staple, what was
  * added by hand and by whom, the note, and who ticked it. Read-only; Edit opens the item panel.
  */
-export default function ItemInfoSheet({ row, aisle, lines, onEdit, onClose }: {
+export default function ItemInfoSheet({
+  row,
+  aisle,
+  lines,
+  onEdit,
+  onClose,
+}: {
   row: AggregatedShoppingListItem;
   aisle: FoodAisle;
   lines: ItemInfoLine[];
@@ -37,7 +43,10 @@ export default function ItemInfoSheet({ row, aisle, lines, onEdit, onClose }: {
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[60] bg-zinc-900/30 flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[60] bg-zinc-900/30 flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-label={`About ${row.name}`}
@@ -53,7 +62,14 @@ export default function ItemInfoSheet({ row, aisle, lines, onEdit, onClose }: {
             <p className="text-sm text-zinc-600 tabular-nums">{shopQuantityText(row)} on the list</p>
             {row.neededText && <p className="text-sm text-zinc-600 tabular-nums">Your meals use {row.neededText}</p>}
           </div>
-          <button type="button" onClick={onClose} className="w-9 h-9 rounded-full border border-zinc-200 flex items-center justify-center cursor-pointer shrink-0" aria-label="Close"><X className="w-4 h-4" /></button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-full border border-zinc-200 flex items-center justify-center cursor-pointer shrink-0"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
         <ul className="overflow-y-auto px-4 py-2 divide-y divide-zinc-100" data-item-info-lines>
           {lines.map((l, i) => {
@@ -62,18 +78,41 @@ export default function ItemInfoSheet({ row, aisle, lines, onEdit, onClose }: {
             const tone = person ? person.tile : ICONS[l.kind].tone;
             return (
               <li key={i} className="flex items-center gap-3 py-2.5" data-info-line={l.kind}>
-                <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tone}`}><Icon className="w-4 h-4" /></span>
-                <span className={`flex-1 min-w-0 text-[15px] leading-snug ${l.kind === 'note' ? (person ? person.text : 'text-amber-900') : 'text-zinc-800'}`} data-info-who={l.who || undefined}>{l.text}</span>
-                {l.amount && <span className="shrink-0 text-sm font-semibold text-zinc-900 tabular-nums">{l.amount}</span>}
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tone}`}>
+                  <Icon className="w-4 h-4" />
+                </span>
+                <span
+                  className={`flex-1 min-w-0 text-[15px] leading-snug ${l.kind === 'note' ? (person ? person.text : 'text-amber-900') : 'text-zinc-800'}`}
+                  data-info-who={l.who || undefined}
+                >
+                  {l.text}
+                </span>
+                {l.amount && (
+                  <span className="shrink-0 text-sm font-semibold text-zinc-900 tabular-nums">{l.amount}</span>
+                )}
               </li>
             );
           })}
         </ul>
         <div className="px-4 pt-2 flex gap-2">
           {onEdit && (
-            <button type="button" onClick={onEdit} className="flex-1 h-11 rounded-xl border border-zinc-300 text-sm font-semibold text-zinc-800 cursor-pointer" data-item-info-edit>Change it</button>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex-1 h-11 rounded-xl border border-zinc-300 text-sm font-semibold text-zinc-800 cursor-pointer"
+              data-item-info-edit
+            >
+              Change it
+            </button>
           )}
-          <button type="button" onClick={onClose} className="flex-1 h-11 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer" data-item-info-close>OK</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 h-11 rounded-xl bg-emerald-600 text-white text-sm font-semibold cursor-pointer"
+            data-item-info-close
+          >
+            OK
+          </button>
         </div>
       </div>
     </div>

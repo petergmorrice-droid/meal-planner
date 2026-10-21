@@ -39,7 +39,7 @@ export function CleanDatabaseModal({
   groceryItems,
   onApplyChanges,
   showToast,
-  onNavigateTab
+  onNavigateTab,
 }: CleanDatabaseModalProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export function CleanDatabaseModal({
       'Canned',
       'Pasta',
       'Frozen',
-      'Household'
+      'Household',
     ];
     const customCats = new Set<string>(standardAisles);
     for (const item of groceryItems) {
@@ -117,7 +117,7 @@ export function CleanDatabaseModal({
   }, [isOpen]);
 
   const updateCurrentAction = (updates: Partial<DatabaseCleanAction>) => {
-    setActions(prev => {
+    setActions((prev) => {
       const next = [...prev];
       if (next[currentIndex]) {
         next[currentIndex] = { ...next[currentIndex], ...updates };
@@ -129,7 +129,7 @@ export function CleanDatabaseModal({
   const swapMergeDirection = () => {
     const action = actions[currentIndex];
     if (!action || action.actionType !== 'merge' || !action.secondaryItemId) return;
-    
+
     const newPrimaryId = action.secondaryItemId;
     const newSecondaryId = action.primaryItemId;
     const itemA = itemsMap.get(newPrimaryId);
@@ -140,7 +140,7 @@ export function CleanDatabaseModal({
     updateCurrentAction({
       primaryItemId: newPrimaryId,
       secondaryItemId: newSecondaryId,
-      reason: `Absorb duplicate "${nameB}" into "${nameA}" (direction chosen by user).`
+      reason: `Absorb duplicate "${nameB}" into "${nameA}" (direction chosen by user).`,
     });
   };
 
@@ -148,12 +148,12 @@ export function CleanDatabaseModal({
     if (flyDirection) return; // already animating
 
     setFlyDirection(decision === 'accept' ? 'right' : 'left');
-    setDecisions(prev => ({ ...prev, [currentIndex]: decision }));
+    setDecisions((prev) => ({ ...prev, [currentIndex]: decision }));
 
     setTimeout(() => {
       setFlyDirection(null);
       setDragOffset({ x: 0, y: 0 });
-      setCurrentIndex(prev => prev + 1);
+      setCurrentIndex((prev) => prev + 1);
     }, 280);
   };
 
@@ -161,7 +161,7 @@ export function CleanDatabaseModal({
     if (currentIndex <= 0 || flyDirection) return;
     const prevIdx = currentIndex - 1;
     setCurrentIndex(prevIdx);
-    setDecisions(prev => {
+    setDecisions((prev) => {
       const next = { ...prev };
       delete next[prevIdx];
       return next;
@@ -245,7 +245,7 @@ export function CleanDatabaseModal({
   }, [actions, decisions]);
 
   const rejectedCount = useMemo(() => {
-    return Object.values(decisions).filter(d => d === 'reject').length;
+    return Object.values(decisions).filter((d) => d === 'reject').length;
   }, [decisions]);
 
   const handleApplyFinalChanges = async () => {
@@ -283,7 +283,7 @@ export function CleanDatabaseModal({
     cardTransform = 'translate3d(-130%, 20px, 0) rotate(-22deg)';
     cardTransition = 'transform 0.28s ease-in, opacity 0.24s ease-in';
   } else if (isDragging) {
-    const rot = (dragOffset.x / 14);
+    const rot = dragOffset.x / 14;
     cardTransform = `translate3d(${dragOffset.x}px, ${dragOffset.y * 0.3}px, 0) rotate(${rot}deg)`;
     cardTransition = 'none';
   } else {
@@ -297,13 +297,14 @@ export function CleanDatabaseModal({
 
   // Current item lookups
   const primaryItem = currentAction ? itemsMap.get(currentAction.primaryItemId) : undefined;
-  const secondaryItem = currentAction && currentAction.secondaryItemId ? itemsMap.get(currentAction.secondaryItemId) : undefined;
+  const secondaryItem =
+    currentAction && currentAction.secondaryItemId ? itemsMap.get(currentAction.secondaryItemId) : undefined;
   const primaryName = primaryItem ? primaryItem.name : currentAction?.primaryItemId || '';
   const secondaryName = secondaryItem ? secondaryItem.name : currentAction?.secondaryItemId || '';
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150 select-none">
-      <div 
+      <div
         className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-zinc-200 flex flex-col max-h-[94vh] overflow-hidden animate-in zoom-in-95 duration-150"
         role="dialog"
         aria-modal="true"
@@ -316,13 +317,11 @@ export function CleanDatabaseModal({
             </div>
             <div>
               <h2 className="text-sm font-bold text-zinc-900 tracking-tight">Grocery Database Reconciliation</h2>
-              <p className="text-[11px] text-zinc-500">
-                Swipe cards: Right to Accept · Left to Reject
-              </p>
+              <p className="text-[11px] text-zinc-500">Swipe cards: Right to Accept · Left to Reject</p>
             </div>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={onClose}
             className="text-zinc-400 hover:text-zinc-700 p-1.5 rounded-lg hover:bg-zinc-100 cursor-pointer transition-colors"
           >
@@ -382,7 +381,8 @@ export function CleanDatabaseModal({
                   Analyzing catalog for duplicates and miscategorized items...
                 </h3>
                 <p className="text-xs text-zinc-500 leading-relaxed">
-                  Scanning {groceryItems.length} items for semantic overlap, inconsistent plurals, and supermarket aisles.
+                  Scanning {groceryItems.length} items for semantic overlap, inconsistent plurals, and supermarket
+                  aisles.
                 </p>
               </div>
             </div>
@@ -399,8 +399,8 @@ export function CleanDatabaseModal({
                   {error === 'GEMINI_API_KEY_MISSING' ? 'Gemini API Key Required' : 'Failed to analyze database'}
                 </h3>
                 <p className="text-xs text-red-700">
-                  {error === 'GEMINI_API_KEY_MISSING' 
-                    ? 'Add your Gemini key first: Settings, under This phone.' 
+                  {error === 'GEMINI_API_KEY_MISSING'
+                    ? 'Add your Gemini key first: Settings, under This phone.'
                     : error}
                 </p>
               </div>
@@ -438,7 +438,8 @@ export function CleanDatabaseModal({
               <div className="space-y-1 max-w-xs mx-auto">
                 <h3 className="text-sm font-bold text-zinc-900">Your grocery database is clean!</h3>
                 <p className="text-xs text-zinc-500">
-                  No duplicates, naming discrepancies, or aisle misclassifications were detected across your {groceryItems.length} items.
+                  No duplicates, naming discrepancies, or aisle misclassifications were detected across your{' '}
+                  {groceryItems.length} items.
                 </p>
               </div>
               <div className="pt-2">
@@ -458,7 +459,7 @@ export function CleanDatabaseModal({
             <div className="relative w-full max-w-md mx-auto my-auto flex flex-col items-center">
               {/* Ghost Card Behind (Stack Depth Effect) */}
               {currentIndex + 1 < actions.length && (
-                <div 
+                <div
                   className="absolute inset-x-2 top-2 h-full rounded-2xl bg-zinc-100/80 border border-zinc-200/80 shadow-xs scale-[0.97] pointer-events-none transition-all"
                   aria-hidden="true"
                 />
@@ -473,7 +474,7 @@ export function CleanDatabaseModal({
                 style={{
                   transform: cardTransform,
                   transition: cardTransition,
-                  touchAction: 'none'
+                  touchAction: 'none',
                 }}
                 className={`relative w-full bg-white rounded-2xl border border-zinc-200 shadow-xl p-4 sm:p-5 cursor-grab active:cursor-grabbing z-10 transition-shadow ${
                   isDragging ? 'shadow-2xl' : 'hover:border-zinc-300'
@@ -519,14 +520,11 @@ export function CleanDatabaseModal({
                     )}
                   </div>
 
-                  <span className="text-[11px] font-mono text-zinc-400">
-                    #{currentIndex + 1}
-                  </span>
+                  <span className="text-[11px] font-mono text-zinc-400">#{currentIndex + 1}</span>
                 </div>
 
                 {/* Specific Card Options & Content */}
                 <div className="py-3.5 space-y-3">
-                  
                   {/* 1. Merge Duplicates with user choice of which definition to keep! */}
                   {currentAction.actionType === 'merge' && secondaryItem && (
                     <div className="space-y-3">
@@ -551,19 +549,16 @@ export function CleanDatabaseModal({
                       {/* Interactive Choice Cards */}
                       <div className="grid grid-cols-1 gap-2">
                         {/* Choice 1: Currently Primary (Kept) */}
-                        <div
-                          className="p-3 rounded-xl border bg-emerald-50/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs flex items-center justify-between gap-3"
-                        >
+                        <div className="p-3 rounded-xl border bg-emerald-50/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                               <span>Keep as Primary</span>
                             </div>
-                            <div className="font-extrabold text-sm text-zinc-950 truncate mt-0.5">
-                              {primaryName}
-                            </div>
+                            <div className="font-extrabold text-sm text-zinc-950 truncate mt-0.5">{primaryName}</div>
                             <div className="text-[11px] text-zinc-500">
-                              {primaryItem?.category || 'General'} · step: {primaryItem?.increment || 1} {primaryItem?.unit || 'item'}
+                              {primaryItem?.category || 'General'} · step: {primaryItem?.increment || 1}{' '}
+                              {primaryItem?.unit || 'item'}
                             </div>
                           </div>
                           <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100/80 px-2 py-1 rounded-md shrink-0 border border-emerald-200">
@@ -588,7 +583,8 @@ export function CleanDatabaseModal({
                               {secondaryName}
                             </div>
                             <div className="text-[11px] text-zinc-400">
-                              {secondaryItem?.category || 'General'} · step: {secondaryItem?.increment || 1} {secondaryItem?.unit || 'item'}
+                              {secondaryItem?.category || 'General'} · step: {secondaryItem?.increment || 1}{' '}
+                              {secondaryItem?.unit || 'item'}
                             </div>
                           </div>
                           <button
@@ -608,7 +604,8 @@ export function CleanDatabaseModal({
                       <div className="text-[11px] text-zinc-600 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/80 flex items-start gap-1.5">
                         <Info className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                         <span>
-                          <strong>"{primaryName}"</strong> will be kept. <strong>"{secondaryName}"</strong> will be merged into its aliases for smart recipe matching.
+                          <strong>"{primaryName}"</strong> will be kept. <strong>"{secondaryName}"</strong> will be
+                          merged into its aliases for smart recipe matching.
                         </span>
                       </div>
                     </div>
@@ -618,20 +615,22 @@ export function CleanDatabaseModal({
                   {currentAction.actionType === 'rename' && (
                     <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-zinc-800 tracking-tight">
-                          Standardize Name:
-                        </span>
+                        <span className="text-xs font-bold text-zinc-800 tracking-tight">Standardize Name:</span>
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => updateCurrentAction({ newName: (currentAction.newName || primaryName).toLowerCase() })}
+                            onClick={() =>
+                              updateCurrentAction({ newName: (currentAction.newName || primaryName).toLowerCase() })
+                            }
                             className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-200 text-zinc-700 shadow-3xs cursor-pointer"
                           >
                             lowercase
                           </button>
                           <button
                             type="button"
-                            onClick={() => updateCurrentAction({ newName: toTitleCase(currentAction.newName || primaryName) })}
+                            onClick={() =>
+                              updateCurrentAction({ newName: toTitleCase(currentAction.newName || primaryName) })
+                            }
                             className="text-[11px] font-bold px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 rounded border border-zinc-200 text-zinc-700 shadow-3xs cursor-pointer"
                           >
                             Title Case
@@ -674,8 +673,13 @@ export function CleanDatabaseModal({
 
                       <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl space-y-2">
                         <div className="flex items-center justify-between text-xs text-zinc-600">
-                          <span>Item: <strong className="text-zinc-900">{primaryName}</strong></span>
-                          <span>Current: <span className="line-through text-zinc-400">{primaryItem?.category || 'Pantry'}</span></span>
+                          <span>
+                            Item: <strong className="text-zinc-900">{primaryName}</strong>
+                          </span>
+                          <span>
+                            Current:{' '}
+                            <span className="line-through text-zinc-400">{primaryItem?.category || 'Pantry'}</span>
+                          </span>
                         </div>
 
                         <div className="flex items-center gap-2 pt-1">
@@ -685,7 +689,7 @@ export function CleanDatabaseModal({
                             onChange={(e) => updateCurrentAction({ newAisle: e.target.value })}
                             className="flex-1 text-xs px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg focus:outline-none focus:border-emerald-500 font-bold text-emerald-800 cursor-pointer shadow-2xs"
                           >
-                            {availableAisles.map(aisle => (
+                            {availableAisles.map((aisle) => (
                               <option key={aisle} value={aisle}>
                                 {aisle} {aisle === currentAction.newAisle ? '(AI Recommended)' : ''}
                               </option>
@@ -701,7 +705,6 @@ export function CleanDatabaseModal({
                     <Info className="w-3.5 h-3.5 text-zinc-400 shrink-0 mt-0.5" />
                     <span>{currentAction.reason}</span>
                   </div>
-
                 </div>
 
                 {/* Footer Controls: Big Swipe/Reject/Accept Action Buttons */}
@@ -781,14 +784,13 @@ export function CleanDatabaseModal({
                               </span>
                             )}
                             <span className="font-bold text-zinc-900 truncate">
-                              {action.actionType === 'merge' && `Keep "${prim?.name || action.primaryItemId}" (absorb "${sec?.name || action.secondaryItemId}")`}
+                              {action.actionType === 'merge' &&
+                                `Keep "${prim?.name || action.primaryItemId}" (absorb "${sec?.name || action.secondaryItemId}")`}
                               {action.actionType === 'rename' && `Rename to "${action.newName}"`}
                               {action.actionType === 'recategorize' && `Move "${prim?.name}" to ${action.newAisle}`}
                             </span>
                           </div>
-                          <div className="text-[11px] text-zinc-400 truncate mt-0.5">
-                            {action.reason}
-                          </div>
+                          <div className="text-[11px] text-zinc-400 truncate mt-0.5">{action.reason}</div>
                         </div>
                         <Check className="w-4 h-4 text-emerald-600 shrink-0 stroke-[2.5]" />
                       </div>

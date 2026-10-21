@@ -2,7 +2,10 @@
 // The build stamps a version into index.html (<meta name="app-version">) and the same one into
 // sw.js; reading sw.js fresh from the site tells us the newest uploaded version.
 
-export interface RunningVersion { id: string; built?: string }
+export interface RunningVersion {
+  id: string;
+  built?: string;
+}
 
 /** The version in this page, or null (the preview inside Claude has none). */
 export function runningVersion(): RunningVersion | null {
@@ -10,7 +13,9 @@ export function runningVersion(): RunningVersion | null {
     const m = document.querySelector('meta[name="app-version"]') as HTMLMetaElement | null;
     const id = m?.content?.trim();
     return id ? { id, built: m?.getAttribute('data-built') || undefined } : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 /** The version stamped in a sw.js ("const CACHE = 'meal-planner-abc123…'"). */
@@ -25,7 +30,9 @@ export async function latestVersion(): Promise<string | null> {
     const res = await fetch(`./sw.js?check=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) return null;
     return versionInServiceWorker(await res.text());
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export type UpdateCheck = 'current' | 'available' | 'unknown';
@@ -43,7 +50,9 @@ export async function updateNow() {
   try {
     const reg = await navigator.serviceWorker?.getRegistration?.();
     await reg?.update?.();
-  } catch { /* reload anyway */ }
+  } catch {
+    /* reload anyway */
+  }
   window.location.reload();
 }
 

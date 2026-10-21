@@ -5,12 +5,16 @@ export function readOpenShop(): { planId: string; at: number } | null {
   try {
     const v = JSON.parse(localStorage.getItem(OPEN_SHOP_KEY) || 'null');
     if (v && typeof v.planId === 'string' && typeof v.at === 'number' && Date.now() - v.at < OPEN_SHOP_MS) return v;
-  } catch { /* nothing saved */ }
+  } catch {
+    /* nothing saved */
+  }
   return null;
 }
 export const saveOpenShop = (planId: string | null) => {
   try {
     if (planId) localStorage.setItem(OPEN_SHOP_KEY, JSON.stringify({ planId, at: Date.now() }));
     else localStorage.removeItem(OPEN_SHOP_KEY);
-  } catch { /* per-phone convenience only */ }
+  } catch {
+    /* per-phone convenience only */
+  }
 };

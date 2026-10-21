@@ -169,5 +169,5 @@ export const INITIAL_GROCERY_DATABASE: GroceryItem[] = [
   { id: 'gdb-166', name: 'Toothpaste', unit: 'tube', increment: 1, category: 'Hygiene' },
   { id: 'gdb-167', name: 'Deodorant', unit: 'can', increment: 1, category: 'Hygiene' },
   { id: 'gdb-168', name: 'Peas', unit: 'g', increment: 100, category: 'Produce' },
-  { id: 'gdb-169', name: 'Garlic Bread', unit: 'pack', increment: 1, category: 'Bakery' }
+  { id: 'gdb-169', name: 'Garlic Bread', unit: 'pack', increment: 1, category: 'Bakery' },
 ];

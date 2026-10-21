@@ -4,7 +4,7 @@ import { Plus, Minus, Trash2, Check, X, Search, Database } from 'lucide-react';
 import { PlannedMeal, PlannedMealSide } from '../../types';
 import { GROCERY_AISLES } from '../../utils';
 import { catalogForState, matchProduct, productMatchesSearch } from '../../shopping';
-import type  { AppStore } from '../../store';
+import type { AppStore } from '../../store';
 
 interface SidesModalInnerProps {
   dayName: string;
@@ -17,7 +17,7 @@ interface SidesModalInnerProps {
 export function SidesModalInner({ dayName, meal, store, onClose, onSave }: SidesModalInnerProps) {
   const [chosenSides, setChosenSides] = useState<PlannedMealSide[]>(() => meal.sides || []);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Triage state
   const [triageSideName, setTriageSideName] = useState<string | null>(null);
   const [triageCategory, setTriageCategory] = useState(GROCERY_AISLES.produce.name);
@@ -30,7 +30,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
     { name: 'Broccoli', category: GROCERY_AISLES.produce.name, unit: 'head', amount: 1, increment: 1 },
     { name: 'Mixed Salad', category: GROCERY_AISLES.produce.name, unit: 'bag', amount: 1, increment: 1 },
     { name: 'Frozen Chips', category: GROCERY_AISLES.frozen.name, unit: 'g', amount: 300, increment: 250 },
-    { name: 'Basmati Rice', category: GROCERY_AISLES.grains_pasta.name, unit: 'g', amount: 150, increment: 100 }
+    { name: 'Basmati Rice', category: GROCERY_AISLES.grains_pasta.name, unit: 'g', amount: 150, increment: 100 },
   ];
 
   // The shared product list (built-in products and yours, not ones you've taken off).
@@ -46,25 +46,34 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
       .map((p) => p.item);
   }, [searchQuery, catalog]);
 
-  const handleAddSide = (sideItem: { name: string; category?: string; unit?: string; increment?: number; amount?: number }) => {
-    const existing = chosenSides.find(s => s.name.toLowerCase() === sideItem.name.toLowerCase());
+  const handleAddSide = (sideItem: {
+    name: string;
+    category?: string;
+    unit?: string;
+    increment?: number;
+    amount?: number;
+  }) => {
+    const existing = chosenSides.find((s) => s.name.toLowerCase() === sideItem.name.toLowerCase());
     if (existing) {
-      setChosenSides(chosenSides.map(s => s.name.toLowerCase() === sideItem.name.toLowerCase()
-        ? { ...s, amount: s.amount + (sideItem.increment || s.amount) }
-        : s
-      ));
+      setChosenSides(
+        chosenSides.map((s) =>
+          s.name.toLowerCase() === sideItem.name.toLowerCase()
+            ? { ...s, amount: s.amount + (sideItem.increment || s.amount) }
+            : s,
+        ),
+      );
     } else {
       const dbMatch = matchProduct(catalog, sideItem.name)?.item;
       const cat = sideItem.category || dbMatch?.category || 'Pantry';
       const unit = sideItem.unit || dbMatch?.unit || 'item';
       const amt = sideItem.amount || dbMatch?.increment || sideItem.increment || 1;
-      
+
       const newSide: PlannedMealSide = {
         id: dbMatch?.id || `side-custom-${crypto.randomUUID()}`,
         name: sideItem.name,
         amount: amt,
         unit: unit,
-        category: cat
+        category: cat,
       };
       setChosenSides([...chosenSides, newSide]);
     }
@@ -73,23 +82,25 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
   };
 
   const handleRemoveSide = (id: string) => {
-    setChosenSides(chosenSides.filter(s => s.id !== id));
+    setChosenSides(chosenSides.filter((s) => s.id !== id));
   };
 
   const handleUpdateAmount = (id: string, delta: number) => {
-    setChosenSides(chosenSides.map(s => {
-      if (s.id !== id) return s;
-      
-      const dbMatch = catalog.byId.get(s.id)?.item;
-      const step = dbMatch?.increment || 1;
-      const nextAmount = Math.max(step, s.amount + (delta * step));
-      return { ...s, amount: nextAmount };
-    }));
+    setChosenSides(
+      chosenSides.map((s) => {
+        if (s.id !== id) return s;
+
+        const dbMatch = catalog.byId.get(s.id)?.item;
+        const step = dbMatch?.increment || 1;
+        const nextAmount = Math.max(step, s.amount + delta * step);
+        return { ...s, amount: nextAmount };
+      }),
+    );
   };
 
   const handleAddCustomSide = () => {
     if (!triageSideName) return;
-    
+
     const newId = `gdb-custom-${crypto.randomUUID()}`;
     const newItem = {
       id: newId,
@@ -98,31 +109,31 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
       unit: triageUnit,
       increment: triageIncrement,
     };
-    
- if (store.saveProduct) store.saveProduct(newItem);
+
+    if (store.saveProduct) store.saveProduct(newItem);
     else store.updateGroceryOverride(newId, newItem);
-    
+
     const newSide: PlannedMealSide = {
       id: newId,
       name: triageSideName,
       amount: triageIncrement,
       unit: triageUnit,
-      category: triageCategory
+      category: triageCategory,
     };
-    
+
     setChosenSides([...chosenSides, newSide]);
     setTriageSideName(null);
     setSearchQuery('');
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
-      <div 
+      <div
         className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-150 overflow-hidden flex flex-col max-h-[85vh]"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between shrink-0 bg-emerald-50/50">
@@ -133,7 +144,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
             </h3>
             <p className="text-[11px] text-zinc-500 font-medium mt-0.5">{dayName} Meal Plan</p>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-1 text-zinc-400 hover:text-zinc-950 rounded-lg hover:bg-zinc-100 transition-colors cursor-pointer"
           >
@@ -151,8 +162,11 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
               </div>
             ) : (
               <div className="space-y-1.5">
-                {chosenSides.map(side => (
-                  <div key={side.id} className="flex items-center justify-between p-2.5 bg-zinc-50 border border-zinc-200/80 rounded-xl">
+                {chosenSides.map((side) => (
+                  <div
+                    key={side.id}
+                    className="flex items-center justify-between p-2.5 bg-zinc-50 border border-zinc-200/80 rounded-xl"
+                  >
                     <div className="min-w-0 pr-2">
                       <span className="font-semibold text-xs text-zinc-900 block truncate">{side.name}</span>
                       <span className="text-[11px] text-zinc-400">{side.category || 'Pantry'}</span>
@@ -209,16 +223,16 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                 None
               </button>
 
-              {POPULAR_SIDES.map(pop => {
-                const isSelected = chosenSides.some(s => s.name.toLowerCase() === pop.name.toLowerCase());
+              {POPULAR_SIDES.map((pop) => {
+                const isSelected = chosenSides.some((s) => s.name.toLowerCase() === pop.name.toLowerCase());
                 return (
                   <button
                     key={pop.name}
                     type="button"
                     onClick={() => handleAddSide(pop)}
                     className={`text-xs px-2.5 py-1.5 rounded-full border transition-all cursor-pointer font-medium ${
-                      isSelected 
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-semibold' 
+                      isSelected
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-semibold'
                         : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
                     }`}
                   >
@@ -231,14 +245,16 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
 
           {/* Search Bar */}
           <div>
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Search your grocery list</h4>
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2">
+              Search your grocery list
+            </h4>
             <div className="relative">
               <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search sides... (e.g. Peas, Salad)"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-white"
               />
             </div>
@@ -246,7 +262,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
             {/* Autocomplete Dropdown Search Results */}
             {searchQuery.trim() !== '' && (
               <div className="mt-1.5 border border-zinc-200 bg-white rounded-xl shadow-lg overflow-hidden divide-y divide-zinc-100">
-                {searchResults.map(item => (
+                {searchResults.map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -259,7 +275,7 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                 ))}
 
                 {/* If no exact match and query is non-empty, allow Triage */}
-                {!searchResults.some(r => r.name.toLowerCase() === searchQuery.toLowerCase().trim()) && (
+                {!searchResults.some((r) => r.name.toLowerCase() === searchQuery.toLowerCase().trim()) && (
                   <button
                     type="button"
                     onClick={() => setTriageSideName(searchQuery.trim())}
@@ -282,7 +298,9 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                     <Database className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Triage Custom Side</span>
                   </h5>
-                  <p className="text-[11px] text-emerald-800/80 mt-0.5">Pick what you buy for "{triageSideName}" so it lands in the right aisle.</p>
+                  <p className="text-[11px] text-emerald-800/80 mt-0.5">
+                    Pick what you buy for "{triageSideName}" so it lands in the right aisle.
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -298,10 +316,16 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                   <label className="block text-[11px] font-semibold text-emerald-950 mb-1">Aisle / Category</label>
                   <select
                     value={triageCategory}
-                    onChange={e => setTriageCategory(e.target.value)}
+                    onChange={(e) => setTriageCategory(e.target.value)}
                     className="w-full p-1.5 border border-emerald-200/80 rounded-lg bg-white"
                   >
-                    {Object.values(GROCERY_AISLES).sort((a, b) => a.order - b.order).map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
+                    {Object.values(GROCERY_AISLES)
+                      .sort((a, b) => a.order - b.order)
+                      .map((a) => (
+                        <option key={a.id} value={a.name}>
+                          {a.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
                 <div>
@@ -310,14 +334,16 @@ export function SidesModalInner({ dayName, meal, store, onClose, onSave }: Sides
                     type="text"
                     placeholder="g, pack, head..."
                     value={triageUnit}
-                    onChange={e => setTriageUnit(e.target.value)}
+                    onChange={(e) => setTriageUnit(e.target.value)}
                     className="w-full p-1.5 border border-emerald-200/80 rounded-lg bg-white"
                   />
                 </div>
               </div>
 
               <div className="text-xs">
-                <label className="block text-[11px] font-semibold text-emerald-950 mb-1">Default Amount / Increment</label>
+                <label className="block text-[11px] font-semibold text-emerald-950 mb-1">
+                  Default Amount / Increment
+                </label>
                 <div className="flex items-center gap-1.5 bg-white border border-emerald-200/80 rounded-lg p-0.5 w-fit">
                   <button
                     type="button"

@@ -18,15 +18,39 @@ export type VoiceCommand =
   | { kind: 'question'; text: string };
 
 const NUMBER_WORDS: Record<string, number> = {
-  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
-  eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60,
-  a: 1, an: 1, half: 0.5,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
+  a: 1,
+  an: 1,
+  half: 0.5,
 };
-const num = (w: string): number | null => (/^\d+$/.test(w) ? Number(w) : NUMBER_WORDS[w] ?? null);
+const num = (w: string): number | null => (/^\d+$/.test(w) ? Number(w) : (NUMBER_WORDS[w] ?? null));
 
 const clean = (s: string) =>
-  s.toLowerCase()
+  s
+    .toLowerCase()
     .replace(/[’']/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -36,14 +60,122 @@ const clean = (s: string) =>
     .replace(/(?:\s+(?:please|thanks|thank you|then|now))+$/, '');
 
 const ONE_OF = (words: string[]) => new RegExp(`^(?:${words.join('|')})$`);
-const NEXT = ONE_OF(['next', 'next step', 'next one', 'go on', 'carry on', 'continue', 'forward', 'go forward', 'move on', 'go next', 'whats next', 'what next', 'done next', 'next please']);
-const BACK = ONE_OF(['back', 'go back', 'previous', 'previous step', 'last step', 'step back', 'back one', 'go back one', 'back a step', 'go back a step']);
-const REPEAT = ONE_OF(['repeat', 'repeat that', 'repeat it', 'repeat the step', 'again', 'say again', 'say that again', 'say it again', 'read again', 'read it again', 'read that again', 'read the step', 'read it', 'what was that', 'pardon', 'sorry', 'come again', 'what']);
-const STOP = ONE_OF(['stop', 'stop it', 'stop timer', 'stop the timer', 'stop the alarm', 'stop alarm', 'cancel timer', 'cancel the timer', 'quiet', 'be quiet', 'silence', 'shush', 'shut up', 'turn it off', 'alarm off', 'timer off']);
-const LEFT = ONE_OF(['how long left', 'how long is left', 'how longs left', 'how long has it got', 'how long has it got left', 'whats left', 'how long to go', 'how long', 'time left', 'how much time', 'how much time left', 'how much longer', 'how long now', 'whats left on the timer', 'how long on the timer', 'timer']);
-const START = ONE_OF(['start timer', 'start the timer', 'set timer', 'set the timer', 'set a timer', 'start a timer', 'timer on', 'go timer', 'start it', 'start']);
-const INGREDIENTS = ONE_OF(['ingredients', 'what do i need', 'what do i need for this', 'what do i need for this step', 'what ingredients', 'whats in it', 'what goes in']);
-const FINISH = ONE_OF(['finished', 'finish', 'all done', 'im done', 'were done', 'done cooking', 'finished cooking', 'thats it', 'the end']);
+const NEXT = ONE_OF([
+  'next',
+  'next step',
+  'next one',
+  'go on',
+  'carry on',
+  'continue',
+  'forward',
+  'go forward',
+  'move on',
+  'go next',
+  'whats next',
+  'what next',
+  'done next',
+  'next please',
+]);
+const BACK = ONE_OF([
+  'back',
+  'go back',
+  'previous',
+  'previous step',
+  'last step',
+  'step back',
+  'back one',
+  'go back one',
+  'back a step',
+  'go back a step',
+]);
+const REPEAT = ONE_OF([
+  'repeat',
+  'repeat that',
+  'repeat it',
+  'repeat the step',
+  'again',
+  'say again',
+  'say that again',
+  'say it again',
+  'read again',
+  'read it again',
+  'read that again',
+  'read the step',
+  'read it',
+  'what was that',
+  'pardon',
+  'sorry',
+  'come again',
+  'what',
+]);
+const STOP = ONE_OF([
+  'stop',
+  'stop it',
+  'stop timer',
+  'stop the timer',
+  'stop the alarm',
+  'stop alarm',
+  'cancel timer',
+  'cancel the timer',
+  'quiet',
+  'be quiet',
+  'silence',
+  'shush',
+  'shut up',
+  'turn it off',
+  'alarm off',
+  'timer off',
+]);
+const LEFT = ONE_OF([
+  'how long left',
+  'how long is left',
+  'how longs left',
+  'how long has it got',
+  'how long has it got left',
+  'whats left',
+  'how long to go',
+  'how long',
+  'time left',
+  'how much time',
+  'how much time left',
+  'how much longer',
+  'how long now',
+  'whats left on the timer',
+  'how long on the timer',
+  'timer',
+]);
+const START = ONE_OF([
+  'start timer',
+  'start the timer',
+  'set timer',
+  'set the timer',
+  'set a timer',
+  'start a timer',
+  'timer on',
+  'go timer',
+  'start it',
+  'start',
+]);
+const INGREDIENTS = ONE_OF([
+  'ingredients',
+  'what do i need',
+  'what do i need for this',
+  'what do i need for this step',
+  'what ingredients',
+  'whats in it',
+  'what goes in',
+]);
+const FINISH = ONE_OF([
+  'finished',
+  'finish',
+  'all done',
+  'im done',
+  'were done',
+  'done cooking',
+  'finished cooking',
+  'thats it',
+  'the end',
+]);
 const HELP = ONE_OF(['help', 'what can i say', 'commands', 'what do i say']);
 const QUESTION = /^(?:hey |ok |okay )?(?:chef|question|quick question|ask|i have a question|a question)\b[\s,:]*(.*)$/;
 
@@ -56,7 +188,9 @@ export function parseVoiceCommand(heard: string): VoiceCommand | null {
   const q = t.match(QUESTION);
   if (q) {
     // Keep the question as said (with its capitals and accents), minus the "question," at the start.
-    const said = raw.replace(/^\s*(?:hey |ok |okay )?(?:chef|question|quick question|ask|i have a question|a question)\b[\s,:]*/i, '').trim();
+    const said = raw
+      .replace(/^\s*(?:hey |ok |okay )?(?:chef|question|quick question|ask|i have a question|a question)\b[\s,:]*/i, '')
+      .trim();
     if (!q[1] || !said) return null;
     const text = said.charAt(0).toUpperCase() + said.slice(1);
     return { kind: 'question', text: /[?.!]$/.test(text) ? text : `${text}?` };
@@ -102,7 +236,13 @@ export function parseAlternatives(alternatives: string[]): { command: VoiceComma
 // ---------- The listener ----------
 
 export const canListen = (): boolean => {
-  try { return typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition); } catch { return false; }
+  try {
+    return (
+      typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+    );
+  } catch {
+    return false;
+  }
 };
 
 export type ListenerProblem = 'blocked' | 'no-mic' | 'network' | 'stopped' | 'unsupported';
@@ -128,7 +268,12 @@ export function createListener(handlers: {
     // Something's wrong if it keeps ending straight away (no mic, no network): give up and say so.
     const now = Date.now();
     starts = [...starts.filter((t) => now - t < 15000), now];
-    if (starts.length > 8) { wanted = false; handlers.onListening?.(false); handlers.onProblem?.('stopped'); return; }
+    if (starts.length > 8) {
+      wanted = false;
+      handlers.onListening?.(false);
+      handlers.onProblem?.('stopped');
+      return;
+    }
     try {
       rec = new Rec();
       rec.lang = 'en-GB';
@@ -142,15 +287,25 @@ export function createListener(handlers: {
           if (r && (r.isFinal ?? true)) {
             const alts: string[] = [];
             for (let j = 0; j < r.length; j++) if (r[j]?.transcript) alts.push(String(r[j].transcript));
-            if (alts.length) { starts = []; handlers.onHeard(alts); }
+            if (alts.length) {
+              starts = [];
+              handlers.onHeard(alts);
+            }
           }
         }
       };
       rec.onerror = (e: any) => {
         const err = String(e?.error || '');
-        if (err === 'not-allowed' || err === 'service-not-allowed') { wanted = false; handlers.onProblem?.('blocked'); }
-        else if (err === 'audio-capture') { wanted = false; handlers.onProblem?.('no-mic'); }
-        else if (err === 'network') { wanted = false; handlers.onProblem?.('network'); }
+        if (err === 'not-allowed' || err === 'service-not-allowed') {
+          wanted = false;
+          handlers.onProblem?.('blocked');
+        } else if (err === 'audio-capture') {
+          wanted = false;
+          handlers.onProblem?.('no-mic');
+        } else if (err === 'network') {
+          wanted = false;
+          handlers.onProblem?.('network');
+        }
         // 'no-speech' and 'aborted' just mean start again.
       };
       rec.onend = () => {
@@ -165,15 +320,43 @@ export function createListener(handlers: {
     }
   };
   const halt = () => {
-    if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
-    try { rec?.abort?.(); } catch { /* already stopped */ }
+    if (restartTimer) {
+      clearTimeout(restartTimer);
+      restartTimer = null;
+    }
+    try {
+      rec?.abort?.();
+    } catch {
+      /* already stopped */
+    }
     rec = null;
   };
 
   return {
-    start() { if (!Rec) { handlers.onProblem?.('unsupported'); return; } wanted = true; paused = false; starts = []; begin(); },
-    stop() { wanted = false; halt(); handlers.onListening?.(false); },
-    pause() { if (paused) return; paused = true; halt(); },
-    resume() { if (!paused) return; paused = false; if (wanted) begin(); },
+    start() {
+      if (!Rec) {
+        handlers.onProblem?.('unsupported');
+        return;
+      }
+      wanted = true;
+      paused = false;
+      starts = [];
+      begin();
+    },
+    stop() {
+      wanted = false;
+      halt();
+      handlers.onListening?.(false);
+    },
+    pause() {
+      if (paused) return;
+      paused = true;
+      halt();
+    },
+    resume() {
+      if (!paused) return;
+      paused = false;
+      if (wanted) begin();
+    },
   };
 }

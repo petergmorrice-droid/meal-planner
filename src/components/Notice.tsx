@@ -25,9 +25,7 @@ export default function Notice({
   /** The Shop's message (kept for its tests). */
   shop?: boolean;
 }) {
-  const outer = placement === 'screen'
-    ? 'fixed left-3 right-3 z-[80]'
-    : 'absolute left-3 right-3 bottom-3 z-40';
+  const outer = placement === 'screen' ? 'fixed left-3 right-3 z-[80]' : 'absolute left-3 right-3 bottom-3 z-40';
   return (
     <div
       className={`${outer} flex justify-center pointer-events-none`}
@@ -45,14 +43,20 @@ export default function Notice({
         {action ? (
           <button
             type="button"
-            onClick={() => { const run = action.run; onDone(); run(); }}
+            onClick={() => {
+              const run = action.run;
+              onDone();
+              run();
+            }}
             className="shrink-0 h-9 px-3 rounded-xl text-sm font-semibold text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100 cursor-pointer"
             data-toast-action
             {...(action.label === 'Undo' ? { 'data-toast-undo': '' } : {})}
           >
             {action.label}
           </button>
-        ) : <span className="w-1.5" />}
+        ) : (
+          <span className="w-1.5" />
+        )}
       </div>
     </div>
   );
