@@ -215,6 +215,13 @@ await test('the per-minute allowance: wait a minute', async () => {
   assert.match(e.message, /only takes a few requests a minute\. Wait a minute, then try again\./);
 });
 
+await test('two models out of time: the third is not asked (no waiting minutes)', async () => {
+  google(neverAnswers, neverAnswers, says('too late'));
+  const e = page(await failing(() => askGemini('k', [{ text: 'x' }], { thinking: 'low', waitSeconds: 0.1 })));
+  assert.equal(calls.length, 2);
+  assert.match(e.message, /didn't answer in time/);
+});
+
 await test('first used up, second too slow: says it didn\'t answer in time (not "no connection")', async () => {
   google(quota('Day'), quota('Day'), neverAnswers);
   const started = Date.now();

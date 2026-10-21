@@ -813,4 +813,7 @@ next run that passes saves a new one.
   it comes back at about 8am (remembered on each phone; a new key starts
   afresh), so it doesn't cost a wasted request each time. Tests: five new
   unit tests, including the reset time across the clock changes.
+- `No waiting minutes` — with three Gemini models, a link that every model
+  is slow to read could take three time limits. Now it stops after two
+  models run out of time. Test: a unit test.
 

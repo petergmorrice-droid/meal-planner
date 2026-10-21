@@ -231,6 +231,8 @@ export async function askGemini(
       // A key Google says isn't valid, or no signal at all, would fail the same way on the next model.
       const badKey = result.problem === 'key' && /API_KEY_INVALID|not valid|expired/i.test(result.note);
       if (badKey || (result.problem === 'offline' && globalThis.navigator?.onLine === false)) break;
+      // Two models out of time: stop there, rather than keep you waiting minutes for a third.
+      if (tries.filter((t) => t.problem === 'slow').length >= 2) break;
     }
   }
   throw new GeminiError(tries);
