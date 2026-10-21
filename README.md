@@ -816,4 +816,9 @@ next run that passes saves a new one.
 - `No waiting minutes` — with three Gemini models, a link that every model
   is slow to read could take three time limits. Now it stops after two
   models run out of time. Test: a unit test.
+- `More free Gemini use` — copying (a link, a photo, pasted text), matching
+  products and questions while cooking now start on the light models
+  (3.5 Flash-Lite, then 3.1 Flash-Lite), which do these jobs well and allow
+  hundreds of free requests a day. 3.8 Flash's ~20 a day are kept for
+  writing and changing recipes. Test: a unit test.
 

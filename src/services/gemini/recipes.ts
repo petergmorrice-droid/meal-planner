@@ -53,7 +53,7 @@ export async function readRecipePageApi(url: string): Promise<string> {
     result = await askGemini(
       apiKey,
       [{ text: `Open this web page and find the recipe on it.\n${COPY_OUT_RULES}\n\nPage: ${url}` }],
-      { tools: [{ url_context: {} }], thinking: 'low', waitSeconds: 90 },
+      { tools: [{ url_context: {} }], thinking: 'low', light: true, waitSeconds: 90 },
     );
   } catch (err) {
     console.error('Gemini readRecipePageApi failed:', err);
@@ -80,7 +80,7 @@ export async function readRecipePhotoApi(base64: string, mimeType: string): Prom
         { inlineData: { mimeType, data: base64 } },
         { text: `This is a photo of a recipe (a cookbook page, a card or a screen).\n${COPY_OUT_RULES}` },
       ],
-      { thinking: 'low', waitSeconds: 60 },
+      { thinking: 'low', light: true, waitSeconds: 60 },
     );
   } catch (err) {
     console.error('Gemini readRecipePhotoApi failed:', err);
@@ -109,6 +109,7 @@ export async function parseRecipeApi(text: string, cookingMethod: 'ninja' | 'ove
       systemInstruction: COPY_SYSTEM_INSTRUCTION,
       responseSchema: COPY_RECIPE_SCHEMA,
       thinking: 'low',
+      light: true,
       waitSeconds: 60,
     });
     data = readJsonAnswer(rawText);
@@ -167,6 +168,7 @@ ${productNames.join('; ')}`;
       systemInstruction: 'You match recipe ingredients to a fixed grocery list. Never invent product names.',
       responseSchema: schema,
       thinking: 'low',
+      light: true,
       waitSeconds: 30,
     });
     const data: { matches?: ({ ingredient?: unknown; product?: unknown } | null)[] } = readJsonAnswer(rawText);
@@ -381,7 +383,12 @@ export async function askAboutRecipeApi(
     'Answer from the recipe when it says; otherwise give sensible, safe general cooking advice and say briefly that it is not in the recipe.',
     'Be accurate about food safety (cooking meat through, reheating, allergens). If you are not sure, say so.',
   ].join(' ');
-  const text = await askGeminiText(apiKey, prompt, { systemInstruction: system, thinking: 'low', waitSeconds: 30 });
+  const text = await askGeminiText(apiKey, prompt, {
+    systemInstruction: system,
+    thinking: 'low',
+    light: true,
+    waitSeconds: 30,
+  });
   return String(text || '')
     .replace(/[*#_`]+/g, '')
     .replace(/\s+/g, ' ')

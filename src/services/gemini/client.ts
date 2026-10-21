@@ -15,6 +15,16 @@ const MODELS = [
   { id: 'gemini-3.6-flash', name: '3.6 Flash' },
   { id: 'gemini-3.1-flash-lite', name: '3.1 Flash-Lite' },
 ];
+/**
+ * For copying, matching and quick answers: the light models first. They do these jobs well and
+ * have far bigger free allowances (hundreds a day), which keeps 3.8 Flash's ~20 for writing recipes.
+ */
+const LIGHT_MODELS = [
+  { id: 'gemini-3.5-flash-lite', name: '3.5 Flash-Lite' },
+  { id: 'gemini-3.1-flash-lite', name: '3.1 Flash-Lite' },
+  { id: 'gemini-3.6-flash', name: '3.6 Flash' },
+  { id: 'gemini-3.8-flash', name: '3.8 Flash' },
+];
 
 /** How long to wait before asking a busy model once more (Google's advice for a 503). */
 let BUSY_RETRY_MS = 2500;
@@ -192,6 +202,8 @@ export interface AskOptions {
    * Unset (Gemini's own default, more thinking, slower) for writing or changing a recipe.
    */
   thinking?: 'low';
+  /** A simple job (copying, matching, a quick answer): start with the light, high-allowance models. */
+  light?: boolean;
   /** How long to wait for each model before trying the next, in seconds. */
   waitSeconds: number;
 }
@@ -207,8 +219,9 @@ export async function askGemini(
 ): Promise<{ text: string; response: GeminiReply }> {
   const tries: GeminiTry[] = [];
   // Models already used up today are skipped (unless they all are: then each is asked anyway).
-  const fresh = MODELS.filter((m) => !isUsedUp(m.id));
-  for (const model of MODELS) {
+  const models = options.light ? LIGHT_MODELS : MODELS;
+  const fresh = models.filter((m) => !isUsedUp(m.id));
+  for (const model of models) {
     if (fresh.length && !fresh.includes(model)) {
       tries.push({ model: model.name, problem: 'limit', limit: 'day', note: 'free limit for today used up earlier' });
       continue;

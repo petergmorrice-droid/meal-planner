@@ -215,6 +215,18 @@ await test('the per-minute allowance: wait a minute', async () => {
   assert.match(e.message, /only takes a few requests a minute\. Wait a minute, then try again\./);
 });
 
+await test('copying and quick answers start on the light models (big free allowances)', async () => {
+  google(json(429, { error: { status: 'RESOURCE_EXHAUSTED', details: [{ quotaId: 'PerDay' }] } }), says('OK'));
+  assert.equal((await askGemini('k', [{ text: 'x' }], { ...quick, light: true })).text, 'OK');
+  assert.deepEqual(
+    calls.map((c) => c.model),
+    ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  );
+  google(says('OK'));
+  await askGemini('k', [{ text: 'x' }], { waitSeconds: 5 });
+  assert.equal(calls[0].model, 'gemini-3.8-flash', 'writing a recipe still starts on 3.8 Flash');
+});
+
 await test('two models out of time: the third is not asked (no waiting minutes)', async () => {
   google(neverAnswers, neverAnswers, says('too late'));
   const e = page(await failing(() => askGemini('k', [{ text: 'x' }], { thinking: 'low', waitSeconds: 0.1 })));
