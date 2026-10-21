@@ -169,7 +169,7 @@ export function AddRecipe({
     try {
       if (mode === 'generate') {
         setBusy('write');
-        const data = await generateRecipeApi(t, appliance);
+        const data = await generateRecipeApi(t, appliance, store.state.preferences?.defaultServings || 2);
         toReview(await toDraft(data));
       } else if (linkOnly) {
         setBusy('page');

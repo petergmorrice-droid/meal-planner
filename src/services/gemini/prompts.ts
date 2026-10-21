@@ -13,7 +13,7 @@ export const RECIPE_RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
     name: { type: 'STRING', description: 'Recipe title' },
-    description: { type: 'STRING', description: 'Engaging concise description of the meal portioned for 2 adults' },
+    description: { type: 'STRING', description: 'Engaging concise description of the meal' },
     ingredients: {
       type: 'ARRAY',
       description: 'List of ingredients with normalized decimal quantities and standard units',
@@ -76,7 +76,7 @@ export const RECIPE_RESPONSE_SCHEMA = {
         oven_hob: { type: 'INTEGER' },
       },
     },
-    servings: { type: 'INTEGER', description: 'Must be 2' },
+    servings: { type: 'INTEGER', description: 'How many people the amounts are for (as the request asks)' },
     tags: {
       type: 'ARRAY',
       items: { type: 'STRING' },

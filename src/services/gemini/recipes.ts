@@ -181,7 +181,15 @@ ${productNames.join('; ')}`;
   }
 }
 
-export async function generateRecipeApi(promptText: string, cookingMethod: 'ninja' | 'oven_hob'): Promise<Recipe> {
+/**
+ * Write a new recipe. It's for as many people as the request says ("macaroni cheese for 4"),
+ * otherwise for how many you usually cook for (Settings → Household).
+ */
+export async function generateRecipeApi(
+  promptText: string,
+  cookingMethod: 'ninja' | 'oven_hob',
+  usualServings = 2,
+): Promise<Recipe> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY_MISSING');
@@ -212,7 +220,7 @@ CRITICAL INSTRUCTIONS:
 - Convert any vague phrasing to exact decimal amounts and standard units.
 - Quantities in instructions must match decimal amounts in ingredients list.
 
-5. Strict portion scaling for 2 adults (servings: 2).
+5. Servings: if the idea says how many people it is for, write it for exactly that many; otherwise write it for ${usualServings}. Set servings to that number, and make every amount (in the ingredients and the steps) right for that many people.
 - Exclude all macros, health scores, and cost estimates.`;
 
   try {
@@ -222,7 +230,7 @@ CRITICAL INSTRUCTIONS:
       waitSeconds: 90,
     });
     const data: GeminiRecipe = readJsonAnswer(rawText);
-    return validateAndNormalizeRecipe(data, selectedMethod, promptText);
+    return validateAndNormalizeRecipe(data, selectedMethod, promptText, usualServings);
   } catch (err) {
     console.error('Gemini generateRecipeApi failed:', err);
     throw geminiFailure(err, 'create this recipe');

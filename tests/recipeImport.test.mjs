@@ -322,6 +322,25 @@ test('"next week" is right in the weeks the clocks change', () => {
   }
 });
 
+test('a recipe Gemini wrote keeps the number of people it was written for (not always 2)', () => {
+  const written = (servings) =>
+    validateAndNormalizeRecipe(
+      {
+        name: 'Macaroni cheese',
+        servings,
+        ingredients: [{ name: 'macaroni', amount: 400, unit: 'g' }],
+        instructions: ['Boil.'],
+      },
+      'oven_hob',
+      'macaroni cheese for 4',
+      3,
+    ).servings;
+  assert.equal(written(4), 4, 'asked for 4');
+  assert.equal(written(undefined), 3, 'not said: your usual number');
+  assert.equal(written(0), 3);
+  assert.equal(written('lots'), 3);
+});
+
 test('a recipe Gemini wrote or changed: gaps filled, its extras kept, every ingredient has its own id', () => {
   const r = validateAndNormalizeRecipe(
     {

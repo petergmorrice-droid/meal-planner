@@ -217,10 +217,16 @@ function generateFunctionalTags(
 }
 
 /** A recipe Gemini wrote or changed, made ready to save: gaps filled, its own extras kept. */
+const wholeServings = (n: unknown) => {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) && v >= 1 && v <= 50 ? v : 0;
+};
+
 export function validateAndNormalizeRecipe(
   data: GeminiRecipe,
   selectedMethod: 'ninja' | 'oven_hob',
   rawText?: string,
+  usualServings = 2,
 ): Recipe {
   // Ingredients, each with its own id like every other recipe's.
   const ingredients: Ingredient[] = (data.ingredients || []).map((ing) => ({
@@ -262,7 +268,8 @@ export function validateAndNormalizeRecipe(
     id: data.id || crypto.randomUUID(),
     name: (data.name as string) || 'Custom Recipe',
     description: (data.description as string) || 'Custom home-cooked meal.',
-    servings: 2,
+    // How many Gemini wrote it for (what was asked, or your usual number); never forced to 2.
+    servings: wholeServings(data.servings) || usualServings,
     ingredients,
     instructions,
     methodInstructions,

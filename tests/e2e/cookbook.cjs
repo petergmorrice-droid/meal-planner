@@ -113,6 +113,21 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
       calls.push({ kind: 'suggest' });
       return reply(r, json({ matches: [] }));
     }
+    if (/Create an original/.test(prompt)) {
+      calls.push({ kind: 'write', prompt });
+      const people = /for 4\b/.test(prompt) ? 4 : 2;
+      return reply(
+        r,
+        json({
+          ...copied('Macaroni cheese'),
+          servings: people,
+          ingredients: [
+            { name: 'macaroni', amount: 100 * people, unit: 'g', category: 'Pantry', suggestedAisle: 'Pantry' },
+          ],
+          instructions: ['Boil the macaroni.'],
+        }),
+      );
+    }
     calls.push({ kind: 'copy', prompt, body });
     return reply(r, json(copied(ctx.nextName)));
   });
@@ -523,6 +538,32 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
     await page.getByRole('button', { name: 'Close' }).first().click();
     await page.waitForTimeout(200);
     check(page.errors.length === 0, 'no page errors (adding)', page.errors.join(' | '));
+    await ctx.close();
+  }
+
+  // Ask Gemini to write one, for 4: it's written for 4 (not always 2)
+  {
+    const { ctx, page, calls } = await open(browser);
+    await page.tab('Cookbook');
+    await page.locator('[data-add-recipe-button]').click();
+    await page.waitForTimeout(300);
+    await page.getByRole('tab', { name: 'Ask Gemini to write one' }).click();
+    await page.locator('textarea[aria-label="What should Gemini write?"]').fill('Macaroni cheese for 4');
+    await page.locator('[data-add-go]').click();
+    await page.waitForTimeout(1500);
+    const write = calls.find((c) => c.kind === 'write');
+    check(
+      !!write &&
+        /says how many people it is for, write it for exactly that many/.test(write.prompt) &&
+        !/for 2 adults/.test(write.prompt),
+      'Gemini is told to write it for the number asked for (no more "always 2")',
+      write?.prompt.slice(-400),
+    );
+    check(
+      (await page.locator('input[aria-label="Serves"]').inputValue()) === '4',
+      '"Macaroni cheese for 4" comes back serving 4',
+      await page.locator('input[aria-label="Serves"]').inputValue(),
+    );
     await ctx.close();
   }
 

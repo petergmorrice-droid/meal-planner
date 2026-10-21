@@ -797,4 +797,10 @@ next run that passes saves a new one.
   clears a "check amount" that no longer applies (it used to keep the old
   one). Tests: three unit tests and a browser test (`list-catch-up`) of the
   shepherd's pie list as it was on the phone.
+- `Written for the number you ask for` — *Ask Gemini to write one* always
+  made the recipe for 2 ("macaroni cheese for 4" came back for 2): the
+  request said "servings: 2" and the app then set 2 whatever Gemini wrote.
+  Now it's written for the number in your request, or for how many you
+  usually cook for (*Settings → Household*) if you don't say, and that's the
+  number it's saved with. Tests: a unit test and a browser check.
 
