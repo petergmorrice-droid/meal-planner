@@ -10,6 +10,7 @@ import {
   generateAlternativeInstructionsApi,
   readRecipePageApi,
   readRecipePhotoApi,
+  geminiDetail,
 } from '../services/geminiService';
 import { RecipeEditor } from './RecipeEditor';
 import { firstUrl, isJustAUrl, findDuplicate, siteName, recipeMethods, METHOD_LABEL } from '../recipeInfo';
@@ -78,7 +79,9 @@ export function AddRecipe({
   const [text, setText] = useState(initialText || '');
   const [appliance, setApplianceState] = useState<CookingMethod>(readAppliance);
   const [busy, setBusy] = useState<Busy>(null);
-  const [error, setError] = useState('');
+  // What went wrong, and the small print (what happened on each Gemini model) when there is some.
+  const [error, setErrorState] = useState({ text: '', detail: '' });
+  const setError = (text: string, detail = '') => setErrorState({ text, detail });
   const [draft, setDraft] = useState<Recipe | null>(null);
   const [method, setMethod] = useState<CookingMethod>('oven_hob');
   const [showRefine, setShowRefine] = useState(false);
@@ -176,7 +179,7 @@ export function AddRecipe({
         await copyRecipe(t);
       }
     } catch (err) {
-      setError(explain(err));
+      setError(explain(err), geminiDetail(err));
     } finally {
       setBusy(null);
     }
@@ -193,7 +196,7 @@ export function AddRecipe({
       setText(photoText); // if the next step fails, the words are here to fix and try again
       await copyRecipe(photoText);
     } catch (err) {
-      setError(explain(err));
+      setError(explain(err), geminiDetail(err));
     } finally {
       setBusy(null);
       if (photoRef.current) photoRef.current.value = '';
@@ -440,14 +443,14 @@ export function AddRecipe({
               className="px-4 py-3 border-t border-zinc-200 shrink-0"
               style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
-              {error && (
+              {error.text && (
                 <div
                   className="text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 mb-2"
                   role="alert"
                   data-add-error
                 >
-                  {error}{' '}
-                  {/Settings/.test(error) && onNavigateTab && (
+                  {error.text}{' '}
+                  {/Settings/.test(error.text) && onNavigateTab && (
                     <button
                       type="button"
                       className="underline font-semibold cursor-pointer"
@@ -458,6 +461,11 @@ export function AddRecipe({
                     >
                       Open Settings
                     </button>
+                  )}
+                  {error.detail && (
+                    <span className="block mt-1 text-xs text-rose-700/80 break-words" data-add-error-detail>
+                      Details: {error.detail}
+                    </span>
                   )}
                 </div>
               )}

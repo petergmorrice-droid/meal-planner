@@ -1,6 +1,6 @@
 /** Tidying the product list: Gemini's suggestions for duplicates, names and aisles (or simple rules offline). */
 import { GroceryItem, DatabaseCleanAction } from '../../types';
-import { callGeminiRest, getGeminiApiKey, readJsonAnswer } from './client';
+import { askGeminiText, getGeminiApiKey, readJsonAnswer } from './client';
 
 function cleanGroceryDatabaseLocally(items: GroceryItem[]): DatabaseCleanAction[] {
   if (!Array.isArray(items) || items.length === 0) return [];
@@ -148,12 +148,12 @@ ${JSON.stringify(
 Return a structured JSON object with the "actions" array detailing any recommended merges, renames, and recategorizations. If clean, return {"actions": []}.`;
 
   try {
-    const rawText = await callGeminiRest(
-      apiKey,
-      prompt,
-      'You are a database normalization specialist.',
-      CLEAN_DATABASE_SCHEMA,
-    );
+    // The whole product list goes in and a lot can come back, so this one gets a long time.
+    const rawText = await askGeminiText(apiKey, prompt, {
+      systemInstruction: 'You are a database normalization specialist.',
+      responseSchema: CLEAN_DATABASE_SCHEMA,
+      waitSeconds: 120,
+    });
     const data: { actions?: DatabaseCleanAction[] } = readJsonAnswer(rawText);
     return data?.actions || [];
   } catch (err) {

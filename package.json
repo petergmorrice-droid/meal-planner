@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "esbuild src/services/syncMerge.ts --bundle --format=esm --platform=node --outfile=.test-build/syncMerge.mjs --log-level=warning && esbuild tests/shopping-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/shopping.mjs --log-level=warning && esbuild tests/recipeImport-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/recipeImport.mjs --log-level=warning && esbuild tests/app-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/app.mjs --log-level=warning && node tests/syncMerge.test.mjs && node tests/shopping.test.mjs && node tests/recipeImport.test.mjs && node tests/app.test.mjs",
+    "test": "esbuild src/services/syncMerge.ts --bundle --format=esm --platform=node --outfile=.test-build/syncMerge.mjs --log-level=warning && esbuild tests/shopping-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/shopping.mjs --log-level=warning && esbuild tests/recipeImport-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/recipeImport.mjs --log-level=warning && esbuild tests/app-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/app.mjs --log-level=warning && esbuild tests/gemini-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/gemini.mjs --log-level=warning && node tests/syncMerge.test.mjs && node tests/shopping.test.mjs && node tests/recipeImport.test.mjs && node tests/app.test.mjs && node tests/gemini.test.mjs",
     "test:e2e": "npm run build:single && node tests/e2e/run.mjs dist-single"
   },
   "dependencies": {

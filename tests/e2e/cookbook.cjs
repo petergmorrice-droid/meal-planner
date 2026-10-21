@@ -59,7 +59,25 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
     const parts = body.contents?.[0]?.parts || [];
     const prompt = parts.map((p) => p.text || '').join('\n');
     if (body.tools) {
-      calls.push({ kind: 'page', prompt, tools: body.tools });
+      calls.push({ kind: 'page', prompt, tools: body.tools, config: body.generationConfig });
+      if (pageRead === 'limit-busy')
+        return /gemini-3\.8-flash/.test(r.request().url())
+          ? r.fulfill({
+              status: 429,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                error: {
+                  status: 'RESOURCE_EXHAUSTED',
+                  message: 'You exceeded your current quota.',
+                  details: [{ violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }],
+                },
+              }),
+            })
+          : r.fulfill({
+              status: 503,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: { status: 'UNAVAILABLE', message: 'The model is overloaded.' } }),
+            });
       if (pageRead === 'fail')
         return reply(r, {
           candidates: [
@@ -95,7 +113,7 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
       calls.push({ kind: 'suggest' });
       return reply(r, json({ matches: [] }));
     }
-    calls.push({ kind: 'copy', prompt });
+    calls.push({ kind: 'copy', prompt, body });
     return reply(r, json(copied(ctx.nextName)));
   });
   await ctx.addInitScript((s) => {
@@ -353,6 +371,21 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
       'link: Gemini asked to open the page (URL context tool)',
     );
     check(
+      JSON.stringify(pageCall?.config) === '{"thinkingConfig":{"thinkingLevel":"low"}}',
+      'and to think only briefly, with no temperature (so it answers quickly)',
+      JSON.stringify(pageCall?.config),
+    );
+    check(
+      calls
+        .filter((c) => c.kind === 'copy')
+        .every(
+          (c) =>
+            c.body.generationConfig?.thinkingConfig?.thinkingLevel === 'low' &&
+            !/temperature/.test(JSON.stringify(c.body)),
+        ),
+      'the copy into fields is quick too, with no temperature',
+    );
+    check(
       calls.some((c) => c.kind === 'copy' && /Lemon nduja spaghetti\nServes 2/.test(c.prompt)),
       "then the page's recipe text goes through the usual exact copy",
     );
@@ -513,6 +546,44 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
     );
     check((await page.locator('[data-add-recipe="review"]').count()) === 0, 'and nothing is made up');
     await page.screenshot({ path: OUT + '/a7-link-fail.png' });
+    await ctx.close();
+  }
+
+  // Gemini can't answer: the first model's free allowance is used up and the second is busy
+  {
+    const { ctx, page } = await open(browser, { pageRead: 'limit-busy' });
+    await page.tab('Cookbook');
+    await page.locator('[data-add-recipe-button]').click();
+    await page.waitForTimeout(300);
+    await page.locator('textarea[aria-label="Recipe text or link"]').fill('https://www.bbcgoodfood.com/recipes/pie');
+    await page.locator('[data-add-go]').click();
+    await page.waitForTimeout(1500);
+    const err = await page
+      .locator('[data-add-error]')
+      .innerText()
+      .catch(() => '');
+    check(
+      /Gemini couldn't open that page: Google's Gemini service is busy just now/.test(err) &&
+        !/no connection/.test(err),
+      'Gemini can\'t answer: the real reason (busy), not "no connection"',
+      err,
+    );
+    const detail = await page
+      .locator('[data-add-error-detail]')
+      .innerText()
+      .catch(() => '');
+    check(
+      /3\.8 Flash: free limit for today reached \(429 RESOURCE_EXHAUSTED\)/.test(detail) &&
+        /3\.1 Flash-Lite: busy \(503 UNAVAILABLE\)/.test(detail),
+      'with what happened on each model in the small print',
+      detail,
+    );
+    check(
+      (await page.locator('textarea[aria-label="Recipe text or link"]').inputValue()) ===
+        'https://www.bbcgoodfood.com/recipes/pie',
+      'the link is still there to try again',
+    );
+    await page.screenshot({ path: OUT + '/a7b-gemini-busy.png' });
     await ctx.close();
   }
 

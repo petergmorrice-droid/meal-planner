@@ -156,6 +156,15 @@ If step 3 fails (e.g. the free daily limit), the recipe still imports; a few
 more ingredients just come up in "Map Ingredient". If step 1 fails, the app
 says so and saves nothing, rather than guessing.
 
+Every Gemini request goes to Gemini 3.8 Flash first and, if that can't answer
+(its free allowance used up, busy, or too slow), to 3.1 Flash-Lite, which has
+its own allowance. Copying jobs ask Gemini to think only briefly, so they take
+seconds; writing or changing a recipe uses Gemini's usual amount of thinking.
+When neither model answers, the message says why in plain words (the free
+allowance, no signal, too slow, busy), with what happened on each model in
+small print underneath. The code is `src/services/gemini/client.ts`, tested by
+`tests/gemini.test.mjs`.
+
 A recipe that serves 4 is saved as serving 4. When you plan it for 2, the
 shopping list and the amounts in cook mode are worked out for 2 by the app.
 "Gluten-Free" and "Dairy-Free" labels only appear when both Gemini and the
@@ -233,7 +242,7 @@ npm run dev       # local dev server with live reload
 npm run build     # production build into dist/
 npm run build:single  # the whole app as ONE file: dist-single/index.html
 npm run preview   # serve the production build locally
-npm test          # tests for syncing, shopping quantities and recipe import
+npm test          # tests for syncing, shopping quantities, recipe import and Gemini requests
 npm run typecheck # strict TypeScript check (nothing unused)
 npm run lint      # code checks (ESLint, with React's rules for hooks)
 npm run format    # tidy the layout of every file (Prettier); format:check only checks
@@ -742,3 +751,26 @@ next run that passes saves a new one.
   check passes (GitHub Pages via Actions), instead of five files being
   uploaded by hand. The history is published under GitHub's private
   "noreply" address rather than a personal email address.
+- `Reading recipe pages fixed` — adding a recipe from a link could fail with
+  "there was no connection, or it took too long" even with good signal:
+  - Gemini was left to think at its usual length while also opening the
+    page, so it could run past the one-minute limit. Copying jobs (a link, a
+    photo, pasted text, matching products, questions while cooking, *Test it*)
+    now ask it to think only briefly. Reading a page now gets 90 seconds.
+  - Every request set "temperature 0", which Google now says not to do with
+    Gemini 3 models (the backup model can repeat itself until the time runs
+    out; the newest ones ignore it). It's no longer sent.
+  - The message came from whichever model failed last, guessed from its
+    wording, so a used-up free allowance could show as "no connection". Now
+    each failure is sorted by what Google actually said (the free allowance
+    for today or per minute, the key, no signal, too slow, busy, stopped by
+    Google's checks, cut off), the message gives the real reason (today's
+    allowance says it comes back at about 8am), and the import screen shows
+    what happened on each model in small print.
+  - An answer that ran on and was cut off is no longer used (part of a recipe
+    is worse than none); the other model is asked instead. A wrong key, or no
+    signal at all, doesn't wait for a second model that would fail the same
+    way. The time limit now covers the whole answer, not just its start.
+
+  Tests: 15 new unit tests (`tests/gemini.test.mjs`) with a stand-in for
+  Google, and 5 new browser checks on the import screen.

@@ -7,8 +7,8 @@ import {
   GeminiReply,
   NoGeminiKeyError,
   UrlRead,
-  callGeminiParts,
-  callGeminiRest,
+  askGemini,
+  askGeminiText,
   geminiFailure,
   getGeminiApiKey,
   readJsonAnswer,
@@ -49,13 +49,11 @@ export async function readRecipePageApi(url: string): Promise<string> {
   if (!apiKey) throw new Error('GEMINI_API_KEY_MISSING');
   let result: { text: string; response: GeminiReply };
   try {
-    result = await callGeminiParts(
+    // Opening the page takes Gemini a while on some sites, so this one gets longer.
+    result = await askGemini(
       apiKey,
       [{ text: `Open this web page and find the recipe on it.\n${COPY_OUT_RULES}\n\nPage: ${url}` }],
-      {
-        tools: [{ url_context: {} }],
-        temperature: 0,
-      },
+      { tools: [{ url_context: {} }], thinking: 'low', waitSeconds: 90 },
     );
   } catch (err) {
     console.error('Gemini readRecipePageApi failed:', err);
@@ -76,13 +74,13 @@ export async function readRecipePhotoApi(base64: string, mimeType: string): Prom
   if (!apiKey) throw new Error('GEMINI_API_KEY_MISSING');
   let result: { text: string; response: GeminiReply };
   try {
-    result = await callGeminiParts(
+    result = await askGemini(
       apiKey,
       [
         { inlineData: { mimeType, data: base64 } },
         { text: `This is a photo of a recipe (a cookbook page, a card or a screen).\n${COPY_OUT_RULES}` },
       ],
-      { temperature: 0 },
+      { thinking: 'low', waitSeconds: 60 },
     );
   } catch (err) {
     console.error('Gemini readRecipePhotoApi failed:', err);
@@ -107,8 +105,11 @@ export async function parseRecipeApi(text: string, cookingMethod: 'ninja' | 'ove
 
   let data: GeminiRecipe;
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, COPY_SYSTEM_INSTRUCTION, COPY_RECIPE_SCHEMA, {
-      temperature: 0,
+    const rawText = await askGeminiText(apiKey, prompt, {
+      systemInstruction: COPY_SYSTEM_INSTRUCTION,
+      responseSchema: COPY_RECIPE_SCHEMA,
+      thinking: 'low',
+      waitSeconds: 60,
     });
     data = readJsonAnswer(rawText);
   } catch (err) {
@@ -162,13 +163,12 @@ ${productNames.join('; ')}`;
     required: ['matches'],
   };
   try {
-    const rawText = await callGeminiRest(
-      apiKey,
-      prompt,
-      'You match recipe ingredients to a fixed grocery list. Never invent product names.',
-      schema,
-      { temperature: 0 },
-    );
+    const rawText = await askGeminiText(apiKey, prompt, {
+      systemInstruction: 'You match recipe ingredients to a fixed grocery list. Never invent product names.',
+      responseSchema: schema,
+      thinking: 'low',
+      waitSeconds: 30,
+    });
     const data: { matches?: ({ ingredient?: unknown; product?: unknown } | null)[] } = readJsonAnswer(rawText);
     const out: Record<string, string> = {};
     for (const m of Array.isArray(data?.matches) ? data.matches : []) {
@@ -216,7 +216,11 @@ CRITICAL INSTRUCTIONS:
 - Exclude all macros, health scores, and cost estimates.`;
 
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), RECIPE_RESPONSE_SCHEMA);
+    const rawText = await askGeminiText(apiKey, prompt, {
+      systemInstruction: recipeSystemInstruction(),
+      responseSchema: RECIPE_RESPONSE_SCHEMA,
+      waitSeconds: 90,
+    });
     const data: GeminiRecipe = readJsonAnswer(rawText);
     return validateAndNormalizeRecipe(data, selectedMethod, promptText);
   } catch (err) {
@@ -259,7 +263,11 @@ Rules:
 
   let data: GeminiRecipe;
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), EDIT_RECIPE_SCHEMA);
+    const rawText = await askGeminiText(apiKey, prompt, {
+      systemInstruction: recipeSystemInstruction(),
+      responseSchema: EDIT_RECIPE_SCHEMA,
+      waitSeconds: 90,
+    });
     data = readJsonAnswer(rawText);
   } catch (err) {
     console.error('Gemini editRecipeApi failed:', err);
@@ -317,12 +325,11 @@ Do not include macros or cost estimates.`;
   };
 
   try {
-    const rawText = await callGeminiRest(
-      apiKey,
-      prompt,
-      'You are an expert appliance chef. Translate recipes to specific appliances.',
+    const rawText = await askGeminiText(apiKey, prompt, {
+      systemInstruction: 'You are an expert appliance chef. Translate recipes to specific appliances.',
       responseSchema,
-    );
+      waitSeconds: 90,
+    });
     return readJsonAnswer(rawText);
   } catch (err) {
     console.error('Gemini generateAlternativeInstructionsApi failed:', err);
@@ -366,7 +373,7 @@ export async function askAboutRecipeApi(
     'Answer from the recipe when it says; otherwise give sensible, safe general cooking advice and say briefly that it is not in the recipe.',
     'Be accurate about food safety (cooking meat through, reheating, allergens). If you are not sure, say so.',
   ].join(' ');
-  const text = await callGeminiRest(apiKey, prompt, system, undefined, { temperature: 0.4 });
+  const text = await askGeminiText(apiKey, prompt, { systemInstruction: system, thinking: 'low', waitSeconds: 30 });
   return String(text || '')
     .replace(/[*#_`]+/g, '')
     .replace(/\s+/g, ' ')
