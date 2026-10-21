@@ -11,12 +11,11 @@ export function useJustTicked(ms: number = JUST_TICKED_MS) {
   const [justTicked, setJustTicked] = useState<Record<string, true>>({});
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  useEffect(
-    () => () => {
-      Object.values(timers.current).forEach(clearTimeout);
-    },
-    [],
-  );
+  // Leaving: stop the timers still waiting (the same object for the life of the screen).
+  useEffect(() => {
+    const pending = timers.current;
+    return () => Object.values(pending).forEach(clearTimeout);
+  }, []);
 
   const drop = useCallback((key: string) => {
     clearTimeout(timers.current[key]);

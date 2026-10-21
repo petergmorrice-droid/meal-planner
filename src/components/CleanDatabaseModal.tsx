@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 import {
   Sparkles,
   X,
@@ -102,9 +102,13 @@ export function CleanDatabaseModal({
     }
   };
 
+  // Opening the window starts a scan (of the products as they are then); closing it clears up.
+  const startScan = useEffectEvent(() => {
+    fetchRecommendations();
+  });
   useEffect(() => {
     if (isOpen) {
-      fetchRecommendations();
+      startScan();
     } else {
       setActions([]);
       setCurrentIndex(0);
@@ -170,36 +174,35 @@ export function CleanDatabaseModal({
     setFlyDirection(null);
   };
 
-  // Keyboard navigation: ArrowLeft to reject, ArrowRight to accept, ArrowUp/S to swap, Backspace to undo
-  useEffect(() => {
-    if (!isOpen || isLoading || error || actions.length === 0 || currentIndex >= actions.length) {
+  // Keyboard navigation: ArrowLeft to reject, ArrowRight to accept, ArrowUp/S to swap, Backspace to undo.
+  // On while there's a suggestion showing; each key acts on the window as it is at that moment.
+  const keysOn = isOpen && !isLoading && !error && actions.length > 0 && currentIndex < actions.length;
+  const handleKey = useEffectEvent((e: KeyboardEvent) => {
+    // Don't trigger shortcuts if typing inside an input
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
       return;
     }
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts if typing inside an input
-      if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
-        return;
-      }
-
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        handleDecision('accept');
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handleDecision('reject');
-      } else if ((e.key === 's' || e.key === 'S') && actions[currentIndex]?.actionType === 'merge') {
-        e.preventDefault();
-        swapMergeDirection();
-      } else if ((e.key === 'Backspace' || e.key === 'z') && currentIndex > 0) {
-        e.preventDefault();
-        handleUndo();
-      }
-    };
-
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      handleDecision('accept');
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      handleDecision('reject');
+    } else if ((e.key === 's' || e.key === 'S') && actions[currentIndex]?.actionType === 'merge') {
+      e.preventDefault();
+      swapMergeDirection();
+    } else if ((e.key === 'Backspace' || e.key === 'z') && currentIndex > 0) {
+      e.preventDefault();
+      handleUndo();
+    }
+  });
+  useEffect(() => {
+    if (!keysOn) return;
+    const handleKeyDown = (e: KeyboardEvent) => handleKey(e);
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isLoading, error, actions, currentIndex, flyDirection]);
+  }, [keysOn]);
 
   // Pointer drag gesture handlers
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -226,7 +229,9 @@ export function CleanDatabaseModal({
 
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+      /* the browser had already let go of the pointer */
+    }
 
     const threshold = 85;
     if (dragOffset.x > threshold) {

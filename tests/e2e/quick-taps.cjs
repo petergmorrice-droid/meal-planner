@@ -2,7 +2,6 @@
 // count. (A window left open while the other phone changes something: latest-edits.cjs.)
 const { chromium } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
-const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
 let failures = 0;
 const check = (ok, label, detail = '') => {

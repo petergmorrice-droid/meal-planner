@@ -1,4 +1,4 @@
-const { openApp, tab, buttons, fields, state, text } = require('./flow-lib.cjs');
+const { openApp, tab, buttons, state } = require('./flow-lib.cjs');
 const OUT = process.argv[2];
 (async () => {
   const { browser, page, geminiCalls } = await openApp();

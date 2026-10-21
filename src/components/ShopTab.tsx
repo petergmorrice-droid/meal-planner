@@ -337,7 +337,7 @@ export default function ShopTab({
     return orderedAisles(aisleOrder)
       .map((a) => ({ id: a, title: GROCERY_AISLES[a].name, rows: toBuyRows.filter((r) => aisleOf(r) === a) }))
       .filter((g) => g.rows.length > 0);
-  }, [viewMode, toBuyRows, buyingItems, aisleOrder, justTicked]);
+  }, [viewMode, toBuyRows, buyingItems, aisleOrder, justTicked, neededOf]);
 
   const openRow = openRowId ? rows.find((r) => r.underlyingIds.includes(openRowId)) || null : null;
 
@@ -476,6 +476,8 @@ export default function ShopTab({
     return true;
   };
 
+  const catalog = catalogForState(store.state);
+  const shoppingList = store.state.shoppingList;
   const quickAddSuggestions = useMemo(() => {
     const seen = new Set<string>();
     const out: { name: string; aisle: string; favourite?: boolean }[] = [];
@@ -486,12 +488,10 @@ export default function ShopTab({
       out.push({ name, aisle: GROCERY_AISLES[getGroceryAisle({ name, category })].name, favourite });
     };
     favourites.forEach((f) => push(f.name, f.category, true));
-    catalogForState(store.state)
-      .products.filter((p) => !p.sameAs)
-      .forEach((p) => push(p.name, p.category));
-    (store.state.shoppingList || []).forEach((i: ShoppingListItem) => push(i.name, i.category));
+    catalog.products.filter((p) => !p.sameAs).forEach((p) => push(p.name, p.category));
+    (shoppingList || []).forEach((i: ShoppingListItem) => push(i.name, i.category));
     return out;
-  }, [favourites, store.state.groceryDatabase, store.state.groceryOverrides, store.state.shoppingList]);
+  }, [favourites, catalog, shoppingList]);
 
   // ---------- Sharing the list ----------
   const shareList = async () => {

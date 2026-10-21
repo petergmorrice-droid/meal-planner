@@ -7,7 +7,9 @@ export function useDeviceIdentity(): string {
       if (saved === 'P' || saved === 'R') {
         return saved;
       }
-    } catch (e) {}
+    } catch {
+      /* storage can't be read: ask who's using this phone */
+    }
     return 'P'; // Default to Peter
   });
 
@@ -37,6 +39,8 @@ export function useDeviceIdentity(): string {
 export function setCurrentDeviceIdentity(identity: 'P' | 'R') {
   try {
     localStorage.setItem('currentUser', identity);
-  } catch (e) {}
+  } catch {
+    /* storage blocked: remembered until the app is closed */
+  }
   window.dispatchEvent(new CustomEvent('currentUserChanged', { detail: identity }));
 }

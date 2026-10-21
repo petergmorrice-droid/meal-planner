@@ -3,6 +3,7 @@ import { X, Search, Plus, Minus, Check, Clock, ArrowLeft, Utensils, ChefHat, Spa
 import { Recipe } from '../types';
 import { convertToShoppingQuantity } from '../utils';
 import type { AppStore } from '../store';
+import { EMPTY_LIST } from '../emptyList';
 
 interface BatchMealModalProps {
   store: AppStore;
@@ -50,7 +51,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
     { id: string; name: string; amount: number; unit: string; category: string }[]
   >([{ id: '1', name: '', amount: 1, unit: 'item', category: 'Produce' }]);
 
-  const recipes: Recipe[] = store?.state?.recipes || [];
+  const recipes: Recipe[] = store?.state?.recipes || EMPTY_LIST;
 
   // Extract all unique tags from recipes
   const allTags = useMemo(() => {

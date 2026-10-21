@@ -1,6 +1,6 @@
 // "Next" update, end to end: one-tap meals, copy a week, cupboard check, compact rows, aisle order.
 const { chromium, devices } = require('./pw.cjs');
-const { reviewSeed, iso, mondayOf } = require('./review-seed.cjs');
+const { reviewSeed, iso } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
 let failures = 0;

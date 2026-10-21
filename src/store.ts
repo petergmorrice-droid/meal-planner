@@ -123,7 +123,9 @@ const getInitialMealPlans = (): MealPlan[] => {
         return parsed;
       }
     }
-  } catch (e) {}
+  } catch {
+    /* unreadable: start from the built-in data below */
+  }
 
   const currentMonday = getMonday(new Date());
   const nextMonday = new Date(currentMonday);
@@ -206,7 +208,9 @@ const getInitialState = (): AppState => {
         );
       }
     }
-  } catch (e) {}
+  } catch {
+    /* unreadable: start from the built-in data below */
+  }
 
   // Fallback to legacy local storage structures if they exist
   let legacyDb = asDefaults(builtInProducts());
@@ -225,16 +229,20 @@ const getInitialState = (): AppState => {
         hasLegacyData = true;
       }
     }
-  } catch (e) {}
+  } catch {
+    /* no old-style data to bring over */
+  }
 
-  let legacyPrefs = { ...DEFAULT_PREFERENCES };
+  const legacyPrefs = { ...DEFAULT_PREFERENCES };
   try {
     const storedFavs = localStorage.getItem('mealPlannerCustomFavouritesObj');
     if (storedFavs) {
       legacyPrefs.favouriteItems = JSON.parse(storedFavs);
       hasLegacyData = true;
     }
-  } catch (e) {}
+  } catch {
+    /* no old-style favourites to bring over */
+  }
 
   return migrateLegacyDismissed({
     recipes: [],
@@ -298,7 +306,9 @@ export function useStore() {
     pendingRef.current = value;
     try {
       localStorage.setItem(LS_PENDING, value ? '1' : '0');
-    } catch {}
+    } catch {
+      /* storage full or blocked: still remembered while the app is open */
+    }
   };
 
   /** Replace the data on this phone (screen + local storage). */
@@ -552,7 +562,7 @@ export function useStore() {
   const writeMealPlan = (state: AppState, plan: MealPlan) => {
     const currentMondayStr = formatDateISO(getMonday(new Date()));
     const expectedId = `plan-${plan.startDate}`;
-    let processedPlan = {
+    const processedPlan = {
       ...plan,
       id: expectedId,
       isCurrent: plan.startDate === currentMondayStr,
@@ -579,7 +589,7 @@ export function useStore() {
     const existingIdx = state.mealPlans.findIndex(
       (p) => p.id === expectedId || p.startDate === processedPlan.startDate,
     );
-    let nextMealPlans: MealPlan[] = [...state.mealPlans];
+    const nextMealPlans: MealPlan[] = [...state.mealPlans];
     if (existingIdx >= 0) {
       nextMealPlans[existingIdx] = processedPlan;
     } else {

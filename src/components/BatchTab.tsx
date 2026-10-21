@@ -22,6 +22,7 @@ import { RecipeModal } from './RecipePopup';
 import type { AppStore } from '../store';
 import { undoDays } from '../planning';
 import { useLatest } from '../hooks/useLatest';
+import { EMPTY_LIST } from '../emptyList';
 
 const portionsText = (n: number) => `${n} ${n === 1 ? 'portion' : 'portions'}`;
 const isoAtNoon = (date: string) => new Date(`${date}T12:00:00`).toISOString();
@@ -42,9 +43,9 @@ export default function BatchTab({
   const storeRef = useLatest(store);
   const todayIso = formatDateISO(new Date());
   const people: number = store.state.preferences?.defaultServings || 2;
-  const batches: BatchItem[] = store.state.batches || [];
-  const recipes: Recipe[] = store.state.recipes || [];
-  const plans: MealPlan[] = store.state.mealPlans || [];
+  const batches: BatchItem[] = store.state.batches || EMPTY_LIST;
+  const recipes: Recipe[] = store.state.recipes || EMPTY_LIST;
+  const plans: MealPlan[] = store.state.mealPlans || EMPTY_LIST;
 
   const groups = useMemo(() => freezerGroups(batches, recipes, plans, todayIso), [batches, recipes, plans, todayIso]);
   const total = groups.reduce((s, g) => s + g.portions, 0);

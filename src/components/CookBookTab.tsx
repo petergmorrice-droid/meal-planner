@@ -23,6 +23,7 @@ import {
   saveFavouritesFirst,
 } from '../recipeInfo';
 import type { AppStore } from '../store';
+import { EMPTY_LIST } from '../emptyList';
 
 const FILTER_ICON: Record<QuickFilter, React.ReactNode> = {
   favourites: <Star className="w-3.5 h-3.5" />,
@@ -80,7 +81,7 @@ export default function CookBookTab({
   }, [searchOpen]);
 
   const prefs: Partial<UserPreferences> = store.state.preferences || {};
-  const recipes: Recipe[] = store.state.recipes || [];
+  const recipes: Recipe[] = store.state.recipes || EMPTY_LIST;
   const today = todayISO();
   const history = useMemo(() => recipeHistories(store.state.mealPlans, today), [store.state.mealPlans, today]);
   const [sort, setSortState] = useState<RecipeSort>(readRecipeSort);

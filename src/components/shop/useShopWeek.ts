@@ -59,18 +59,20 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
   }, []);
 
   // Keep the selected week valid (e.g. a week removed on the other phone)
+  const bestWeek = useEffectEvent(() => defaultWeekId());
   useEffect(() => {
     if (allPlans.length > 0) {
-      if (!allPlans.some((p) => p.id === selectedPlanId)) setSelectedPlanId(defaultWeekId() || allPlans[0].id);
+      if (!allPlans.some((p) => p.id === selectedPlanId)) setSelectedPlanId(bestWeek() || allPlans[0].id);
     } else if (selectedPlanId !== null) {
       setSelectedPlanId(null);
     }
   }, [allPlans, selectedPlanId, nextMondayStr]);
 
-  // The other tabs open on the same week.
+  // The other tabs open on the same week. (The store's setter is React's own, so it never changes.)
+  const shareWeek = store.setSelectedPlanId;
   useEffect(() => {
-    if (selectedPlanId) store.setSelectedPlanId?.(selectedPlanId);
-  }, [selectedPlanId]);
+    if (selectedPlanId) shareWeek(selectedPlanId);
+  }, [selectedPlanId, shareWeek]);
 
   const activePlan: MealPlan | null = useMemo(() => {
     if (selectedPlanId) {

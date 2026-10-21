@@ -483,7 +483,7 @@ export default function CookMode({
       setSpeaking(false);
       listenerRef.current?.pause();
     } else if (voiceOnRef.current) listenerRef.current?.resume();
-  }, [finished]);
+  }, [finished, voiceOnRef]);
   useEffect(
     () => () => {
       stopSpeaking();

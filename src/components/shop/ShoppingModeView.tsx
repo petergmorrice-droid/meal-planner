@@ -2,7 +2,7 @@
  * Shopping mode: the full-screen list you use in the shop (aisles in your walking order,
  * % done, Undo, out of stock, cupboard check, Done shopping). Ticks stay on the phone if offline.
  */
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Check,
   ShoppingBag,
@@ -139,7 +139,10 @@ export function ShoppingModeView({
 
   // Just ticked: counts straight away, but stays put (crossed out, with Undo) for a few seconds.
   const { justTicked, hold, release } = useJustTicked();
-  const isDone = (i: AggregatedShoppingListItem) => (i.checked && !justTicked[i.key]) || !!i.outOfStock;
+  const isDone = useCallback(
+    (i: AggregatedShoppingListItem) => (i.checked && !justTicked[i.key]) || !!i.outOfStock,
+    [justTicked],
+  );
 
   // The last thing you did, with Undo in the bottom bar until you do something else.
   const [lastAction, setLastAction] = useState<{
@@ -161,7 +164,7 @@ export function ShoppingModeView({
       buzz(40);
     }
     if (before < 100 && completionPercent === 100 && totalCount > 0) buzz([60, 40, 60, 40, 120]);
-  }, [completionPercent]);
+  }, [completionPercent, totalCount]);
   // The moment lasts a couple of seconds, however fast you keep ticking.
   useEffect(() => {
     if (!milestone) return;
@@ -174,7 +177,7 @@ export function ShoppingModeView({
     if (filter === 'to_buy') return aggregatedItems.filter((i) => !isDone(i));
     if (filter === 'bought') return aggregatedItems.filter((i) => i.checked);
     return aggregatedItems;
-  }, [aggregatedItems, filter, justTicked]);
+  }, [aggregatedItems, filter, isDone]);
 
   // Sections sorting & grouping helpers
   const plannedModeItems = useMemo(() => {

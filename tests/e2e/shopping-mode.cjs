@@ -221,13 +221,6 @@ const check = (ok, label, detail = '') => {
   check((await page.locator('[data-offline]').count()) === 0, 'back online: the note goes');
 
   // ---------- Done shopping: out of stock not moved unless asked; history; best; route ----------
-  const ticked = await page.evaluate(
-    (id) =>
-      JSON.parse(localStorage.getItem('mealPlannerAppStateCache')).shoppingList.filter(
-        (i) => i.planId === id && i.checked,
-      ).length,
-    nextId,
-  );
   await page.evaluate((id) => localStorage.setItem('shop_started_' + id, String(Date.now() - 23 * 60000)), nextId);
   await page.locator('[data-done-shopping]').click();
   await page.waitForTimeout(400);

@@ -2,7 +2,7 @@
  * Which week Planning shows: this week and the next few (never past weeks), opening on this week
  * Monday–Thursday and next week Friday–Sunday, and following the other tabs' choice of week.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { MealPlan } from '../../types';
 import {
   createEmptyPlan,
@@ -42,15 +42,18 @@ export function usePlanningWeek(
           ? 'Last Week'
           : formatWeekRange(startDate);
 
-  // This week and later ones within the forward limit (never past weeks).
+  // This week and later ones within the forward limit (never past weeks), counted from this
+  // week's Monday (so the list moves on when a new week starts).
+  const mealPlans = store.state.mealPlans;
   const allowedPlans: MealPlan[] = useMemo(() => {
-    return (store.state.mealPlans || [])
+    const thisMonday = new Date(currentMondayStr + 'T00:00:00');
+    return (mealPlans || [])
       .filter(
         (p: MealPlan) =>
-          isCurrentOrFutureWeek(p.startDate) && isWeekWithinForwardLimit(p.startDate, undefined, maxWeeks),
+          isCurrentOrFutureWeek(p.startDate, thisMonday) && isWeekWithinForwardLimit(p.startDate, thisMonday, maxWeeks),
       )
       .sort((a: MealPlan, b: MealPlan) => a.startDate.localeCompare(b.startDate));
-  }, [store.state.mealPlans, currentMondayStr, maxWeeks]);
+  }, [mealPlans, currentMondayStr, maxWeeks]);
 
   // The week asked for (from another tab), else the one you're most likely planning.
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
@@ -82,16 +85,17 @@ export function usePlanningWeek(
     return null;
   });
 
-  // Whenever targetPlanId or store.selectedPlanId changes, update selectedPlanId immediately
+  // Whenever the week asked for (from another tab) changes, or the weeks do, go to it. Choosing a
+  // week here doesn't re-run this, so it never pulls you back to the week asked for earlier.
+  const askedPlanId = targetPlanId || store.selectedPlanId;
+  const goToAskedWeek = useEffectEvent((target: string) => {
+    if (target === selectedPlanId) return;
+    const match = (mealPlans || []).find((p: MealPlan) => p.id === target);
+    if (match && isWeekWithinForwardLimit(match.startDate, undefined, maxWeeks)) setSelectedPlanId(match.id);
+  });
   useEffect(() => {
-    const target = targetPlanId || store.selectedPlanId;
-    if (target && target !== selectedPlanId) {
-      const match = (store.state.mealPlans || []).find((p: MealPlan) => p.id === target);
-      if (match && isWeekWithinForwardLimit(match.startDate, undefined, maxWeeks)) {
-        setSelectedPlanId(match.id);
-      }
-    }
-  }, [targetPlanId, store.selectedPlanId, store.state.mealPlans, maxWeeks]);
+    if (askedPlanId) goToAskedWeek(askedPlanId);
+  }, [askedPlanId, mealPlans, maxWeeks]);
 
   // Ensure selectedPlanId doesn't randomly jump when plans update, and always resolves to an active plan
   useEffect(() => {
@@ -120,11 +124,10 @@ export function usePlanningWeek(
   }
 
   // Sync selectedPlanId with the resolved currentPlan to prevent detached state
+  const shownPlanId = currentPlan?.id;
   useEffect(() => {
-    if (currentPlan && currentPlan.id !== selectedPlanId) {
-      setSelectedPlanId(currentPlan.id);
-    }
-  }, [currentPlan?.id]);
+    if (shownPlanId && shownPlanId !== selectedPlanId) setSelectedPlanId(shownPlanId);
+  }, [shownPlanId, selectedPlanId]);
 
   // ‹ › between weeks
   const planIndex = currentPlan ? allowedPlans.findIndex((p: MealPlan) => p.id === currentPlan!.id) : -1;

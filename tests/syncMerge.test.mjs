@@ -4,11 +4,8 @@ import {
   applyLocalChange,
   statesEqual,
   getDismissedShoppingIds,
-  stableStringify,
   dropDefaultsMissingFrom,
   keepOnlyChangesSince,
-  mergePlans,
-  TOMBSTONE_RETENTION_MS,
 } from '../.test-build/syncMerge.mjs';
 import assert from 'node:assert/strict';
 

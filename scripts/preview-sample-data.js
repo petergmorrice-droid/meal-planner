@@ -1,7 +1,8 @@
 // Sample data for the preview page (scripts/make-preview.mjs). Plain browser
 // JavaScript: this whole function is copied into the preview and run there, so
 // the sample weeks are always "this week" and "next week" whenever it's opened.
-function makeSampleState() {
+// Put on the page (window) so the preview's own script can call it.
+window.makeSampleState = function makeSampleState() {
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const iso = (d) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -301,4 +302,4 @@ function makeSampleState() {
     },
     groceryOverrides: {},
   };
-}
+};

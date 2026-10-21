@@ -232,6 +232,8 @@ npm run build:single  # the whole app as ONE file: dist-single/index.html
 npm run preview   # serve the production build locally
 npm test          # tests for syncing, shopping quantities and recipe import
 npm run typecheck # strict TypeScript check (no loose types, nothing unused)
+npm run lint      # code checks (ESLint, with React's rules for hooks)
+npm run format    # tidy the layout of every file (Prettier); format:check only checks
 npm run test:e2e  # builds the app and runs the browser tests (tests/e2e/README.md)
 ```
 
@@ -267,10 +269,19 @@ value through `useLatest(value)` (`src/hooks/useLatest.ts`). No lint warnings
 are switched off (`eslint-disable`) anywhere. If one ever has to be, say why on
 the same line.
 
+Layout is Prettier's (single quotes, lines up to 120 characters,
+`.prettierrc.json`), so nobody has to think about it. Run `npm run format`
+before committing; GitHub checks it. Code checks are in `eslint.config.js`:
+ESLint's and typescript-eslint's recommended rules plus React's two hook
+rules. A name starting with `_` marks something unused on purpose. For an
+empty list that shouldn't count as a change on every render, use
+`EMPTY_LIST` (`src/emptyList.ts`) rather than a new `[]`.
+
 ## Automatic checks on GitHub
 
 `.github/workflows/check.yml` checks every change on a fresh machine: the
-strict type check, the unit tests, a full build and all the browser tests
+strict type check, the code checks, the formatting, the unit tests, a full
+build and all the browser tests
 (about 10 minutes). It runs whenever code is pushed, and from the *Run
 workflow* button on the repository's *Actions* tab. A green tick next to a
 commit means everything passed; a red cross means something didn't. Open the
@@ -644,3 +655,21 @@ anything.
   from the first run that passes, ready to commit. The type check was also run
   with Node's type definitions included, as TypeScript 5.8 on GitHub does, and
   passes. The browser tests pass two at a time, as they'll run there.
+- `Formatting and code checks` — every file is laid out by Prettier in one
+  consistent style. The built app is the same as before, apart from some
+  spaces in on-screen text now being stored as separate pieces; the text
+  shown is identical. ESLint runs on every file (`npm run lint`), with React's
+  rules that hooks are called the same way every time and that effects list
+  what they use; GitHub checks both on every change. The packages couldn't be
+  installed where this was done, so each rule was run with stand-ins built
+  from the tools available. They found 23 things to fix, mostly a list that
+  wasn't kept up to date or was worked out again on every render, including:
+  - Planning's week following "the week asked for" so it can't pull you back
+    to it;
+  - the Shop's rows following what the meals need;
+  - shopping mode's filter following ticks.
+
+  Also fixed: empty error handlers now say why they're empty, three `let`s
+  that never change are `const`, and unused names in the tests are gone.
+  Nothing looks different: the page is identical step by step before and
+  after.

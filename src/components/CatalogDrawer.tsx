@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Heart, Store, X, Plus, Clock, ArrowDownAZ, LayoutGrid, Check, BookOpen } from 'lucide-react';
 import { buildCatalog } from '../shopping';
 import type { AppStore } from '../store';
+import { EMPTY_LIST } from '../emptyList';
 
 interface CatalogDrawerProps {
   isOpen: boolean;
@@ -36,8 +37,8 @@ export default function CatalogDrawer({
     }
   }, [isOpen]);
 
-  const favourites = store?.state?.preferences?.favouriteItems || [];
-  const shoppingList = store?.state?.shoppingList || [];
+  const favourites = store?.state?.preferences?.favouriteItems || EMPTY_LIST;
+  const shoppingList = store?.state?.shoppingList || EMPTY_LIST;
 
   // Already on this week's list? Shown as "On the list: 1 kg" (not a sum of grams across weeks).
   const onListText = (name: string): string | null => (onTheList ? onTheList(name) : null);

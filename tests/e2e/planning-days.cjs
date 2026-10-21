@@ -140,7 +140,6 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
 
   // Shop shows it too
   await page.tab('Shop');
-  const shopWeek = await page.evaluate(() => document.body.innerText);
   // Shop may show next week by default; switch it to this week via its own week control if needed
   if ((await page.locator('[data-shop-out-of-date]').count()) === 0) {
     await page.tab('Planning');
@@ -156,7 +155,6 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
     await page.locator('[data-week-prev]').click();
     await page.waitForTimeout(500);
   }
-  const before = (await page.state()).shoppingList.length;
   await page.locator('[data-update-list]').click();
   await page.waitForTimeout(600);
   check(

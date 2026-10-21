@@ -1,7 +1,8 @@
-# Checks every change on GitHub: the strict type check, the unit tests, a full build and every
-# browser test, on a fresh machine each time. A red cross on a commit means one of them failed;
-# open the run to see which (the browser tests' screenshots and logs are attached when they fail).
-# The built site files (the five to upload) are attached to every run that gets that far.
+# Checks every change on GitHub: the strict type check, the code checks (ESLint), the formatting
+# (Prettier), the unit tests, a full build and every browser test, on a fresh machine each time.
+# A red cross on a commit means one of them failed; open the run to see which (the browser tests'
+# screenshots and logs are attached when they fail). The built site files (the five to upload)
+# are attached to every run that gets that far.
 name: Check
 
 on:
@@ -44,6 +45,12 @@ jobs:
 
       - name: Type check
         run: npm run typecheck
+
+      - name: Code checks (ESLint)
+        run: npm run lint
+
+      - name: Formatting (Prettier)
+        run: npm run format:check
 
       - name: Unit tests
         run: npm test

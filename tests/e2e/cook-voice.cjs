@@ -103,7 +103,7 @@ function seed() {
         speak: (u) => {
           window.__spoken.push(u.text);
           setTimeout(() => {
-            u.onstart && u.onstart();
+            u.onstart?.();
             setTimeout(() => u.onend && u.onend(), 30);
           }, 5);
         },
@@ -142,7 +142,7 @@ function seed() {
       if (!rec) return false;
       const result = alts.map((t) => ({ transcript: t }));
       result.isFinal = true;
-      rec.onresult && rec.onresult({ resultIndex: 0, results: [result] });
+      rec.onresult?.({ resultIndex: 0, results: [result] });
       return true;
     };
   }, seed());
