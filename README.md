@@ -239,25 +239,33 @@ npm run test:e2e  # builds the app and runs the browser tests (tests/e2e/README.
 
 Main files:
 
-- `src/store.ts` — all app state, saving, and the background sync loop
+- `src/store/` — all app state: `index.ts` (the store and the background sync
+  loop), `saved.ts` (what's saved on the phone and how the app starts),
+  `edits.ts` and `productEdits.ts` (every way to change the data, each saved
+  through the store's `commit`)
 - `src/services/syncMerge.ts` — how two phones' data is combined
 - `src/services/gistStorage.ts` — GitHub Gist read/write (incl. splitting large data)
 - `src/shopping/` — standard units, product matching and shopping quantities;
   `aisles.ts` (the one set of aisles), `productList.ts` (keeping the product
   list in one piece; remove, merge, other names, tidy-up checks)
 - `src/utils/initialGroceryDb.ts` — the built-in grocery list (pack sizes are in `src/shopping/catalog.ts`)
-- `src/services/geminiService.ts` — Gemini calls (copying a recipe, suggesting products)
-- `src/components/*Tab.tsx` — one file per tab. The two biggest are split up:
+- `src/services/geminiService.ts` — Gemini: the rest of the app imports from
+  here; the code is in `src/services/gemini/` (`client.ts` the key and the
+  request, `recipes.ts` the recipe requests, `recipeRules.ts` turning answers
+  into recipes, `prompts.ts` what Gemini is told, `products.ts` product tidy-up)
+- `src/components/*Tab.tsx` — one file per tab. The biggest are split up:
   the Shop's pieces are in `src/components/shop/` (shopping mode, the sheets,
   and hooks such as `useShopWeek`, `useNewProducts`, `useShoppingTrip`), and
   Planning's are in `src/components/planner/` (the windows, and hooks such as
-  `usePlanningWeek`, `useWeekEditor`). Changes to the shopping list are plain
+  `usePlanningWeek`, `useWeekEditor`). Settings' pages and sections are in
+  `src/components/settings/` (this phone, household, sync, backup, about,
+  products, history). Changes to the shopping list are plain
   functions in `src/shopListEdits.ts`; changes to a week's meals are in
   `src/planning.ts`. Both have unit tests.
 - `src/staples.ts` — the one way weekly staples are made, changed and removed
   (the staples window, "Add every week?", saving a new product as a staple)
 - `src/types.ts` — data shapes (Recipe, MealPlan, ShoppingListItem, TabName, …);
-  `AppStore` (in `src/store.ts`) is what every screen gets from the store
+  `AppStore` (in `src/store/index.ts`) is what every screen gets from the store
 - `public/` — `sw.js` (opening without signal), the manifest and icons
   (`scripts/make-icons.py` draws the icons)
 
@@ -704,3 +712,17 @@ anything.
   ingredient's product link, note and aisle. An answer without ingredients
   changes nothing. Tests: two new unit tests and a new browser test
   (`gemini-edit`), which fails on the old version.
+- `Big files split` — the three biggest files are now folders of smaller
+  ones, each about one thing:
+  - **Settings:** 2,212 lines became 201, plus `settings/` (one file per
+    section or page).
+  - **Gemini code:** 1,427 lines became `gemini/` (connection, recipe
+    requests, turning answers into recipes, what Gemini is told, product
+    tidy-up), with `geminiService.ts` as the one place the app imports
+    from. Six copies of "read Gemini's JSON answer" became one.
+  - **The store:** 1,001 lines became `store/` (the store and its sync,
+    what's saved, and the ways to change the data).
+
+  Nothing works differently: the moved code is the same line for line apart
+  from names. The page is identical step by step before and after, and all
+  the tests pass.
