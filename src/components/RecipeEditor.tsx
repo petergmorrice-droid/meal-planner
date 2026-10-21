@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import Fuse from 'fuse.js';
 import { X, Plus, Flame, Zap, Leaf, Sparkles, Trash2, ShoppingCart, ChevronRight, Search, Check } from 'lucide-react';
 import { Recipe, CookingMethod, Ingredient, GroceryItem } from '../types';
-import { buildCatalog } from '../shopping';
+import { catalogForState } from '../shopping';
 import { GROCERY_AISLES, getGroceryAisle, type FoodAisle } from '../utils';
 import { recipeMethods, METHOD_LABEL, METHOD_ORDER } from '../recipeInfo';
 import type  { AppStore } from '../store';
@@ -53,10 +53,9 @@ export function RecipeEditor({
   const missingMethod = methods.length === 1 ? METHOD_ORDER.find((m) => !methods.includes(m)) : undefined;
   const [shopFor, setShopFor] = useState<number | null>(null);
 
-  const catalog = useMemo(
-    () => (store?.state ? buildCatalog(store.state.groceryDatabase, store.state.groceryOverrides) : null),
-    [store?.state?.groceryDatabase, store?.state?.groceryOverrides], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  // The products as they are now (the same object until a product changes, so the list below
+  // is only rebuilt then).
+  const catalog = store?.state ? catalogForState(store.state) : null;
   const products: GroceryItem[] = useMemo(
     () => (catalog ? catalog.products.filter((p) => !p.sameAs).map((p) => p.item as GroceryItem) : []),
     [catalog],
@@ -89,8 +88,10 @@ export function RecipeEditor({
       });
       updateIngredient(idx, { groceryId: id });
     } else {
-      const { groceryId, ...rest } = ing; // eslint-disable-line @typescript-eslint/no-unused-vars
-      onChange({ ...recipe, ingredients: recipe.ingredients.map((x, i) => (i === idx ? { ...rest, category: GROCERY_AISLES[choice.aisle].name } : x)) });
+      // Not linked to a product: just which aisle it's in.
+      const unlinked: Ingredient = { ...ing, category: GROCERY_AISLES[choice.aisle].name };
+      delete unlinked.groceryId;
+      onChange({ ...recipe, ingredients: recipe.ingredients.map((x, i) => (i === idx ? unlinked : x)) });
     }
     setShopFor(null);
   };

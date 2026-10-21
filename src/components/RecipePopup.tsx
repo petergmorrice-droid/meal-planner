@@ -68,14 +68,20 @@ export function RecipeModal({
   const [writeError, setWriteError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Pick up changes synced from the other phone, but never throw away an edit in progress.
-  useEffect(() => { if (!isEditing) setEdited(recipe); }, [recipe]); // eslint-disable-line react-hooks/exhaustive-deps
+  // While you're only looking (not editing), show the recipe as it is now: a change the other
+  // phone makes appears here, and anything you change next starts from it. An edit in progress is
+  // never thrown away (Save, Cancel and Gemini's changes each set what's shown when editing ends).
+  // Done while drawing, as React suggests for "this changed since last time", not in an effect.
+  const [seen, setSeen] = useState(recipe);
+  if (seen !== recipe) {
+    setSeen(recipe);
+    if (!isEditing) setEdited(recipe);
+  }
 
   const methods = recipeMethods(edited);
-  const [method, setMethod] = useState<CookingMethod>(methods[0] || 'oven_hob');
-  useEffect(() => {
-    if (methods.length > 0 && !methods.includes(method)) setMethod(methods[0]);
-  }, [methods.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [pickedMethod, setMethod] = useState<CookingMethod>(methods[0] || 'oven_hob');
+  // The method shown: the one you picked, or the recipe's first if it no longer has that one.
+  const method = methods.length > 0 && !methods.includes(pickedMethod) ? methods[0] : pickedMethod;
   useEffect(() => { setDoneSteps({}); }, [method]);
 
   useEffect(() => {
@@ -132,12 +138,6 @@ export function RecipeModal({
 
   // "Our notes", changed right here without editing the whole recipe.
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
-  // While you're only looking (not editing), show the recipe as it is now: a change the other
-  // phone makes appears here, and anything you change next starts from it.
-  useEffect(() => {
-    if (!isEditing && notesDraft === null) setEdited(recipe);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipe]);
   const saveNotes = () => {
     const notes = (notesDraft || '').trim() || undefined;
     const next: Recipe = { ...edited, notes };

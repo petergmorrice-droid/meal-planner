@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { ratingsFor, averagesById } from '../ratings';
 import { Search, Plus, X, SlidersHorizontal, BookOpen, Star, Clock, Leaf, Zap, Snowflake, History } from 'lucide-react';
 import { Recipe, UserPreferences, TabName } from '../types';
@@ -54,12 +54,13 @@ export default function CookBookTab({
   const [addText, setAddText] = useState<string | undefined>(undefined);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!startAddWith) return;
-    setAddText(startAddWith);
+  // A recipe shared to the app: open "Add a recipe" with it (once, when it arrives).
+  const startAdding = useEffectEvent((text: string) => {
+    setAddText(text);
     setAddOpen(true);
     onStartAddHandled?.();
-  }, [startAddWith]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => { if (startAddWith) startAdding(startAddWith); }, [startAddWith]);
 
   useEffect(() => { if (searchOpen) searchRef.current?.focus(); }, [searchOpen]);
 

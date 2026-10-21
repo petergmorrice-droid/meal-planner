@@ -3,7 +3,7 @@
  * The pieces live in ./shop: the hooks hold the logic (which week, new products, staples, the (i)
  * panel, the trip), and src/shopListEdits.ts has the changes to the list as plain functions.
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useEffectEvent, useMemo } from 'react';
 import { BookOpen, Calendar, RotateCcw, ShoppingBag } from 'lucide-react';
 import { ShoppingListItem, MealPlan, ShopRoute, TabName } from '../types';
 import { useJustTicked } from '../hooks/useJustTicked';
@@ -111,14 +111,14 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   const week = useShopWeek(store, openPlanId, onOpenPlanHandled);
   const { activePlan, setSelectedPlanId } = week;
 
-  // From Settings → Shopping: open that panel.
-  useEffect(() => {
-    if (!openPanel) return;
-    if (openPanel === 'aisles') setShowAisleOrder(true);
-    else if (openPanel === 'staples') setShowEditStaplesModal(true);
-    else if (openPanel === 'history') setShowHistory(true);
+  // From Settings → Shopping: open that panel (once, when asked).
+  const openAskedPanel = useEffectEvent((panel: NonNullable<typeof openPanel>) => {
+    if (panel === 'aisles') setShowAisleOrder(true);
+    else if (panel === 'staples') setShowEditStaplesModal(true);
+    else if (panel === 'history') setShowHistory(true);
     onOpenPanelHandled?.();
-  }, [openPanel]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => { if (openPanel) openAskedPanel(openPanel); }, [openPanel]);
 
   const trip = useShoppingTrip(store, activePlan, openPlanId);
   const { isShoppingMode, setIsShoppingMode } = trip;

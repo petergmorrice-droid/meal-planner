@@ -18,6 +18,7 @@ import { TimerBar } from './cook/TimerBar';
 import CookMode from './CookMode';
 import { RecipeModal } from './RecipePopup';
 import type { AppStore } from '../store';
+import { useLatest } from '../hooks/useLatest';
 
 
 interface CookTabProps {
@@ -58,8 +59,8 @@ const shortDay = (plan: MealPlan, day: string) => `${day.slice(0, 3)} ${new Date
  * a freezer meal comes off it; a batch cook can go on it.
  */
 export default function CookTab({ store, onNavigateTab }: CookTabProps) {
-  const storeRef = useRef(store);
-  storeRef.current = store;
+  // The newest store, for Undo and other changes made a moment after what's on screen.
+  const storeRef = useLatest(store);
 
   const now = new Date();
   const todayIso = formatDateISO(now);
@@ -293,7 +294,8 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
       if (box && el) box.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 12) });
     });
     return () => cancelAnimationFrame(raf);
-  }, [plan?.id, todayInPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Also on a different week, even when today's day is the same name.
+  }, [plan?.id, todayInPlan]);
 
   if (!plan) {
     return (

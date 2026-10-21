@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef } from 'react';
 import { RatingRows } from './Stars';
 import { ratingsFor, withRating } from '../ratings';
 import PersonMark, { noteLook } from './PersonMark';
@@ -36,6 +36,7 @@ import { canListen, createListener, parseAlternatives, VoiceCommand } from '../v
 import { askAboutRecipeApi, NoGeminiKeyError } from '../services/geminiService';
 import type  { AppStore } from '../store';
 import { useScreenAwake } from '../hooks/phone';
+import { useLatest } from '../hooks/useLatest';
 
 interface CookModeProps {
   store: AppStore;
@@ -82,8 +83,8 @@ export default function CookMode({
   const [big, setBig] = useState(() => readPref('cook_big_steps'));
   const speechOK = useMemo(() => canSpeak(), []);
   const [readAloud, setReadAloud] = useState(() => speechOK && readPref('cook_read_aloud'));
-  const readAloudRef = useRef(readAloud);
-  readAloudRef.current = readAloud;
+  // For an answer that arrives after a wait: is Read on by then?
+  const readAloudRef = useLatest(readAloud);
   const [speaking, setSpeaking] = useState(false);
   const [readNote, setReadNote] = useState<string | null>(null);
   useEffect(() => {
@@ -129,7 +130,13 @@ export default function CookMode({
   const preferred = store.state.preferences?.preferredCookingMethod;
   const firstMethod = (preferred && preferred !== 'all' && methods.includes(preferred) ? preferred : methods[0]) as CookingMethod;
   const [method, setMethod] = useState<CookingMethod>(firstMethod);
-  useEffect(() => { setMethod(firstMethod); }, [recipe?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A different recipe (the next meal of the day) starts on its own first method. Set while
+  // drawing rather than in an effect, so its steps never show for a moment with the old method.
+  const [methodFor, setMethodFor] = useState(recipe?.id);
+  if (methodFor !== recipe?.id) {
+    setMethodFor(recipe?.id);
+    setMethod(firstMethod);
+  }
 
   const instructions = useMemo<string[]>(() => {
     if (!recipe) return [];
@@ -171,8 +178,8 @@ export default function CookMode({
   // ---- Voice: "next", "back", "repeat", "start the timer", "question, …" ----
   const listenOK = useMemo(() => canListen(), []);
   const [voiceOn, setVoiceOn] = useState(false);
-  const voiceOnRef = useRef(false);
-  voiceOnRef.current = voiceOn;
+  // Read by the microphone's callbacks; also set straight away when Voice is turned on.
+  const voiceOnRef = useLatest(voiceOn);
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState<{ text: string; understood: boolean } | null>(null);
   useEffect(() => {
@@ -206,12 +213,14 @@ export default function CookMode({
     else { stopSpeaking(); setSpeaking(false); if (voiceOnRef.current) listenerRef.current?.resume(); }
   };
   const firstStep = useRef(true);
-  useEffect(() => {
-    // Opening cooking mode with Read on reads the first step; after that, each step you move to
-    // (and always when you're cooking by voice).
-    if (firstStep.current) { firstStep.current = false; if (!readAloudRef.current) return; }
-    if ((readAloudRef.current || voiceOnRef.current) && !finished) sayStep(step);
-  }, [step, method, activeMealId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Opening cooking mode with Read on reads the first step; after that, each step you move to
+  // (and always when you're cooking by voice). Read and Voice being turned on or off don't
+  // re-read the step by themselves, so they're read here as they are now rather than watched.
+  const readStepShown = useEffectEvent(() => {
+    if (firstStep.current) { firstStep.current = false; if (!readAloud) return; }
+    if ((readAloud || voiceOnRef.current) && !finished) sayStep(step);
+  });
+  useEffect(() => { readStepShown(); }, [step, method, activeMealId]);
 
   // Questions: typed or spoken, answered by Gemini from this recipe as you're cooking it.
   const [answer, setAnswer] = useState<{ q: string; a?: string; loading?: boolean; problem?: boolean } | null>(null);
@@ -292,8 +301,8 @@ export default function CookMode({
       case 'question': ask(c.text, true); break;
     }
   };
-  const runCommandRef = useRef(runCommand);
-  runCommandRef.current = runCommand;
+  // The microphone is set up once; what it hears is acted on with the screen as it is now.
+  const runCommandRef = useLatest(runCommand);
 
   const stopVoice = () => { listenerRef.current?.stop(); setVoiceOn(false); setListening(false); };
   const toggleVoice = () => {
@@ -345,7 +354,8 @@ export default function CookMode({
     const ro = new RO(() => fit());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [big, step, method, activeMealId, servings, tickedCount, timers.length, readAloud]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Refitted whenever what's on the step's card changes, as well as on resize.
+  }, [big, step, method, activeMealId, servings, tickedCount, timers.length, readAloud]);
 
   if (!activeMeal || !recipe) {
     return (

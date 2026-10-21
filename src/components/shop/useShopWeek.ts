@@ -2,7 +2,7 @@
  * Which week's list the Shop shows, the weeks either side, and "the following week" (where things
  * you didn't get can go).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { MealPlan } from '../../types';
 import { carryItemsToWeek, defaultShopWeek, weekStartShort } from '../../shopList';
 import { preferredWeekStart } from '../../planning';
@@ -38,7 +38,10 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
     if (open && plans.some((p) => p.id === open.planId)) return open.planId;
     return defaultWeekId();
   });
-  useEffect(() => { if (openPlanId) onOpenPlanHandled?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // "See the list" for a week is only ever asked as the Shop opens: the week above is chosen from
+  // it, then the request is cleared.
+  const requestTaken = useEffectEvent(() => { if (openPlanId) onOpenPlanHandled?.(); });
+  useEffect(() => { requestTaken(); }, []);
 
   // Keep the selected week valid (e.g. a week removed on the other phone)
   useEffect(() => {

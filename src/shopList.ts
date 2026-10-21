@@ -3,6 +3,7 @@
 import { MealPlan, ShoppingListItem, ShopRoute, ShopRecord } from './types';
 import { aggregateIngredients } from './utils/aggregation';
 import { matchProduct, matchProductDetailed, groupingKey, largeUnitQuantity, formatAmount, canonicalUnit, formatUnit, unitInfo } from './shopping';
+import type { Catalog } from './shopping';
 import { getCatalog, convertToShoppingQuantity, quantityForAddedItem } from './utils/shoppingConversion';
 
 /** One row on the list: every line for the same product, added up. */
@@ -38,8 +39,8 @@ export interface AggregatedShoppingListItem {
 }
 
 /** Same product = same key, whatever it's called ("Chicken breasts" / "chicken breast fillets"). */
-export function productKey(item: { name: string; groceryId?: string }): string {
-  const product = matchProduct(getCatalog(), item.name, { groceryId: item.groceryId });
+export function productKey(item: { name: string; groceryId?: string }, catalog: Catalog = getCatalog()): string {
+  const product = matchProduct(catalog, item.name, { groceryId: item.groceryId });
   return product ? `p:${product.id}` : `n:${groupingKey(item.name)}`;
 }
 
@@ -116,11 +117,10 @@ export function aggregateShoppingItems(items: ShoppingListItem[], neededOf?: (pa
  * Things you added by hand that aren't saved products yet (so the Shop can offer to save them):
  * one per name, not ones you've said aren't products.
  */
-export function notYetProducts(items: ShoppingListItem[], declined?: string[] | null): ShoppingListItem[] {
+export function notYetProducts(items: ShoppingListItem[], declined?: string[] | null, catalog: Catalog = getCatalog()): ShoppingListItem[] {
   const no = new Set((declined || []).map((n) => n.trim().toLowerCase()));
   const seen = new Set<string>();
   const out: ShoppingListItem[] = [];
-  const catalog = getCatalog();
   for (const i of items) {
     if (!i || !i.isAdhoc || i.isRecurring || i.isBatch || i.groceryId) continue;
     const k = String(i.name || '').trim().toLowerCase();
@@ -262,8 +262,9 @@ const weekOfLine = (i: ShoppingListItem): string | null => {
  */
 export function suggestedStaples(
   list: ShoppingListItem[],
-  opts: { thisWeek: string; staples?: { name: string }[]; declined?: string[]; lookBack?: number; minWeeks?: number },
+  opts: { thisWeek: string; staples?: { name: string }[]; declined?: string[]; lookBack?: number; minWeeks?: number; catalog?: Catalog },
 ): StapleSuggestion[] {
+  const catalog = opts.catalog ?? getCatalog();
   const lookBack = opts.lookBack ?? 6;
   const minWeeks = opts.minWeeks ?? 3;
   const weeks = new Set<string>();
@@ -274,13 +275,13 @@ export function suggestedStaples(
     weeks.add(`${w.getFullYear()}-${String(w.getMonth() + 1).padStart(2, '0')}-${String(w.getDate()).padStart(2, '0')}`);
   }
   const declined = new Set((opts.declined || []).map((x) => x.trim().toLowerCase()));
-  const stapleKeys = new Set((opts.staples || []).flatMap((r) => [productKey({ name: r.name }), `name:${r.name.trim().toLowerCase()}`]));
+  const stapleKeys = new Set((opts.staples || []).flatMap((r) => [productKey({ name: r.name }, catalog), `name:${r.name.trim().toLowerCase()}`]));
   const found = new Map<string, { weeks: Set<string>; latestWeek: string; lines: ShoppingListItem[] }>();
   for (const i of list || []) {
     if (!i || !i.isAdhoc || i.isRecurring || i.isBatch) continue;
     const week = weekOfLine(i);
     if (!week || !weeks.has(week)) continue;
-    const key = productKey(i);
+    const key = productKey(i, catalog);
     let f = found.get(key);
     if (!f) { f = { weeks: new Set(), latestWeek: '', lines: [] }; found.set(key, f); }
     f.weeks.add(week);
@@ -460,7 +461,7 @@ export function carryItemsToWeek(
   const idSet = new Set(ids);
   const moving = list.filter((i) => idSet.has(i.id));
   const kept = list.filter((i) => !idSet.has(i.id));
-  const waiting = new Set(kept.filter((i) => i.planId === toPlanId && !i.checked).map(productKey));
+  const waiting = new Set(kept.filter((i) => i.planId === toPlanId && !i.checked).map((i) => productKey(i)));
 
   const byProduct = new Map<string, ShoppingListItem[]>();
   for (const i of moving) {

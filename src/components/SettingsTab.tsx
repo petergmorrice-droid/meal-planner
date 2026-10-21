@@ -24,6 +24,7 @@ import { testGeminiKeyApi, getGeminiApiKey, saveGeminiApiKey, clearGeminiApiKey 
 import { runningVersion, checkForUpdate, updateNow, builtText, UpdateCheck } from '../appVersion';
 import { agoText, syncProblemText, backupSummary } from '../settingsInfo';
 import type { AppStore } from '../store';
+import { useLatest } from '../hooks/useLatest';
 
 type ShopPanel = 'aisles' | 'staples' | 'history';
 
@@ -614,14 +615,17 @@ function ProductsPage({ store, onBack, onClean, say, setConfirm }: {
   say: (t: string, undo?: () => void) => void;
   setConfirm: (c: Confirm) => void;
 }) {
-  const storeRef = useRef(store);
-  storeRef.current = store;
+  // The newest store, for Undo tapped after other changes.
+  const storeRef = useLatest(store);
   const prefs = (store.state.preferences || {}) as UserPreferences;
   const catalog = catalogForState(store.state);
+  // Worked out again only when something that can use a product changes (not on every edit).
+  const { recipes, shoppingList } = store.state;
+  const staples = prefs.recurringItems;
+  const favourites = prefs.favouriteItems;
   const usage = useMemo(
-    () => productUsage(store.state, catalog),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [catalog, store.state.recipes, store.state.preferences?.recurringItems, store.state.preferences?.favouriteItems, store.state.shoppingList],
+    () => productUsage({ recipes, shoppingList, preferences: { recurringItems: staples, favouriteItems: favourites } }, catalog),
+    [catalog, recipes, shoppingList, staples, favourites],
   );
   const recipeNames = useMemo(() => new Map((store.state.recipes || []).map((r) => [r.id, r.name])), [store.state.recipes]);
   const dups = useMemo(() => {
@@ -643,15 +647,13 @@ function ProductsPage({ store, onBack, onClean, say, setConfirm }: {
   useEffect(() => setLimit(PAGE), [q, aisle, view]);
   const openView = (v: ProductView) => { setView(v); setAisle('all'); scrollRef.current?.scrollTo({ top: 0 }); };
 
-  const aisleOf = (p: Product) => (hasNoAisle(p) ? null : p.aisle);
-  const matchesQ = (p: Product) => productMatchesSearch(p, q);
   const shown = useMemo(() => {
     const base = view === 'no-aisle' ? noAisle : view === 'unused' ? unused : catalog.products;
     const yours = (p: Product) => (isBuiltInProduct(p.id) ? 1 : 0);
+    const aisleOf = (p: Product) => (hasNoAisle(p) ? null : p.aisle);
     return base
-      .filter((p) => (aisle === 'all' || aisleOf(p) === aisle) && matchesQ(p))
+      .filter((p) => (aisle === 'all' || aisleOf(p) === aisle) && productMatchesSearch(p, q))
       .sort((a, b) => (view === 'unused' ? yours(a) - yours(b) : 0) || a.name.localeCompare(b.name));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog, noAisle, unused, view, aisle, q]);
 
   const save = (item: GroceryItem, isNew: boolean) => {

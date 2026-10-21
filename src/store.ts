@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useEffectEvent, useRef, useMemo } from 'react';
 import { oldShoppingLineIds } from './shopList';
 import { setCurrentProducts } from './shopping/current';
 import { stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes } from './whoChanged';
@@ -373,28 +373,33 @@ export function useStore() {
   };
 
   // Shopping lines from weeks long gone are cleared (through the normal save, so the other phone
-  // clears them too): shortly after opening, once the first sync has had its chance.
+  // clears them too): once, shortly after opening, when the first sync has had its chance.
+  const clearOldLines = useEffectEvent(() => {
+    const cur = stateRef.current;
+    const old = new Set(oldShoppingLineIds(cur.shoppingList || [], formatDateISO(new Date())));
+    if (old.size) commit(cur, { ...cur, shoppingList: cur.shoppingList.filter((i) => !old.has(i.id)) });
+  });
   useEffect(() => {
-    const t = setTimeout(() => {
-      const cur = stateRef.current;
-      const old = new Set(oldShoppingLineIds(cur.shoppingList || [], formatDateISO(new Date())));
-      if (old.size) commit(cur, { ...cur, shoppingList: cur.shoppingList.filter((i) => !old.has(i.id)) });
-    }, getGistConfig() ? 15000 : 1500);
+    const t = setTimeout(() => clearOldLines(), getGistConfig() ? 15000 : 1500);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Background sync: on open, every SYNC_POLL_SECONDS while visible, on return to the app, and when back online.
+  // Background sync: on open, every SYNC_POLL_SECONDS while visible, on return to the app, and when
+  // back online. Started again only when the Gist, the key or the pace (shopping mode) changes;
+  // each round runs with everything as it is at that moment.
+  const syncGistId = githubConfig?.gistId;
+  const syncPat = githubConfig?.pat;
+  const syncNow = useEffectEvent((reason: 'initial' | 'poll' | 'focus') => void runSync(reason));
   useEffect(() => {
-    if (!githubConfig) return;
-    void runSync('initial');
+    if (!syncGistId || !syncPat) return;
+    syncNow('initial');
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') void runSync('poll');
+      if (document.visibilityState === 'visible') syncNow('poll');
     }, (fastSync ? FAST_SYNC_SECONDS : SYNC_POLL_SECONDS) * 1000);
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void runSync('focus');
+      if (document.visibilityState === 'visible') syncNow('focus');
     };
-    const onOnline = () => void runSync('focus');
+    const onOnline = () => syncNow('focus');
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
     return () => {
@@ -402,8 +407,7 @@ export function useStore() {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onOnline);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [githubConfig?.gistId, githubConfig?.pat, fastSync]);
+  }, [syncGistId, syncPat, fastSync]);
 
   /** Newer built-in product defaults, applied once per catalogue version. True if it did anything. */
   const upgradeProductsIfDue = (): boolean => {
@@ -413,16 +417,16 @@ export function useStore() {
     return true;
   };
 
-  // Phones that don't sync: keep the product list in one piece and up to date on open
+  // Phones that don't sync: keep the product list in one piece and up to date, once on open
   // (syncing phones do it after each sync, so it works on the latest shared data).
-  useEffect(() => {
+  const tidyProductsOnOpen = useEffectEvent(() => {
     if (getGistConfig()) return;
     const current = stateRef.current;
     const tidied = normaliseProducts(current, Date.now());
     if (tidied !== current) replaceState(normalizeState(tidied));
     upgradeProductsIfDue();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
+  useEffect(() => { tidyProductsOnOpen(); }, []);
 
   // Shopping items that either of you removed, so they aren't regenerated automatically.
   const dismissedKey = getDismissedShoppingIds(state).join('|');

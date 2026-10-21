@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PersonMark, { noteLook } from './PersonMark';
 import Notice from './Notice';
 import { Snowflake, Plus, Minus, X, Check, CalendarPlus, BookOpen, Trash2, ChevronRight, Search, StickyNote } from 'lucide-react';
@@ -9,6 +9,7 @@ import { mealTitle } from './planner/DayListRow';
 import { RecipeModal } from './RecipePopup';
 import type { AppStore } from '../store';
 import { undoDays } from '../planning';
+import { useLatest } from '../hooks/useLatest';
 
 
 const portionsText = (n: number) => `${n} ${n === 1 ? 'portion' : 'portions'}`;
@@ -20,8 +21,8 @@ const isoAtNoon = (date: string) => new Date(`${date}T12:00:00`).toISOString();
  * the same as everywhere else in the app.
  */
 export default function BatchTab({ store, onNavigateTab }: { store: AppStore; onNavigateTab?: (tab: TabName, planId?: string) => void }) {
-  const storeRef = useRef(store);
-  storeRef.current = store;
+  // The newest store, for Undo (an "Added 4 portions" undo is made before the add is on screen).
+  const storeRef = useLatest(store);
   const todayIso = formatDateISO(new Date());
   const people: number = store.state.preferences?.defaultServings || 2;
   const batches: BatchItem[] = store.state.batches || [];

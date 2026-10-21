@@ -7,6 +7,7 @@ import { useMemo, useRef, useState } from 'react';
 import { ShoppingListItem, UserPreferences } from '../../types';
 import { notYetProducts, stapleQuantity, inProductUnit } from '../../shopList';
 import { GROCERY_AISLES } from '../../utils';
+import { catalogForState } from '../../shopping';
 import { addStaple, currentStaples, findStaple, newStaple, saveStaples } from '../../staples';
 import type  { HandLine } from '../../shopListEdits';
 import SaveProductSheet, { NewProductDetails } from './SaveProductSheet';
@@ -35,10 +36,11 @@ export function useNewProducts({ store, weekItems, favourites, aisleOrder, setTo
   const askedAboutRef = useRef<Set<string>>(new Set());
 
   const declinedProducts = store.state.preferences?.notProducts;
+  // The products as they are now (the same object until a product changes).
+  const catalog = catalogForState(store.state);
   const newItems = useMemo(
-    () => notYetProducts(weekItems, declinedProducts),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [weekItems, declinedProducts, store.state.groceryDatabase],
+    () => notYetProducts(weekItems, declinedProducts, catalog),
+    [weekItems, declinedProducts, catalog],
   );
   const isNewItem = (name: string) => newItems.some((i) => i.name.trim().toLowerCase() === name.trim().toLowerCase());
 

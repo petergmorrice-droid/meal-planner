@@ -4,7 +4,7 @@
  * The pieces live in ./planner: the hooks hold the logic (which week, the meals panel, the day
  * picker, changing the week), and src/planning.ts has the week changes as plain functions.
  */
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 import { Copy } from 'lucide-react';
 import Notice from './Notice';
 import { Recipe, MealPlan, PlannedMeal, TabName } from '../types';
@@ -67,13 +67,13 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
   const picker = useDayPicker(store, currentPlan, selectedDay);
   const editor = useWeekEditor({ store, currentPlan, defaultServings, weekLabel, setToastMessage, onNavigateTab });
 
-  // "Add to a day…" from the Cookbook: open the day chooser for that recipe.
-  useEffect(() => {
-    if (!pendingAddRecipeId) return;
-    const recipe = (store.state.recipes || []).find((r: Recipe) => r.id === pendingAddRecipeId);
+  // "Add to a day…" from the Cookbook: open the day chooser for that recipe (once, when asked).
+  const takeAddRequest = useEffectEvent((id: string) => {
+    const recipe = (store.state.recipes || []).find((r: Recipe) => r.id === id);
     if (recipe) setAssigningRecipe(recipe);
     onPendingAddDone?.();
-  }, [pendingAddRecipeId]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => { if (pendingAddRecipeId) takeAddRequest(pendingAddRecipeId); }, [pendingAddRecipeId]);
 
   const switchToPlan = (id: string) => { setSelectedPlanId(id); store.setSelectedPlanId?.(id); setShowWeekDropdown(false); };
   const canPlanNext = canPlanFollowingWeek(currentPlan?.startDate, undefined, maxWeeks);
@@ -90,15 +90,18 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
     const row = listRef.current?.querySelector(`[data-list-day="${day}"]`) as HTMLElement | null;
     if (row) row.scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' });
   };
-  useEffect(() => {
+  // Only a different week or view moves the strip: changing a meal leaves it where you are.
+  const showToday = useEffectEvent(() => {
     if (!currentPlan) return;
-    const todayDay = DAYS_OF_WEEK.find((d) => currentPlan!.days[d]?.date === todayISO());
-    const t = setTimeout(() => {
-      if (todayDay) jumpToDay(todayDay, false);
-      else if (stripRef.current) stripRef.current.scrollLeft = 0;
-    }, 30);
+    const todayDay = DAYS_OF_WEEK.find((d) => currentPlan.days[d]?.date === todayISO());
+    if (todayDay) jumpToDay(todayDay, false);
+    else if (stripRef.current) stripRef.current.scrollLeft = 0;
+  });
+  useEffect(() => {
+    if (!currentPlan?.id) return;
+    const t = setTimeout(() => showToday(), 30);
     return () => clearTimeout(t);
-  }, [currentPlan?.id, planningView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentPlan?.id, planningView]);
 
   // Meals planned across the week, and the days with none.
   const totalPlannedMeals = useMemo(() => {

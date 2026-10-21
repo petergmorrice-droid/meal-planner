@@ -168,8 +168,15 @@ export interface ProductUsage {
 
 export const isUnused = (u: ProductUsage | undefined) => !u || (u.recipes.length === 0 && u.staples === 0 && u.favourites === 0 && u.list === 0);
 
+/** The parts of the data that can use a product (the whole AppState will do). */
+export interface UsageSources {
+  recipes?: AppState['recipes'];
+  shoppingList?: AppState['shoppingList'];
+  preferences?: Pick<UserPreferences, 'recurringItems' | 'favouriteItems'>;
+}
+
 /** For each product: the recipes, staples, favourites and shopping-list lines that use it. */
-export function productUsage(state: AppState, catalog: Catalog): Map<string, ProductUsage> {
+export function productUsage(state: UsageSources, catalog: Catalog): Map<string, ProductUsage> {
   const map = new Map<string, ProductUsage>();
   const get = (id: string) => {
     let u = map.get(id);

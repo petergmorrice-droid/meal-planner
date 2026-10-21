@@ -259,6 +259,14 @@ Main files:
 - `public/` — `sw.js` (opening without signal), the manifest and icons
   (`scripts/make-icons.py` draws the icons)
 
+Effects (code that runs after the screen updates) list everything they use.
+When one should run only when certain things change but needs other values as
+they are at that moment, that part goes in React's `useEffectEvent`. Code that
+runs later, such as an Undo or the microphone's callback, reads the newest
+value through `useLatest(value)` (`src/hooks/useLatest.ts`). No lint warnings
+are switched off (`eslint-disable`) anywhere. If one ever has to be, say why on
+the same line.
+
 ## History
 
 - `Import original AI Studio export` — the code exactly as exported.
@@ -577,3 +585,21 @@ Main files:
   other phone's changes and only saves what you changed (tapping favourite
   used to wipe a note the other phone had just added). Undo puts back only
   the days its change touched. Tests: `quick-taps`, `latest-edits`.
+- `Switched-off warnings reviewed` — all 23 places where a code check was
+  switched off (mostly "an effect must list what it uses") were checked and
+  fixed, so none are left. Effects that run only when something particular
+  changes now read the rest through React's `useEffectEvent`. This needs React
+  19.2, which is what the app was already built with, so package.json now says
+  so and lists React's type definitions, which were missing. Values copied
+  into a ref while the screen was being drawn are now copied just after
+  (`useLatest`). In the recipe window, two effects became simple calculations
+  and a duplicate was removed. Lists the Shop works out (new products,
+  suggested staples, product usage) now take the product list explicitly
+  instead of relying on it behind the scenes. Nothing looks different: the
+  page is identical step by step before and after. A new browser test
+  (`follow-changes`) checks four things:
+  - old shopping lines are cleared soon after opening;
+  - a shared recipe opens "Add a recipe" once;
+  - the cooking method you pick stays picked;
+  - an edit in progress survives the other phone's change and saves only
+    what you edited.

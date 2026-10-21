@@ -26,12 +26,14 @@ export function useShoppingTrip(store: AppStore, activePlan: MealPlan | null, op
     setIsShoppingMode(true);
   };
 
-  // While shopping, check for the other phone's ticks every few seconds.
+  // While shopping, check for the other phone's ticks every few seconds. (setFastSync is React's
+  // own state setter, so it never changes and only opening or closing shopping mode re-runs this.)
+  const { setFastSync } = store;
   useEffect(() => {
     if (!isShoppingMode) return;
-    store.setFastSync?.(true);
-    return () => store.setFastSync?.(false);
-  }, [isShoppingMode]); // eslint-disable-line react-hooks/exhaustive-deps
+    setFastSync(true);
+    return () => setFastSync(false);
+  }, [isShoppingMode, setFastSync]);
 
   // The order things are ticked in this shop (this phone), to learn your route.
   const routeKey = activePlan ? `shop_route_${activePlan.id}` : '';

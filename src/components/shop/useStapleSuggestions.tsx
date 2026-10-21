@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { MealPlan } from '../../types';
 import { suggestedStaples, StapleSuggestion, productKey, shopQuantityText } from '../../shopList';
 import { getIngredientStep } from '../../utils';
+import { catalogForState } from '../../shopping';
 import { addStaple, currentStaples, newStaple, saveStaples } from '../../staples';
 import StapleSuggestSheet from './StapleSuggestSheet';
 import type  { ShopToastState } from './ShopToast';
@@ -14,10 +15,14 @@ export function useStapleSuggestions({ store, activePlan, setToastMessage }: {
   setToastMessage: (message: string | null, action?: ShopToastState['action']) => void;
 }) {
   const declinedStaples = store.state.preferences?.notStaples;
+  const { shoppingList } = store.state;
+  const stapleList = store.state.preferences?.recurringItems;
+  const thisWeek = activePlan?.startDate;
+  // The products as they are now (the same object until a product changes).
+  const catalog = catalogForState(store.state);
   const suggestions = useMemo(
-    () => (activePlan ? suggestedStaples(store.state.shoppingList || [], { thisWeek: activePlan.startDate, staples: store.state.preferences?.recurringItems || [], declined: declinedStaples }) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [store.state.shoppingList, activePlan?.startDate, store.state.preferences?.recurringItems, declinedStaples, store.state.groceryDatabase],
+    () => (thisWeek ? suggestedStaples(shoppingList || [], { thisWeek, staples: stapleList || [], declined: declinedStaples, catalog }) : []),
+    [shoppingList, thisWeek, stapleList, declinedStaples, catalog],
   );
   const [stapleOffer, setStapleOffer] = useState<StapleSuggestion | null>(null);
 
