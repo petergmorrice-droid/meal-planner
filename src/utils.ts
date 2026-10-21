@@ -85,15 +85,6 @@ export function formatDateISO(d: Date): string {
 
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-export function formatWeekStart(startDateStr?: string): string {
-  if (!startDateStr) return '';
-  const start = new Date(startDateStr + 'T00:00:00');
-  if (isNaN(start.getTime())) return '';
-  const day = start.getDate();
-  const month = SHORT_MONTHS[start.getMonth()];
-  return `${day}-${month}`;
-}
-
 export function formatWeekRange(startDateStr?: string): string {
   if (!startDateStr) return '';
   const start = new Date(startDateStr + 'T00:00:00');
@@ -106,11 +97,6 @@ export function formatWeekRange(startDateStr?: string): string {
   const endDay = end.getDate();
   const endMonth = SHORT_MONTHS[end.getMonth()];
   return `${startDay} ${startMonth} to ${endDay} ${endMonth}`;
-}
-
-export function isPlanAllowedInCook(plan: MealPlan, baseDate?: Date): boolean {
-  if (!plan || !plan.startDate) return false;
-  return isWeekWithinForwardLimit(plan.startDate, baseDate);
 }
 
 export function createEmptyPlan(mondayDate: Date): MealPlan {

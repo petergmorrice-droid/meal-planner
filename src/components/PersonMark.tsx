@@ -26,8 +26,6 @@ export const PEOPLE = {
   },
 } as const;
 
-export type PersonId = keyof typeof PEOPLE;
-
 /** Peter or Rachel's colours, or null when it isn't known who. */
 export function personLook(id?: string | null) {
   return id === 'P' || id === 'R' ? PEOPLE[id] : null;

@@ -13,7 +13,6 @@ import {
   EXTRA_PRODUCTS,
   builtInProducts,
   builtInSameAs,
-  isBuiltInProduct,
   matchProduct,
   alsoCalled,
   applyDefaultChanges,
@@ -682,6 +681,3 @@ export function replaceProductsIn(state: AppState, items: GroceryItem[]): AppSta
   for (const i of incoming.values()) out.push(i);
   return { ...state, groceryDatabase: out };
 }
-
-/** Exposed for tests. */
-export const __productTest = { coreKey, oneEditApart, isBuiltInProduct };

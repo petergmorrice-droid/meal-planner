@@ -13,26 +13,6 @@ export interface Ingredient {
 
 export type CookingMethod = 'ninja' | 'oven_hob';
 
-export interface RecipeCostBreakdown {
-  totalCost: number;
-  costPerServing: number;
-  notes?: string;
-  items: { ingredient: string; cost: number; notes?: string }[];
-}
-
-export interface RecipeHealthBreakdown {
-  score: number;
-  summary?: string;
-  points: { factor: string; description: string; impact: 'positive' | 'negative' | 'neutral' }[];
-  macros: {
-    calories: number;
-    protein: string;
-    carbs: string;
-    fat: string;
-    fiber: string;
-  };
-}
-
 export interface Recipe {
   addedBy?: string;
   lastModifiedBy?: string;
@@ -63,8 +43,6 @@ export interface Recipe {
   cookingMethods?: CookingMethod[];
   isVegetarian?: boolean;
   isVegan?: boolean;
-  costBreakdown?: RecipeCostBreakdown;
-  healthBreakdown?: RecipeHealthBreakdown;
   costEstimate?: number;
   healthScore?: number;
 }
@@ -311,10 +289,6 @@ export interface DatabaseCleanAction {
   newName?: string;
   newAisle?: string;
   reason: string;
-}
-
-export interface CleanDatabaseResponse {
-  actions: DatabaseCleanAction[];
 }
 
 /**

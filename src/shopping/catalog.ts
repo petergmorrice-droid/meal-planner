@@ -12,7 +12,7 @@
  */
 import type { GroceryItem } from '../types';
 import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
-import { matchKey, nameWords, IDENTITY_AFTER, IDENTITY_BEFORE, GENERIC_HEADS, DESCRIPTORS } from './names';
+import { matchKey, IDENTITY_AFTER, IDENTITY_BEFORE, GENERIC_HEADS, DESCRIPTORS } from './names';
 import { canonicalUnit, unitInfo, vagueUnit } from './units';
 import { aisleCategory, guessAisle, type FoodAisle } from './aisles';
 
@@ -1409,11 +1409,6 @@ export function outdatedDefaults(groceryDatabase: GroceryItem[] | undefined | nu
 
 const EXTRA_BY_ID = new Map(EXTRA_PRODUCTS.map((p) => [p.item.id, p]));
 
-/** Built-in other names for a product (from the app's own knowledge), e.g. Courgette: zucchini. */
-export function builtInAliases(id: string): string[] {
-  return (PRODUCT_SPECS[id] ?? EXTRA_BY_ID.get(id)?.spec)?.aliases ?? [];
-}
-
 /** The built-in product a merged duplicate belongs to (Zucchini is Courgette), if any. */
 export function builtInSameAs(id: string): string | undefined {
   return PRODUCT_SPECS[id]?.sameAs;
@@ -1793,6 +1788,3 @@ export function missingExtraProducts(groceryDatabase: GroceryItem[] | undefined 
     ...e.item,
   }));
 }
-
-/** Exposed for tests. */
-export const __test = { nameWords };

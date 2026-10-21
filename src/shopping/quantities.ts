@@ -6,7 +6,6 @@
  * Amounts that can't be converted are never added to amounts that can; they
  * are reported so the person can check them.
  */
-import { currentCatalog } from './current';
 import { matchProduct, sizeOfUnit, type Catalog, type Product } from './catalog';
 import { groupingKey, displayName, matchKey } from './names';
 import {
@@ -369,9 +368,4 @@ export function stepForItem(catalog: Catalog, item: { name: string; unit?: strin
   if (u === 'g' || u === 'ml') return 50;
   if (u === 'kg' || u === 'l') return 0.25;
   return 1;
-}
-
-/** Catalogue of the household's products right now (for code outside React). */
-export function catalogFromLocalStorage(): Catalog {
-  return currentCatalog();
 }

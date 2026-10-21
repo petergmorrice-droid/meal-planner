@@ -391,16 +391,13 @@ export default function CookBookTab({
         <CookMode
           store={store}
           dayName="Cookbook"
-          meals={[
-            {
-              id: 'cookbook-temp',
-              recipeId: cookModeRecipe.id,
-              name: cookModeRecipe.name,
-              type: 'recipe',
-              servings: cookModeRecipePortions || cookModeRecipe.servings || 2,
-            },
-          ]}
-          initialActiveMealId="cookbook-temp"
+          meal={{
+            id: 'cookbook-temp',
+            recipeId: cookModeRecipe.id,
+            name: cookModeRecipe.name,
+            type: 'recipe',
+            servings: cookModeRecipePortions || cookModeRecipe.servings || 2,
+          }}
           onClose={() => {
             setCookModeRecipe(null);
             setCookModeRecipePortions(undefined);

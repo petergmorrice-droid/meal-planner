@@ -259,7 +259,9 @@ Main files:
   Planning's are in `src/components/planner/` (the windows, and hooks such as
   `usePlanningWeek`, `useWeekEditor`). Settings' pages and sections are in
   `src/components/settings/` (this phone, household, sync, backup, about,
-  products, history). Changes to the shopping list are plain
+  products, history). The Cook tab's and cooking mode's are in
+  `src/components/cook/` (a day's card, tonight's panel, the steps two ways,
+  the finished screen, the timers). Changes to the shopping list are plain
   functions in `src/shopListEdits.ts`; changes to a week's meals are in
   `src/planning.ts`. Both have unit tests.
 - `src/staples.ts` — the one way weekly staples are made, changed and removed
@@ -726,3 +728,20 @@ anything.
   Nothing works differently: the moved code is the same line for line apart
   from names. The page is identical step by step before and after, and all
   the tests pass.
+- `Dead ends removed` — searched the whole app for code nothing uses, and
+  removed:
+  - Cooking mode's meal switcher, which could never appear (cooking mode is
+    always opened for one meal), and its handling of switching recipes;
+  - "large" versions of the step pieces nothing drew;
+  - an unused banner option on the recipe window;
+  - thirteen functions and types nothing called, among them four old product
+    checks, two week helpers and two test hooks;
+  - the recipe "cost" and "health" fields left from the app's first version
+    (old saved data that has them is still read fine).
+
+  A search for files, packages or component options nothing uses found no
+  others. Cooking mode (1,507 lines → 896) and the Cook tab (1,437 → 766)
+  were split into `cook/` too. Nothing looks or works differently: the Cook
+  tab and cooking mode are identical step by step before and after (13
+  steps, including big steps, timers and ticking), as are Planning and the
+  Shop, and all the tests pass.

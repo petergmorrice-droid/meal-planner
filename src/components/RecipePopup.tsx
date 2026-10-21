@@ -64,7 +64,6 @@ export function RecipeModal({
   recipe: opened,
   onClose,
   initialServings,
-  bannerMessage,
   onStartCook,
   onAddToDay,
   onNavigateTab,
@@ -73,7 +72,6 @@ export function RecipeModal({
   recipe: Recipe;
   onClose: () => void;
   initialServings?: number;
-  bannerMessage?: React.ReactNode;
   onStartCook?: (servings?: number) => void;
   /** Shown as "Add to a day…": plan this recipe on a day of a week. */
   onAddToDay?: (recipe: Recipe) => void;
@@ -517,7 +515,6 @@ export function RecipeModal({
               )}
             </div>
           )}
-          {bannerMessage && !isEditing && <div className="mt-2">{bannerMessage}</div>}
         </div>
 
         {/* Body */}
