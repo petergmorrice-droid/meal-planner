@@ -3,6 +3,7 @@
 import { MealPlan, Recipe, RecurringItem, ShoppingListItem } from './types';
 import { generateShoppingListForPlan, getCurrentMondayStr, getNextMondayStr, formatWeekRange } from './utils';
 import { listSnapshot } from './planning';
+import type { Catalog } from './shopping';
 import type { AppStore } from './store';
 
 export function weekLabelFor(startDate: string): string {
@@ -36,8 +37,9 @@ export function listWithWeek(
   recipes: Recipe[],
   staples: RecurringItem[],
   dismissedItemIds: string[],
+  catalog?: Catalog,
 ): ShoppingListItem[] {
-  const targetItems = generateShoppingListForPlan(plan, recipes);
+  const targetItems = generateShoppingListForPlan(plan, recipes, catalog);
   const existingItemsForPlan = list.filter((i) => i.planId === plan.id);
   const adhocOrBatchItems = existingItemsForPlan.filter((i) => i.isAdhoc || i.isBatch);
   const existingMealItems = existingItemsForPlan.filter((i) => !i.isAdhoc && !i.isBatch && !i.isRecurring);
@@ -82,13 +84,21 @@ export function listWithWeek(
     const existing = existingMealItems.find((e) => e.name.toLowerCase().trim() === key);
     if (existing) {
       const keep = existing.userAdjusted;
-      syncedMealItems.push({
+      const line: ShoppingListItem = {
         ...existing,
         amount: keep ? existing.amount : target.amount,
         unit: keep ? existing.unit : target.unit,
         recipeNames: target.recipeNames,
         neededText: target.neededText,
-      });
+      };
+      // "Check amount" goes with the amount it was about: worked out again, it's checked again.
+      if (!keep) {
+        delete line.needsCheck;
+        delete line.quantityNote;
+        if (target.needsCheck) line.needsCheck = true;
+        if (target.quantityNote) line.quantityNote = target.quantityNote;
+      }
+      syncedMealItems.push(line);
     } else if (!dismissedItemIds.includes(target.id)) {
       syncedMealItems.push(target);
     }
@@ -96,4 +106,34 @@ export function listWithWeek(
 
   const otherWeeksItems = list.filter((i) => i.planId !== plan.id);
   return [...otherWeeksItems, ...adhocOrBatchItems, ...recurringItemsToKeep, ...syncedMealItems];
+}
+
+/**
+ * Lines on a sent week's list whose amount no longer matches what the meals need, because a recipe
+ * or a product changed after the week was sent, or the app now works the amount out better (a
+ * "400 g can" that used to need checking). Lines you've bought, or changed by hand, don't count;
+ * meals added or taken off are the planner's "changed since" note instead. Returns their names.
+ */
+export function mealLinesOutOfDate(
+  list: ShoppingListItem[],
+  plan: MealPlan,
+  recipes: Recipe[],
+  staples: RecurringItem[],
+  dismissedItemIds: string[],
+  catalog?: Catalog,
+): string[] {
+  if (plan.status !== 'finalized') return [];
+  const isMeal = (i: ShoppingListItem) => i.planId === plan.id && !i.isAdhoc && !i.isBatch && !i.isRecurring;
+  const updated = new Map(
+    listWithWeek(list, plan, recipes, staples, dismissedItemIds, catalog)
+      .filter(isMeal)
+      .map((i) => [i.id, i]),
+  );
+  return list
+    .filter((i) => isMeal(i) && !i.checked && !i.userAdjusted)
+    .filter((i) => {
+      const next = updated.get(i.id);
+      return next && (next.amount !== i.amount || next.unit !== i.unit || !!next.needsCheck !== !!i.needsCheck);
+    })
+    .map((i) => i.name);
 }

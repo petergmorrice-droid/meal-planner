@@ -33,10 +33,26 @@ export function UnsentNotice({ plan, onPlanning }: { plan: MealPlan; onPlanning?
   );
 }
 
-/** The week changed on Planning after it was sent: one tap brings the list up to date. */
-export function OutOfDateNotice({ plan, onUpdate }: { plan: MealPlan; onUpdate: () => void }) {
+/**
+ * The week changed on Planning after it was sent, or some lines no longer match what the meals need
+ * (a recipe or product changed, or the app works an amount out better now): one tap brings the list
+ * up to date.
+ */
+export function OutOfDateNotice({
+  plan,
+  staleLines,
+  onUpdate,
+}: {
+  plan: MealPlan;
+  staleLines: string[];
+  onUpdate: () => void;
+}) {
   const changed = changedDaysSinceList(plan);
-  if (!changed.length) return null;
+  if (!changed.length && !staleLines.length) return null;
+  const named =
+    staleLines.length > 3
+      ? formatListWithAnd([...staleLines.slice(0, 2), `${staleLines.length - 2} more`])
+      : formatListWithAnd(staleLines);
   return (
     <div
       className="bg-amber-50 border border-amber-300 rounded-xl px-3.5 py-3 flex items-center justify-between gap-3"
@@ -45,8 +61,17 @@ export function OutOfDateNotice({ plan, onUpdate }: { plan: MealPlan; onUpdate: 
       <div className="flex items-start gap-2.5 min-w-0">
         <RefreshCw className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-amber-950">The meal plan has changed</p>
-          <p className="text-xs text-amber-900/80">{changed.join(', ')} changed since this list was made.</p>
+          {changed.length ? (
+            <>
+              <p className="text-sm font-semibold text-amber-950">The meal plan has changed</p>
+              <p className="text-xs text-amber-900/80">{changed.join(', ')} changed since this list was made.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-amber-950">Some amounts are out of date</p>
+              <p className="text-xs text-amber-900/80">{named}: the meals now need a different amount.</p>
+            </>
+          )}
         </div>
       </div>
       <button

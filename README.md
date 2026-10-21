@@ -788,4 +788,13 @@ next run that passes saves a new one.
   Lentils from a can or tin go to a new *Tinned Lentils* product (Canned
   aisle) instead of the dried *Lentils* bag; dried, red and puy lentils still
   go to *Lentils*. Tests: four new unit tests, which fail on the old version.
+- `The list catches up` — a sent week's list is saved, so a fix like the one
+  above (or changing a recipe or a product after sending) didn't reach it:
+  *Update list* only appeared when the meals changed. Now the Shop also says
+  "Some amounts are out of date" when lines no longer match what the meals
+  need, naming them, and *Update list* puts them right. Lines you've bought
+  or changed by hand are left alone, and ticks are kept. *Update list* also
+  clears a "check amount" that no longer applies (it used to keep the old
+  one). Tests: three unit tests and a browser test (`list-catch-up`) of the
+  shepherd's pie list as it was on the phone.
 

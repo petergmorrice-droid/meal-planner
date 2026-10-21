@@ -131,6 +131,10 @@ import {
   stepStaple,
   listWithStaples,
   getCatalog,
+  listWithWeek,
+  mealLinesOutOfDate,
+  buildCatalog,
+  INITIAL_GROCERY_DATABASE,
 } from '../.test-build/app.mjs';
 
 let failures = 0,
@@ -1807,6 +1811,78 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     "the other phone's notes are kept",
   );
 });
+
+// ---- A sent list made before a fix to the sums: spotted, and put right by "Update list" ----
+{
+  // Your veggie shepherd's pie (serves 4), cooked for 2. "Green Lentils" was made with Shop as ->
+  // new product, and took the line's unit "g can".
+  const catalog = buildCatalog(INITIAL_GROCERY_DATABASE, {
+    'gdb-custom-gl': {
+      id: 'gdb-custom-gl',
+      name: 'Green Lentils',
+      category: 'Pantry, Oils & Spices',
+      unit: 'g can',
+      increment: 1,
+      aliases: ['green lentils', 'Green Lentils'],
+    },
+  });
+  const pie = {
+    id: 'r-pie',
+    name: "Veggie shepherd's pie",
+    servings: 4,
+    ingredients: [
+      { id: 'a', name: 'chopped tomatoes', amount: 400, unit: 'g can' },
+      { id: 'b', name: 'green lentils', amount: 410, unit: 'g can', groceryId: 'gdb-custom-gl' },
+      { id: 'c', name: 'butter', amount: 25, unit: 'g' },
+    ],
+    instructions: [],
+  };
+  const plan = {
+    id: 'plan-2026-10-19',
+    startDate: '2026-10-19',
+    status: 'finalized',
+    days: { Monday: { date: '2026-10-19', meals: [{ id: 'm1', type: 'recipe', recipeId: 'r-pie', servings: 2 }] } },
+  };
+  const fresh = listWithWeek([], plan, [pie], [], [], catalog);
+  const line = (list, name) => list.find((i) => i.name === name);
+  // What the list looked like when it was sent with the old sums.
+  const old = fresh.map((i) =>
+    i.name === 'Green Lentils'
+      ? { ...i, amount: 205, unit: 'g canses' }
+      : i.name === 'Chopped Tomatoes'
+        ? { ...i, needsCheck: true, quantityNote: "recipe says 200 g cans (Veggie shepherd's pie)" }
+        : i,
+  );
+
+  test('a sent list made with older sums: the lines that changed are spotted', () => {
+    assert.equal(`${line(fresh, 'Green Lentils').amount} ${line(fresh, 'Green Lentils').unit}`, '1 can');
+    assert.equal(line(fresh, 'Chopped Tomatoes').needsCheck, undefined);
+    assert.deepEqual(mealLinesOutOfDate(fresh, plan, [pie], [], [], catalog), [], 'an up-to-date list');
+    assert.deepEqual(mealLinesOutOfDate(old, plan, [pie], [], [], catalog), ['Chopped Tomatoes', 'Green Lentils']);
+  });
+
+  test('Update list puts them right: the amount, and "check amount" goes', () => {
+    const updated = listWithWeek(old, plan, [pie], [], [], catalog);
+    assert.equal(`${line(updated, 'Green Lentils').amount} ${line(updated, 'Green Lentils').unit}`, '1 can');
+    assert.equal(line(updated, 'Chopped Tomatoes').needsCheck, undefined);
+    assert.equal(line(updated, 'Chopped Tomatoes').quantityNote, undefined);
+    assert.deepEqual(mealLinesOutOfDate(updated, plan, [pie], [], [], catalog), []);
+  });
+
+  test("lines you've bought or changed by hand aren't out of date, and Update keeps your amount", () => {
+    const mine = old.map((i) =>
+      i.name === 'Green Lentils'
+        ? { ...i, checked: true }
+        : i.name === 'Chopped Tomatoes'
+          ? { ...i, amount: 2, userAdjusted: true }
+          : i,
+    );
+    assert.deepEqual(mealLinesOutOfDate(mine, plan, [pie], [], [], catalog), []);
+    assert.equal(line(listWithWeek(mine, plan, [pie], [], [], catalog), 'Chopped Tomatoes').amount, 2);
+    // A week that hasn't been sent has nothing to be out of date.
+    assert.deepEqual(mealLinesOutOfDate(old, { ...plan, status: 'draft' }, [pie], [], [], catalog), []);
+  });
+}
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
 process.exit(failures ? 1 : 0);

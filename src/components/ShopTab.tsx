@@ -35,7 +35,7 @@ import {
   restoreRemoved,
   HandLine,
 } from '../shopListEdits';
-import { sendWeekToShoppingList } from '../planShopping';
+import { mealLinesOutOfDate, sendWeekToShoppingList } from '../planShopping';
 import {
   formatWeekRange,
   createEmptyPlan,
@@ -72,6 +72,7 @@ import { useStapleSuggestions } from './shop/useStapleSuggestions';
 import { useItemInfo } from './shop/useItemInfo';
 import type { AppStore } from '../store';
 import { errorNameOf } from '../errors';
+import { EMPTY_LIST } from '../emptyList';
 
 interface ShopTabProps {
   store: AppStore;
@@ -137,7 +138,7 @@ export default function ShopTab({
 
   // Meal ingredients and staples either of you removed, so they don't come back by themselves.
   // Shared between phones via sync; removing an item adds it here automatically.
-  const dismissedItemIds: string[] = store.dismissedShoppingItemIds || [];
+  const dismissedItemIds: string[] = store.dismissedShoppingItemIds || EMPTY_LIST;
   const activeWeekDismissedCount = activePlan ? dismissedItemIds.filter((id) => id.includes(activePlan.id)).length : 0;
   useListUpkeep(store, activePlan, dismissedItemIds);
 
@@ -479,6 +480,16 @@ export default function ShopTab({
 
   const catalog = catalogForState(store.state);
   const shoppingList = store.state.shoppingList;
+  // Lines that no longer match what the week's meals need (see OutOfDateNotice).
+  const recipes = store.state.recipes;
+  const staplesNow = store.state.preferences?.recurringItems;
+  const staleLines = useMemo(
+    () =>
+      activePlan?.status === 'finalized'
+        ? mealLinesOutOfDate(shoppingList || [], activePlan, recipes, staplesNow || [], dismissedItemIds, catalog)
+        : [],
+    [shoppingList, activePlan, recipes, staplesNow, dismissedItemIds, catalog],
+  );
   const quickAddSuggestions = useMemo(() => {
     const seen = new Set<string>();
     const out: { name: string; aisle: string; favourite?: boolean }[] = [];
@@ -682,7 +693,11 @@ export default function ShopTab({
             />
           )}
           {activePlan && isPlanFinalized && (
-            <OutOfDateNotice plan={activePlan} onUpdate={() => sendWeekToShoppingList(store, activePlan)} />
+            <OutOfDateNotice
+              plan={activePlan}
+              staleLines={staleLines}
+              onUpdate={() => sendWeekToShoppingList(store, activePlan)}
+            />
           )}
           <SaveForNextTime items={newProducts.newItems} onPick={newProducts.offerToSave} />
           <StapleIdeas suggestions={staples.suggestions} onPick={staples.offer} />
