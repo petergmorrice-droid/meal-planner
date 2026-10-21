@@ -1,0 +1,83 @@
+# Checks every change on GitHub: the strict type check, the unit tests, a full build and every
+# browser test, on a fresh machine each time. A red cross on a commit means one of them failed;
+# open the run to see which (the browser tests' screenshots and logs are attached when they fail).
+# The built site files (the five to upload) are attached to every run that gets that far.
+name: Check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: # a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+
+# A newer push to the same branch replaces a run that's still going.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      TZ: Europe/London
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Exact versions from package-lock.json once it's committed; until then, the newest that
+      # package.json allows (and the lock file made is attached at the end if everything passed).
+      - name: Install
+        id: install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+            echo "made_lock=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build:single
+
+      - name: Site files
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-files
+          path: dist-single/
+          retention-days: 30
+
+      - name: Browser for the tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: node tests/e2e/run.mjs dist-single --jobs 2
+
+      - name: Browser test screenshots and logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: tests/e2e/.out/
+          retention-days: 14
+
+      # No package-lock.json in the repository yet: here's one from a run where everything passed.
+      # Commit it next to package.json so every later run (and every install) uses these versions.
+      - name: Lock file to commit
+        if: success() && steps.install.outputs.made_lock == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          retention-days: 30

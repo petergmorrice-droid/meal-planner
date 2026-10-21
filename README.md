@@ -267,6 +267,40 @@ value through `useLatest(value)` (`src/hooks/useLatest.ts`). No lint warnings
 are switched off (`eslint-disable`) anywhere. If one ever has to be, say why on
 the same line.
 
+## Automatic checks on GitHub
+
+`.github/workflows/check.yml` checks every change on a fresh machine: the
+strict type check, the unit tests, a full build and all the browser tests
+(about 10 minutes). It runs whenever code is pushed, and from the *Run
+workflow* button on the repository's *Actions* tab. A green tick next to a
+commit means everything passed; a red cross means something didn't. Open the
+run to see which step failed. When browser tests fail, their screenshots and
+logs are attached as *browser-test-results*.
+
+Every run that gets past the build also attaches **site-files**: the five
+files to upload to the website, built by GitHub rather than on one computer.
+
+To switch it on, the code (not just the five site files) needs to be in a
+GitHub repository. Use a separate one from the website, and it can be
+private:
+
+1. On github.com, create a new **private** repository (e.g. `meal-planner-code`).
+2. Upload the project's files. Include the `.github` folder; on a Mac, press
+   Cmd+Shift+. in Finder to see it. If it doesn't upload, use *Add file →
+   Create new file*, type `.github/workflows/check.yml` as the name, and
+   paste the file in.
+3. The *Actions* tab shows the first run.
+
+Cost: public repositories run free with no limit. Private ones include 2,000
+free minutes a month, enough for about 200 runs.
+
+`package-lock.json` (the exact version of every package) isn't in the code
+yet, because it can only be made where the package registry can be reached.
+The first run that passes attaches one as *package-lock*. Commit it next to
+`package.json`. From then on every run installs exactly those versions, so a
+new release of a tool can't break the build without anyone changing
+anything.
+
 ## History
 
 - `Import original AI Studio export` — the code exactly as exported.
@@ -603,3 +637,10 @@ the same line.
   - the cooking method you pick stays picked;
   - an edit in progress survives the other phone's change and saves only
     what you edited.
+- `Automatic checks on GitHub` — a GitHub Actions workflow
+  (`.github/workflows/check.yml`) runs the type check, unit tests, build and
+  all browser tests on every push. It attaches the built site files and, when
+  browser tests fail, their screenshots. It also makes `package-lock.json`
+  from the first run that passes, ready to commit. The type check was also run
+  with Node's type definitions included, as TypeScript 5.8 on GitHub does, and
+  passes. The browser tests pass two at a time, as they'll run there.
