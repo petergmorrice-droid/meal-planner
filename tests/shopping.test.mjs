@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   canonicalUnit,
+  productUnit,
   parseAmount,
   formatUnit,
   singularize,
@@ -70,6 +71,28 @@ test('units: every common spelling maps to one standard unit', () => {
   };
   for (const [want, spellings] of Object.entries(cases))
     for (const s of spellings) assert.equal(canonicalUnit(s), want, `"${s}"`);
+});
+
+test('units: "410 g can" with 410 as the amount is grams; as a product it is sold in cans', () => {
+  for (const [unit, want] of [
+    ['g can', 'g'],
+    ['G Can', 'g'],
+    ['g cans', 'g'],
+    ['ml tin', 'ml'],
+    ['g jar', 'g'],
+  ])
+    assert.equal(canonicalUnit(unit), want, `recipe line "${unit}"`);
+  for (const [unit, want] of [
+    ['g can', 'can'],
+    ['ml tin', 'can'],
+    ['400g tins', 'can'],
+    ['g jar', 'jar'],
+    ['g', 'g'],
+    ['pack', 'pack'],
+    ['large', 'large'],
+    ['', ''],
+  ])
+    assert.equal(productUnit(unit), want, `product unit "${unit}"`);
 });
 
 test('amounts: fractions, ranges and odd input', () => {
@@ -498,6 +521,44 @@ test('user changes to the grocery list are respected (pack sizes, custom items, 
   assert.equal(matchProduct(c, 'nduja paste')?.name, 'Nduja');
   assert.equal(shoppingQuantityFor(c, 'nduja', 40, 'g').amount, 40);
   assert.equal(matchProduct(c, 'moo juice')?.name, 'Milk');
+});
+
+test('lentils from a can are tinned lentils; a "400 g can" line is one can, with nothing to check', () => {
+  const pie = (people) => {
+    const scale = people / 4; // the recipe serves 4
+    return show(
+      lines([
+        { name: 'chopped tomatoes', amount: 400 * scale, unit: 'g can' },
+        { name: 'green lentils', amount: 410 * scale, unit: 'g can' },
+      ]),
+    );
+  };
+  assert.equal(pie(4), 'Chopped Tomatoes: 1 can | Tinned Lentils: 1 can');
+  assert.equal(pie(2), 'Chopped Tomatoes: 1 can | Tinned Lentils: 1 can');
+  assert.equal(pie(8), 'Chopped Tomatoes: 2 cans | Tinned Lentils: 2 cans');
+  assert.equal(matchProduct(cat, 'green lentils', { unit: 'x 400g tins', amount: 2 })?.name, 'Tinned Lentils');
+  assert.equal(matchProduct(cat, 'green lentils', { unit: 'can', amount: 1 })?.name, 'Tinned Lentils');
+  assert.equal(matchProduct(cat, 'tinned green lentils', { unit: 'g', amount: 400 })?.name, 'Tinned Lentils');
+  // Dried ones stay dried.
+  assert.equal(matchProduct(cat, 'green lentils', { unit: 'g', amount: 200 })?.name, 'Lentils');
+  assert.equal(matchProduct(cat, 'red lentils', { unit: 'g', amount: 150 })?.name, 'Lentils');
+  assert.equal(matchProduct(cat, 'puy lentils', { unit: 'g', amount: 100 })?.name, 'Lentils');
+});
+
+test('a product made from a recipe line keeps working: "Green Lentils" in "g can" is bought by the can', () => {
+  // What "Shop as -> new product" made before it learned to say "can".
+  const c = buildCatalog(INITIAL_GROCERY_DATABASE, {
+    'gdb-custom-1': {
+      id: 'gdb-custom-1',
+      name: 'Green Lentils',
+      category: 'Pantry, Oils & Spices',
+      unit: 'g can',
+      increment: 1,
+      aliases: ['green lentils'],
+    },
+  });
+  const ls = buildShoppingLines([{ name: 'green lentils', amount: 205, unit: 'g can', groceryId: 'gdb-custom-1' }], c);
+  assert.equal(show(ls), 'Green Lentils: 1 can');
 });
 
 test('amounts read the way you buy and cook them', () => {

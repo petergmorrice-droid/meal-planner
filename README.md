@@ -774,3 +774,18 @@ next run that passes saves a new one.
 
   Tests: 15 new unit tests (`tests/gemini.test.mjs`) with a stand-in for
   Google, and 5 new browser checks on the import screen.
+- `Tinned lentils, and "400 g can" lines` — found checking a real import
+  (BBC Good Food's veggie shepherd's pie). Recipes often say "a 410g can
+  green lentils", which Gemini copies as 410 with the unit "g can". The app
+  didn't know that unit, so:
+  - the chopped tomatoes ("400 g can") showed *check amount*;
+  - *Shop as → new product* made a "Green Lentils" product sold in "g cans",
+    so the list said "205 g canses".
+
+  Now "g can" (and "ml tin", "g jar"…) in a recipe line means that weight,
+  so it comes to 1 can; a product made from such a line is sold by the can,
+  and products already made that way (like your Green Lentils) work too.
+  Lentils from a can or tin go to a new *Tinned Lentils* product (Canned
+  aisle) instead of the dried *Lentils* bag; dried, red and puy lentils still
+  go to *Lentils*. Tests: four new unit tests, which fail on the old version.
+

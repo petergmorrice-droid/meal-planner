@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import Fuse from 'fuse.js';
 import { X, Plus, Flame, Zap, Leaf, Sparkles, Trash2, ShoppingCart, ChevronRight, Search, Check } from 'lucide-react';
 import { Recipe, CookingMethod, Ingredient, GroceryItem } from '../types';
-import { catalogForState } from '../shopping';
+import { catalogForState, productUnit } from '../shopping';
 import { GROCERY_AISLES, getGroceryAisle, type FoodAisle } from '../utils';
 import { recipeMethods, METHOD_LABEL, METHOD_ORDER } from '../recipeInfo';
 import type { AppStore } from '../store';
@@ -93,7 +93,7 @@ export function RecipeEditor({
         id,
         name,
         category: GROCERY_AISLES[choice.aisle].name,
-        unit: ing.unit || 'unit',
+        unit: productUnit(ing.unit) || 'unit', // "410 g can" is bought by the can
         increment: 1,
         cost: 0,
         aliases: Array.from(new Set([ing.name.trim(), name])),

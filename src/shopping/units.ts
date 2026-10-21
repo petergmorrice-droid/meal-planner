@@ -264,6 +264,22 @@ const VAGUE: Record<string, { dimension: Dimension; factor: number }> = {
   handful: { dimension: 'mass', factor: 30 },
 };
 
+/** Packs a recipe line can name after a weight or volume: "400g can", "g tin", "500ml carton". */
+const PACK_WORDS = 'cans?|tins?|jars?|packs?|packets?|bags?|pots?|tubs?|cartons?|bottles?|pouch|pouches|blocks?|tubes?';
+const METRIC_THEN_PACK = new RegExp(`^(g|kg|ml|l)\\s+(?:${PACK_WORDS})$`);
+const SIZED_PACK = new RegExp(`^(?:x\\s+)?\\(?(?:\\d+(?:\\.\\d+)?\\s*)?(?:g|kg|ml|l)\\)?\\s*(${PACK_WORDS})$`);
+
+/**
+ * The unit to buy a product in, from a unit a recipe line used: "g can", "400g tin" -> can; "g jar"
+ * -> jar. (In a recipe line "410 g can" is 410 grams; as a product, it's sold in cans.) Any other
+ * unit is returned as it is.
+ */
+export function productUnit(raw: string | undefined | null): string {
+  const text = String(raw ?? '').trim();
+  const pack = SIZED_PACK.exec(text.toLowerCase().replace(/\s+/g, ' '));
+  return pack ? canonicalUnit(pack[1]) : text;
+}
+
 /** Normalise a raw unit string to its canonical id ('' means "each"). Unknown units come back cleaned but unchanged. */
 export function canonicalUnit(raw: string | undefined | null): string {
   let u = String(raw ?? '')
@@ -278,6 +294,9 @@ export function canonicalUnit(raw: string | undefined | null): string {
     .replace(/\(?\d+(\.\d+)?\s*(g|ml|kg|l)\)?\s*/g, '')
     .trim();
   if (u in ALIASES) return ALIASES[u];
+  // "g can", "ml tin": "a 400g can" copied with 400 as the amount, so the amount is in grams.
+  const weightOfPack = METRIC_THEN_PACK.exec(u);
+  if (weightOfPack) return ALIASES[weightOfPack[1]];
   // "pots (150ml)" style suffixes
   u = u.replace(/\s*\(.*\)$/, '').trim();
   if (u in ALIASES) return ALIASES[u];

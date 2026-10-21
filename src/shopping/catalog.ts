@@ -13,7 +13,7 @@
 import type { GroceryItem } from '../types';
 import { INITIAL_GROCERY_DATABASE } from '../utils/initialGroceryDb';
 import { matchKey, IDENTITY_AFTER, IDENTITY_BEFORE, GENERIC_HEADS, DESCRIPTORS } from './names';
-import { canonicalUnit, unitInfo, vagueUnit } from './units';
+import { canonicalUnit, productUnit, unitInfo, vagueUnit } from './units';
 import { aisleCategory, guessAisle, type FoodAisle } from './aisles';
 
 export type Base = 'g' | 'ml' | 'each';
@@ -750,6 +750,21 @@ export const EXTRA_PRODUCTS: ExtraProduct[] = [
     per: { cup: 190 },
     aliases: ['red lentil', 'green lentil', 'puy lentil', 'dried red lentil', 'split red lentil', 'lentil'],
   }),
+  // Ready to use, so not the same as the dried ones above: "410g can green lentils" buys a can.
+  extra('gdb-x-tinned-lentils', 'Tinned Lentils', 'can', 1, CANNED, {
+    base: 'g',
+    per: { can: 400 },
+    aliases: [
+      'tinned lentil',
+      'canned lentil',
+      'tinned green lentil',
+      'canned green lentil',
+      'tinned brown lentil',
+      'canned brown lentil',
+      'green lentils in water',
+      'lentils in water',
+    ],
+  }),
   extra('gdb-x-pasta', 'Pasta', 'g', 500, 'Pasta', {
     base: 'g',
     cupboard: true,
@@ -1446,7 +1461,7 @@ export const isBuiltInProduct = (id: string) => BUILT_IN_IDS.has(id);
 
 /** Work out a spec for a product nobody has described (e.g. one added from the "Map Ingredient" screen). */
 function inferSpec(item: GroceryItem): ProductSpec {
-  const info = unitInfo(item.unit);
+  const info = unitInfo(productUnit(item.unit));
   if (info.dimension === 'mass') return { base: 'g' };
   if (info.dimension === 'volume') return { base: 'ml' };
   if (info.unit === 'can') return { base: 'g', per: { can: 400 } };
@@ -1485,7 +1500,8 @@ function toProduct(item: GroceryItem, specOverride?: ProductSpec): Product {
   const spec = specOverride ?? PRODUCT_SPECS[item.id] ?? EXTRA_BY_ID.get(item.id)?.spec ?? inferSpec(item);
   const base = spec.base;
   const per = { ...(spec.per ?? {}) };
-  const buyUnit = canonicalUnit(item.unit);
+  // A product made from a recipe line may have its unit as the line had it ("g can"): that's a can.
+  const buyUnit = canonicalUnit(productUnit(item.unit));
   const step = typeof item.increment === 'number' && item.increment > 0 ? item.increment : 1;
   const buySize = sizeOfUnit(buyUnit, base, per, spec.density);
   const nameKey = matchKey(item.name);
@@ -1740,7 +1756,14 @@ export function matchProductDetailed(
 const PASTA_IDS = new Set(['gdb-92', 'gdb-93', 'gdb-94', 'gdb-95', 'gdb-96', 'gdb-97', 'gdb-x-pasta', 'gdb-x-gnocchi']);
 const isPastaProduct = (p: Product) => PASTA_IDS.has(p.id) || (!isBuiltInProduct(p.id) && p.aisle === 'grains_pasta');
 
-/** "Pepper": a counted pepper is a bell pepper; a pinch or teaspoon is black pepper. */
+/** Products that are also sold ready to use in tins, and that tinned product. */
+const TINNED_VERSION: Record<string, string> = { 'gdb-x-lentils': 'gdb-x-tinned-lentils' };
+const SAYS_TIN = /\b(cans?|tins?|tinned|canned)\b/;
+
+/**
+ * Two products with one name. Lentils from a can or tin are the tinned ones, not dried. "Pepper":
+ * a counted pepper is a bell pepper; a pinch or teaspoon is black pepper.
+ */
 function disambiguate(
   catalog: Catalog,
   found: Product,
@@ -1748,6 +1771,9 @@ function disambiguate(
   key: string,
   opts: { unit?: string; amount?: number },
 ): Product {
+  const tinned = TINNED_VERSION[found.id];
+  if (tinned && (SAYS_TIN.test(String(opts.unit ?? '').toLowerCase()) || SAYS_TIN.test(key)))
+    return resolve(catalog, catalog.byId.get(tinned)) ?? found;
   if (foundKey !== 'pepper') return found;
   const u = canonicalUnit(opts.unit);
   const words = key.split(' ');
