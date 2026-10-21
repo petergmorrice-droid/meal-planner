@@ -23,6 +23,7 @@ import { formatWeekSpan } from '../shopList';
 import { testGeminiKeyApi, getGeminiApiKey, saveGeminiApiKey, clearGeminiApiKey } from '../services/geminiService';
 import { runningVersion, checkForUpdate, updateNow, builtText, UpdateCheck } from '../appVersion';
 import { agoText, syncProblemText, backupSummary } from '../settingsInfo';
+import type { AppStore } from '../store';
 
 type ShopPanel = 'aisles' | 'staples' | 'history';
 
@@ -33,7 +34,7 @@ interface SettingsTabProps {
   store: {
     state: AppState;
     getState?: () => AppState;
-    updatePreferences: (prefs: Partial<UserPreferences>) => void;
+    updatePreferences: AppStore['updatePreferences'];
     resetPreferences: () => void;
     updateMealPlan: (plan: MealPlan) => void;
     duplicatePlanToWeek: (sourcePlanId: string, targetStartDate: string) => void;
@@ -335,9 +336,9 @@ function Household({ prefs, store }: { prefs: UserPreferences; store: SettingsTa
             <span className="block text-[13px] text-zinc-500">New meals start with this many people</span>
           </span>
           <div className="flex items-center gap-1.5">
-            <button type="button" onClick={() => store.updatePreferences({ defaultServings: Math.max(1, people - 1) })} disabled={people <= 1} className="w-10 h-10 rounded-xl border border-zinc-300 flex items-center justify-center disabled:opacity-40 cursor-pointer" aria-label="One fewer person"><Minus className="w-4 h-4" /></button>
+            <button type="button" onClick={() => store.updatePreferences((p) => ({ defaultServings: Math.max(1, (p.defaultServings || 2) - 1) }))} disabled={people <= 1} className="w-10 h-10 rounded-xl border border-zinc-300 flex items-center justify-center disabled:opacity-40 cursor-pointer" aria-label="One fewer person"><Minus className="w-4 h-4" /></button>
             <span className="w-8 text-center text-lg font-bold tabular-nums" data-people-count>{people}</span>
-            <button type="button" onClick={() => store.updatePreferences({ defaultServings: Math.min(12, people + 1) })} className="w-10 h-10 rounded-xl border border-zinc-300 flex items-center justify-center cursor-pointer" aria-label="One more person"><Plus className="w-4 h-4" /></button>
+            <button type="button" onClick={() => store.updatePreferences((p) => ({ defaultServings: Math.min(12, (p.defaultServings || 2) + 1) }))} className="w-10 h-10 rounded-xl border border-zinc-300 flex items-center justify-center cursor-pointer" aria-label="One more person"><Plus className="w-4 h-4" /></button>
           </div>
         </div>
         <label className={row} data-setting-eat-at>

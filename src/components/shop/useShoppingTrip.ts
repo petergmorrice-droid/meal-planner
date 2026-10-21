@@ -78,9 +78,12 @@ export function useShoppingTrip(store: AppStore, activePlan: MealPlan | null, op
       minutes,
       by: store.currentUser || 'P',
     };
-    const shopRoute = store.state.preferences?.shopRoute;
-    const learned = learnRoute(shopRoute, readTicks());
-    store.updatePreferences?.({ shopHistory: addShopRecord(history, record), ...(learned && learned !== shopRoute ? { shopRoute: learned } : {}) });
+    // Added to the past shops and the route as they are now (the other phone may have finished a shop too).
+    const ticks = readTicks();
+    store.updatePreferences((p) => {
+      const learned = learnRoute(p.shopRoute, ticks);
+      return { shopHistory: addShopRecord(p.shopHistory || [], record), ...(learned && learned !== p.shopRoute ? { shopRoute: learned } : {}) };
+    });
     try { if (startKey) localStorage.removeItem(startKey); if (routeKey) localStorage.removeItem(routeKey); } catch { /* ignore */ }
     return isBest;
   };

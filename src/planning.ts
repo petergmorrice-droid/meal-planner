@@ -224,3 +224,19 @@ export function copyWeekMeals(days: Record<string, DayPlan>, source: MealPlan): 
   });
   return { days: nextDays, copied };
 }
+
+/**
+ * Undo a change to a week: the days it changed go back to how they were, and any other day keeps
+ * what's happened to it since (on this phone or the other one).
+ */
+export function undoDays(
+  latest: Record<string, DayPlan>, before: Record<string, DayPlan>, after: Record<string, DayPlan>,
+): Record<string, DayPlan> {
+  const out = { ...latest };
+  for (const d of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (JSON.stringify(before[d]) === JSON.stringify(after[d])) continue;
+    if (before[d]) out[d] = before[d];
+    else delete out[d];
+  }
+  return out;
+}

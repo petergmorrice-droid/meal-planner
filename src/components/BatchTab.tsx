@@ -8,6 +8,7 @@ import { freezerGroups, frozenAgo, mealsFor, planDayDate, planFreezerMeal, whenT
 import { mealTitle } from './planner/DayListRow';
 import { RecipeModal } from './RecipePopup';
 import type { AppStore } from '../store';
+import { undoDays } from '../planning';
 
 
 const portionsText = (n: number) => `${n} ${n === 1 ? 'portion' : 'portions'}`;
@@ -49,17 +50,18 @@ export default function BatchTab({ store, onNavigateTab }: { store: AppStore; on
     const g = groups.find((x) => x.batches.some((b) => b.id === id));
     if (g && g.batches.length <= 1) setOpenKey(null);
   };
-  /** Change a batch's portions; at 0 it's gone (with Undo). */
-  const setPortions = (id: string, n: number) => {
+  /** One more or one fewer portion (from the latest count, so quick taps all count); at 0 it's gone (with Undo). */
+  const stepPortions = (id: string, change: number) => {
     const b = liveBatch(id);
     if (!b) return;
+    const n = b.portions + change;
     if (n <= 0) {
       closeIfLast(id);
       storeRef.current.removeBatch(id);
       setToast({ text: `${b.name || 'That'} is all gone from the freezer`, undo: () => storeRef.current.addBatch({ ...b }) });
       return;
     }
-    storeRef.current.updateBatch({ ...b, portions: Math.min(99, n) });
+    storeRef.current.changeBatch(id, (latestBatch) => ({ ...latestBatch, portions: Math.min(99, n) }));
   };
   const removeBatch = (id: string) => {
     const b = liveBatch(id);
@@ -68,10 +70,7 @@ export default function BatchTab({ store, onNavigateTab }: { store: AppStore; on
     storeRef.current.removeBatch(id);
     setToast({ text: `Removed ${portionsText(b.portions)} of ${b.name || 'that'}`, undo: () => storeRef.current.addBatch({ ...b }) });
   };
-  const patchBatch = (id: string, patch: Partial<BatchItem>) => {
-    const b = liveBatch(id);
-    if (b) storeRef.current.updateBatch({ ...b, ...patch });
-  };
+  const patchBatch = (id: string, patch: Partial<BatchItem>) => storeRef.current.changeBatch(id, (b) => ({ ...b, ...patch }));
 
   const openGroup = groups.find((g) => g.key === openKey) || null;
   const planGroup = groups.find((g) => g.key === planning) || null;
@@ -116,7 +115,7 @@ export default function BatchTab({ store, onNavigateTab }: { store: AppStore; on
           todayIso={todayIso}
           people={people}
           recipe={openGroup.recipeId ? recipes.find((r) => r.id === openGroup.recipeId) || null : null}
-          onPortions={setPortions}
+          onPortions={stepPortions}
           onPatch={patchBatch}
           onRemove={removeBatch}
           onPlan={() => { setOpenKey(null); setPlanning(openGroup.key); }}
@@ -134,13 +133,14 @@ export default function BatchTab({ store, onNavigateTab }: { store: AppStore; on
           onPick={(plan, day) => {
             const live: MealPlan = (latest().mealPlans || []).find((p: MealPlan) => p.id === plan.id) || plan;
             const before = live;
-            const r = planFreezerMeal(live.days, day, planGroup, people, crypto.randomUUID());
-            storeRef.current.updateMealPlan({ ...live, days: r.days });
+            const mealId = crypto.randomUUID();
+            const r = planFreezerMeal(live.days, day, planGroup, people, mealId);
+            storeRef.current.changeMealPlan(live.id, (p) => ({ ...p, days: planFreezerMeal(p.days, day, planGroup, people, mealId).days }));
             setPlanning(null);
             const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
             setToast({
               text: `${planGroup.name} on ${whenText(planDayDate(live, day), todayIso)}${r.replaced ? ` instead of ${mealTitle(r.replaced)}` : ''}.${fresh}`,
-              undo: () => { const p = (latest().mealPlans || []).find((x: MealPlan) => x.id === before.id); if (p) storeRef.current.updateMealPlan({ ...p, days: before.days }); },
+              undo: () => storeRef.current.changeMealPlan(before.id, (p) => ({ ...p, days: undoDays(p.days, before.days, r.days) })),
             });
           }}
           onGoPlanning={() => { setPlanning(null); onNavigateTab?.('planning'); }}
@@ -266,7 +266,8 @@ function FreezerSheet({ g, todayIso, people, recipe, onPortions, onPatch, onRemo
   todayIso: string;
   people: number;
   recipe: Recipe | null;
-  onPortions: (id: string, n: number) => void;
+  /** One more (+1) or one fewer (−1). */
+  onPortions: (id: string, change: number) => void;
   onPatch: (id: string, patch: Partial<BatchItem>) => void;
   onRemove: (id: string) => void;
   onPlan: () => void;
@@ -295,7 +296,7 @@ function FreezerSheet({ g, todayIso, people, recipe, onPortions, onPatch, onRemo
                   <span className="text-sm font-semibold text-zinc-900 flex items-center gap-1.5">{g.batches.length > 1 ? `Batch ${i + 1}` : 'Portions'}<PersonMark who={b.lastModifiedBy || b.addedBy} what="Last changed" /></span>
                   <span className="text-xs text-zinc-500">frozen {frozenAgo(b.dateAdded, todayIso)}</span>
                 </div>
-                <Stepper value={b.portions} onChange={(n) => onPortions(b.id, n)} label="portion" />
+                <Stepper value={b.portions} onChange={(n) => onPortions(b.id, n - b.portions)} label="portion" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">

@@ -774,8 +774,7 @@ function FinishedScreen({
   // Your stars (saved straight away; the other person's are shown as they left them).
   const ratings = ratingsFor(store.state?.preferences?.ratings, recipe.id);
   const rate = (stars: number) => {
-    const list = (store.getState?.() || store.state)?.preferences?.ratings;
-    store.updatePreferences?.({ ratings: withRating(list, recipe.id, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) });
+    store.updatePreferences((p) => ({ ratings: withRating(p.ratings, recipe.id, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) }));
   };
   const isCook = meal.type === 'recipe';
 
@@ -788,9 +787,9 @@ function FinishedScreen({
     }
     const trimmed = note.trim();
     if (trimmed) {
+      // Added to the recipe's notes as they are now (the other phone may have added one meanwhile).
       const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      const notes = trimmed ? [recipe.notes?.trim(), `${date}: ${trimmed}`].filter(Boolean).join('\n') : recipe.notes;
-      store.updateRecipe?.({ ...recipe, notes });
+      store.changeRecipe(recipe.id, (r) => ({ ...r, notes: [r.notes?.trim(), `${date}: ${trimmed}`].filter(Boolean).join('\n') }));
     }
     onDone({ markCooked, froze });
   };

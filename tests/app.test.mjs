@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   orderedAisles, aislePositions, GROCERY_AISLES, generateShoppingListForPlan,
   recipeMethods, totalMinutes, formatMinutes, recipeHistories, formatAgo, formatPlannedDay, freezerPortions, freezerBatchesFor,
-  sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe,
+  sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe, changedFields,
   recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
   aggregateShoppingItems, shopQuantityText, defaultShopWeek, formatWeekSpan, parseQuickAdd, quickAddLine,
   listAsText, carryItemsToWeek, shopDurationText, partLabel,
@@ -16,7 +16,7 @@ import {
   frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText,
   versionInServiceWorker, builtText, agoText, syncProblemText, backupSummary,
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
-  isLeftoverOf, orphanedLeftoverDays, mealOnDay, changeDayMeal, describeMealChange, earlierDaysWithRecipe, copyWeekMeals,
+  isLeftoverOf, orphanedLeftoverDays, mealOnDay, changeDayMeal, describeMealChange, earlierDaysWithRecipe, copyWeekMeals, undoDays,
   stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes, handAddedBy, noteAuthor,
   patchLines, removeLines, tickLines, markOutOfStock, answerCupboard, setLineAmount, setLineAmountAndUnit, stepLine,
   addHandLines, addCatalogItems, addRecipeIngredients, restoreRemoved,
@@ -993,6 +993,27 @@ test('staples: every week follows, lines taken off stay off, and a hand-added li
   assert.equal(w2[0].id, `recurring-w2-${milk.id}`);
   assert.equal(w2[0].checked, true, 'already ticked: still ticked');
   assert.equal(w2[0].note, 'semi', 'the note comes with it');
+});
+
+// ---------- Changes made on the latest data ----------
+test('Undo puts back only the days the change touched', () => {
+  const before = week({ Monday: cook('a', 'chilli'), Tuesday: cook('b', 'curry') });
+  const after = { ...before, Monday: { ...before.Monday, meals: [] } };            // Monday's meal removed
+  const latest = { ...after, Tuesday: { ...after.Tuesday, meals: [cook('c', 'fajitas')] } }; // then Tuesday changed (other phone)
+  const undone = undoDays(latest, before, after);
+  assert.deepEqual(names(undone), ['Mon:chilli', 'Tue:fajitas'], 'Monday back; Tuesday keeps what happened since');
+  assert.deepEqual(undoDays(latest, before, before), latest, 'nothing changed: nothing undone');
+});
+
+test('only the fields you changed are saved (the rest stays as the latest copy has it)', () => {
+  const before = { id: 'r', name: 'Chilli', favourite: false, notes: 'old', tags: ['a'] };
+  const after = { ...before, favourite: true };
+  assert.deepEqual(changedFields(before, after), { favourite: true });
+  assert.deepEqual(changedFields(before, { ...before, tags: ['a', 'b'] }), { tags: ['a', 'b'] });
+  const gone = changedFields(before, { id: 'r', name: 'Chilli', favourite: false, tags: ['a'] });
+  assert.ok('notes' in gone && gone.notes === undefined, 'a field taken away is saved as gone');
+  const latest = { ...before, notes: 'from the other phone' };
+  assert.deepEqual({ ...latest, ...changedFields(before, after) }, { ...latest, favourite: true }, "the other phone's notes are kept");
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

@@ -117,7 +117,7 @@ export function usePlanningWeek(store: AppStore, targetPlanId: string | null | u
     nextMonday.setDate(baseDate.getDate() + 7);
     const nextStartStr = formatDateISO(nextMonday);
 
-    const existing = store.state.mealPlans.find((p: MealPlan) => p.startDate === nextStartStr);
+    const existing = store.getState().mealPlans.find((p: MealPlan) => p.startDate === nextStartStr);
     if (existing) {
       setSelectedPlanId(existing.id);
       store.setSelectedPlanId?.(existing.id);
@@ -126,11 +126,11 @@ export function usePlanningWeek(store: AppStore, targetPlanId: string | null | u
 
     const newPlan = createEmptyPlan(nextMonday);
     store.updateMealPlan(newPlan);
-    const prefsRecurring = store.state.preferences?.recurringItems || [];
-    if (prefsRecurring.length > 0 && store.updateShoppingList) {
-      const nextList = syncRecurringStaplesForPlan(newPlan, store.state.shoppingList || [], prefsRecurring);
-      store.updateShoppingList(nextList);
-    }
+    // Its weekly staples, added to the list as it is now.
+    store.updateShoppingList((list, s) => {
+      const staples = s.preferences?.recurringItems || [];
+      return staples.length > 0 ? syncRecurringStaplesForPlan(newPlan, list, staples) : list;
+    });
     setSelectedPlanId(newPlan.id);
     store.setSelectedPlanId?.(newPlan.id);
     return newPlan.id;

@@ -2,7 +2,7 @@
 export { orderedAisles, aislePositions, GROCERY_AISLES, generateShoppingListForPlan } from '../src/utils';
 export {
   recipeMethods, totalMinutes, formatMinutes, recipeHistories, formatAgo, formatPlannedDay, freezerPortions, freezerBatchesFor,
-  sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe,
+  sortRecipes, firstUrl, siteName, recipeIntro, isVegetarianRecipe, isVeganRecipe, changedFields,
   recipeMatchesSearch, matchesQuickFilters, findDuplicate, normaliseRecipeName, isJustAUrl, recipeShareText,
 } from '../src/recipeInfo';
 export {
@@ -18,7 +18,7 @@ export {
 } from '../src/cookInfo';
 export {
   moveMeal, relinkLeftovers, listSnapshot, changedDaysSinceList, cooksForText, leftoverSourceDay, preferredWeekStart,
-  isLeftoverOf, orphanedLeftoverDays, mealOnDay, changeDayMeal, describeMealChange, earlierDaysWithRecipe, copyWeekMeals,
+  isLeftoverOf, orphanedLeftoverDays, mealOnDay, changeDayMeal, describeMealChange, earlierDaysWithRecipe, copyWeekMeals, undoDays,
 } from '../src/planning';
 export { speechChunks, forSpeech } from '../src/speech';
 export { parseVoiceCommand, parseAlternatives } from '../src/voiceCommands';

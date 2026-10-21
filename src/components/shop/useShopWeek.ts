@@ -3,7 +3,7 @@
  * you didn't get can go).
  */
 import { useEffect, useMemo, useState } from 'react';
-import { MealPlan, ShoppingListItem } from '../../types';
+import { MealPlan } from '../../types';
 import { carryItemsToWeek, defaultShopWeek, weekStartShort } from '../../shopList';
 import { preferredWeekStart } from '../../planning';
 import {
@@ -88,17 +88,21 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
   const carryToFollowingWeek = (ids: string[], removeFirst: string[] = []): { moved: string[]; alreadyThere: string[] } | null => {
     if (!activePlan || !followingStart || !canCarry || ids.length === 0) return null;
     const gone = new Set(removeFirst);
-    let list: ShoppingListItem[] = (store.state.shoppingList || []).filter((i: ShoppingListItem) => !gone.has(i.id));
-    let target = followingPlan;
-    if (!target) {
-      target = createEmptyPlan(new Date(followingStart + 'T00:00:00'));
-      store.updateMealPlan(target);
-      const recurringPrefs = store.state.preferences?.recurringItems || [];
-      if (recurringPrefs.length > 0) list = syncRecurringStaplesForPlan(target, list, recurringPrefs, store.dismissedShoppingItemIds || []);
-    }
-    const res = carryItemsToWeek(list, ids, target.id, `Week of ${formatWeekRange(target.startDate)}`);
-    store.updateShoppingList(res.list);
-    return { moved: res.moved, alreadyThere: res.alreadyThere };
+    const existing = store.getState().mealPlans.find((p: MealPlan) => p.startDate === followingStart) || null;
+    const target = existing || createEmptyPlan(new Date(followingStart + 'T00:00:00'));
+    if (!existing) store.updateMealPlan(target);
+    const removed = store.dismissedShoppingItemIds || [];
+    let res: { moved: string[]; alreadyThere: string[] } = { moved: [], alreadyThere: [] };
+    // Worked out from the latest list (a tick a moment ago counts).
+    store.updateShoppingList((latest, s) => {
+      let list = latest.filter((i) => !gone.has(i.id));
+      const staples = s.preferences?.recurringItems || [];
+      if (!existing && staples.length > 0) list = syncRecurringStaplesForPlan(target, list, staples, removed);
+      const r = carryItemsToWeek(list, ids, target.id, `Week of ${formatWeekRange(target.startDate)}`);
+      res = { moved: r.moved, alreadyThere: r.alreadyThere };
+      return r.list;
+    });
+    return res;
   };
 
   return {

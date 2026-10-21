@@ -2,11 +2,15 @@
  * Changing the meals on the week on screen: adding (asking "How are you having it?" when it could
  * be leftovers or from the freezer), replacing, moving, removing (with Undo, and asking first when
  * leftovers depend on it), notes and people, sides, copying a week, and sending it to the list.
+ *
+ * Every change is worked out from the latest copy of the week (what's on screen can be a moment
+ * behind: a window left open while the other phone syncs), and Undo only puts back the days the
+ * change touched.
  */
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { BatchItem, DayPlan, MealPlan, MealType, PlannedMeal, PlannedMealSide, Recipe, TabName } from '../../types';
 import { canPlanFollowingWeek, createEmptyPlan, formatDateISO, syncRecurringStaplesForPlan } from '../../utils';
-import { changeDayMeal, copyWeekMeals, describeMealChange, earlierDaysWithRecipe, listSnapshot, mealOnDay, moveMeal } from '../../planning';
+import { changeDayMeal, copyWeekMeals, describeMealChange, earlierDaysWithRecipe, listSnapshot, mealOnDay, moveMeal, undoDays } from '../../planning';
 import { sendWeekToShoppingList } from '../../planShopping';
 import { freezerBatchesFor } from '../../recipeInfo';
 import type { ToastAction } from './usePlanToast';
@@ -20,10 +24,13 @@ export interface RemoveLeftoversPrompt {
   targetDayName: string;
   targetMealName: string;
   leftoverDays: string[];
-  nextDays: Record<string, DayPlan>;
+  /** The change being asked about (made on the latest week when you say yes). */
+  mealToRemove: PlannedMeal;
+  newMeal: PlannedMeal | null;
   isReplacement: boolean;
 }
 
+type Days = Record<string, DayPlan>;
 
 export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, setToastMessage, onNavigateTab }: {
   store: AppStore;
@@ -34,41 +41,59 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
   setToastMessage: (msg: string | null, action?: ToastAction | null) => void;
   onNavigateTab?: (tab: TabName, planId?: string) => void;
 }) {
-  // The latest store, for actions that run after a re-render (Undo).
-  const storeRef = useRef(store);
-  storeRef.current = store;
   const [howPrompt, setHowPrompt] = useState<HowPrompt | null>(null);
   const [removeLeftoversPrompt, setRemoveLeftoversPrompt] = useState<RemoveLeftoversPrompt | null>(null);
 
-  // Save the week's days. A week already sent to the shopping list just gets an "Update list"
-  // button afterwards; weeks sent before the app kept a record are taken as matching the list.
-  const writeDays = (nextDays: Record<string, DayPlan>) => {
-    if (!currentPlan) return;
-    const keepRecord = currentPlan.status === 'finalized' && !currentPlan.lastFinalizedSnapshot
-      ? { lastFinalizedSnapshot: listSnapshot(currentPlan) }
-      : {};
-    store.updateMealPlan({ ...currentPlan, ...keepRecord, days: nextDays });
-  };
+  /** The week as it is now (a change made a moment ago, here or on the other phone, included). */
+  const live = (): MealPlan | undefined =>
+    currentPlan && (store.getState().mealPlans.find((p) => p.id === currentPlan.id) || currentPlan);
 
-  // "Removed Chicken fajitas · Undo": put the week back as it was.
-  const offerUndo = (label: string) => {
-    if (!currentPlan) return;
-    const planId = currentPlan.id;
-    const before = currentPlan.days;
+  // "Removed Chicken fajitas · Undo": the days the change touched go back as they were.
+  const offerUndo = (label: string, planId: string, before: Days, after: Days) => {
     setToastMessage(label, {
       label: 'Undo',
       run: () => {
-        const latest = (storeRef.current.state.mealPlans || []).find((p: MealPlan) => p.id === planId);
-        if (latest) storeRef.current.updateMealPlan({ ...latest, days: before });
+        store.changeMealPlan(planId, (p) => ({ ...p, days: undoDays(p.days, before, after) }));
         setToastMessage('Undone');
       },
     });
   };
 
+  /**
+   * Change the week's days, starting from the latest copy (null: no change). A week already sent
+   * to the shopping list just gets an "Update list" button afterwards; weeks sent before the app
+   * kept a record are taken as matching the list. With `undoLabel`, says so with Undo.
+   * True if it changed something.
+   */
+  const editDays = (change: (days: Days) => Days | null, undoLabel?: string): boolean => {
+    if (!currentPlan) return false;
+    let before: Days | null = null;
+    let after: Days | null = null;
+    store.changeMealPlan(currentPlan.id, (p) => {
+      const next = change(p.days);
+      if (!next) return null;
+      before = p.days;
+      after = next;
+      const keepRecord = p.status === 'finalized' && !p.lastFinalizedSnapshot ? { lastFinalizedSnapshot: listSnapshot(p) } : {};
+      return { ...p, ...keepRecord, days: next };
+    });
+    if (!before || !after) return false;
+    if (undoLabel) offerUndo(undoLabel, currentPlan.id, before, after);
+    return true;
+  };
+
+  /** Change one meal on a day (null if the day or meal isn't there any more). */
+  const editMeal = (days: Days, dayName: string, mealId: string, patch: (m: PlannedMeal) => PlannedMeal): Days | null => {
+    const day = days[dayName];
+    if (!day || !day.meals.some((m) => m.id === mealId)) return null;
+    return { ...days, [dayName]: { ...day, meals: day.meals.map((m) => (m.id === mealId ? patch(m) : m)) } };
+  };
+
   /** Cooked earlier in the week, or in the freezer? Then ask how you're having it. True if it asked. */
   const askHow = (dayName: string, recipe: Recipe): boolean => {
-    if (!currentPlan) return false;
-    const existingDays = earlierDaysWithRecipe(currentPlan.days, dayName, recipe);
+    const plan = live();
+    if (!plan) return false;
+    const existingDays = earlierDaysWithRecipe(plan.days, dayName, recipe);
     // Portions of it in the freezer (use the oldest batch first)
     const batches = freezerBatchesFor(recipe, store.state.batches);
     const portions = batches.reduce((n: number, b: BatchItem) => n + (Number(b.portions) || 0), 0);
@@ -84,22 +109,34 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
    * otherwise save, with Undo when a meal was taken away.
    */
   const changeMeal = (dayName: string, mealToRemove: PlannedMeal | null, newMeal: PlannedMeal | null) => {
-    if (!currentPlan) return;
-    const { days: nextDays, orphanedDays } = changeDayMeal(currentPlan.days, dayName, mealToRemove, newMeal);
+    const plan = live();
+    if (!plan) return;
+    const { orphanedDays } = changeDayMeal(plan.days, dayName, mealToRemove, newMeal);
     const description = describeMealChange(dayName, mealToRemove, newMeal);
     if (orphanedDays.length > 0 && mealToRemove) {
       setRemoveLeftoversPrompt({
         targetDayName: dayName,
         targetMealName: mealToRemove.name,
         leftoverDays: orphanedDays,
-        nextDays,
+        mealToRemove,
+        newMeal,
         isReplacement: Boolean(newMeal),
       });
       return;
     }
-    if (mealToRemove) offerUndo(description);
-    else if (description) setToastMessage(description);
-    writeDays(nextDays);
+    const write = (days: Days) => changeDayMeal(days, dayName, mealToRemove, newMeal).days;
+    if (mealToRemove) {
+      editDays(write, description);
+    } else {
+      if (description) setToastMessage(description);
+      editDays(write);
+    }
+  };
+
+  /** What's on the day now (to be replaced). */
+  const mealNow = (dayName: string) => {
+    const plan = live();
+    return plan ? mealOnDay(plan.days, dayName) : null;
   };
 
   /** A recipe onto a day (one meal per day). False if it asked how you're having it instead (or there's no week). */
@@ -113,7 +150,7 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
       name: recipe.name,
       servings: defaultServings,
     };
-    changeMeal(dayName, mealOnDay(currentPlan.days, dayName), newMeal);
+    changeMeal(dayName, mealNow(dayName), newMeal);
     return true;
   };
 
@@ -142,7 +179,7 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
           note: how === 'leftover' ? (sourceDay ? `Reheat from ${sourceDay}` : 'Reheat leftovers') : undefined,
         };
     setHowPrompt(null);
-    changeMeal(dayName, mealOnDay(currentPlan.days, dayName), newMeal);
+    changeMeal(dayName, mealNow(dayName), newMeal);
     return true;
   };
 
@@ -169,101 +206,96 @@ export function useWeekEditor({ store, currentPlan, defaultServings, weekLabel, 
       servings: type === 'no_meal' ? 0 : (servings || defaultServings),
       note: note?.trim() || '',
     };
-    changeMeal(dayName, mealOnDay(currentPlan.days, dayName), newMeal);
+    changeMeal(dayName, mealNow(dayName), newMeal);
     return true;
   };
 
   /** People and notes from the day panel. */
   const saveDayDetails = (dayName: string, mealId: string, patch: { servings: number; note: string }) => {
-    if (!currentPlan) return;
-    const day = currentPlan.days[dayName];
-    if (!day) return;
-    const meals = day.meals.map(m => m.id === mealId
-      ? { ...m, servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)), note: patch.note }
-      : m);
-    writeDays({ ...currentPlan.days, [dayName]: { ...day, meals } });
-    setToastMessage('Saved');
+    const saved = editDays((days) => editMeal(days, dayName, mealId, (m) => ({
+      ...m, servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)), note: patch.note,
+    })));
+    if (saved) setToastMessage('Saved');
   };
 
   /** Move a meal to another day (or swap two days). Leftovers follow their cook. */
   const moveDayMeal = (from: string, to: string) => {
-    if (!currentPlan || from === to) return;
-    // The latest days: the panel may have just saved a note or people for this day.
-    const live: MealPlan = (store.getState?.().mealPlans || []).find((p: MealPlan) => p.id === currentPlan.id) || currentPlan;
-    const r = moveMeal(live.days, from, to);
+    const plan = live();
+    if (!plan || from === to) return;
+    const r = moveMeal(plan.days, from, to);
     const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
-    offerUndo((r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh);
-    writeDays(r.days);
+    editDays((days) => moveMeal(days, from, to).days, (r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh);
   };
 
   const removeMeal = (dayName: string, mealId: string) => {
-    if (!currentPlan) return;
-    const mealToRemove = currentPlan.days[dayName]?.meals.find(m => m.id === mealId);
+    const mealToRemove = live()?.days[dayName]?.meals.find(m => m.id === mealId);
     if (!mealToRemove) return;
     changeMeal(dayName, mealToRemove, null);
   };
 
   /** "Remove Leftovers": take the meal away and the leftovers that depended on it. */
   const confirmRemoveWithLeftovers = () => {
-    if (!currentPlan || !removeLeftoversPrompt) return;
-    offerUndo(`Removed, with the leftovers on ${removeLeftoversPrompt.leftoverDays.join(' and ')}.`);
-    writeDays(removeLeftoversPrompt.nextDays);
+    const p = removeLeftoversPrompt;
+    if (!currentPlan || !p) return;
+    editDays(
+      (days) => changeDayMeal(days, p.targetDayName, p.mealToRemove, p.newMeal).days,
+      `Removed, with the leftovers on ${p.leftoverDays.join(' and ')}.`,
+    );
     setRemoveLeftoversPrompt(null);
   };
 
   const saveSides = (dayName: string, mealId: string, sides: PlannedMealSide[]): boolean => {
-    if (!currentPlan) return false;
-    const day = currentPlan.days[dayName];
-    const meal = day?.meals.find(m => m.id === mealId);
-    if (!day || !meal) return false;
-    const meals = day.meals.map(m => m.id === mealId ? { ...meal, sides } : m);
-    writeDays({ ...currentPlan.days, [dayName]: { ...day, meals } });
-    setToastMessage(sides.length ? 'Sides saved.' : 'Sides removed.');
-    return true;
+    const saved = editDays((days) => editMeal(days, dayName, mealId, (m) => ({ ...m, sides })));
+    if (saved) setToastMessage(sides.length ? 'Sides saved.' : 'Sides removed.');
+    return saved;
   };
 
   /** Copy every day's meals from another week into the week on screen (not once it's sent). */
   const copyWeek = (source: MealPlan): boolean => {
     if (!currentPlan || currentPlan.status === 'finalized') return false;
-    const { days, copied } = copyWeekMeals(currentPlan.days, source);
-    store.updateMealPlan({ ...currentPlan, days });
-    setToastMessage(`Copied ${copied} meal${copied === 1 ? '' : 's'} from ${weekLabel(source.startDate)}`);
-    return true;
+    let copied = 0;
+    const done = editDays((days) => {
+      const r = copyWeekMeals(days, source);
+      copied = r.copied;
+      return r.days;
+    });
+    if (done) setToastMessage(`Copied ${copied} meal${copied === 1 ? '' : 's'} from ${weekLabel(source.startDate)}`);
+    return done;
   };
 
   const seeTheList = (planId: string) => (onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop', planId) } : null);
 
   /** Send the week to the shopping list (first time), and get the week after ready. */
   const sendToList = () => {
-    if (!currentPlan) return;
-    const updatedPlan: MealPlan = { ...currentPlan, status: 'finalized' };
+    const plan = live();
+    if (!plan) return;
     // Status, a record of what was sent, and the week's ingredients on the shopping list
-    sendWeekToShoppingList(store, updatedPlan);
+    sendWeekToShoppingList(store, { ...plan, status: 'finalized' });
 
     // Pre-create following week so it is ready to be planned (if within 4-week limit)
-    if (canPlanFollowingWeek(updatedPlan.startDate)) {
-      const fromDate = new Date(updatedPlan.startDate + 'T00:00:00');
+    if (canPlanFollowingWeek(plan.startDate)) {
+      const fromDate = new Date(plan.startDate + 'T00:00:00');
       const nextMonday = new Date(fromDate);
       nextMonday.setDate(fromDate.getDate() + 7);
       const nextStartStr = formatDateISO(nextMonday);
-      if (!store.state.mealPlans.some((p: MealPlan) => p.startDate === nextStartStr)) {
+      if (!store.getState().mealPlans.some((p: MealPlan) => p.startDate === nextStartStr)) {
         const nextPlan = createEmptyPlan(nextMonday);
         store.updateMealPlan(nextPlan);
-        const prefsRecurring = store.state.preferences?.recurringItems || [];
-        if (prefsRecurring.length > 0 && store.updateShoppingList) {
-          const nextList = syncRecurringStaplesForPlan(nextPlan, store.state.shoppingList || [], prefsRecurring);
-          store.updateShoppingList(nextList);
-        }
+        store.updateShoppingList((list, s) => {
+          const staples = s.preferences?.recurringItems || [];
+          return staples.length ? syncRecurringStaplesForPlan(nextPlan, list, staples) : list;
+        });
       }
     }
-    setToastMessage('Sent: the ingredients are on the shopping list.', seeTheList(currentPlan.id));
+    setToastMessage('Sent: the ingredients are on the shopping list.', seeTheList(plan.id));
   };
 
   /** "Update list": the week changed after it was sent. */
   const updateList = () => {
-    if (!currentPlan) return;
-    sendWeekToShoppingList(store, currentPlan);
-    setToastMessage('Shopping list updated.', seeTheList(currentPlan.id));
+    const plan = live();
+    if (!plan) return;
+    sendWeekToShoppingList(store, plan);
+    setToastMessage('Shopping list updated.', seeTheList(plan.id));
   };
 
   return {

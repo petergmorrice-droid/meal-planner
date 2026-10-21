@@ -167,7 +167,7 @@ export default function PlanningTab({ store, onNavigateTab, targetPlanId, pendin
           favFirst={meals.favFirst}
           onFavFirst={meals.setFavFirst}
           prefs={prefs}
-          onCardPref={(pref) => store.updatePreferences({ [pref]: prefs[pref] === false })}
+          onCardPref={(pref) => store.updatePreferences((p) => ({ [pref]: p[pref] === false }))}
         />
 
         {planningView === 'classic' && (

@@ -437,10 +437,24 @@ export function useStore() {
     commit(state, { ...state, recipes: nextRecipes });
   };
 
-  const updateRecipe = async (recipe: Recipe) => {
-    const toSave = stampRecipeNotes({ ...recipe, lastModifiedBy: currentUser }, state.recipes.find(r => r.id === recipe.id), currentUser);
-    const nextRecipes = state.recipes.map(r => r.id === toSave.id ? toSave : r);
-    commit(state, { ...state, recipes: nextRecipes });
+  const writeRecipe = (base: AppState, recipe: Recipe) => {
+    const toSave = stampRecipeNotes({ ...recipe, lastModifiedBy: currentUser }, base.recipes.find(r => r.id === recipe.id), currentUser);
+    const nextRecipes = base.recipes.map(r => r.id === toSave.id ? toSave : r);
+    commit(base, { ...base, recipes: nextRecipes });
+  };
+
+  const updateRecipe = async (recipe: Recipe) => writeRecipe(state, recipe);
+
+  /**
+   * Change one recipe, starting from its latest copy: a recipe left open while the other phone
+   * changes it keeps their change when you save yours.
+   */
+  const changeRecipe = (id: string, change: (latest: Recipe) => Recipe) => {
+    const s = stateRef.current;
+    const latest = s.recipes.find(r => r.id === id);
+    if (!latest) return;
+    const next = change(latest);
+    if (next !== latest) writeRecipe(s, next);
   };
 
   const deleteRecipe = async (recipeId: string) => {
@@ -453,7 +467,19 @@ export function useStore() {
     // started from: the latest one if that's what it read (an Undo, say), otherwise this screen's.
     const latest = stateRef.current;
     const readLatest = latest.mealPlans.find((p) => p.startDate === plan.startDate)?.lastModifiedAt === plan.lastModifiedAt;
-    const state = readLatest ? latest : stateRaw;
+    writeMealPlan(readLatest ? latest : stateRaw, plan);
+  };
+
+  /** Change one week, starting from its latest copy (null: leave it as it is). */
+  const changeMealPlan = (planId: string, change: (latest: MealPlan) => MealPlan | null) => {
+    const s = stateRef.current;
+    const latest = s.mealPlans.find((p) => p.id === planId);
+    if (!latest) return;
+    const next = change(latest);
+    if (next && next !== latest) writeMealPlan(s, next);
+  };
+
+  const writeMealPlan = (state: AppState, plan: MealPlan) => {
     const currentMondayStr = formatDateISO(getMonday(new Date()));
     const expectedId = `plan-${plan.startDate}`;
     let processedPlan = {
@@ -561,6 +587,19 @@ export function useStore() {
     commit(state, { ...state, batches: nextBatches });
   };
 
+  /** Change one freezer batch, starting from its latest copy (null takes it out of the freezer). */
+  const changeBatch = (id: string, change: (latest: BatchItem) => BatchItem | null) => {
+    const s = stateRef.current;
+    const latest = s.batches.find(b => b.id === id);
+    if (!latest) return;
+    const next = change(latest);
+    if (next === latest) return;
+    const nextBatches = next
+      ? s.batches.map(b => (b.id === id ? stampBatch(next, b, currentUser) : b))
+      : s.batches.filter(b => b.id !== id);
+    commit(s, { ...s, batches: nextBatches });
+  };
+
   const areItemsEqual = (a: ShoppingListItem, b: ShoppingListItem): boolean => {
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
     for (const key of keys) {
@@ -581,7 +620,16 @@ export function useStore() {
     return true;
   };
 
-  const updateShoppingList = async (list: ShoppingListItem[]) => {
+  /**
+   * Save the shopping list. Pass a function to work from the latest list (and data): a change
+   * worked out from what's on screen can be a moment behind (two changes in one tap, a window
+   * left open while the other phone syncs).
+   */
+  const updateShoppingList = async (listOrChange: ShoppingListItem[] | ((latest: ShoppingListItem[], latestState: AppState) => ShoppingListItem[])) => {
+    const fromLatest = typeof listOrChange === 'function';
+    const state = fromLatest ? stateRef.current : stateRaw;
+    const list = fromLatest ? listOrChange(state.shoppingList, state) : listOrChange;
+    if (fromLatest && list === state.shoppingList) return;
     const processedList = list.map(item => {
       const existingItem = state.shoppingList.find(i => i.id === item.id);
       if (!existingItem) {
@@ -673,9 +721,16 @@ export function useStore() {
 
   const getHydratedGroceryItem = (id: string): GroceryItem | undefined => catalogForState(stateRef.current).byId.get(id)?.item;
 
-  const updatePreferences = async (prefs: Partial<AppState['preferences']>) => {
-    const newPrefs = { ...(state.preferences || DEFAULT_PREFERENCES), ...prefs };
-    commit(state, { ...state, preferences: newPrefs });
+  /**
+   * Change settings. Pass a function to work out the change from the latest settings (adding
+   * to a list such as ratings or past shops); return null to change nothing.
+   */
+  const updatePreferences = async (prefsOrChange: Partial<UserPreferences> | ((latest: UserPreferences) => Partial<UserPreferences> | null)) => {
+    const base = typeof prefsOrChange === 'function' ? stateRef.current : state;
+    const current = base.preferences || DEFAULT_PREFERENCES;
+    const prefs = typeof prefsOrChange === 'function' ? prefsOrChange(current) : prefsOrChange;
+    if (!prefs) return;
+    commit(base, { ...base, preferences: { ...current, ...prefs } });
   };
 
   /** Settings back to how they started; keeps your staples, favourites, aisle order and shop history. */
@@ -795,13 +850,16 @@ export function useStore() {
     setSelectedPlanId,
     addRecipe,
     updateRecipe,
+    changeRecipe,
     deleteRecipe,
     updateMealPlan,
+    changeMealPlan,
     duplicatePlanToWeek,
     clearPastWeeks,
     addBatch,
     updateBatch,
     removeBatch,
+    changeBatch,
     updateShoppingList,
     updateGroceryDatabase,
     updateGroceryOverride,

@@ -302,3 +302,16 @@ export function recipeIntro(recipe: Recipe): string {
 export function siteName(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
+
+/**
+ * The fields that differ between two versions of something (a field taken away comes back as
+ * undefined). Saving just these onto the latest copy keeps changes made elsewhere meanwhile.
+ */
+export function changedFields<T extends object>(before: T, after: T): Partial<T> {
+  const out: Partial<T> = {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]) as Set<keyof T>;
+  for (const k of keys) {
+    if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) out[k] = after[k];
+  }
+  return out;
+}

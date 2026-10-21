@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { RatingRows } from './Stars';
 import { ratingsFor, withRating } from '../ratings';
 import PersonMark, { noteLook } from './PersonMark';
@@ -15,8 +15,7 @@ import { editRecipeApi, generateAlternativeInstructionsApi } from '../services/g
 import {
   recipeMethods, totalMinutes, formatMinutes, isVegetarianRecipe, isVeganRecipe, recipeHistories,
   freezerPortions, formatAgo, formatPlannedDay, formatShortDate, todayISO, siteName, recipeIntro, recipeShareText,
-  METHOD_LABEL, METHOD_ORDER,
-} from '../recipeInfo';
+  METHOD_LABEL, METHOD_ORDER, changedFields } from '../recipeInfo';
 import type { AppStore } from '../store';
 
 
@@ -28,7 +27,7 @@ const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-50
  */
 export function RecipeModal({
   store,
-  recipe,
+  recipe: opened,
   onClose,
   initialServings,
   bannerMessage,
@@ -46,12 +45,21 @@ export function RecipeModal({
   onAddToDay?: (recipe: Recipe) => void;
   onNavigateTab?: (tab: TabName) => void;
 }) {
+  // The recipe as it is now (changes synced from the other phone show while it's open).
+  const recipe = store?.state?.recipes?.find((r) => r.id === opened.id) || opened;
   const basePortions = recipe.servings || 2;
   const [portions, setPortions] = useState<number>(initialServings ?? basePortions);
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
   const [doneSteps, setDoneSteps] = useState<Record<number, boolean>>({});
   const [isEditing, setIsEditing] = useState(false);
   const [edited, setEdited] = useState<Recipe>(recipe);
+  // The recipe as it was when editing started: only what you change is saved (onto the latest copy).
+  const editStart = useRef<Recipe>(recipe);
+  /** Save just what changed from `before` to `next`, onto the latest copy of the recipe. */
+  const saveChanges = (before: Recipe, next: Recipe) => {
+    const changes = changedFields(before, next);
+    if (Object.keys(changes).length) store?.changeRecipe?.(recipe.id, (r) => ({ ...r, ...changes }));
+  };
   const [showAiPrompt, setShowAiPrompt] = useState(false);
   const [aiInstruction, setAiInstruction] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
@@ -96,7 +104,7 @@ export function RecipeModal({
   const toggleFavourite = () => {
     const next = { ...edited, favourite: !edited.favourite };
     setEdited(next);
-    store?.updateRecipe?.(next);
+    saveChanges(edited, next);
   };
   // The phone's share sheet (WhatsApp, Messages, email…), or copy when there isn't one.
   const handleShare = async () => {
@@ -119,19 +127,24 @@ export function RecipeModal({
   // Both of your star ratings; tapping yours saves it straight away (synced one rating at a time).
   const myRatings = ratingsFor(store?.state?.preferences?.ratings, recipe.id);
   const rate = (stars: number) => {
-    const list = (store?.getState?.() || store?.state)?.preferences?.ratings;
-    store?.updatePreferences?.({ ratings: withRating(list, recipe.id, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) });
+    store?.updatePreferences?.((p) => ({ ratings: withRating(p.ratings, recipe.id, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) }));
   };
 
   // "Our notes", changed right here without editing the whole recipe.
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  // While you're only looking (not editing), show the recipe as it is now: a change the other
+  // phone makes appears here, and anything you change next starts from it.
+  useEffect(() => {
+    if (!isEditing && notesDraft === null) setEdited(recipe);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe]);
   const saveNotes = () => {
     const notes = (notesDraft || '').trim() || undefined;
     const next: Recipe = { ...edited, notes };
     if (notes) next.notesBy = store?.currentUser || next.notesBy; else delete next.notesBy;
     setEdited(next);
     setNotesDraft(null);
-    store?.updateRecipe?.(next);
+    saveChanges(edited, next);
   };
 
   const handleSave = () => {
@@ -142,7 +155,7 @@ export function RecipeModal({
       notes: edited.notes?.trim() || undefined,
       ingredients: edited.ingredients.filter((i) => i.name.trim() !== ''),
     };
-    store?.updateRecipe?.(toSave);
+    saveChanges(editStart.current, toSave);
     setEdited(toSave);
     setIsEditing(false);
     setShowAiPrompt(false);
@@ -155,8 +168,8 @@ export function RecipeModal({
     try {
       const updated = await editRecipeApi(edited, aiInstruction);
       const merged: Recipe = { ...updated, id: edited.id, sourceUrl: edited.sourceUrl, notes: edited.notes };
+      saveChanges(edited, merged);
       setEdited(merged);
-      store?.updateRecipe?.(merged);
       setAiInstruction('');
       setShowAiPrompt(false);
       setIsEditing(false);
@@ -183,8 +196,8 @@ export function RecipeModal({
         methodPrepTime: { ...(edited.methodPrepTime || {}), [target]: data.prepTime || edited.prepTime },
         methodCookTime: { ...(edited.methodCookTime || {}), [target]: data.cookTime || edited.cookTime },
       };
+      saveChanges(edited, next);
       setEdited(next);
-      store?.updateRecipe?.(next);
       setMethod(target);
     } catch (err: any) {
       setWriteError(err?.message === 'GEMINI_API_KEY_MISSING'
@@ -251,7 +264,7 @@ export function RecipeModal({
             {!isEditing && (
               <button
                 type="button"
-                onClick={() => setIsEditing(true)}
+                onClick={() => { editStart.current = edited; setIsEditing(true); }}
                 className="w-11 h-11 rounded-full border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 flex items-center justify-center shrink-0 cursor-pointer"
                 aria-label="Edit recipe"
                 title="Edit recipe"
@@ -313,7 +326,7 @@ export function RecipeModal({
                     onClick={() => {
                       const next = { ...edited, verdict: undefined };
                       setEdited(next);
-                      store?.updateRecipe?.(next);
+                      saveChanges(edited, next);
                     }}
                     title="What you said after cooking it. Tap to clear."
                     data-recipe-verdict={edited.verdict}

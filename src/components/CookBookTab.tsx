@@ -174,7 +174,7 @@ export default function CookBookTab({
                         <input
                           type="checkbox"
                           checked={prefs[pref] !== false}
-                          onChange={() => store.updatePreferences({ [pref]: prefs[pref] === false })}
+                          onChange={() => store.updatePreferences((p) => ({ [pref]: p[pref] === false }))}
                           className="rounded border-zinc-300"
                         />
                         {label}

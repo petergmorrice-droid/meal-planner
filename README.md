@@ -568,3 +568,12 @@ Main files:
   Gemini fallbacks, unused imports, and a second copy of "keep the screen
   on" (cooking and shopping now share one). Nothing looks different: the
   page is identical step by step before and after.
+- `Latest data` — every change is worked out from the latest data, not the
+  copy on screen (which can be a moment behind). The store takes a change
+  as a function (`updateShoppingList(list => …)`, `updatePreferences(p => …)`,
+  `changeMealPlan`, `changeBatch`, `changeRecipe`), and the screens use it.
+  So two quick taps both count (+ + on milk, freezer portions, people in
+  Settings used to add one), and a recipe left open on one phone shows the
+  other phone's changes and only saves what you changed (tapping favourite
+  used to wipe a note the other phone had just added). Undo puts back only
+  the days its change touched. Tests: `quick-taps`, `latest-edits`.

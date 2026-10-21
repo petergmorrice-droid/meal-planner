@@ -5,7 +5,7 @@
  * every week?", saving a new product as a staple) a staple looks the same, there's never two of
  * the same thing, every week's list follows, and lines either of you took off a week stay off.
  */
-import { MealPlan, RecurringItem, ShoppingListItem } from './types';
+import { MealPlan, RecurringItem, ShoppingListItem, UserPreferences } from './types';
 import { canonicalUnit, formatUnit, matchProduct, aisleCategory } from './shopping';
 import type { Catalog } from './shopping/catalog';
 import { GROCERY_AISLES, getGroceryAisle, syncRecurringStaplesForAllPlans } from './utils';
@@ -88,17 +88,17 @@ export function currentStaples(store: AppStore): RecurringItem[] {
 }
 
 /**
- * Save the staples (shared) and bring every week's list in line with them.
- * `list`: start from this list instead of the saved one; `alsoPreferences`: other preferences
- * saved in the same change.
+ * Save the staples (shared) and bring every week's list in line with them, working from the
+ * latest list. `alsoChangeList`: another change to the list made at the same time;
+ * `alsoPreferences`: other preferences saved in the same change.
  */
 export function saveStaples(store: AppStore, staples: RecurringItem[], opts: {
-  list?: ShoppingListItem[];
+  alsoChangeList?: (list: ShoppingListItem[]) => ShoppingListItem[];
   takeOver?: { staple: RecurringItem; isSame: (i: ShoppingListItem) => boolean };
-  alsoPreferences?: Record<string, unknown>;
+  alsoPreferences?: Partial<UserPreferences>;
 } = {}) {
-  const now = store.getState?.() || store.state;
-  const list = listWithStaples(now.mealPlans || [], opts.list || now.shoppingList || [], staples, store.dismissedShoppingItemIds || [], opts.takeOver);
+  const removed = store.dismissedShoppingItemIds || [];
   store.updatePreferences({ ...opts.alsoPreferences, recurringItems: staples });
-  if (store.updateShoppingList) store.updateShoppingList(list);
+  store.updateShoppingList((list, now) =>
+    listWithStaples(now.mealPlans || [], opts.alsoChangeList ? opts.alsoChangeList(list) : list, staples, removed, opts.takeOver));
 }

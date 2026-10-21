@@ -3,7 +3,7 @@
  * The pieces live in ./shop: the hooks hold the logic (which week, new products, staples, the (i)
  * panel, the trip), and src/shopListEdits.ts has the changes to the list as plain functions.
  */
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { BookOpen, Calendar, RotateCcw, ShoppingBag } from 'lucide-react';
 import { ShoppingListItem, MealPlan, ShopRoute, TabName } from '../types';
 import { useJustTicked } from '../hooks/useJustTicked';
@@ -86,11 +86,9 @@ interface ShopTabProps {
 const COUNT_UNITS = ['whole', 'item', 'items', 'count', 'piece', 'pieces', 'unit', 'units', ''];
 
 export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHandled, openPanel, onOpenPanelHandled }: ShopTabProps) {
-  // The latest store, for buttons pressed later (Undo in a message).
-  const storeRef = useRef(store);
-  storeRef.current = store;
-  const currentList = (): ShoppingListItem[] => store.state.shoppingList || [];
-  const saveList = (next: ShoppingListItem[]) => store.updateShoppingList(next);
+  // Every change to the list is worked out from the latest list (what's on screen can be a
+  // moment behind), so changes in quick succession, or from the other phone, all count.
+  const changeList = (change: (list: ShoppingListItem[]) => ShoppingListItem[]) => store.updateShoppingList(change);
 
   // Panels and sheets
   const [showCatalogModal, setShowCatalogModal] = useState(false);
@@ -135,14 +133,14 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   // ---------- Changing the list ----------
   const handleToggleItem = (idOrIds: string | string[], forceState?: boolean) => {
     const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
-    saveList(tickLines(currentList(), ids, forceState, store.currentUser || 'P'));
+    changeList((list) => tickLines(list, ids, forceState, store.currentUser || 'P'));
   };
 
   /** Out of stock at the shop: not ticked, and not counted against the % done. */
-  const handleOutOfStock = (ids: string[], value: boolean) => saveList(markOutOfStock(currentList(), ids, value));
+  const handleOutOfStock = (ids: string[], value: boolean) => changeList((list) => markOutOfStock(list, ids, value));
 
   const handleKeepRequired = (item: ShoppingListItem, requiredAmount: number) => {
-    saveList(setLineAmount(currentList(), item.id, requiredAmount, false));
+    changeList((list) => setLineAmount(list, item.id, requiredAmount, false));
     const isCount = !item.unit || COUNT_UNITS.includes(item.unit.toLowerCase().trim());
     const unitText = !isCount && item.unit ? ` ${item.unit}` : '';
     setToastMessage(`Kept required ${requiredAmount}${unitText} for planned meals`);
@@ -150,25 +148,29 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
 
   const handleConfirmReduce = (item: ShoppingListItem, targetAmount: number, isRemoval?: boolean) => {
     if (isRemoval || targetAmount <= 0) {
-      saveList(removeLines(currentList(), [item.id]));
+      changeList((list) => removeLines(list, [item.id]));
       setToastMessage(`Removed ${item.name} from shopping list`);
       return;
     }
-    saveList(setLineAmount(currentList(), item.id, targetAmount, true));
+    changeList((list) => setLineAmount(list, item.id, targetAmount, true));
     setToastMessage(`Updated ${item.name} to ${targetAmount} ${item.unit}`);
   };
 
   const handleRestoreDismissed = () => {
     if (!activePlan) return;
-    saveList(restoreRemoved(currentList(), activePlan, store.state.recipes, store.state.preferences?.recurringItems || []));
+    store.updateShoppingList((list, s) => restoreRemoved(list, activePlan, s.recipes, s.preferences?.recurringItems || []));
     setToastMessage('Restored recipe ingredients');
   };
 
   /** From the products list. */
   const handleAddItems = (items: { name: string; amount: number; category?: string }[]) => {
     if (!activePlan) return;
-    const { list, total } = addCatalogItems(currentList(), activePlan, items);
-    saveList(list);
+    let total = 0;
+    changeList((list) => {
+      const r = addCatalogItems(list, activePlan, items);
+      total = r.total;
+      return r.list;
+    });
     if (items.length > 0) {
       setToastMessage(`Added ${items.length} ${items.length === 1 ? 'item' : 'items'} (${total} total quantity)`);
     }
@@ -176,7 +178,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
 
   /** + / − on a line. Going below what the meals need asks first. */
   const handleUpdateQuantity = (id: string, delta: number) => {
-    const item = currentList().find((i) => i.id === id);
+    const item = store.getState().shoppingList.find((i) => i.id === id);
     if (!item) return;
     const step = getIngredientStep(item);
     if (delta < 0) {
@@ -187,10 +189,10 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         return;
       }
     }
-    saveList(stepLine(currentList(), id, step, delta));
+    changeList((list) => stepLine(list, id, step, delta));
   };
 
-  const handleUpdateQtyAndUnit = (id: string, amount: number, unit: string) => saveList(setLineAmountAndUnit(currentList(), id, amount, unit));
+  const handleUpdateQtyAndUnit = (id: string, amount: number, unit: string) => changeList((list) => setLineAmountAndUnit(list, id, amount, unit));
 
   /** An extra recipe's ingredients (and, if you like, the meal in the freezer). */
   const handleAddBatchMealIngredients = (
@@ -208,7 +210,8 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         setSelectedPlanId(targetPlan.id);
       }
     }
-    const { list, count } = addRecipeIngredients(currentList(), targetPlan, mealName, ingredients);
+    const plan = targetPlan;
+    let count = 0;
     if (options?.alsoAddToFreezer && store.addBatch) {
       store.addBatch({
         id: crypto.randomUUID(),
@@ -218,7 +221,11 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
         dateAdded: new Date().toISOString(),
       });
     }
-    saveList(list);
+    changeList((list) => {
+      const r = addRecipeIngredients(list, plan, mealName, ingredients);
+      count = r.count;
+      return r.list;
+    });
     setShowBatchModal(false);
     setToastMessage(`Added ${count} ${count === 1 ? 'ingredient' : 'ingredients'} for ${mealName}`);
   };
@@ -235,7 +242,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
     setToastMessage(order ? 'Aisle order saved' : 'Aisles back to the usual order');
   };
 
-  const handleCupboardAnswer = (ids: string[], answer: 'have' | 'need' | null) => saveList(answerCupboard(currentList(), ids, answer));
+  const handleCupboardAnswer = (ids: string[], answer: 'have' | 'need' | null) => changeList((list) => answerCupboard(list, ids, answer));
 
   // ---------- This week's list ----------
   const currentWeekItems = useMemo<ShoppingListItem[]>(() => {
@@ -313,19 +320,19 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   };
 
   // ---------- The item panel ----------
-  const updateParts = (ids: string[], patch: (i: ShoppingListItem) => ShoppingListItem) => saveList(patchLines(currentList(), ids, patch));
+  const updateParts = (ids: string[], patch: (i: ShoppingListItem) => ShoppingListItem) => changeList((list) => patchLines(list, ids, patch));
 
   const removeRowParts = (row: AggregatedShoppingListItem) => {
     const removed = row.parts;
-    saveList(removeLines(currentList(), row.underlyingIds));
+    changeList((list) => removeLines(list, row.underlyingIds));
     setOpenRowId(null);
     setToastMessage(`Removed ${row.name}`, {
       label: 'Undo',
-      run: () => {
-        const st = storeRef.current;
-        const live = new Set((st.state.shoppingList || []).map((i: ShoppingListItem) => i.id));
-        st.updateShoppingList([...(st.state.shoppingList || []), ...removed.filter(i => !live.has(i.id))]);
-      },
+      // Back onto the list as it is by then (anything else changed meanwhile stays).
+      run: () => changeList((list) => {
+        const live = new Set(list.map((i) => i.id));
+        return [...list, ...removed.filter((i) => !live.has(i.id))];
+      }),
     });
   };
 
@@ -358,10 +365,15 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
   /** Lines typed or picked: added to something you already added by hand, or as a new line. */
   const addLines = (lines: HandLine[]): string[] => {
     if (!activePlan || lines.length === 0) return [];
-    const res = addHandLines(currentList(), activePlan, lines, (line) =>
-      matchProduct(catalogForState(store.getState?.() || store.state), line.name, { groceryId: line.groceryId }));
-    saveList(res.list);
-    return res.ids;
+    const plan = activePlan;
+    let ids: string[] = [];
+    changeList((list) => {
+      const res = addHandLines(list, plan, lines, (line) =>
+        matchProduct(catalogForState(store.getState()), line.name, { groceryId: line.groceryId }));
+      ids = res.ids;
+      return res.list;
+    });
+    return ids;
   };
 
   /** "Added by you" + in the item panel: one more of it on top of what the meals or staples need. */
@@ -381,12 +393,13 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
 
   /** − on a line you added: at its smallest it comes off (back to "Added by you: 0"), if the row has other lines. */
   const stepPart = (row: AggregatedShoppingListItem, id: string, dir: 1 | -1) => {
-    const part = row.parts.find(p => p.id === id);
+    // How much there is now (a tap a moment ago may not be on screen yet).
+    const part = store.getState().shoppingList.find((p) => p.id === id) || row.parts.find((p) => p.id === id);
     const handAdded = !!part && part.isAdhoc && !part.isRecurring && !part.isBatch;
     if (dir < 0 && part && handAdded && row.parts.length > 1 && (part.amount || 0) <= getIngredientStep(part) + 1e-9) {
       const keep = row.parts.find(p => p.id !== id);
       if (keep && openRowId === id) setOpenRowId(keep.id);
-      saveList(removeLines(currentList(), [id]));
+      changeList((list) => removeLines(list, [id]));
       return;
     }
     handleUpdateQuantity(id, dir);
@@ -465,7 +478,7 @@ export default function ShopTab({ store, onNavigateTab, openPlanId, onOpenPlanHa
       const res = week.carryToFollowingWeek(toCarry, toRemove);
       if (res) extra = ` · ${res.moved.length + res.alreadyThere.length} moved to ${week.followingShort}`;
     } else if (toRemove.length) {
-      saveList(removeLines(currentList(), toRemove));
+      changeList((list) => removeLines(list, toRemove));
     }
     if (choice === 'remove' && ids.length) extra += ` · ${notBought.length} taken off`;
     if (choice === 'keep' && ids.length) extra += ` · ${notBought.length} still to get`;

@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import type { AppStore } from '../../store';
 
-export interface Favourite { name: string; category: string }
+export interface Favourite { name: string; category?: string }
 
 const DEFAULT_FAVOURITES: Favourite[] = [
   { name: 'Milk', category: 'Dairy' },
@@ -37,12 +37,16 @@ export function useFavourites(store: AppStore) {
 
   /** Add it to your favourites, or take it off if it's there. */
   const toggleFavourite = (name: string, category: string = 'Staples') => {
-    const exists = favourites.some((f) => f.name.toLowerCase() === name.toLowerCase());
-    const nextFavs = exists
-      ? favourites.filter((f) => f.name.toLowerCase() !== name.toLowerCase())
-      : [...favourites, { name, category }];
-    try { localStorage.setItem(FAVOURITES_KEY, JSON.stringify(nextFavs)); } catch { /* the synced copy is the one that matters */ }
-    if (store?.updatePreferences) store.updatePreferences({ favouriteItems: nextFavs });
+    // From the latest favourites (a tap a moment ago, or the other phone's, counts).
+    store.updatePreferences((p) => {
+      const current: Favourite[] = p.favouriteItems?.length ? p.favouriteItems : favourites;
+      const exists = current.some((f) => f.name.toLowerCase() === name.toLowerCase());
+      const nextFavs = exists
+        ? current.filter((f) => f.name.toLowerCase() !== name.toLowerCase())
+        : [...current, { name, category }];
+      try { localStorage.setItem(FAVOURITES_KEY, JSON.stringify(nextFavs)); } catch { /* the synced copy is the one that matters */ }
+      return { favouriteItems: nextFavs };
+    });
   };
 
   return { favourites, toggleFavourite };

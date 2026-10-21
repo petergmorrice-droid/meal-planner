@@ -121,7 +121,7 @@ const popupText = async (page) => (await popup(page).innerText()).replace(/\s+/g
   await page.screenshot({ path: OUT + '/r4-edit.png' });
   await page.getByRole('button', { name: 'Save recipe' }).click(); await page.waitForTimeout(400);
   p = await popupText(page);
-  check(/Our notes (Change )?We use half the tikka paste\./i.test(p) && /From bbcgoodfood\.com/.test(p), 'notes and website shown after saving', p.slice(0, 300));
+  check(/Our notes ([PR] )?(Change )?We use half the tikka paste\./i.test(p) && /From bbcgoodfood\.com/.test(p), 'notes and website shown after saving', p.slice(0, 300));
   check(await page.locator('[data-recipe-source]').getAttribute('target') === '_blank', 'website opens in a new tab');
   st = await page.state();
   tikka = st.recipes.find((r) => r.id === 'r-tikka');

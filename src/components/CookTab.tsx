@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { MealPlan, PlannedMeal, Recipe, BatchItem, DayPlan, UserPreferences, TabName } from '../types';
 import { DAYS_OF_WEEK, formatDateISO, getMonday, getNextMonday, isWeekWithinForwardLimit } from '../utils';
-import { leftoverSourceDay, moveMeal, relinkLeftovers, cooksForText } from '../planning';
+import { leftoverSourceDay, moveMeal, relinkLeftovers, cooksForText, undoDays } from '../planning';
 import { formatWeekSpan, weekStartShort } from '../shopList';
 import { recipeMinutes, startBy, clockText, parseClock, prepTonight, freezePortionsFromNote, eatAtFor } from '../cookInfo';
 import { DaySheet, describeMeal, mealTitle, dayTone } from './planner/DayListRow';
@@ -118,8 +118,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
   // "Rate it": both of your stars for a recipe you've cooked.
   const [rating, setRating] = useState<{ recipeId: string; name: string } | null>(null);
   const rateRecipe = (recipeId: string, stars: number) => {
-    const list = (store.getState?.() || store.state)?.preferences?.ratings;
-    store.updatePreferences?.({ ratings: withRating(list, recipeId, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) });
+    store.updatePreferences((p) => ({ ratings: withRating(p.ratings, recipeId, store.currentUser || 'P', stars, new Date().toISOString().slice(0, 10)) }));
   };
   const [moving, setMoving] = useState<string | null>(null);
   const [noting, setNoting] = useState<string | null>(null);
@@ -145,11 +144,13 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
   // The very latest state (a note saved a moment ago in the same tap isn't in store.state yet).
   const latest = () => storeRef.current.getState?.() || storeRef.current.state;
   const livePlan = (planId: string): MealPlan | null => (latest().mealPlans || []).find((p: MealPlan) => p.id === planId) || null;
+  /** Change one meal, on the latest copy of the week. */
   const patchMeal = (planId: string, day: string, mealId: string, patch: (m: PlannedMeal) => PlannedMeal) => {
-    const p = livePlan(planId);
-    const dp = p?.days[day];
-    if (!p || !dp) return;
-    storeRef.current.updateMealPlan({ ...p, days: { ...p.days, [day]: { ...dp, meals: dp.meals.map((m) => (m.id === mealId ? patch(m) : m)) } } });
+    storeRef.current.changeMealPlan(planId, (p) => {
+      const dp = p.days[day];
+      if (!dp) return null;
+      return { ...p, days: { ...p.days, [day]: { ...dp, meals: dp.meals.map((m) => (m.id === mealId ? patch(m) : m)) } } };
+    });
   };
   const liveBatch = (id: string): BatchItem | null => (latest().batches || []).find((b: BatchItem) => b.id === id) || null;
   const batchName = (b: BatchItem | null, m: PlannedMeal) => (b?.name || recipeFor(m)?.name || mealTitle(m)).trim();
@@ -157,8 +158,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
 
   /** Put portions back into a batch (or bring the batch back if it was used up). */
   const addToFreezer = (batchId: string, portions: number, fallback: BatchItem) => {
-    const b = liveBatch(batchId);
-    if (b) storeRef.current.updateBatch({ ...b, portions: b.portions + portions });
+    if (liveBatch(batchId)) storeRef.current.changeBatch(batchId, (b) => ({ ...b, portions: b.portions + portions }));
     else storeRef.current.addBatch({ ...fallback, id: batchId, portions });
   };
   /** Take portions out of a batch (removing it when it's empty). */
@@ -167,9 +167,9 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
     if (!b) return { took: 0, left: 0 };
     const took = Math.min(portions, b.portions);
     const left = b.portions - took;
-    if (left <= 0) { storeRef.current.removeBatch(b.id); return { took, left: 0, snapshot: b }; }
-    storeRef.current.updateBatch({ ...b, portions: left });
-    return { took, left };
+    // Gone when it's empty.
+    storeRef.current.changeBatch(b.id, (latestBatch) => (left <= 0 ? null : { ...latestBatch, portions: left }));
+    return left <= 0 ? { took, left: 0, snapshot: b } : { took, left };
   };
 
   /**
@@ -246,23 +246,29 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
   };
 
   // ---------- Day panel actions (same panel as Planning) ----------
-  const writeDays = (p: MealPlan, days: Record<string, DayPlan>) => store.updateMealPlan({ ...p, days });
+  /** Change the week's days (from its latest copy), with Undo that puts back just the days it changed. */
+  const changeDays = (change: (days: Record<string, DayPlan>) => Record<string, DayPlan>, text: string) => {
+    const before = plan && livePlan(plan.id);
+    if (!before) return;
+    const after = change(before.days);
+    storeRef.current.changeMealPlan(before.id, (p) => ({ ...p, days: change(p.days) }));
+    setToast({ text, undo: () => storeRef.current.changeMealPlan(before.id, (p) => ({ ...p, days: undoDays(p.days, before.days, after) })) });
+  };
   const moveDay = (from: string, to: string) => {
     const before = plan && livePlan(plan.id);
     if (!before) return;
     const r = moveMeal(before.days, from, to);
-    writeDays(before, r.days);
     const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
-    setToast({ text: (r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh, undo: () => { const live = livePlan(before.id); if (live) writeDays(live, before.days); } });
+    changeDays((days) => moveMeal(days, from, to).days, (r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh);
   };
   const removeDay = (day: string, mealId: string) => {
     const before = plan && livePlan(plan.id);
     if (!before) return;
-    const dp = before.days[day];
-    const r = relinkLeftovers({ ...before.days, [day]: { ...dp, meals: dp.meals.filter((m) => m.id !== mealId) } });
-    writeDays(before, r.days);
-    const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
-    setToast({ text: `Removed from ${day}.${fresh}`, undo: () => { const live = livePlan(before.id); if (live) writeDays(live, before.days); } });
+    const without = (days: Record<string, DayPlan>) => (days[day]
+      ? relinkLeftovers({ ...days, [day]: { ...days[day], meals: days[day].meals.filter((m) => m.id !== mealId) } })
+      : { days, freshDays: [] as string[] });
+    const fresh = without(before.days).freshDays;
+    changeDays((days) => without(days).days, `Removed from ${day}.${fresh.length ? ` ${fresh.join(' and ')} now cooked fresh.` : ''}`);
   };
   const saveNote = (day: string, mealId: string, note: string) => {
     if (!plan) return;

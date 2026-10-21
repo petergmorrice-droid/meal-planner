@@ -30,10 +30,8 @@ export function useStapleSuggestions({ store, activePlan, setToastMessage }: {
   };
 
   const declineStaple = (s: StapleSuggestion) => {
-    const now = store.getState?.() || store.state;
-    const cur: string[] = now.preferences?.notStaples || [];
     const key = s.name.trim().toLowerCase();
-    if (!cur.includes(key)) store.updatePreferences({ notStaples: [...cur, key] });
+    store.updatePreferences((p) => (p.notStaples || []).includes(key) ? null : { notStaples: [...(p.notStaples || []), key] });
     setStapleOffer(null);
     setToastMessage(`OK, won't suggest ${s.name} as a staple again`);
   };

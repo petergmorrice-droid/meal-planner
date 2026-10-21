@@ -4,7 +4,7 @@
  * Saving can also make it a weekly staple and/or a favourite.
  */
 import { useMemo, useRef, useState } from 'react';
-import { ShoppingListItem } from '../../types';
+import { ShoppingListItem, UserPreferences } from '../../types';
 import { notYetProducts, stapleQuantity, inProductUnit } from '../../shopList';
 import { GROCERY_AISLES } from '../../utils';
 import { addStaple, currentStaples, findStaple, newStaple, saveStaples } from '../../staples';
@@ -69,14 +69,13 @@ export function useNewProducts({ store, weekItems, favourites, aisleOrder, setTo
     else store.updateGroceryOverride?.(id, product);
     // This week's line(s) become that product too.
     const key = from.name.trim().toLowerCase();
-    const now = store.getState?.() || store.state;
     // ...in the unit it's sold in ("1" becomes "1 pack"), so adding another one adds up.
-    const list: ShoppingListItem[] = (now.shoppingList || []).map((i: ShoppingListItem) =>
+    const asProduct = (list: ShoppingListItem[]) => list.map((i) =>
       i.isAdhoc && !i.groceryId && i.name.trim().toLowerCase() === key
         ? { ...i, name: d.name, groceryId: id, category, ...(inProductUnit(i, d.unit, d.increment) || {}) }
         : i);
     const isThis = (n: string) => sameName(n, from.name) || sameName(n, d.name);
-    const favouritesPatch: Record<string, unknown> = {};
+    const favouritesPatch: Partial<UserPreferences> = {};
     const also: string[] = [];
     // Favourite: in your favourites, quick to add.
     if (d.favourite) {
@@ -94,10 +93,10 @@ export function useNewProducts({ store, weekItems, favourites, aisleOrder, setTo
       ? addStaple(staples, newStaple({ name: d.name, ...stapleQuantity(d.unit, d.increment, d.staple.packs), category }))
       : null;
     if (made?.added) {
-      saveStaples(store, made.staples, { list, takeOver: { staple: made.staple, isSame: (i) => i.groceryId === id }, alsoPreferences: favouritesPatch });
+      saveStaples(store, made.staples, { alsoChangeList: asProduct, takeOver: { staple: made.staple, isSame: (i) => i.groceryId === id }, alsoPreferences: favouritesPatch });
     } else {
       if (Object.keys(favouritesPatch).length) store.updatePreferences(favouritesPatch);
-      store.updateShoppingList(list);
+      store.updateShoppingList(asProduct);
     }
     setSaveAsProduct(null);
     setToastMessage(also.length ? `Saved ${d.name} (${category}). It's now ${also.join(' and ')} too.` : `Saved ${d.name}: next time it goes straight to ${category}`);
@@ -105,8 +104,7 @@ export function useNewProducts({ store, weekItems, favourites, aisleOrder, setTo
 
   const declineNewProduct = (from: { name: string }) => {
     const key = from.name.trim().toLowerCase();
-    const current = store.state.preferences?.notProducts || [];
-    if (!current.includes(key)) store.updatePreferences({ notProducts: [...current, key] });
+    store.updatePreferences((p) => (p.notProducts || []).includes(key) ? null : { notProducts: [...(p.notProducts || []), key] });
     setSaveAsProduct(null);
     setToastMessage(`OK, won't ask about ${from.name} again`);
   };

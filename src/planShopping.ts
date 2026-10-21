@@ -1,6 +1,6 @@
 // Building a week's ingredients on the shopping list. Used by Planning ("Send to shopping list",
 // "Update list") and by Shop's "Planning has changed" note.
-import { MealPlan, ShoppingListItem } from './types';
+import { MealPlan, Recipe, RecurringItem, ShoppingListItem } from './types';
 import { generateShoppingListForPlan, getCurrentMondayStr, getNextMondayStr, formatWeekRange } from './utils';
 import { listSnapshot } from './planning';
 import type { AppStore } from './store';
@@ -12,24 +12,30 @@ export function weekLabelFor(startDate: string): string {
 /**
  * Put this week's meals on the shopping list, keeping other weeks, items added by hand, staples
  * you've adjusted and anything either of you removed. Then remember what the list was made from,
- * so later changes to the week can be spotted ("Shopping list out of date").
+ * so later changes to the week can be spotted ("Shopping list out of date"). Works from the
+ * latest copy of the week and the list (the screen's may be a moment behind).
  */
 export function sendWeekToShoppingList(store: AppStore, plan: MealPlan) {
-  const sentPlan: MealPlan = { ...plan, status: 'finalized', lastFinalizedSnapshot: listSnapshot(plan) };
+  const latest = store.getState().mealPlans.find((p) => p.id === plan.id) || plan;
+  const sentPlan: MealPlan = { ...latest, status: 'finalized', lastFinalizedSnapshot: listSnapshot(latest) };
   store.updateMealPlan(sentPlan);
+  const removed: string[] = store.dismissedShoppingItemIds || [];
+  store.updateShoppingList((list, s) => listWithWeek(list, sentPlan, s.recipes, s.preferences?.recurringItems || [], removed));
+}
 
-  const targetItems = generateShoppingListForPlan(sentPlan, store.state.recipes);
-  const dismissedItemIds: string[] = store.dismissedShoppingItemIds || [];
-  const currentShoppingList: ShoppingListItem[] = [...(store.state.shoppingList || [])];
-  const existingItemsForPlan = currentShoppingList.filter((i) => i.planId === plan.id);
+/** The shopping list with this week's staples and meal ingredients brought up to date (see above). */
+export function listWithWeek(
+  list: ShoppingListItem[], plan: MealPlan, recipes: Recipe[], staples: RecurringItem[], dismissedItemIds: string[],
+): ShoppingListItem[] {
+  const targetItems = generateShoppingListForPlan(plan, recipes);
+  const existingItemsForPlan = list.filter((i) => i.planId === plan.id);
   const adhocOrBatchItems = existingItemsForPlan.filter((i) => i.isAdhoc || i.isBatch);
   const existingMealItems = existingItemsForPlan.filter((i) => !i.isAdhoc && !i.isBatch && !i.isRecurring);
 
   // 1. Weekly staples
-  const prefsRecurring = store.state.preferences?.recurringItems || [];
   const recurringItemsToKeep: ShoppingListItem[] = [];
   const existingRecurring = existingItemsForPlan.filter((i) => i.isRecurring);
-  prefsRecurring.forEach((rec) => {
+  staples.forEach((rec) => {
     const itemId = `recurring-${plan.id}-${rec.id}`;
     if (dismissedItemIds.includes(itemId)) return;
     const existing = existingRecurring.find((i) => i.id === itemId);
@@ -59,6 +65,6 @@ export function sendWeekToShoppingList(store: AppStore, plan: MealPlan) {
     }
   });
 
-  const otherWeeksItems = currentShoppingList.filter((i) => i.planId !== plan.id);
-  store.updateShoppingList([...otherWeeksItems, ...adhocOrBatchItems, ...recurringItemsToKeep, ...syncedMealItems]);
+  const otherWeeksItems = list.filter((i) => i.planId !== plan.id);
+  return [...otherWeeksItems, ...adhocOrBatchItems, ...recurringItemsToKeep, ...syncedMealItems];
 }
