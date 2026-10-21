@@ -26,6 +26,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    outputs:
+      made_lock: ${{ steps.install.outputs.made_lock }}
     env:
       TZ: Europe/London
     steps:
@@ -117,3 +119,28 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # No package-lock.json yet: commit the one from this run, where every check passed, so every
+  # later run installs exactly the versions that were tested. A separate job, so the job that
+  # installs and runs packages never has permission to change the repository.
+  save-lock:
+    needs: check
+    if: needs.check.outputs.made_lock == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-lock
+
+      - name: Commit package-lock.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Pin package versions: package-lock.json from a run where every check passed"
+          git push

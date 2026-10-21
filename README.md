@@ -311,12 +311,12 @@ When everything passes on `main`, the last step publishes the site (see
 
 It's free: public repositories have no limit on these runs.
 
-`package-lock.json` (the exact version of every package) isn't in the code
-yet, because it can only be made where the package registry can be reached.
-The first run that passes attaches one as *package-lock*. Commit it next to
-`package.json`. From then on every run installs exactly those versions, so a
-new release of a tool can't break the build without anyone changing
-anything.
+`package-lock.json` pins the exact version of every package, so every run
+installs what was last tested, and a new release of a tool can't break the
+build without anyone changing anything. It was made by GitHub, not by hand:
+when there isn't one, the first run that passes commits the one it made
+(the `save-lock` step). To move to newer versions, delete it and push; the
+next run that passes saves a new one.
 
 ## History
 
