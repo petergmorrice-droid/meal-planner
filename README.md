@@ -157,8 +157,10 @@ more ingredients just come up in "Map Ingredient". If step 1 fails, the app
 says so and saves nothing, rather than guessing.
 
 Every Gemini request goes to Gemini 3.8 Flash first and, if that can't answer
-(its free allowance used up, busy, or too slow), to 3.1 Flash-Lite, which has
-its own allowance. Copying jobs ask Gemini to think only briefly, so they take
+(its free allowance used up, busy, or too slow), to 3.6 Flash, then 3.1
+Flash-Lite, each with its own free allowance. A model that's busy for a moment
+is asked once more after a short wait, and one whose allowance for today is
+used up is skipped until it comes back (about 8am). Copying jobs ask Gemini to think only briefly, so they take
 seconds; writing or changing a recipe uses Gemini's usual amount of thinking.
 When neither model answers, the message says why in plain words (the free
 allowance, no signal, too slow, busy), with what happened on each model in
@@ -803,4 +805,12 @@ next run that passes saves a new one.
   Now it's written for the number in your request, or for how many you
   usually cook for (*Settings → Household*) if you don't say, and that's the
   number it's saved with. Tests: a unit test and a browser check.
+- `Three Gemini models, and fewer wasted requests` — on the phone, 3.8
+  Flash's free allowance (only 20 a day) was used up and Flash-Lite happened
+  to be busy, so a recipe couldn't be read. Now a busy model is asked again
+  after 2.5 seconds; 3.6 Flash, with its own free allowance, is tried before
+  Flash-Lite; and a model whose daily allowance is used up is skipped until
+  it comes back at about 8am (remembered on each phone; a new key starts
+  afresh), so it doesn't cost a wasted request each time. Tests: five new
+  unit tests, including the reset time across the clock changes.
 

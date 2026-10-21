@@ -598,7 +598,8 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
     await page.waitForTimeout(300);
     await page.locator('textarea[aria-label="Recipe text or link"]').fill('https://www.bbcgoodfood.com/recipes/pie');
     await page.locator('[data-add-go]').click();
-    await page.waitForTimeout(1500);
+    // Each busy model is asked twice, a couple of seconds apart.
+    await page.locator('[data-add-error]').waitFor({ timeout: 20000 });
     const err = await page
       .locator('[data-add-error]')
       .innerText()
@@ -615,6 +616,7 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
       .catch(() => '');
     check(
       /3\.8 Flash: free limit for today reached \(429 RESOURCE_EXHAUSTED\)/.test(detail) &&
+        /3\.6 Flash: busy \(503 UNAVAILABLE\)/.test(detail) &&
         /3\.1 Flash-Lite: busy \(503 UNAVAILABLE\)/.test(detail),
       'with what happened on each model in the small print',
       detail,

@@ -1,10 +1,27 @@
-// Talking to Gemini: what the app asks for, the second model when the first can't answer, and the
-// plain reason when neither can. Google is replaced by a stand-in that answers as scripted.
+// Talking to Gemini: what the app asks for, the next model when one can't answer, and the plain
+// reason when none can. Google is replaced by a stand-in that answers as scripted.
 // Run with: npm test
 import assert from 'node:assert/strict';
-import { askGemini, geminiFailure, geminiDetail, testGeminiKeyApi } from '../.test-build/gemini.mjs';
+import {
+  askGemini,
+  geminiFailure,
+  geminiDetail,
+  testGeminiKeyApi,
+  nextAllowanceReset,
+  setBusyRetryWait,
+  saveGeminiApiKey,
+} from '../.test-build/gemini.mjs';
 
 console.warn = () => {}; // each failed try is logged for the phone's console; not needed here
+setBusyRetryWait(20);
+// The phone's storage (which models are used up today), fresh for each test.
+const stored = new Map();
+globalThis.localStorage = {
+  getItem: (k) => (stored.has(k) ? stored.get(k) : null),
+  setItem: (k, v) => stored.set(k, String(v)),
+  removeItem: (k) => stored.delete(k),
+};
+const M = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite'];
 
 let failures = 0,
   passes = 0;
@@ -23,6 +40,7 @@ const test = async (name, fn) => {
 let calls = [];
 const google = (...answers) => {
   calls = [];
+  stored.clear();
   globalThis.fetch = async (url, init) => {
     calls.push({ model: /models\/([^:]+):/.exec(url)?.[1], body: JSON.parse(init.body) });
     const answer = answers[calls.length - 1];
@@ -95,15 +113,57 @@ await test("writing a recipe: Gemini's own amount of thinking, and a JSON answer
   assert.deepEqual(calls[0].body.systemInstruction, { parts: [{ text: 'You are a chef.' }] });
 });
 
-// ---- The second model ----
-await test("the first model's free allowance is used up: the second answers", async () => {
+// ---- The next model ----
+await test("the first model's free allowance is used up: the next answers", async () => {
   google(quota('Day'), says('Lemon pasta'));
   const r = await askGemini('k', [{ text: 'x' }], quick);
   assert.equal(r.text, 'Lemon pasta');
   assert.deepEqual(
     calls.map((c) => c.model),
-    ['gemini-3.8-flash', 'gemini-3.1-flash-lite'],
+    M.slice(0, 2),
   );
+});
+
+await test("a model used up today isn't asked again until its allowance comes back", async () => {
+  google(quota('Day'), says('one'));
+  await askGemini('k', [{ text: 'x' }], quick);
+  calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push({ model: /models\/([^:]+):/.exec(url)?.[1] });
+    return says('two')();
+  };
+  assert.equal((await askGemini('k', [{ text: 'x' }], quick)).text, 'two');
+  assert.deepEqual(
+    calls.map((c) => c.model),
+    ['gemini-3.6-flash'],
+    '3.8 Flash skipped',
+  );
+  const saved = JSON.parse(stored.get('gemini_used_up'));
+  assert.ok(saved['gemini-3.8-flash'] > Date.now(), 'remembered until the reset');
+  saveGeminiApiKey('new-key');
+  assert.equal(stored.get('gemini_used_up'), undefined, 'a new key starts afresh');
+});
+
+await test("today's allowance comes back at midnight in California: 8am here (7am in the odd week)", async () => {
+  const at = (iso) => new Date(nextAllowanceReset(new Date(iso))).toISOString();
+  assert.equal(at('2026-10-21T15:39:00+01:00'), '2026-10-22T07:00:00.000Z'); // 8am BST
+  assert.equal(at('2026-10-21T07:30:00+01:00'), '2026-10-21T07:00:00.000Z'); // 8am today
+  assert.equal(at('2026-11-02T12:00:00Z'), '2026-11-03T08:00:00.000Z'); // 8am GMT
+  assert.equal(at('2026-10-27T12:00:00Z'), '2026-10-28T07:00:00.000Z'); // 7am GMT (US clocks not back yet)
+});
+
+await test('Google busy for a moment: the same model is asked again and answers', async () => {
+  google(busy, says('Lemon pasta'));
+  assert.equal((await askGemini('k', [{ text: 'x' }], quick)).text, 'Lemon pasta');
+  assert.deepEqual(
+    calls.map((c) => c.model),
+    [M[0], M[0]],
+  );
+});
+
+await test('what happened on the phone: 3.8 Flash used up, Flash-Lite busy — now 3.6 Flash answers', async () => {
+  google(quota('Day'), says('Lemon pasta'));
+  assert.equal((await askGemini('k', [{ text: 'x' }], quick)).text, 'Lemon pasta');
 });
 
 await test('an answer that ran on and was cut off is not used: the second model is asked', async () => {
@@ -134,25 +194,29 @@ await test('a model Google has retired (404): the other model answers', async ()
   assert.equal((await askGemini('k', [{ text: 'x' }], quick)).text, 'OK');
 });
 
-// ---- The reason given when neither can answer ----
-await test('both used up for today: says so, and when it comes back', async () => {
-  google(quota('Day'), quota('Day'));
+// ---- The reason given when none can answer ----
+await test('all used up for today: says so, and when it comes back', async () => {
+  google(quota('Day'), quota('Day'), quota('Day'));
   const e = page(await failing(() => askGemini('k', [{ text: 'x' }], quick)));
   assert.match(e.message, /today's free Gemini allowance is used up\. It comes back at about 8am\./);
   assert.equal(
     geminiDetail(e),
-    '3.8 Flash: free limit for today reached (429 RESOURCE_EXHAUSTED) · 3.1 Flash-Lite: free limit for today reached (429 RESOURCE_EXHAUSTED)',
+    '3.8 Flash: free limit for today reached (429 RESOURCE_EXHAUSTED) · 3.6 Flash: free limit for today reached (429 RESOURCE_EXHAUSTED) · 3.1 Flash-Lite: free limit for today reached (429 RESOURCE_EXHAUSTED)',
   );
+  // Asked again later: every model is used up, so they're all asked anyway (the estimate may be off).
+  calls = [];
+  await failing(() => askGemini('k', [{ text: 'x' }], quick));
+  assert.equal(calls.length, 3);
 });
 
 await test('the per-minute allowance: wait a minute', async () => {
-  google(quota('Minute'), quota('Minute'));
+  google(quota('Minute'), quota('Minute'), quota('Minute'));
   const e = page(await failing(() => askGemini('k', [{ text: 'x' }], quick)));
   assert.match(e.message, /only takes a few requests a minute\. Wait a minute, then try again\./);
 });
 
 await test('first used up, second too slow: says it didn\'t answer in time (not "no connection")', async () => {
-  google(quota('Day'), neverAnswers);
+  google(quota('Day'), quota('Day'), neverAnswers);
   const started = Date.now();
   const e = page(await failing(() => askGemini('k', [{ text: 'x' }], { thinking: 'low', waitSeconds: 0.1 })));
   assert.ok(Date.now() - started < 2000, 'gave up at the time limit');
@@ -163,23 +227,23 @@ await test('first used up, second too slow: says it didn\'t answer in time (not 
   );
 });
 
-await test("Google busy on both: says it's busy, try in a minute", async () => {
-  google(busy, busy);
+await test("Google busy on all, even asked twice: says it's busy, try in a minute", async () => {
+  google(busy, busy, busy, busy, busy, busy);
   const e = page(await failing(() => askGemini('k', [{ text: 'x' }], quick)));
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 6);
   assert.match(e.message, /Google's Gemini service is busy just now/);
   assert.match(geminiDetail(e), /busy \(503 UNAVAILABLE\)/);
 });
 
 await test("Google's checks stop the copy on both: says so", async () => {
-  google(says('Lemon pasta. 200 g', 'RECITATION'), says('', 'RECITATION'));
+  google(says('Lemon pasta. 200 g', 'RECITATION'), says('', 'RECITATION'), says('', 'RECITATION'));
   const e = page(await failing(() => askGemini('k', [{ text: 'x' }], quick)));
   assert.match(e.message, /Google's checks stopped its answer part-way/);
   assert.match(geminiDetail(e), /RECITATION/);
 });
 
 await test("no connection: says the phone couldn't reach Google", async () => {
-  google(noSignal, noSignal);
+  google(noSignal, noSignal, noSignal);
   const e = page(await failing(() => askGemini('k', [{ text: 'x' }], quick)));
   assert.match(e.message, /this phone couldn't reach Google\. Check it's online\./);
   // With the phone saying it's offline, the second model isn't tried either.
@@ -213,7 +277,7 @@ await test('Test it: works, a bad key, and a used-up allowance (the key still wo
   assert.deepEqual(calls[0].body.generationConfig, { thinkingConfig: { thinkingLevel: 'low' } });
   google(badKey);
   assert.match((await testGeminiKeyApi('k')).message, /isn't valid/);
-  google(quota('Day'), quota('Day'));
+  google(quota('Day'), quota('Day'), quota('Day'));
   const used = await testGeminiKeyApi('k');
   assert.equal(used.ok, true);
   assert.match(used.message, /today's free allowance is used up\. It comes back at about 8am/);

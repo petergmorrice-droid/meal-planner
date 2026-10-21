@@ -6,13 +6,63 @@
 import { messageOf } from '../../errors';
 
 /**
- * Asked in this order. Each has its own free daily allowance, so when the first is used up, busy or
- * too slow, the second usually still answers. Both can read web pages (the URL context tool).
+ * Asked in this order. Each has its own free daily allowance (3.8 Flash's is only about 20), so when
+ * one is used up, busy or too slow, the next usually still answers. All can read web pages (the URL
+ * context tool).
  */
 const MODELS = [
   { id: 'gemini-3.8-flash', name: '3.8 Flash' },
+  { id: 'gemini-3.6-flash', name: '3.6 Flash' },
   { id: 'gemini-3.1-flash-lite', name: '3.1 Flash-Lite' },
 ];
+
+/** How long to wait before asking a busy model once more (Google's advice for a 503). */
+let BUSY_RETRY_MS = 2500;
+/** For the tests only: wait less. */
+export const setBusyRetryWait = (ms: number) => {
+  BUSY_RETRY_MS = ms;
+};
+
+// ---- Models whose free allowance for today is used up (kept on this phone until it comes back) ----
+const USED_UP_KEY = 'gemini_used_up';
+/** When today's free allowance comes back: the next midnight in California, as a time here. */
+export function nextAllowanceReset(now = new Date()): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, Number(p.value)]),
+  );
+  const wallAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const offset = wallAsUtc - Math.floor(now.getTime() / 1000) * 1000; // California minus UTC
+  return Date.UTC(parts.year, parts.month - 1, parts.day + 1) - offset;
+}
+function readUsedUp(): Record<string, number> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(USED_UP_KEY) || '{}');
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch {
+    return {};
+  }
+}
+function markUsedUp(model: string, now = Date.now()) {
+  try {
+    const all = readUsedUp();
+    all[model] = nextAllowanceReset(new Date(now));
+    localStorage.setItem(USED_UP_KEY, JSON.stringify(all));
+  } catch {
+    // only saves a wasted request
+  }
+}
+const isUsedUp = (model: string, now = Date.now()) => (readUsedUp()[model] ?? 0) > now;
 
 export function getGeminiApiKey(): string | null {
   try {
@@ -26,6 +76,7 @@ export function getGeminiApiKey(): string | null {
 export function saveGeminiApiKey(key: string) {
   try {
     localStorage.setItem('gemini_api_key', key.trim());
+    localStorage.removeItem(USED_UP_KEY); // a new key may have its own allowance
   } catch (e) {
     console.error('Failed to save Gemini API key to localStorage', e);
   }
@@ -155,13 +206,28 @@ export async function askGemini(
   options: AskOptions,
 ): Promise<{ text: string; response: GeminiReply }> {
   const tries: GeminiTry[] = [];
+  // Models already used up today are skipped (unless they all are: then each is asked anyway).
+  const fresh = MODELS.filter((m) => !isUsedUp(m.id));
   for (const model of MODELS) {
+    if (fresh.length && !fresh.includes(model)) {
+      tries.push({ model: model.name, problem: 'limit', limit: 'day', note: 'free limit for today used up earlier' });
+      continue;
+    }
     try {
-      return await askModel(model.id, apiKey, parts, options);
+      try {
+        return await askModel(model.id, apiKey, parts, options);
+      } catch (first) {
+        // Busy for a moment: ask the same model once more after a short wait.
+        if (!(first instanceof TryFailed && first.result.problem === 'busy')) throw first;
+        console.warn(`[Gemini ${model.id}] busy; asking again`);
+        await new Promise((r) => setTimeout(r, BUSY_RETRY_MS));
+        return await askModel(model.id, apiKey, parts, options);
+      }
     } catch (err) {
       const result = err instanceof TryFailed ? err.result : { problem: 'refused' as const, note: String(err) };
       tries.push({ model: model.name, ...result });
       console.warn(`[Gemini ${model.id}] ${result.problem}: ${result.note}`);
+      if (result.problem === 'limit' && result.limit === 'day') markUsedUp(model.id);
       // A key Google says isn't valid, or no signal at all, would fail the same way on the next model.
       const badKey = result.problem === 'key' && /API_KEY_INVALID|not valid|expired/i.test(result.note);
       if (badKey || (result.problem === 'offline' && globalThis.navigator?.onLine === false)) break;
