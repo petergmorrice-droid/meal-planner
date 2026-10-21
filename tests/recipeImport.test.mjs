@@ -5,6 +5,7 @@ process.env.TZ = 'Europe/London'; // UK clock changes matter for the week maths 
 import {
   normalizeParsedRecipe,
   validateAndNormalizeRecipe,
+  applyGeminiEdit,
   generateShoppingListForPlan,
   scaleRecipeStepQuantities,
   getMonday,
@@ -365,6 +366,116 @@ test('a recipe Gemini wrote or changed: gaps filled, its extras kept, every ingr
   assert.equal(r.tags.includes('Ninja Combi'), true);
   assert.equal(r.imageUrl, 'kept.jpg', 'anything else it sent back is kept');
   assert.equal(typeof r.id === 'string' && r.id.length > 0, true);
+});
+
+// A recipe for 4, with oven and Ninja steps, a favourite with notes, linked to products.
+const curry = () => ({
+  id: 'r-curry',
+  name: 'Chicken curry',
+  description: 'Weeknight curry.',
+  servings: 4,
+  ingredients: [
+    {
+      id: 'i-ch',
+      name: 'Chicken thighs',
+      amount: 8,
+      unit: 'piece',
+      groceryId: 'gdb-thighs',
+      category: 'Meat & Seafood',
+    },
+    {
+      id: 'i-on',
+      name: 'Onion',
+      amount: 2,
+      unit: 'piece',
+      note: 'sliced',
+      groceryId: 'gdb-onion',
+      category: 'Produce',
+    },
+    { id: 'i-cp', name: 'Curry paste', amount: 3, unit: 'tbsp', groceryId: 'gdb-paste', category: 'Pantry' },
+  ],
+  instructions: ['Fry the onion for 10 mins.', 'Add the chicken and paste and simmer for 30 mins.'],
+  methodInstructions: {
+    oven_hob: ['Fry the onion for 10 mins.', 'Add the chicken and paste and simmer for 30 mins.'],
+    ninja: ['Sear the onion for 5 mins.', 'Add the rest and slow cook for 30 mins.'],
+  },
+  cookingMethods: ['oven_hob', 'ninja'],
+  prepTime: 10,
+  cookTime: 40,
+  methodPrepTime: { oven_hob: 10, ninja: 10 },
+  methodCookTime: { oven_hob: 40, ninja: 35 },
+  isVegetarian: false,
+  isVegan: false,
+  tags: ['Stovetop', 'Ninja Combi', 'Freezer-Friendly', 'Gluten-Free'],
+  favourite: true,
+  addedBy: 'R',
+  notes: 'Less salt',
+  notesBy: 'P',
+  sourceUrl: 'https://example.com/curry',
+});
+
+test('a Gemini edit keeps what it did not change: servings, both appliances, favourite, notes, product links', () => {
+  const r = applyGeminiEdit(curry(), {
+    name: 'Chicken curry',
+    description: 'Weeknight curry with spinach.',
+    ingredients: [
+      { name: 'Chicken thighs', amount: 8, unit: 'piece' },
+      { name: 'Onion', amount: 2, unit: 'piece' },
+      { name: 'Curry paste', amount: 3, unit: 'tbsp' },
+      { name: 'Spinach', amount: 200, unit: 'g', note: 'washed' },
+    ],
+    methodInstructions: {
+      oven_hob: [
+        'Fry the onion for 10 mins.',
+        'Add the chicken and paste and simmer for 30 mins.',
+        'Stir in 200g spinach.',
+      ],
+      ninja: ['Sear the onion for 5 mins.', 'Add the rest and slow cook for 30 mins.', 'Stir in 200g spinach.'],
+    },
+    prepTime: 12,
+    cookTime: 42,
+    isVegetarian: false,
+    isVegan: false,
+  });
+  assert.equal(r.servings, 4, 'still serves 4');
+  assert.deepEqual(r.cookingMethods, ['oven_hob', 'ninja']);
+  assert.equal(r.methodInstructions.ninja.length, 3, 'the Ninja steps were changed too');
+  assert.deepEqual(r.instructions, r.methodInstructions.oven_hob);
+  assert.equal(r.favourite, true);
+  assert.equal(r.addedBy, 'R');
+  assert.equal(r.notes, 'Less salt');
+  assert.equal(r.notesBy, 'P');
+  assert.equal(r.sourceUrl, 'https://example.com/curry');
+  assert.equal(r.id, 'r-curry');
+  const [chicken, onion, paste, spinach] = r.ingredients;
+  assert.deepEqual(
+    [chicken.id, chicken.groceryId],
+    ['i-ch', 'gdb-thighs'],
+    'an unchanged ingredient keeps its product',
+  );
+  assert.deepEqual([onion.groceryId, onion.note], ['gdb-onion', 'sliced'], 'and its note');
+  assert.equal(paste.groceryId, 'gdb-paste');
+  assert.equal(spinach.groceryId, undefined, 'a new ingredient is linked when shopping, as usual');
+  assert.equal(typeof spinach.id === 'string' && !['i-ch', 'i-on', 'i-cp'].includes(spinach.id), true);
+  assert.equal(spinach.note, 'washed');
+  assert.equal(r.prepTime, 12);
+  assert.equal(r.methodPrepTime.oven_hob, 12);
+  assert.equal(r.methodCookTime.ninja, 35, "the other appliance's time stays");
+  assert.equal(r.tags.includes('Freezer-Friendly') && r.tags.includes('Ninja Combi'), true, 'your tags stay');
+});
+
+test('a Gemini edit: steps it left out are kept; a new number of people is taken; no ingredients changes nothing', () => {
+  const r = applyGeminiEdit(curry(), {
+    servings: 6,
+    ingredients: [{ name: 'Chicken thighs', amount: 12, unit: 'piece' }],
+    instructions: ['Simmer everything for 30 mins.'],
+  });
+  assert.equal(r.servings, 6, 'asked to cook for 6');
+  assert.deepEqual(r.methodInstructions.oven_hob, ['Simmer everything for 30 mins.']);
+  assert.deepEqual(r.methodInstructions.ninja, curry().methodInstructions.ninja, 'Ninja steps kept');
+  assert.equal(r.name, 'Chicken curry', 'a missing name keeps the old one');
+  assert.equal(r.prepTime, 10, 'missing times keep the old ones');
+  assert.throws(() => applyGeminiEdit(curry(), { name: 'Curry', ingredients: [] }), /without its ingredients/);
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

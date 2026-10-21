@@ -690,3 +690,17 @@ anything.
 
   Everything else works exactly as before: the page is identical step by
   step, and all the tests pass.
+- `Gemini edits keep what they didn't change` — *Change it with Gemini* in a
+  recipe used to replace the whole recipe with Gemini's answer. That meant:
+  - a recipe for 4 became one for 2;
+  - a recipe with oven and Ninja steps lost one of them;
+  - favourite, who added it, and who wrote the notes were wiped;
+  - every ingredient lost its link to its product.
+
+  Now Gemini is sent just the recipe (how many it serves, the ingredients
+  and each appliance's steps), and its answer is applied onto the recipe as
+  it was (`applyGeminiEdit`). It keeps the number of people unless you ask
+  to change it, gives steps for every appliance, and keeps each unchanged
+  ingredient's product link, note and aisle. An answer without ingredients
+  changes nothing. Tests: two new unit tests and a new browser test
+  (`gemini-edit`), which fails on the old version.

@@ -1104,43 +1104,146 @@ CRITICAL INSTRUCTIONS:
   }
 }
 
+/** Tags that follow from the ingredients (worked out again after an edit); any others are yours and kept. */
+const DIET_TAGS = new Set(['Vegan', 'Vegetarian', 'Gluten-Free', 'Dairy-Free']);
+
+/**
+ * Gemini's changed version of a recipe, applied onto the recipe as it was: what the edit changed is
+ * taken from the reply, and everything else stays (favourite, notes and who wrote them, how many it
+ * serves, both appliances' steps, your tags, and each unchanged ingredient's link to its product).
+ */
+export function applyGeminiEdit(original: Recipe, reply: GeminiRecipe): Recipe {
+  const methods: CookingMethod[] = original.cookingMethods?.length ? original.cookingMethods : ['oven_hob'];
+  const main = methods[0];
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+  const positive = (v: unknown) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : undefined);
+  const steps = (v: unknown) => {
+    const list = Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean) : [];
+    return list.length ? list : undefined;
+  };
+
+  // Ingredients: an unchanged name keeps its id, product link, aisle and note (unless a new note came back).
+  const before = new Map(original.ingredients.map((i) => [i.name.trim().toLowerCase(), i]));
+  const ingredients: Ingredient[] = (reply.ingredients || [])
+    .filter((ing): ing is GeminiIngredient & { name: string } => !!ing && !!text(ing.name))
+    .map((ing) => {
+      const fresh = normalizeIngredientAmountAndUnit(ing.amount, ing.unit, ing.name);
+      const old = before.get(fresh.name.toLowerCase());
+      const note = text(ing.note) ?? old?.note;
+      return {
+        ...fresh,
+        id: old?.id || crypto.randomUUID(),
+        ...(old
+          ? { category: old.category ?? fresh.category, suggestedAisle: old.suggestedAisle ?? fresh.suggestedAisle }
+          : {}),
+        ...(old?.groceryId ? { groceryId: old.groceryId } : {}),
+        ...(note ? { note } : {}),
+      };
+    });
+  if (ingredients.length === 0) {
+    throw new Error("Gemini's changed recipe came back without its ingredients, so nothing was changed. Try again.");
+  }
+
+  // Steps for each appliance the recipe has; one Gemini left out keeps its old steps.
+  const methodInstructions = { ...(original.methodInstructions || {}) };
+  for (const m of methods) {
+    const fromReply = steps(reply.methodInstructions?.[m]) ?? (m === main ? steps(reply.instructions) : undefined);
+    if (fromReply) methodInstructions[m] = fromReply;
+  }
+  const instructions = methodInstructions[main] || original.instructions;
+
+  const prepTime = positive(reply.prepTime) ?? original.prepTime;
+  const cookTime = positive(reply.cookTime) ?? original.cookTime;
+  const flags = analyzeDietaryFlags(ingredients);
+  const isVegetarian = typeof reply.isVegetarian === 'boolean' ? reply.isVegetarian : flags.isVegetarian;
+  const isVegan = typeof reply.isVegan === 'boolean' ? reply.isVegan && isVegetarian : flags.isVegan;
+  const dietTags = generateFunctionalTags(ingredients, isVegetarian, isVegan, main).filter((t) => DIET_TAGS.has(t));
+  const servings = positive(reply.servings);
+
+  return {
+    ...original,
+    name: text(reply.name) ?? original.name,
+    description: text(reply.description) ?? original.description,
+    servings: servings ? Math.round(servings) : original.servings || 2,
+    ingredients,
+    instructions,
+    methodInstructions,
+    prepTime,
+    cookTime,
+    methodPrepTime: { ...(original.methodPrepTime || {}), [main]: prepTime },
+    methodCookTime: { ...(original.methodCookTime || {}), [main]: cookTime },
+    isVegetarian,
+    isVegan,
+    tags: [...new Set([...(original.tags || []).filter((t) => !DIET_TAGS.has(t)), ...dietTags])],
+  };
+}
+
+/** The reply's shape for an edit: a recipe, plus how many it serves and each ingredient's note. */
+const EDIT_RECIPE_SCHEMA = {
+  ...RECIPE_RESPONSE_SCHEMA,
+  properties: {
+    ...RECIPE_RESPONSE_SCHEMA.properties,
+    description: { type: 'STRING', description: 'One short sentence about the meal' },
+    servings: { type: 'INTEGER', description: 'How many people the amounts are for' },
+    ingredients: {
+      ...RECIPE_RESPONSE_SCHEMA.properties.ingredients,
+      items: {
+        ...RECIPE_RESPONSE_SCHEMA.properties.ingredients.items,
+        properties: {
+          ...RECIPE_RESPONSE_SCHEMA.properties.ingredients.items.properties,
+          note: { type: 'STRING', description: 'Preparation, e.g. "finely chopped" (empty if none)' },
+        },
+      },
+    },
+  },
+};
+
 export async function editRecipeApi(recipe: Recipe, instruction: string): Promise<Recipe> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY_MISSING');
   }
 
-  const selectedMethod: 'ninja' | 'oven_hob' =
-    recipe.cookingMethods && recipe.cookingMethods[0] === 'ninja' ? 'ninja' : 'oven_hob';
+  const methods: CookingMethod[] = recipe.cookingMethods?.length ? recipe.cookingMethods : ['oven_hob'];
+  const serves = recipe.servings || 2;
+  // Just the recipe itself (not the app's bookkeeping), so Gemini changes only that.
+  const shown = {
+    name: recipe.name,
+    description: recipe.description,
+    servings: serves,
+    ingredients: recipe.ingredients.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit, note: i.note || '' })),
+    methodInstructions: Object.fromEntries(
+      methods.map((m) => [m, recipe.methodInstructions?.[m] || (m === methods[0] ? recipe.instructions : [])]),
+    ),
+    prepTime: recipe.prepTime,
+    cookTime: recipe.cookTime,
+  };
 
-  const prompt = `You are a culinary AI assistant. Modify the following recipe according to the user instruction:
-"${instruction}"
+  const prompt = `Change this recipe as asked: "${instruction}"
 
-Original Recipe JSON:
-${JSON.stringify(recipe, null, 2)}
+The recipe (it serves ${serves}, and the amounts are for ${serves} people):
+${JSON.stringify(shown, null, 2)}
 
-CRITICAL INSTRUCTIONS:
-- Realistically recalculate prepTime, cookTime, isVegetarian, isVegan, and tags dynamically based on the modifications.
-- Ensure all ingredient amounts are positive decimals with standard units.
-- Never use static placeholders or defaults.
-- Do NOT include macros, health scores, or cost estimates.
-- Servings MUST remain 2.`;
+Rules:
+- Change only what the request asks for. Keep everything else exactly as it is: ingredient names, amounts and notes, and the wording of the steps.
+- servings: keep ${serves}, unless the request is to change how many it serves. Then set the new number and scale every amount, including amounts in the steps.
+- Give the steps for each appliance the recipe has, in methodInstructions: ${methods.join(', ')} ("oven_hob" is the hob and oven, "ninja" the Ninja Combi). Put the ${methods[0]} steps in instructions too.
+- Recalculate prepTime, cookTime, isVegetarian and isVegan for the changed recipe.
+- Amounts are positive decimals with standard units. No macros, health scores or costs.`;
 
+  let data: GeminiRecipe;
   try {
-    const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), RECIPE_RESPONSE_SCHEMA);
+    const rawText = await callGeminiRest(apiKey, prompt, recipeSystemInstruction(), EDIT_RECIPE_SCHEMA);
     const cleanText = rawText
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    const data: GeminiRecipe = JSON.parse(cleanText);
-    const validated = validateAndNormalizeRecipe(data, selectedMethod);
-    validated.id = recipe.id;
-    validated.imageUrl = recipe.imageUrl;
-    return validated;
+    data = JSON.parse(cleanText);
   } catch (err) {
     console.error('Gemini editRecipeApi failed:', err);
     throw geminiFailure(err, 'change this recipe');
   }
+  return applyGeminiEdit(recipe, data);
 }
 
 export async function generateAlternativeInstructionsApi(

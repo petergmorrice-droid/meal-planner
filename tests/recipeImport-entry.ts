@@ -1,5 +1,5 @@
 // Bundled by `npm test` so the recipe-import tests can run in plain Node.
-export { normalizeParsedRecipe, validateAndNormalizeRecipe } from '../src/services/geminiService';
+export { normalizeParsedRecipe, validateAndNormalizeRecipe, applyGeminiEdit } from '../src/services/geminiService';
 export {
   generateShoppingListForPlan,
   scaleRecipeStepQuantities,
