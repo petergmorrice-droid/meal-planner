@@ -1,5 +1,6 @@
 // The code checks run by `npm run lint`, and on GitHub for every change. ESLint's and
-// typescript-eslint's recommended rules, plus React's two rules for hooks: hooks are called the
+// typescript-eslint's recommended rules (including no `any`: data from outside is `unknown` or a
+// described shape, checked before use), plus React's two rules for hooks: hooks are called the
 // same way every time, and an effect or memo lists everything it uses. None of these is switched
 // off anywhere in the code; if one ever has to be, say why on the same line.
 import js from '@eslint/js';
@@ -28,9 +29,6 @@ export default defineConfig([
         'error',
         { varsIgnorePattern: '^_', argsIgnorePattern: '^_', caughtErrors: 'none', ignoreRestSiblings: true },
       ],
-      // Loose types are still allowed where data comes in from outside (the Gist, Gemini, backups,
-      // speech); the type check keeps them from spreading.
-      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   {

@@ -11,7 +11,7 @@ type Synth = {
 
 const synth = (): Synth | null => {
   try {
-    return (typeof window !== 'undefined' && (window as any).speechSynthesis) || null;
+    return (typeof window !== 'undefined' && (window.speechSynthesis as Synth | undefined)) || null;
   } catch {
     return null;
   }
@@ -19,7 +19,7 @@ const synth = (): Synth | null => {
 
 /** Can this phone/browser read aloud? */
 export function canSpeak(): boolean {
-  return !!synth() && typeof (window as any).SpeechSynthesisUtterance === 'function';
+  return !!synth() && typeof window.SpeechSynthesisUtterance === 'function';
 }
 
 /** A British English voice if there is one, else any English one, else the default. */
@@ -111,7 +111,7 @@ export function speak(text: string, events: SpeakEvents = {}): boolean {
       u.rate = 0.95;
       if (i === 0) u.onstart = () => events.onStart?.();
       if (i === chunks.length - 1) u.onend = () => events.onEnd?.();
-      u.onerror = (e: any) => {
+      u.onerror = (e: SpeechSynthesisErrorEvent) => {
         const reason = String(e?.error || 'error');
         // Stopping or replacing what's being read isn't a failure.
         if (reason === 'interrupted' || reason === 'canceled') {

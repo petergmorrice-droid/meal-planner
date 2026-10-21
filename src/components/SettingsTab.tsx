@@ -56,6 +56,7 @@ import { runningVersion, checkForUpdate, updateNow, builtText, UpdateCheck } fro
 import { agoText, syncProblemText, backupSummary } from '../settingsInfo';
 import type { AppStore } from '../store';
 import { useLatest } from '../hooks/useLatest';
+import { messageOf } from '../errors';
 
 type ShopPanel = 'aisles' | 'staples' | 'history';
 
@@ -720,8 +721,8 @@ function SyncSection({
       say('Syncing is on');
       setPat('');
       setCode('');
-    } catch (e: any) {
-      setProblem(syncProblemText(e?.message || String(e)));
+    } catch (e) {
+      setProblem(syncProblemText(messageOf(e) || String(e)));
     } finally {
       setBusy(false);
     }
@@ -960,21 +961,25 @@ function BackupSection({
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const arr = JSON.parse(String(reader.result || ''));
+        // A products file: checked field by field, as it may have come from anywhere.
+        const arr: unknown = JSON.parse(String(reader.result || ''));
         if (!Array.isArray(arr)) throw new Error('not a list');
-        const items: GroceryItem[] = arr
-          .filter((x) => x && typeof x.name === 'string' && x.name.trim() && !x.removed)
-          .map((x: any, i: number) => ({
+        const items: GroceryItem[] = (arr as (FileProduct | null)[])
+          .filter(
+            (x): x is FileProduct & { name: string } =>
+              !!x && typeof x.name === 'string' && !!x.name.trim() && !x.removed,
+          )
+          .map((x, i: number) => ({
             id: typeof x.id === 'string' ? x.id : `gdb-imported-${i}-${Date.now()}`,
             name: x.name.trim(),
             category: typeof x.category === 'string' ? x.category : '',
             unit: typeof x.unit === 'string' ? x.unit : 'each',
             increment: typeof x.increment === 'number' ? Math.max(0.01, x.increment) : 1,
             ...(Array.isArray(x.aliases) && x.aliases.length
-              ? { aliases: x.aliases.filter((a: any) => typeof a === 'string') }
+              ? { aliases: x.aliases.filter((a): a is string => typeof a === 'string') }
               : {}),
             ...(Array.isArray(x.hiddenAliases) && x.hiddenAliases.length
-              ? { hiddenAliases: x.hiddenAliases.filter((a: any) => typeof a === 'string') }
+              ? { hiddenAliases: x.hiddenAliases.filter((a): a is string => typeof a === 'string') }
               : {}),
           }));
         if (!items.length) throw new Error('empty');
@@ -1227,6 +1232,18 @@ const PAGE = 60;
 type ProductView = 'all' | 'duplicates' | 'no-aisle' | 'unused';
 const AISLES_IN_ORDER = Object.values(GROCERY_AISLES).sort((a, b) => a.order - b.order);
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** A product as read from a products file (any field may be missing or the wrong kind). */
+interface FileProduct {
+  id?: unknown;
+  name?: unknown;
+  category?: unknown;
+  unit?: unknown;
+  increment?: unknown;
+  aliases?: unknown;
+  hiddenAliases?: unknown;
+  removed?: unknown;
+}
+
 const listText = (names: string[], max = 3) =>
   names.length <= max ? names.join(', ') : `${names.slice(0, max).join(', ')} and ${names.length - max} more`;
 

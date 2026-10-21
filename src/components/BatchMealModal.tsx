@@ -199,7 +199,7 @@ export default function BatchMealModal({ store, onClose, onAdd, weekLabel }: Bat
     setCustomIngredientLines((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev));
   };
 
-  const handleUpdateCustomRow = (id: string, field: string, value: any) => {
+  const handleUpdateCustomRow = (id: string, field: 'name' | 'amount' | 'unit', value: string | number) => {
     setCustomIngredientLines((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 

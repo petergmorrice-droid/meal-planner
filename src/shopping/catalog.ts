@@ -1369,7 +1369,10 @@ const DEFAULT_CHANGES: DefaultChange[] = [
 ];
 
 const matchesOld = (item: GroceryItem, from: Record<string, unknown>) =>
-  Object.entries(from).every(([k, v]) => (Array.isArray(v) ? v.includes((item as any)[k]) : (item as any)[k] === v));
+  Object.entries(from).every(([k, v]) => {
+    const now = (item as unknown as Record<string, unknown>)[k];
+    return Array.isArray(v) ? v.includes(now) : now === v;
+  });
 
 /** A built-in product with every newer default it still qualifies for, or null if none apply. */
 export function applyDefaultChanges(item: GroceryItem): GroceryItem | null {

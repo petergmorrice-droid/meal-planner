@@ -25,7 +25,8 @@ import {
 import { matchKey, nameWords } from './names';
 import { canonicalUnit } from './units';
 
-const ts = (x: any): number => (typeof x?.lastModifiedAt === 'number' ? x.lastModifiedAt : 0);
+const ts = (x: { lastModifiedAt?: unknown } | null | undefined): number =>
+  typeof x?.lastModifiedAt === 'number' ? x.lastModifiedAt : 0;
 const same = (a: unknown, b: unknown) => a === b || stableStringify(a) === stableStringify(b);
 /**
  * Time for a change the app makes by itself (giving a product its aisle, say): just newer than
@@ -76,7 +77,11 @@ export function normaliseProducts(state: AppState, now: number): AppState {
   const ovKeys = Object.keys(ov);
   if (ovKeys.length) {
     for (const k of ovKeys) {
-      const { lastModifiedAt: _t, id: _id, ...fields } = (ov[k] || {}) as any;
+      const {
+        lastModifiedAt: _t,
+        id: _id,
+        ...fields
+      } = (ov[k] || {}) as Partial<GroceryItem> & { lastModifiedAt?: number };
       const t = meta.overridesModifiedAt?.[k] || 0;
       const at = index.get(k);
       if (at !== undefined) {
@@ -87,7 +92,7 @@ export function normaliseProducts(state: AppState, now: number): AppState {
           changed = true;
         }
       } else if (typeof fields.name === 'string' && fields.name.trim()) {
-        add({ unit: 'each', increment: 1, category: '', ...fields, id: k, lastModifiedAt: t + 1 });
+        add({ unit: 'each', increment: 1, category: '', ...fields, name: fields.name, id: k, lastModifiedAt: t + 1 });
       } else {
         const b = builtIn(k);
         if (b && deletedAt(k) === undefined) add({ ...b, ...fields, id: k, lastModifiedAt: t + 1 });
@@ -372,7 +377,7 @@ export function updateProductIn(state: AppState, id: string, changes: Partial<Gr
     if (typeof changes.name !== 'string' || !changes.name.trim()) return state;
     return saveProductIn(state, { unit: 'each', increment: 1, category: '', ...changes, id } as GroceryItem);
   }
-  const { lastModifiedAt: _t, ...fields } = changes as any;
+  const { lastModifiedAt: _t, ...fields } = changes as Partial<GroceryItem> & { lastModifiedAt?: number };
   return saveProductIn(state, { ...cur, ...fields, id });
 }
 

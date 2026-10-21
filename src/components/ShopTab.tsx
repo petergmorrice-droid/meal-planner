@@ -71,6 +71,7 @@ import { useNewProducts } from './shop/useNewProducts';
 import { useStapleSuggestions } from './shop/useStapleSuggestions';
 import { useItemInfo } from './shop/useItemInfo';
 import type { AppStore } from '../store';
+import { errorNameOf } from '../errors';
 
 interface ShopTabProps {
   store: AppStore;
@@ -500,17 +501,18 @@ export default function ShopTab({
       .map((a) => ({ name: GROCERY_AISLES[a].name, items: stillToBuy.filter((r) => aisleOf(r) === a) }))
       .filter((g) => g.items.length);
     const text = listAsText(title, groups);
-    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    const nav: Navigator | null = typeof navigator !== 'undefined' ? navigator : null;
     const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
     if (nav?.share && touch) {
       try {
         await nav.share({ title, text });
         return;
-      } catch (e: any) {
-        if (e?.name === 'AbortError') return;
+      } catch (e) {
+        if (errorNameOf(e) === 'AbortError') return;
       }
     }
     try {
+      if (!nav) throw new Error('No clipboard here');
       await nav.clipboard.writeText(text);
       setToastMessage(
         `List copied (${stillToBuy.length} ${stillToBuy.length === 1 ? 'item' : 'items'}): paste it anywhere`,

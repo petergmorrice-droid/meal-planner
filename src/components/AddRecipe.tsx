@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, ClipboardPaste, Camera, Flame, Zap, Link2, Sparkles, ChevronDown, ArrowLeft } from 'lucide-react';
-import { Recipe, CookingMethod, TabName } from '../types';
+import { Recipe, CookingMethod, TabName, Ingredient } from '../types';
 import { buildCatalog, namesNeedingSuggestion, linkIngredients } from '../shopping';
 import {
   parseRecipeApi,
@@ -14,6 +14,7 @@ import {
 import { RecipeEditor } from './RecipeEditor';
 import { firstUrl, isJustAUrl, findDuplicate, siteName, recipeMethods, METHOD_LABEL } from '../recipeInfo';
 import type { AppStore } from '../store';
+import { messageOf } from '../errors';
 
 type Busy = null | 'page' | 'photo' | 'copy' | 'match' | 'write';
 
@@ -107,18 +108,18 @@ export function AddRecipe({
     return () => window.removeEventListener('keydown', onKey);
   }, [step, busy, onClose]);
 
-  const explain = (err: any): string => {
-    if (err?.message === 'GEMINI_API_KEY_MISSING') return 'Gemini needs its key first: add it in Settings.';
-    return err?.message || 'Something went wrong. Please try again.';
+  const explain = (err: unknown): string => {
+    if (messageOf(err) === 'GEMINI_API_KEY_MISSING') return 'Gemini needs its key first: add it in Settings.';
+    return messageOf(err) || 'Something went wrong. Please try again.';
   };
 
   // Link each ingredient to a grocery-list product without changing its wording (exact matches,
   // then Gemini's suggestions for the rest). Anything left shows "Shop as" on the check screen.
-  const toDraft = async (data: any, sourceUrl?: string): Promise<Recipe> => {
+  const toDraft = async (data: Recipe, sourceUrl?: string): Promise<Recipe> => {
     setBusy('match');
     const catalog = buildCatalog(store.state.groceryDatabase, store.state.groceryOverrides);
     const allItems = catalog.products.filter((p) => !p.sameAs).map((p) => p.item);
-    const ingredientsIn: any[] = Array.isArray(data?.ingredients) ? data.ingredients : [];
+    const ingredientsIn: Ingredient[] = Array.isArray(data?.ingredients) ? data.ingredients : [];
     const pending = namesNeedingSuggestion(ingredientsIn, catalog);
     const suggestions =
       pending.length > 0
@@ -133,7 +134,7 @@ export function AddRecipe({
       id: data.id || crypto.randomUUID(),
       servings: data.servings || 2,
       sourceUrl: sourceUrl || data.sourceUrl,
-      ingredients: linked.ingredients.map((i: any) => ({
+      ingredients: linked.ingredients.map((i) => ({
         ...i,
         id: i?.id || crypto.randomUUID(),
         name: i?.name || 'Unknown ingredient',
@@ -174,7 +175,7 @@ export function AddRecipe({
       } else {
         await copyRecipe(t);
       }
-    } catch (err: any) {
+    } catch (err) {
       setError(explain(err));
     } finally {
       setBusy(null);
@@ -191,7 +192,7 @@ export function AddRecipe({
       const photoText = await readRecipePhotoApi(photo.data, photo.mimeType);
       setText(photoText); // if the next step fails, the words are here to fix and try again
       await copyRecipe(photoText);
-    } catch (err: any) {
+    } catch (err) {
       setError(explain(err));
     } finally {
       setBusy(null);
@@ -219,7 +220,7 @@ export function AddRecipe({
       setDraft({ ...updated, id: draft.id, sourceUrl: draft.sourceUrl, notes: draft.notes });
       setRefineText('');
       setShowRefine(false);
-    } catch (err: any) {
+    } catch (err) {
       setRefineError(explain(err));
     } finally {
       setRefineBusy(false);
@@ -242,7 +243,7 @@ export function AddRecipe({
         methodCookTime: { ...(draft.methodCookTime || {}), [target]: data.cookTime || draft.cookTime },
       });
       setMethod(target);
-    } catch (err: any) {
+    } catch (err) {
       setRefineError(explain(err));
     } finally {
       setWriting(null);

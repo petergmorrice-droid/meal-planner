@@ -235,11 +235,37 @@ export function parseAlternatives(alternatives: string[]): { command: VoiceComma
 
 // ---------- The listener ----------
 
+/**
+ * The browser's speech recognition, as far as the app uses it. (Chrome and Safari call it
+ * webkitSpeechRecognition; TypeScript's own description differs between versions, so it's
+ * described here.)
+ */
+interface Recognition {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onstart: (() => void) | null;
+  onresult: ((e: RecognitionEvent) => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+interface RecognitionEvent {
+  resultIndex?: number;
+  results?: ArrayLike<(ArrayLike<{ transcript?: string } | undefined> & { isFinal?: boolean }) | undefined>;
+}
+type RecognitionClass = new () => Recognition;
+const recognitionClass = (): RecognitionClass | undefined => {
+  const w = window as unknown as { SpeechRecognition?: RecognitionClass; webkitSpeechRecognition?: RecognitionClass };
+  return w.SpeechRecognition || w.webkitSpeechRecognition;
+};
+
 export const canListen = (): boolean => {
   try {
-    return (
-      typeof window !== 'undefined' && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
-    );
+    return typeof window !== 'undefined' && !!recognitionClass();
   } catch {
     return false;
   }
@@ -256,8 +282,8 @@ export function createListener(handlers: {
   onListening?: (listening: boolean) => void;
   onProblem?: (problem: ListenerProblem) => void;
 }) {
-  const Rec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  let rec: any = null;
+  const Rec = recognitionClass();
+  let rec: Recognition | null = null;
   let wanted = false;
   let paused = false;
   let starts: number[] = [];
@@ -275,18 +301,19 @@ export function createListener(handlers: {
       return;
     }
     try {
-      rec = new Rec();
-      rec.lang = 'en-GB';
-      rec.continuous = true;
-      rec.interimResults = false;
-      rec.maxAlternatives = 3;
-      rec.onstart = () => handlers.onListening?.(true);
-      rec.onresult = (e: any) => {
+      const r = new Rec();
+      rec = r;
+      r.lang = 'en-GB';
+      r.continuous = true;
+      r.interimResults = false;
+      r.maxAlternatives = 3;
+      r.onstart = () => handlers.onListening?.(true);
+      r.onresult = (e) => {
         for (let i = e.resultIndex ?? 0; i < (e.results?.length ?? 0); i++) {
-          const r = e.results[i];
-          if (r && (r.isFinal ?? true)) {
+          const res = e.results?.[i];
+          if (res && (res.isFinal ?? true)) {
             const alts: string[] = [];
-            for (let j = 0; j < r.length; j++) if (r[j]?.transcript) alts.push(String(r[j].transcript));
+            for (let j = 0; j < res.length; j++) if (res[j]?.transcript) alts.push(String(res[j]?.transcript));
             if (alts.length) {
               starts = [];
               handlers.onHeard(alts);
@@ -294,7 +321,7 @@ export function createListener(handlers: {
           }
         }
       };
-      rec.onerror = (e: any) => {
+      r.onerror = (e) => {
         const err = String(e?.error || '');
         if (err === 'not-allowed' || err === 'service-not-allowed') {
           wanted = false;
@@ -308,12 +335,12 @@ export function createListener(handlers: {
         }
         // 'no-speech' and 'aborted' just mean start again.
       };
-      rec.onend = () => {
+      r.onend = () => {
         rec = null;
         if (wanted && !paused) restartTimer = setTimeout(begin, 250);
         else handlers.onListening?.(false);
       };
-      rec.start();
+      r.start();
     } catch {
       rec = null;
       if (wanted) restartTimer = setTimeout(begin, 1000);

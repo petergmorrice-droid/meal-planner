@@ -52,6 +52,7 @@ import {
   replaceProductsIn,
   type RemovedProduct,
 } from './shopping';
+import { messageOf } from './errors';
 
 /** How often to check GitHub for the other phone's changes while the app is open. */
 export const SYNC_POLL_SECONDS = 20;
@@ -257,7 +258,7 @@ const getInitialState = (): AppState => {
   });
 };
 
-const friendlyError = (err: any, fallback: string) => (err && err.message) || fallback;
+const friendlyError = (err: unknown, fallback: string) => (err ? messageOf(err) : undefined) || fallback;
 
 /** Everything the screens get from the store: the data, and the ways to change it. */
 export type AppStore = ReturnType<typeof useStore>;
@@ -420,7 +421,7 @@ export function useStore() {
         setSyncError(null);
         // Quiet checks that found nothing new don't need to refresh the screen.
         if (!quiet || remote || willUpload) setLastSynced(new Date());
-      } catch (err: any) {
+      } catch (err) {
         console.error(`Gist sync (${reason}) failed:`, err);
         setSyncStatus('error');
         setSyncError(friendlyError(err, 'Failed to sync with GitHub Gist.'));
@@ -692,8 +693,8 @@ export function useStore() {
       if (key === 'addedBy' || key === 'lastModifiedBy' || key === 'lastModifiedAt') {
         continue;
       }
-      const valA = (a as any)[key];
-      const valB = (b as any)[key];
+      const valA = (a as unknown as Record<string, unknown>)[key];
+      const valB = (b as unknown as Record<string, unknown>)[key];
 
       if (valA === valB) continue;
 
@@ -839,8 +840,7 @@ export function useStore() {
       'notProducts',
     ] as const;
     const kept: Partial<UserPreferences> = {};
-    for (const k of keep)
-      if ((state.preferences as any)?.[k] !== undefined) (kept as any)[k] = (state.preferences as any)[k];
+    for (const k of keep) if (state.preferences?.[k] !== undefined) Object.assign(kept, { [k]: state.preferences[k] });
     commit(state, { ...state, preferences: { ...DEFAULT_PREFERENCES, ...kept } });
   };
 
@@ -899,7 +899,7 @@ export function useStore() {
       setGithubConfigState(config);
       setSyncStatus('synced');
       setLastSynced(new Date());
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to configure Gist integration:', err);
       setSyncStatus('error');
       setSyncError(friendlyError(err, 'Failed to configure GitHub Gist.'));
@@ -921,7 +921,7 @@ export function useStore() {
       setSyncStatus('synced');
       setLastSynced(new Date());
       return created.id;
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create private Gist:', err);
       setSyncStatus('error');
       setSyncError(friendlyError(err, 'Failed to create a private GitHub Gist.'));

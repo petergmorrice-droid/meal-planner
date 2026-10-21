@@ -18,7 +18,6 @@ export interface LinkableIngredient {
   unit?: string;
   category?: string;
   groceryId?: string;
-  [key: string]: any;
 }
 
 export type LinkSource = 'exact' | 'gemini' | 'partial';

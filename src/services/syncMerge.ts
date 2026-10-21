@@ -23,17 +23,44 @@ import { AppState, SyncMeta } from '../types';
 
 type CollectionName = 'recipes' | 'mealPlans' | 'batches' | 'shoppingList' | 'groceryDatabase';
 
+/**
+ * One synced thing (a recipe, week, batch, shopping line or product) as merging sees it. Data from
+ * the Gist may have been written by any version of the app, so nothing is assumed beyond this, and
+ * every field is read with care.
+ */
+interface Item {
+  [field: string]: unknown;
+  lastModifiedAt?: number;
+  lastModifiedBy?: string;
+}
+type MaybeItem = Item | null | undefined;
+/** A week, with when each day and the week's own details last changed. */
+interface Plan extends Item {
+  startDate?: string;
+  days?: Record<string, unknown>;
+  dayModifiedAt?: Record<string, number>;
+  headModifiedAt?: number;
+}
+/** Plain objects keyed by name (settings, product overrides, a copy of the data being built). */
+type Fields = Record<string, unknown>;
+/** A field of something that may not be an object at all: exactly `x?.[k]`. */
+const get = (x: unknown, k: string): unknown => (x as Fields | null | undefined)?.[k];
+/** A list read from the data (it may be missing). */
+const listOf = (state: unknown, name: CollectionName) => get(state, name) as Item[] | undefined;
+/** What a merge builds, given back as app data. */
+const asState = (x: Fields) => x as unknown as AppState;
+
 interface CollectionSpec {
   name: CollectionName;
-  key: (item: any) => string | undefined;
+  key: (item: MaybeItem) => string | undefined;
 }
 
 export const COLLECTIONS: CollectionSpec[] = [
-  { name: 'recipes', key: (r) => r?.id },
-  { name: 'mealPlans', key: (p) => p?.startDate },
-  { name: 'batches', key: (b) => b?.id },
-  { name: 'shoppingList', key: (i) => i?.id },
-  { name: 'groceryDatabase', key: (g) => g?.id },
+  { name: 'recipes', key: (r) => r?.id as string | undefined },
+  { name: 'mealPlans', key: (p) => p?.startDate as string | undefined },
+  { name: 'batches', key: (b) => b?.id as string | undefined },
+  { name: 'shoppingList', key: (i) => i?.id as string | undefined },
+  { name: 'groceryDatabase', key: (g) => g?.id as string | undefined },
 ];
 
 /** Tombstones older than this (relative to the newest change in the data) are forgotten. */
@@ -75,7 +102,10 @@ export function getSyncMeta(state: Partial<AppState> | null | undefined): SyncMe
 const settingTime = (meta: SyncMeta, key: string): number =>
   meta.preferencesFieldModifiedAt?.[key] ?? meta.preferencesModifiedAt ?? 0;
 
-const ts = (item: any): number => (typeof item?.lastModifiedAt === 'number' ? item.lastModifiedAt : 0);
+const ts = (item: unknown): number => {
+  const t = get(item, 'lastModifiedAt');
+  return typeof t === 'number' ? t : 0;
+};
 
 /** Pick the newer of two versions; ties are broken by content so the result never depends on order. */
 function newer<T>(a: T, aTime: number, b: T, bTime: number): T {
@@ -99,17 +129,18 @@ const dayOrder = (keys: Iterable<string>) =>
 
 /** The week's own details (everything except its days and bookkeeping). */
 const HEAD_SKIP = new Set(['days', 'dayModifiedAt', 'headModifiedAt', 'lastModifiedAt', 'lastModifiedBy']);
-function planHead(p: any): Record<string, any> {
-  const h: Record<string, any> = {};
-  for (const k of Object.keys(p || {})) if (!HEAD_SKIP.has(k) && p[k] !== undefined) h[k] = p[k];
+function planHead(p: Plan | null | undefined): Fields {
+  const h: Fields = {};
+  const src: Plan = p || {};
+  for (const k of Object.keys(src)) if (!HEAD_SKIP.has(k) && src[k] !== undefined) h[k] = src[k];
   return h;
 }
 
 /** When each day and the week's details last changed (all the week's time if an older app changed it since). */
-function planTimes(p: any): { day: (d: string) => number; head: number } {
+function planTimes(p: Plan | null | undefined): { day: (d: string) => number; head: number } {
   const t = ts(p);
   const dm = p?.dayModifiedAt;
-  if (!dm || typeof dm !== 'object') return { day: () => t, head: t };
+  if (!p || !dm || typeof dm !== 'object') return { day: () => t, head: t };
   let known = typeof p.headModifiedAt === 'number' ? p.headModifiedAt : -Infinity;
   for (const v of Object.values(dm)) if (typeof v === 'number') known = Math.max(known, v);
   if (t > known) return { day: () => t, head: t };
@@ -120,11 +151,11 @@ function planTimes(p: any): { day: (d: string) => number; head: number } {
 }
 
 /** Two copies of the same week: each day from whichever changed it last; the same for the week's details. */
-export function mergePlans(a: any, b: any): any {
+export function mergePlans(a: Plan, b: Plan): Plan {
   if (a === b || same(a, b)) return newer(a, ts(a), b, ts(b));
   const ta = planTimes(a);
   const tb = planTimes(b);
-  const days: Record<string, any> = {};
+  const days: Record<string, unknown> = {};
   const dayModifiedAt: Record<string, number> = {};
   for (const d of dayOrder([...Object.keys(a?.days || {}), ...Object.keys(b?.days || {})])) {
     const da = a?.days?.[d];
@@ -143,7 +174,7 @@ export function mergePlans(a: any, b: any): any {
     dayModifiedAt[d] = Math.max(ta.day(d), tb.day(d));
   }
   const head = newer(planHead(a), ta.head, planHead(b), tb.head);
-  const out: any = {
+  const out: Plan = {
     ...head,
     days,
     dayModifiedAt,
@@ -162,7 +193,7 @@ export function mergePlans(a: any, b: any): any {
 }
 
 /** An empty day, as a week starts. */
-function emptyDay(startDate: string, d: string) {
+function emptyDay(startDate: string | undefined, d: string) {
   const i = DAY_ORDER.indexOf(d);
   let date = '';
   if (i >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate))) {
@@ -177,18 +208,18 @@ function emptyDay(startDate: string, d: string) {
  * A week deleted at `deletedAt`: gone, unless part of it was changed after that, in which case
  * the parts changed before the deletion are emptied (as if the week had been started again).
  */
-function applyPlanDeletion(p: any, deletedAt: number | undefined): any | null {
+function applyPlanDeletion(p: Plan, deletedAt: number | undefined): Plan | null {
   if (deletedAt === undefined) return p;
   const t = planTimes(p);
   const days = Object.keys(p?.days || {});
   const alive = t.head > deletedAt || days.some((d) => t.day(d) > deletedAt);
   if (!alive) return null;
   if (t.head > deletedAt && DAY_ORDER.every((d) => days.includes(d) && t.day(d) > deletedAt)) return p;
-  const outDays: Record<string, any> = {};
+  const outDays: Record<string, unknown> = {};
   const dayModifiedAt: Record<string, number> = {};
   for (const d of dayOrder([...DAY_ORDER, ...days])) {
     if (days.includes(d) && t.day(d) > deletedAt) {
-      outDays[d] = p.days[d];
+      outDays[d] = p.days?.[d];
       dayModifiedAt[d] = t.day(d);
     } else {
       outDays[d] = emptyDay(p.startDate, d);
@@ -199,7 +230,7 @@ function applyPlanDeletion(p: any, deletedAt: number | undefined): any | null {
   const head = headAlive
     ? planHead(p)
     : { id: `plan-${p.startDate}`, startDate: p.startDate, status: 'not_started', isCurrent: false };
-  const out: any = {
+  const out: Plan = {
     ...head,
     days: outDays,
     dayModifiedAt,
@@ -214,14 +245,14 @@ function applyPlanDeletion(p: any, deletedAt: number | undefined): any | null {
  * A local edit to one week, applied to the latest copy: only the days (and week details) the
  * edit changed are taken from it. Null if it changed nothing that matters.
  */
-function applyPlanEdit(cur: any, before: any, item: any, stamp: number): any | null {
+function applyPlanEdit(cur: Plan | undefined, before: Plan | undefined, item: Plan, stamp: number): Plan | null {
   if (!before || !cur) {
     const dayModifiedAt: Record<string, number> = {};
     for (const d of Object.keys(item?.days || {})) dayModifiedAt[d] = stamp;
     return { ...item, dayModifiedAt, headModifiedAt: stamp, lastModifiedAt: stamp };
   }
   const ct = planTimes(cur);
-  const days: Record<string, any> = { ...(cur.days || {}) };
+  const days: Record<string, unknown> = { ...(cur.days || {}) };
   const dayModifiedAt: Record<string, number> = {};
   for (const d of Object.keys(days)) dayModifiedAt[d] = ct.day(d);
   let touched = false;
@@ -232,7 +263,7 @@ function applyPlanEdit(cur: any, before: any, item: any, stamp: number): any | n
       delete days[d];
       delete dayModifiedAt[d];
     } else {
-      days[d] = item.days[d];
+      days[d] = item.days?.[d];
       dayModifiedAt[d] = stamp;
     }
   }
@@ -247,7 +278,7 @@ function applyPlanEdit(cur: any, before: any, item: any, stamp: number): any | n
     else head[k] = hi[k];
   }
   if (!touched && !headChanged) return null;
-  const out: any = {
+  const out: Plan = {
     ...head,
     days,
     dayModifiedAt,
@@ -264,45 +295,48 @@ function applyPlanEdit(cur: any, before: any, item: any, stamp: number): any | n
 // ---------------------------------------------------------------------------
 
 interface PrefListSpec {
-  key: (item: any) => string | undefined;
+  /** Items can be objects (a staple) or plain text ("not a staple"), or anything an old app wrote. */
+  key: (item: unknown) => string | undefined;
   /**
    * The list's order. It has to come from the items themselves (not from either phone's list)
    * so that merging in any order, any number of times, gives the same list on both phones.
    */
-  sort: (a: any, b: any) => number;
+  sort: (a: unknown, b: unknown) => number;
 }
 
-const lower = (x: any) =>
-  String(x?.name ?? '')
+const lower = (x: unknown) =>
+  String(get(x, 'name') ?? '')
     .trim()
     .toLowerCase();
 const cmp = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
 export const PREF_LISTS: Record<string, PrefListSpec> = {
   /** Staples: A to Z. */
   recurringItems: {
-    key: (x) => (x?.id ? String(x.id) : x?.name ? `n:${lower(x)}` : undefined),
-    sort: (a, b) => cmp(lower(a), lower(b)) || cmp(String(a?.id ?? ''), String(b?.id ?? '')),
+    key: (x) => (get(x, 'id') ? String(get(x, 'id')) : get(x, 'name') ? `n:${lower(x)}` : undefined),
+    sort: (a, b) => cmp(lower(a), lower(b)) || cmp(String(get(a, 'id') ?? ''), String(get(b, 'id') ?? '')),
   },
   /** Favourites: A to Z. */
-  favouriteItems: { key: (x) => (x?.name ? lower(x) : undefined), sort: (a, b) => cmp(lower(a), lower(b)) },
+  favouriteItems: { key: (x) => (get(x, 'name') ? lower(x) : undefined), sort: (a, b) => cmp(lower(a), lower(b)) },
   /** Star ratings, one per recipe per person: in id order. */
   ratings: {
-    key: (x) => (x?.id ? String(x.id) : undefined),
-    sort: (a, b) => cmp(String(a?.id ?? ''), String(b?.id ?? '')),
+    key: (x) => (get(x, 'id') ? String(get(x, 'id')) : undefined),
+    sort: (a, b) => cmp(String(get(a, 'id') ?? ''), String(get(b, 'id') ?? '')),
   },
   /** Things that aren't weekly staples: A to Z. */
   notStaples: { key: (x) => (typeof x === 'string' && x ? x : undefined), sort: (a, b) => cmp(String(a), String(b)) },
   /** Past shops: newest first. */
   shopHistory: {
-    key: (x) => (x?.id ? String(x.id) : undefined),
-    sort: (a, b) => cmp(String(b?.date ?? ''), String(a?.date ?? '')) || cmp(String(a?.id ?? ''), String(b?.id ?? '')),
+    key: (x) => (get(x, 'id') ? String(get(x, 'id')) : undefined),
+    sort: (a, b) =>
+      cmp(String(get(b, 'date') ?? ''), String(get(a, 'date') ?? '')) ||
+      cmp(String(get(a, 'id') ?? ''), String(get(b, 'id') ?? '')),
   },
 };
 const prefItemKey = (field: string, key: string) => `${field}:${key}`;
 const prefTombstoneKey = (field: string, key: string) => `pref.${field}:${key}`;
 
-function listByKey(spec: PrefListSpec, list: any[] | undefined): Map<string, any> {
-  const m = new Map<string, any>();
+function listByKey(spec: PrefListSpec, list: unknown): Map<string, unknown> {
+  const m = new Map<string, unknown>();
   for (const item of Array.isArray(list) ? list : []) {
     const k = spec.key(item);
     if (k !== undefined && !m.has(k)) m.set(k, item);
@@ -313,23 +347,23 @@ function listByKey(spec: PrefListSpec, list: any[] | undefined): Map<string, any
 const prefItemTime = (meta: SyncMeta, field: string, key: string) =>
   meta.prefItemModifiedAt?.[prefItemKey(field, key)] ?? settingTime(meta, field);
 
-const finishPrefList = (spec: PrefListSpec, list: any[]): any[] => list.slice().sort(spec.sort);
+const finishPrefList = (spec: PrefListSpec, list: unknown[]): unknown[] => list.slice().sort(spec.sort);
 
 /** Merge one of those lists; records each kept item's time in `times`. */
 function mergePrefList(
   field: string,
-  listA: any[] | undefined,
+  listA: unknown,
   ma: SyncMeta,
-  listB: any[] | undefined,
+  listB: unknown,
   mb: SyncMeta,
   tombstones: Record<string, number>,
   times: Record<string, number>,
-): any[] | undefined {
+): unknown[] | undefined {
   if (listA === undefined && listB === undefined) return undefined;
   const spec = PREF_LISTS[field];
   const A = listByKey(spec, listA);
   const B = listByKey(spec, listB);
-  const out: any[] = [];
+  const out: unknown[] = [];
   const seen = new Set<string>();
   for (const k of [...A.keys(), ...B.keys()]) {
     if (seen.has(k)) continue;
@@ -338,7 +372,7 @@ function mergePrefList(
     const vb = B.get(k);
     const xa = prefItemTime(ma, field, k);
     const xb = prefItemTime(mb, field, k);
-    let value: any;
+    let value: unknown;
     let time: number;
     if (va === undefined) {
       value = vb;
@@ -362,12 +396,12 @@ function mergePrefList(
 /** A local edit to one of those lists, applied to the latest copy item by item. */
 function applyPrefListEdit(
   field: string,
-  baseList: any[] | undefined,
-  nextList: any[] | undefined,
-  curList: any[] | undefined,
+  baseList: unknown,
+  nextList: unknown,
+  curList: unknown,
   meta: SyncMeta,
   now: number,
-): any[] {
+): unknown[] {
   const spec = PREF_LISTS[field];
   const bm = listByKey(spec, baseList);
   const nm = listByKey(spec, nextList);
@@ -392,7 +426,7 @@ function applyPrefListEdit(
     meta.tombstones[tk] = Math.max(now, prefItemTime(meta, field, k) + 1, meta.tombstones[tk] || 0);
     delete times[prefItemKey(field, k)];
   }
-  const out: any[] = [];
+  const out: unknown[] = [];
   const seen = new Set<string>();
   for (const [k, item] of nm) {
     seen.add(k);
@@ -408,11 +442,11 @@ function applyPrefListEdit(
 }
 
 /** Drop old tombstones. The cut-off comes from the data itself, so both phones prune identically. */
-function pruneTombstones(state: AppState, tombstones: Record<string, number>): Record<string, number> {
+function pruneTombstones(state: AppState | Fields, tombstones: Record<string, number>): Record<string, number> {
   let newest = 0;
   for (const t of Object.values(tombstones)) newest = Math.max(newest, t);
   for (const col of COLLECTIONS) {
-    for (const item of (state[col.name] as any[]) || []) newest = Math.max(newest, ts(item));
+    for (const item of listOf(state, col.name) || []) newest = Math.max(newest, ts(item));
   }
   const cutoff = newest - TOMBSTONE_RETENTION_MS;
   const kept: Record<string, number> = {};
@@ -432,17 +466,17 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
     tombstones[k] = Math.max(tombstones[k] || 0, t);
   }
 
-  const out: any = {};
+  const out: Fields = {};
   for (const col of COLLECTIONS) {
-    const listA = a?.[col.name] as any[] | undefined;
-    const listB = b?.[col.name] as any[] | undefined;
+    const listA = listOf(a, col.name);
+    const listB = listOf(b, col.name);
     if (listA === undefined && listB === undefined) {
       out[col.name] = col.name === 'groceryDatabase' ? undefined : [];
       continue;
     }
-    const map = new Map<string, any>();
+    const map = new Map<string, Item>();
     const order: string[] = [];
-    const consider = (item: any) => {
+    const consider = (item: Item) => {
       const k = col.key(item);
       if (k === undefined || k === null) return;
       const existing = map.get(k);
@@ -450,7 +484,7 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
         map.set(k, item);
         order.push(k);
       } else if (col.name === 'mealPlans') {
-        map.set(k, mergePlans(existing, item));
+        map.set(k, mergePlans(existing as Plan, item as Plan));
       } else {
         map.set(k, newer(existing, ts(existing), item, ts(item)));
       }
@@ -459,21 +493,21 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
     (listB || []).forEach(consider);
     out[col.name] = order
       .map((k) => {
-        const item = map.get(k);
+        const item = map.get(k) as Item;
         const deletedAt = tombstones[tombstoneKey(col.name, k)];
-        if (col.name === 'mealPlans') return applyPlanDeletion(item, deletedAt);
+        if (col.name === 'mealPlans') return applyPlanDeletion(item as Plan, deletedAt);
         return deletedAt === undefined || ts(item) > deletedAt ? item : null;
       })
       .filter((item) => item !== null);
   }
 
   // Settings: newest wins, one setting at a time.
-  let preferences: any = a?.preferences;
+  let preferences = a?.preferences as Fields | undefined;
   let preferencesModifiedAt = ma.preferencesModifiedAt ?? 0;
   const preferencesFieldModifiedAt: Record<string, number> = {};
   const prefItemModifiedAt: Record<string, number> = {};
   if (a?.preferences === undefined) {
-    preferences = b?.preferences;
+    preferences = b?.preferences as Fields | undefined;
     preferencesModifiedAt = mb.preferencesModifiedAt ?? 0;
     Object.assign(preferencesFieldModifiedAt, mb.preferencesFieldModifiedAt);
     Object.assign(prefItemModifiedAt, mb.prefItemModifiedAt);
@@ -481,9 +515,10 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
     Object.assign(preferencesFieldModifiedAt, ma.preferencesFieldModifiedAt);
     Object.assign(prefItemModifiedAt, ma.prefItemModifiedAt);
   } else {
-    const pa: any = a.preferences;
-    const pb: any = b.preferences;
-    preferences = {};
+    const pa = a.preferences as unknown as Fields;
+    const pb = b.preferences as unknown as Fields;
+    const combined: Fields = {};
+    preferences = combined;
     preferencesModifiedAt = Math.max(ma.preferencesModifiedAt ?? 0, mb.preferencesModifiedAt ?? 0);
     const keys = new Set([
       ...Object.keys(pa),
@@ -496,7 +531,7 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
       const tb = settingTime(mb, k);
       if (PREF_LISTS[k]) {
         const list = mergePrefList(k, pa[k], ma, pb[k], mb, tombstones, prefItemModifiedAt);
-        if (list !== undefined) preferences[k] = list;
+        if (list !== undefined) combined[k] = list;
         if (ma.preferencesFieldModifiedAt?.[k] !== undefined || mb.preferencesFieldModifiedAt?.[k] !== undefined) {
           preferencesFieldModifiedAt[k] = Math.max(ta, tb);
         }
@@ -508,7 +543,7 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
         fromA = pa[k] !== undefined; // a value beats no value
       else fromA = stableStringify(pa[k] ?? null) >= stableStringify(pb[k] ?? null);
       const value = fromA ? pa[k] : pb[k];
-      if (value !== undefined) preferences[k] = value;
+      if (value !== undefined) combined[k] = value;
       if (ma.preferencesFieldModifiedAt?.[k] !== undefined || mb.preferencesFieldModifiedAt?.[k] !== undefined) {
         preferencesFieldModifiedAt[k] = Math.max(ta, tb);
       }
@@ -518,12 +553,12 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
   // Grocery overrides: newest wins per grocery item.
   const oa = a?.groceryOverrides || {};
   const ob = b?.groceryOverrides || {};
-  const groceryOverrides: Record<string, any> = {};
+  const groceryOverrides: Fields = {};
   const overridesModifiedAt: Record<string, number> = {};
   for (const k of new Set([...Object.keys(oa), ...Object.keys(ob)])) {
     const ta = ma.overridesModifiedAt?.[k] || 0;
     const tb = mb.overridesModifiedAt?.[k] || 0;
-    let value: any;
+    let value: unknown;
     let time: number;
     if (!(k in oa)) {
       value = ob[k];
@@ -541,7 +576,7 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
     if (time) overridesModifiedAt[k] = time;
   }
 
-  const merged: AppState = {
+  const merged = asState({
     recipes: out.recipes,
     mealPlans: out.mealPlans,
     batches: out.batches,
@@ -549,7 +584,7 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
     preferences,
     groceryDatabase: out.groceryDatabase,
     groceryOverrides,
-  };
+  });
   merged.syncMeta = {
     tombstones: pruneTombstones(merged, tombstones),
     preferencesModifiedAt,
@@ -570,16 +605,16 @@ export function mergeAppStates(a: AppState, b: AppState): AppState {
  */
 export function applyLocalChange(current: AppState, base: AppState, next: AppState, now: number): AppState {
   const meta = getSyncMeta(current);
-  const out: any = { ...current };
+  const out: Fields = { ...current };
 
   for (const col of COLLECTIONS) {
-    const baseList = (base?.[col.name] as any[]) || [];
-    const nextList = (next?.[col.name] as any[]) || [];
+    const baseList = listOf(base, col.name) || [];
+    const nextList = listOf(next, col.name) || [];
     if (base?.[col.name] === next?.[col.name]) continue; // collection not touched by this edit
-    const curList = (current?.[col.name] as any[]) || [];
+    const curList = listOf(current, col.name) || [];
 
-    const byKey = (list: any[]) => {
-      const m = new Map<string, any>();
+    const byKey = (list: Item[]) => {
+      const m = new Map<string, Item>();
       for (const item of list) {
         const k = col.key(item);
         if (k !== undefined && k !== null) m.set(k, item);
@@ -590,7 +625,7 @@ export function applyLocalChange(current: AppState, base: AppState, next: AppSta
     const nextMap = byKey(nextList);
     const curMap = byKey(curList);
 
-    const changed = new Map<string, any>();
+    const changed = new Map<string, Item>();
     for (const [k, item] of nextMap) {
       const before = baseMap.get(k);
       if (before === undefined || !same(before, item)) {
@@ -602,7 +637,12 @@ export function applyLocalChange(current: AppState, base: AppState, next: AppSta
           (meta.tombstones[tombstoneKey(col.name, k)] || 0) + 1,
         );
         if (col.name === 'mealPlans') {
-          const edited = applyPlanEdit(curMap.get(k), before, item, stamp);
+          const edited = applyPlanEdit(
+            curMap.get(k) as Plan | undefined,
+            before as Plan | undefined,
+            item as Plan,
+            stamp,
+          );
           if (edited) changed.set(k, edited);
           continue;
         }
@@ -614,14 +654,14 @@ export function applyLocalChange(current: AppState, base: AppState, next: AppSta
       if (!nextMap.has(k)) removed.push(k);
     }
 
-    const result: any[] = [];
+    const result: Item[] = [];
     const seen = new Set<string>();
     for (const item of nextList) {
       const k = col.key(item);
       if (k === undefined || k === null || seen.has(k)) continue;
       seen.add(k);
-      if (changed.has(k)) result.push(changed.get(k));
-      else if (curMap.has(k)) result.push(curMap.get(k));
+      if (changed.has(k)) result.push(changed.get(k) as Item);
+      else if (curMap.has(k)) result.push(curMap.get(k) as Item);
       // else: untouched by this edit but deleted on the other phone meanwhile; keep it deleted.
     }
     const removedSet = new Set(removed);
@@ -644,9 +684,9 @@ export function applyLocalChange(current: AppState, base: AppState, next: AppSta
 
   // Preferences: apply only the settings this edit changed.
   if (base?.preferences !== next?.preferences && !same(base?.preferences, next?.preferences)) {
-    const bp: any = base?.preferences || {};
-    const np: any = next?.preferences || {};
-    const prefs: any = { ...(current?.preferences || {}) };
+    const bp = (base?.preferences || {}) as Fields;
+    const np = (next?.preferences || {}) as Fields;
+    const prefs: Fields = { ...(current?.preferences || {}) };
     const fieldTimes = meta.preferencesFieldModifiedAt!;
     for (const k of new Set([...Object.keys(bp), ...Object.keys(np)])) {
       if (!same(bp[k], np[k])) {
@@ -661,9 +701,9 @@ export function applyLocalChange(current: AppState, base: AppState, next: AppSta
 
   // Grocery overrides: per item.
   if (base?.groceryOverrides !== next?.groceryOverrides) {
-    const bo: any = base?.groceryOverrides || {};
-    const no: any = next?.groceryOverrides || {};
-    const overrides: any = { ...(current?.groceryOverrides || {}) };
+    const bo: Fields = base?.groceryOverrides || {};
+    const no: Fields = next?.groceryOverrides || {};
+    const overrides: Fields = { ...(current?.groceryOverrides || {}) };
     const times = meta.overridesModifiedAt!;
     for (const k of new Set([...Object.keys(bo), ...Object.keys(no)])) {
       if (same(bo[k], no[k])) continue;
@@ -682,7 +722,7 @@ export function applyLocalChange(current: AppState, base: AppState, next: AppSta
 
   meta.tombstones = pruneTombstones(out, meta.tombstones);
   out.syncMeta = meta;
-  return out as AppState;
+  return asState(out);
 }
 
 /**
@@ -707,9 +747,9 @@ export function statesEqual(a: AppState | null | undefined, b: AppState | null |
 
 function canonicalString(state: AppState | null | undefined): string {
   const meta = getSyncMeta(state);
-  const obj: any = {};
+  const obj: Fields = {};
   for (const col of COLLECTIONS) {
-    const list = ((state?.[col.name] as any[]) || []).slice();
+    const list = (listOf(state, col.name) || []).slice();
     list.sort((x, y) => {
       const kx = String(col.key(x));
       const ky = String(col.key(y));
@@ -761,13 +801,13 @@ export function addTombstones(state: AppState, collection: CollectionName, keys:
  */
 export function keepOnlyChangesSince(state: AppState, since: number): AppState {
   const meta = getSyncMeta(state);
-  const out: any = { ...state };
+  const out: Fields = { ...state };
   for (const col of COLLECTIONS) {
-    const list = state?.[col.name] as any[] | undefined;
+    const list = listOf(state, col.name);
     if (Array.isArray(list)) out[col.name] = list.filter((item) => ts(item) > since);
   }
   if (state.preferences) {
-    const prefs: any = { ...state.preferences };
+    const prefs: Fields = { ...state.preferences };
     for (const field of Object.keys(PREF_LISTS)) {
       const list = prefs[field];
       if (!Array.isArray(list)) continue;
@@ -779,7 +819,7 @@ export function keepOnlyChangesSince(state: AppState, since: number): AppState {
     }
     out.preferences = prefs;
   }
-  const overrides: Record<string, any> = {};
+  const overrides: Fields = {};
   for (const [k, v] of Object.entries(state.groceryOverrides || {})) {
     if ((meta.overridesModifiedAt?.[k] || 0) > since) overrides[k] = v;
   }
@@ -787,5 +827,5 @@ export function keepOnlyChangesSince(state: AppState, since: number): AppState {
   const tombstones: Record<string, number> = {};
   for (const [k, t] of Object.entries(meta.tombstones)) if (t > since) tombstones[k] = t;
   out.syncMeta = { ...meta, tombstones };
-  return out as AppState;
+  return asState(out);
 }

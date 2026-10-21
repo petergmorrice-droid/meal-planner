@@ -34,7 +34,9 @@ const update = (id: string, fn: (t: CookTimer) => CookTimer) => save(timers.map(
 let audio: AudioContext | null = null;
 export function unlockTimerSound() {
   try {
-    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    // Older Safari only has it under its webkit name.
+    const w = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+    const Ctx = w.AudioContext || w.webkitAudioContext;
     if (!audio && Ctx) audio = new Ctx();
     void audio?.resume?.();
   } catch {

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 process.env.TZ = 'Europe/London'; // UK clock changes matter for the week maths below
 import {
   normalizeParsedRecipe,
+  validateAndNormalizeRecipe,
   generateShoppingListForPlan,
   scaleRecipeStepQuantities,
   getMonday,
@@ -318,6 +319,52 @@ test('"next week" is right in the weeks the clocks change', () => {
     assert.equal(formatDateISO(getNextMonday(new Date(now))), want, now);
     assert.equal(formatDateISO(getMonday(new Date(now))) < want, true);
   }
+});
+
+test('a recipe Gemini wrote or changed: gaps filled, its extras kept, every ingredient has its own id', () => {
+  const r = validateAndNormalizeRecipe(
+    {
+      name: 'Chicken traybake',
+      ingredients: [
+        { name: 'New potatoes', amount: 500, unit: 'g' },
+        { name: 'Chicken thighs', amount: '6', unit: '' },
+      ],
+      instructions: ['Roast the potatoes for 20 mins.', '', 'Add the chicken and roast for 25 mins more.'],
+      prepTime: 10,
+      isVegetarian: false,
+      imageUrl: 'kept.jpg',
+    },
+    'ninja',
+  );
+  const ids = r.ingredients.map((i) => i.id);
+  assert.equal(
+    ids.every((id) => typeof id === 'string' && id.length > 0),
+    true,
+    'every ingredient has an id',
+  );
+  assert.equal(new Set(ids).size, ids.length, 'and each id is different');
+  assert.deepEqual(
+    r.ingredients.map((i) => [i.name, i.amount, i.unit]),
+    [
+      ['New potatoes', 500, 'g'],
+      ['Chicken thighs', 6, 'piece'], // a count with no unit is in pieces
+    ],
+  );
+  assert.equal(r.name, 'Chicken traybake');
+  assert.equal(r.description, 'Custom home-cooked meal.');
+  assert.equal(r.servings, 2);
+  assert.deepEqual(r.instructions, ['Roast the potatoes for 20 mins.', 'Add the chicken and roast for 25 mins more.']);
+  assert.deepEqual(r.methodInstructions.ninja, r.instructions);
+  assert.equal(r.prepTime, 10);
+  assert.equal(r.cookTime > 0, true, 'a missing cook time is estimated');
+  assert.equal(r.methodPrepTime.ninja, 10);
+  assert.equal(r.methodCookTime.ninja, r.cookTime);
+  assert.equal(r.isVegetarian, false);
+  assert.equal(r.isVegan, false);
+  assert.deepEqual(r.cookingMethods, ['ninja']);
+  assert.equal(r.tags.includes('Ninja Combi'), true);
+  assert.equal(r.imageUrl, 'kept.jpg', 'anything else it sent back is kept');
+  assert.equal(typeof r.id === 'string' && r.id.length > 0, true);
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

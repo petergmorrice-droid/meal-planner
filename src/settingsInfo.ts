@@ -32,12 +32,12 @@ export function syncProblemText(err: string | null | undefined): string {
 }
 
 /** What's in a backup file, to show before restoring. */
-export function backupSummary(text: string): { ok: boolean; parts: string[]; state?: any } {
+export function backupSummary(text: string): { ok: boolean; parts: string[]; state?: unknown } {
   try {
     const s = JSON.parse(text);
     if (!s || typeof s !== 'object' || (!Array.isArray(s.recipes) && !Array.isArray(s.mealPlans)))
       return { ok: false, parts: [] };
-    const n = (a: any) => (Array.isArray(a) ? a.length : 0);
+    const n = (a: unknown) => (Array.isArray(a) ? a.length : 0);
     const plural = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
     return {
       ok: true,

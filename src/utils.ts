@@ -234,22 +234,6 @@ export function cleanDays(days: Record<string, import('./types').DayPlan>): Reco
   return cleaned;
 }
 
-export function sanitizeForFirestore<T>(obj: T): T {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(sanitizeForFirestore) as unknown as T;
-  }
-  const result: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      result[key] = sanitizeForFirestore(value);
-    }
-  }
-  return result;
-}
-
 export function parseQtyAndUnit(text: string, defaultUnit: string = 'item'): { amount: number; unit: string } {
   const trimmed = text.trim();
   if (!trimmed) return { amount: 1, unit: defaultUnit };
@@ -284,7 +268,11 @@ export function formatScaledNumber(num: number): string {
   return formatCookingAmount(num) || '0';
 }
 
-export function scaleRecipeStepQuantities(step: string, ingredients: any[], scale: number): string {
+export function scaleRecipeStepQuantities(
+  step: string,
+  ingredients: { name: string; amount?: number | string; unit?: string }[],
+  scale: number,
+): string {
   const ingredientWords = new Set<string>(['water', 'oil', 'salt', 'pepper']);
   const ingredientUnits = new Set<string>([
     'g',

@@ -51,6 +51,7 @@ import {
   changedFields,
 } from '../recipeInfo';
 import type { AppStore } from '../store';
+import { errorNameOf, messageOf } from '../errors';
 
 const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-500';
 
@@ -157,13 +158,13 @@ export function RecipeModal({
       formatAmount: formatCookingAmount,
       scaleStep: (step, sc) => scaleRecipeStepQuantities(step, edited.ingredients, sc),
     });
-    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    const nav: Navigator | null = typeof navigator !== 'undefined' ? navigator : null;
     if (nav?.share) {
       try {
         await nav.share({ title: edited.name, text });
         return;
-      } catch (e: any) {
-        if (e?.name === 'AbortError') return;
+      } catch (e) {
+        if (errorNameOf(e) === 'AbortError') return;
       }
     }
     try {
@@ -221,11 +222,11 @@ export function RecipeModal({
       setAiInstruction('');
       setShowAiPrompt(false);
       setIsEditing(false);
-    } catch (err: any) {
+    } catch (err) {
       setAiError(
-        err?.message === 'GEMINI_API_KEY_MISSING'
+        messageOf(err) === 'GEMINI_API_KEY_MISSING'
           ? 'Gemini needs its key: add it in Settings.'
-          : err?.message || 'Gemini could not change the recipe. Try again.',
+          : messageOf(err) || 'Gemini could not change the recipe. Try again.',
       );
     } finally {
       setAiBusy(false);
@@ -253,11 +254,11 @@ export function RecipeModal({
       saveChanges(edited, next);
       setEdited(next);
       setMethod(target);
-    } catch (err: any) {
+    } catch (err) {
       setWriteError(
-        err?.message === 'GEMINI_API_KEY_MISSING'
+        messageOf(err) === 'GEMINI_API_KEY_MISSING'
           ? 'Gemini needs its key: add it in Settings.'
-          : err?.message || 'Gemini could not write the steps. Try again.',
+          : messageOf(err) || 'Gemini could not write the steps. Try again.',
       );
     } finally {
       setWriting(null);

@@ -1,5 +1,6 @@
-import { Recipe, Ingredient, CookingMethod, GroceryItem } from '../types';
+import { Recipe, Ingredient, CookingMethod, GroceryItem, DatabaseCleanAction } from '../types';
 import { getCatalog } from '../utils/shoppingConversion';
+import { messageOf } from '../errors';
 
 /**
  * Gemini AI Integration Client-Side (BYOK Pattern)
@@ -35,6 +36,62 @@ export function clearGeminiApiKey() {
   }
 }
 
+/** A part of a request to Gemini: text, or a photo. */
+type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+/** The shape Gemini's answer must have (the schemas are written out below). */
+type ResponseSchema = Record<string, unknown>;
+interface GeminiRequest {
+  contents: { parts: GeminiPart[] }[];
+  systemInstruction?: { parts: GeminiPart[] };
+  generationConfig?: { responseMimeType?: string; responseSchema?: ResponseSchema; temperature?: number };
+  tools?: object[];
+}
+/** The parts of Gemini's reply the app reads. It's JSON from outside, so every field may be missing. */
+interface GeminiReply {
+  candidates?: {
+    content?: { parts?: { text?: unknown }[] };
+    urlContextMetadata?: UrlContext;
+    url_context_metadata?: UrlContext;
+  }[];
+  error?: { message?: string };
+}
+interface UrlContext {
+  urlMetadata?: UrlRead[];
+  url_metadata?: UrlRead[];
+}
+interface UrlRead {
+  urlRetrievalStatus?: string;
+  url_retrieval_status?: string;
+}
+/**
+ * A recipe as Gemini sends it back: what the schema asks for, but any field may be missing or odd,
+ * so each is checked before use. Anything else it sends is kept.
+ */
+interface GeminiRecipe {
+  [field: string]: unknown;
+  id?: string;
+  name?: unknown;
+  description?: unknown;
+  servings?: unknown;
+  prepTime?: unknown;
+  cookTime?: unknown;
+  ingredients?: (GeminiIngredient | null)[];
+  instructions?: unknown[];
+  methodInstructions?: Partial<Record<CookingMethod, string[]>>;
+  methodPrepTime?: Partial<Record<CookingMethod, number>>;
+  methodCookTime?: Partial<Record<CookingMethod, number>>;
+  isVegetarian?: unknown;
+  isVegan?: unknown;
+  isGlutenFree?: unknown;
+  isDairyFree?: unknown;
+}
+interface GeminiIngredient {
+  name?: unknown;
+  amount?: unknown;
+  unit?: unknown;
+  note?: unknown;
+}
+
 /**
  * Direct REST API request wrapper with retries and timeout
  */
@@ -42,16 +99,16 @@ async function callGeminiRest(
   apiKey: string,
   prompt: string,
   systemInstruction?: string,
-  responseSchema?: any,
+  responseSchema?: ResponseSchema,
   options: { temperature?: number } = {},
-): Promise<any> {
-  let lastError: any = null;
+): Promise<string> {
+  let lastError: unknown = null;
 
   for (const model of CANDIDATE_MODELS) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-      const payload: any = {
+      const payload: GeminiRequest = {
         contents: [{ parts: [{ text: prompt }] }],
       };
 
@@ -86,19 +143,19 @@ async function callGeminiRest(
       clearTimeout(id);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData: GeminiReply = await response.json().catch(() => ({}));
         throw new Error(errorData?.error?.message || `API error (${response.status})`);
       }
 
-      const responseData = await response.json();
+      const responseData: GeminiReply = await response.json();
       const text = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (text) {
-        return text;
+        return text as string;
       }
-    } catch (err: any) {
+    } catch (err) {
       lastError = err;
-      console.warn(`[Gemini REST ${model}] failed:`, err?.message || err);
+      console.warn(`[Gemini REST ${model}] failed:`, messageOf(err) || err);
     }
   }
 
@@ -111,14 +168,14 @@ async function callGeminiRest(
  */
 async function callGeminiParts(
   apiKey: string,
-  parts: any[],
-  options: { systemInstruction?: string; tools?: any[]; temperature?: number; timeoutMs?: number } = {},
-): Promise<{ text: string; response: any }> {
-  let lastError: any = null;
+  parts: GeminiPart[],
+  options: { systemInstruction?: string; tools?: object[]; temperature?: number; timeoutMs?: number } = {},
+): Promise<{ text: string; response: GeminiReply }> {
+  let lastError: unknown = null;
   for (const model of CANDIDATE_MODELS) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const payload: any = { contents: [{ parts }] };
+      const payload: GeminiRequest = { contents: [{ parts }] };
       if (options.systemInstruction) payload.systemInstruction = { parts: [{ text: options.systemInstruction }] };
       if (options.tools) payload.tools = options.tools;
       if (options.temperature !== undefined) payload.generationConfig = { temperature: options.temperature };
@@ -132,18 +189,18 @@ async function callGeminiParts(
       });
       clearTimeout(id);
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData: GeminiReply = await response.json().catch(() => ({}));
         throw new Error(errorData?.error?.message || `API error (${response.status})`);
       }
-      const data = await response.json();
+      const data: GeminiReply = await response.json();
       const text = (data?.candidates?.[0]?.content?.parts || [])
-        .map((p: any) => (typeof p?.text === 'string' ? p.text : ''))
+        .map((p) => (typeof p?.text === 'string' ? p.text : ''))
         .join('')
         .trim();
       if (text) return { text, response: data };
-    } catch (err: any) {
+    } catch (err) {
       lastError = err;
-      console.warn(`[Gemini REST ${model}] failed:`, err?.message || err);
+      console.warn(`[Gemini REST ${model}] failed:`, messageOf(err) || err);
     }
   }
   throw lastError || new Error('All candidate models failed');
@@ -169,9 +226,9 @@ Do not add, change, scale, convert or invent anything. Leave out adverts, storie
 If there is no recipe, or you cannot read it, reply with exactly ${NO_RECIPE}`;
 
 /** Did the page-reading tool actually open the page? (Gemini may otherwise guess from the address.) */
-function pageWasRead(response: any): boolean {
+function pageWasRead(response: GeminiReply): boolean {
   const meta = response?.candidates?.[0]?.urlContextMetadata || response?.candidates?.[0]?.url_context_metadata;
-  const entries: any[] = meta?.urlMetadata || meta?.url_metadata || [];
+  const entries: UrlRead[] = meta?.urlMetadata || meta?.url_metadata || [];
   return entries.some((e) => /SUCCESS/i.test(String(e?.urlRetrievalStatus || e?.url_retrieval_status || '')));
 }
 
@@ -182,7 +239,7 @@ function pageWasRead(response: any): boolean {
 export async function readRecipePageApi(url: string): Promise<string> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('GEMINI_API_KEY_MISSING');
-  let result: { text: string; response: any };
+  let result: { text: string; response: GeminiReply };
   try {
     result = await callGeminiParts(
       apiKey,
@@ -209,7 +266,7 @@ export async function readRecipePageApi(url: string): Promise<string> {
 export async function readRecipePhotoApi(base64: string, mimeType: string): Promise<string> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('GEMINI_API_KEY_MISSING');
-  let result: { text: string; response: any };
+  let result: { text: string; response: GeminiReply };
   try {
     result = await callGeminiParts(
       apiKey,
@@ -272,8 +329,8 @@ function categorizeIngredient(name: string): string {
 }
 
 function normalizeIngredientAmountAndUnit(
-  rawAmount: any,
-  rawUnit: any,
+  rawAmount: unknown,
+  rawUnit: unknown,
   rawName: string,
 ): {
   name: string;
@@ -283,7 +340,7 @@ function normalizeIngredientAmountAndUnit(
   suggestedAisle: string;
 } {
   let name = (rawName || '').trim();
-  let unit = (rawUnit || '').trim().toLowerCase();
+  let unit = ((rawUnit || '') as string).trim().toLowerCase();
   let amount: number = 1;
 
   if (typeof rawAmount === 'number') {
@@ -351,7 +408,7 @@ function analyzeDietaryFlags(ingredients: Array<{ name: string }>): { isVegetari
 }
 
 function estimateDynamicTimes(
-  ingredients: any[],
+  ingredients: { name: string }[],
   instructions: string[],
   _targetMethod: string,
 ): { prepTime: number; cookTime: number } {
@@ -392,7 +449,7 @@ const NOT_DAIRY =
  * worse than a missing one.
  */
 function generateFunctionalTags(
-  ingredients: any[],
+  ingredients: { name?: string }[],
   isVegetarian: boolean,
   isVegan: boolean,
   method: string,
@@ -422,49 +479,65 @@ function generateFunctionalTags(
   return tags;
 }
 
-function validateAndNormalizeRecipe(data: any, selectedMethod: 'ninja' | 'oven_hob', rawText?: string): Recipe {
-  const clean: any = { ...data };
-  clean.id = clean.id || crypto.randomUUID();
-  clean.name = clean.name || 'Custom Recipe';
-  clean.description = clean.description || 'Custom home-cooked meal.';
-  clean.servings = 2;
+/** A recipe Gemini wrote or changed, made ready to save: gaps filled, its own extras kept. */
+export function validateAndNormalizeRecipe(
+  data: GeminiRecipe,
+  selectedMethod: 'ninja' | 'oven_hob',
+  rawText?: string,
+): Recipe {
+  // Ingredients, each with its own id like every other recipe's.
+  const ingredients: Ingredient[] = (data.ingredients || []).map((ing) => ({
+    id: crypto.randomUUID(),
+    ...normalizeIngredientAmountAndUnit(ing!.amount, ing!.unit, ing!.name as string),
+  }));
 
-  // Normalize ingredients
-  clean.ingredients = (clean.ingredients || []).map((ing: any) => {
-    return normalizeIngredientAmountAndUnit(ing.amount, ing.unit, ing.name);
-  });
-
-  // Normalize instructions
-  clean.instructions = Array.isArray(clean.instructions)
-    ? clean.instructions.filter(Boolean)
-    : rawText
-      ? rawText.split('\n').filter(Boolean)
-      : [];
+  const instructions = (
+    Array.isArray(data.instructions)
+      ? data.instructions.filter(Boolean)
+      : rawText
+        ? rawText.split('\n').filter(Boolean)
+        : []
+  ) as string[];
 
   // Set method instructions
-  clean.methodInstructions = clean.methodInstructions || {};
-  if (!clean.methodInstructions[selectedMethod] || clean.methodInstructions[selectedMethod].length === 0) {
-    clean.methodInstructions[selectedMethod] = [...clean.instructions];
+  const methodInstructions = data.methodInstructions || {};
+  if (!methodInstructions[selectedMethod] || methodInstructions[selectedMethod].length === 0) {
+    methodInstructions[selectedMethod] = [...instructions];
   }
 
   // Calculate times
-  const estTimes = estimateDynamicTimes(clean.ingredients, clean.instructions, selectedMethod);
-  clean.prepTime = clean.prepTime || estTimes.prepTime;
-  clean.cookTime = clean.cookTime || estTimes.cookTime;
+  const estTimes = estimateDynamicTimes(ingredients, instructions, selectedMethod);
+  const prepTime = (data.prepTime as number) || estTimes.prepTime;
+  const cookTime = (data.cookTime as number) || estTimes.cookTime;
 
-  clean.methodPrepTime = clean.methodPrepTime || {};
-  clean.methodCookTime = clean.methodCookTime || {};
-  clean.methodPrepTime[selectedMethod] = clean.methodPrepTime[selectedMethod] || clean.prepTime;
-  clean.methodCookTime[selectedMethod] = clean.methodCookTime[selectedMethod] || clean.cookTime;
+  const methodPrepTime = data.methodPrepTime || {};
+  const methodCookTime = data.methodCookTime || {};
+  methodPrepTime[selectedMethod] = methodPrepTime[selectedMethod] || prepTime;
+  methodCookTime[selectedMethod] = methodCookTime[selectedMethod] || cookTime;
 
   // Dietary and tags: Gemini's own judgement is better than word matching ("eggplant" isn't egg).
-  const flags = analyzeDietaryFlags(clean.ingredients);
-  clean.isVegetarian = typeof data?.isVegetarian === 'boolean' ? data.isVegetarian : flags.isVegetarian;
-  clean.isVegan = typeof data?.isVegan === 'boolean' ? data.isVegan && clean.isVegetarian : flags.isVegan;
-  clean.tags = generateFunctionalTags(clean.ingredients, clean.isVegetarian, clean.isVegan, selectedMethod);
-  clean.cookingMethods = [selectedMethod];
+  const flags = analyzeDietaryFlags(ingredients);
+  const isVegetarian = typeof data?.isVegetarian === 'boolean' ? data.isVegetarian : flags.isVegetarian;
+  const isVegan = typeof data?.isVegan === 'boolean' ? data.isVegan && isVegetarian : flags.isVegan;
 
-  return clean;
+  return {
+    ...(data as Partial<Recipe>), // anything else Gemini sent back is kept
+    id: data.id || crypto.randomUUID(),
+    name: (data.name as string) || 'Custom Recipe',
+    description: (data.description as string) || 'Custom home-cooked meal.',
+    servings: 2,
+    ingredients,
+    instructions,
+    methodInstructions,
+    prepTime,
+    cookTime,
+    methodPrepTime,
+    methodCookTime,
+    isVegetarian,
+    isVegan,
+    tags: generateFunctionalTags(ingredients, isVegetarian, isVegan, selectedMethod),
+    cookingMethods: [selectedMethod],
+  };
 }
 
 /**
@@ -473,10 +546,10 @@ function validateAndNormalizeRecipe(data: any, selectedMethod: 'ninja' | 'oven_h
  * ---------------------------------------------------------
  */
 
-function cleanGroceryDatabaseLocally(items: any[]): any[] {
+function cleanGroceryDatabaseLocally(items: GroceryItem[]): DatabaseCleanAction[] {
   if (!Array.isArray(items) || items.length === 0) return [];
 
-  const actions: any[] = [];
+  const actions: DatabaseCleanAction[] = [];
   const absorbedIds = new Set<string>();
 
   const getStem = (name: string): string => {
@@ -717,8 +790,8 @@ CRITICAL FORMATTING INVARIANT:
  * built-in parser for recipes: it guesses quantities badly (100 g -> 1 g) and
  * those guesses went straight into the shopping list without anyone noticing.
  */
-function geminiFailure(err: any, task: string): Error {
-  const raw = String(err?.message || err || '');
+function geminiFailure(err: unknown, task: string): Error {
+  const raw = String(messageOf(err) || err || '');
   let reason = 'it may be busy or unreachable';
   if (/quota|exhaust|rate|429/i.test(raw)) reason = "today's free Gemini limit may have been reached";
   else if (/api key|permission|401|403/i.test(raw))
@@ -828,14 +901,19 @@ const COPY_RECIPE_SCHEMA = {
  * units, notes and method steps are kept exactly as read. Only gaps are filled
  * (missing times are estimated, missing servings default to 2).
  */
-export function normalizeParsedRecipe(data: any, selectedMethod: 'ninja' | 'oven_hob'): Recipe {
-  const toNumber = (v: any): number => {
+export function normalizeParsedRecipe(
+  data: GeminiRecipe | null | undefined,
+  selectedMethod: 'ninja' | 'oven_hob',
+): Recipe {
+  const toNumber = (v: unknown): number => {
     const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''));
     return isFinite(n) && n > 0 ? n : 0;
   };
   const ingredients: Ingredient[] = (Array.isArray(data?.ingredients) ? data.ingredients : [])
-    .filter((ing: any) => ing && typeof ing.name === 'string' && ing.name.trim())
-    .map((ing: any) => {
+    .filter(
+      (ing): ing is GeminiIngredient & { name: string } => !!ing && typeof ing.name === 'string' && !!ing.name.trim(),
+    )
+    .map((ing) => {
       const name = ing.name.trim();
       const out: Ingredient = {
         id: crypto.randomUUID(),
@@ -851,7 +929,7 @@ export function normalizeParsedRecipe(data: any, selectedMethod: 'ninja' | 'oven
     });
 
   const instructions: string[] = (Array.isArray(data?.instructions) ? data.instructions : [])
-    .map((step: any) => String(step ?? '').trim())
+    .map((step) => String(step ?? '').trim())
     .filter(Boolean);
 
   const stated = { prep: toNumber(data?.prepTime), cook: toNumber(data?.cookTime) };
@@ -894,7 +972,7 @@ export async function parseRecipeApi(text: string, cookingMethod: 'ninja' | 'ove
   const selectedMethod = cookingMethod === 'ninja' ? 'ninja' : 'oven_hob';
   const prompt = `Copy this recipe into the JSON fields exactly as written.\n\nRecipe text:\n${text}`;
 
-  let data: any;
+  let data: GeminiRecipe;
   try {
     const rawText = await callGeminiRest(apiKey, prompt, COPY_SYSTEM_INSTRUCTION, COPY_RECIPE_SCHEMA, {
       temperature: 0,
@@ -966,7 +1044,7 @@ ${productNames.join('; ')}`;
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    const data = JSON.parse(cleanText);
+    const data: { matches?: ({ ingredient?: unknown; product?: unknown } | null)[] } = JSON.parse(cleanText);
     const out: Record<string, string> = {};
     for (const m of Array.isArray(data?.matches) ? data.matches : []) {
       if (m && typeof m.ingredient === 'string' && typeof m.product === 'string') out[m.ingredient] = m.product;
@@ -1018,7 +1096,7 @@ CRITICAL INSTRUCTIONS:
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    const data = JSON.parse(cleanText);
+    const data: GeminiRecipe = JSON.parse(cleanText);
     return validateAndNormalizeRecipe(data, selectedMethod, promptText);
   } catch (err) {
     console.error('Gemini generateRecipeApi failed:', err);
@@ -1054,7 +1132,7 @@ CRITICAL INSTRUCTIONS:
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    const data = JSON.parse(cleanText);
+    const data: GeminiRecipe = JSON.parse(cleanText);
     const validated = validateAndNormalizeRecipe(data, selectedMethod);
     validated.id = recipe.id;
     validated.imageUrl = recipe.imageUrl;
@@ -1131,7 +1209,7 @@ Do not include macros or cost estimates.`;
   }
 }
 
-export async function cleanGroceryDatabaseApi(items: GroceryItem[]): Promise<any[]> {
+export async function cleanGroceryDatabaseApi(items: GroceryItem[]): Promise<DatabaseCleanAction[]> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY_MISSING');
@@ -1141,7 +1219,7 @@ export async function cleanGroceryDatabaseApi(items: GroceryItem[]): Promise<any
 
 Item Catalog:
 ${JSON.stringify(
-  items.map((i: any) => ({
+  items.map((i) => ({
     id: i.id,
     name: i.name,
     category: i.category,
@@ -1165,7 +1243,7 @@ Return a structured JSON object with the "actions" array detailing any recommend
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    const data = JSON.parse(cleanText);
+    const data: { actions?: DatabaseCleanAction[] } = JSON.parse(cleanText);
     return data?.actions || [];
   } catch (err) {
     console.error('Gemini cleanGroceryDatabaseApi failed, falling back locally:', err);
@@ -1231,8 +1309,8 @@ export async function testGeminiKeyApi(key: string): Promise<{ ok: boolean; mess
   try {
     await callGeminiRest(k, 'Reply with the single word OK.', undefined, undefined, { temperature: 0 });
     return { ok: true, message: 'It works.' };
-  } catch (e: any) {
-    const m = String(e?.message || e || '');
+  } catch (e) {
+    const m = String(messageOf(e) || e || '');
     if (/api key not valid|api_key_invalid|invalid api key|api key expired/i.test(m))
       return { ok: false, message: "Google says that key isn't valid. Copy it again from Google AI Studio." };
     if (/quota|exhausted|rate limit|429/i.test(m))

@@ -20,16 +20,17 @@ export function useDeviceIdentity(): string {
       }
     };
 
-    const handleCustomChange = (e: CustomEvent<string>) => {
-      setIdentity(e.detail);
+    // Sent by setCurrentDeviceIdentity when "who's using this phone" changes in Settings.
+    const handleCustomChange = (e: Event) => {
+      setIdentity((e as CustomEvent<'P' | 'R'>).detail);
     };
 
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('currentUserChanged' as any, handleCustomChange);
+    window.addEventListener('currentUserChanged', handleCustomChange);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('currentUserChanged' as any, handleCustomChange);
+      window.removeEventListener('currentUserChanged', handleCustomChange);
     };
   }, []);
 

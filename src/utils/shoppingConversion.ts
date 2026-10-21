@@ -4,9 +4,7 @@
  * All the real logic (standard units, product matching, pack rounding) lives in
  * src/shopping. These functions keep the names the screens already use.
  */
-import type { GroceryItem } from '../types';
 import {
-  buildCatalog,
   matchProduct,
   shoppingQuantityFor,
   quantityForAddedItem as addedItemQuantity,
@@ -29,17 +27,6 @@ export function getCatalog(): Catalog {
   return currentCatalog();
 }
 
-const catalogsByList = new WeakMap<object, Catalog>();
-function catalogFor(db: GroceryItem[] | undefined | null): Catalog {
-  if (!Array.isArray(db) || db.length === 0) return getCatalog();
-  let c = catalogsByList.get(db);
-  if (!c) {
-    c = buildCatalog(db, null);
-    catalogsByList.set(db, c);
-  }
-  return c;
-}
-
 /** Lower-case, trimmed, single-spaced name (for simple comparisons). */
 export function normalizeIngredientName(name: string): string {
   return (name || '').toLowerCase().trim().replace(/\s+/g, ' ');
@@ -52,13 +39,6 @@ export function isSameGroceryItem(a: string, b: string): boolean {
   const pb = matchProduct(catalog, b);
   if (pa && pb) return pa.id === pb.id;
   return matchKey(a) === matchKey(b);
-}
-
-/** The grocery-list item an ingredient name refers to, or null. */
-export function findGroceryDatabaseMatch(ingredientName: string, db: any[]): any {
-  if (!ingredientName) return null;
-  const product = matchProduct(catalogFor(db), ingredientName);
-  return product ? product.item : null;
 }
 
 /** +/- step for an item on the shopping list. */

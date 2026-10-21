@@ -106,15 +106,22 @@ export function encodeStateToGistFiles(
   return files;
 }
 
+/** A file in the Gist as GitHub describes it (only the parts the app reads). */
+interface GistFile {
+  content: string;
+  truncated?: boolean;
+}
+
 /** Read app data back out of the Gist's files. */
-export function decodeGistFiles(files: Record<string, any> | undefined): AppState | null {
+export function decodeGistFiles(files: Record<string, GistFile | null | undefined> | undefined): AppState | null {
   const main = files?.[GIST_FILENAME];
   if (!main) return null;
   if (main.truncated) {
     throw new Error('The Gist data file is larger than GitHub allows the app to read (1 MB).');
   }
 
-  let parsed: any;
+  // The main file: the data itself, or (when it's too big for one file) a note of how many parts.
+  let parsed: { __format?: unknown; parts?: number } | null;
   try {
     parsed = JSON.parse(main.content);
   } catch {
@@ -123,7 +130,7 @@ export function decodeGistFiles(files: Record<string, any> | undefined): AppStat
 
   if (parsed && parsed.__format === CHUNKED_FORMAT) {
     let text = '';
-    for (let i = 1; i <= parsed.parts; i++) {
+    for (let i = 1; i <= (parsed.parts ?? 0); i++) {
       const part = files?.[partName(i)];
       if (!part) throw new Error(`Gist data is incomplete: ${partName(i)} is missing.`);
       if (part.truncated) throw new Error(`Gist data part ${i} could not be read in full.`);
@@ -135,10 +142,10 @@ export function decodeGistFiles(files: Record<string, any> | undefined): AppStat
       throw new Error('Gist data parts could not be joined back together.');
     }
   }
-  return parsed as AppState;
+  return parsed as unknown as AppState;
 }
 
-function describeHttpError(response: Response, body: any, action: string): Error {
+function describeHttpError(response: Response, body: { message?: string } | null | undefined, action: string): Error {
   if (response.status === 404) return new Error('Gist not found. Please check your Gist ID.');
   if (response.status === 401) return new Error('Unauthorized. Please check your GitHub Personal Access Token.');
   if (response.status === 403 || response.status === 429) {

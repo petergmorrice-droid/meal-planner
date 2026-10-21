@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { GroceryItem, DatabaseCleanAction, TabName } from '../types';
 import { cleanGroceryDatabaseApi } from '../services/geminiService';
+import { messageOf } from '../errors';
 
 interface CleanDatabaseModalProps {
   isOpen: boolean;
@@ -94,9 +95,9 @@ export function CleanDatabaseModal({
       setActions(actions);
       setCurrentIndex(0);
       setDecisions({});
-    } catch (err: any) {
+    } catch (err) {
       console.error('Database clean error:', err);
-      setError(err?.message || 'Failed to scan grocery database. Please try again.');
+      setError(messageOf(err) || 'Failed to scan grocery database. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -264,7 +265,7 @@ export function CleanDatabaseModal({
       await onApplyChanges(acceptedActions);
       showToast(`Successfully applied ${acceptedActions.length} catalog clean-up changes!`);
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error applying clean changes:', err);
       showToast('Failed to apply changes. Please try again.');
     } finally {

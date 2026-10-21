@@ -1,4 +1,5 @@
 import { useState, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { RatingRows } from './Stars';
 import { ratingsFor, withRating } from '../ratings';
 import PersonMark, { noteLook } from './PersonMark';
@@ -77,6 +78,17 @@ const savePref = (k: string, v: boolean) => {
 function ingredientLine(ing: Ingredient, scale: number): { amount: string; name: string } {
   const amount = formatCookingAmount((Number(ing.amount) || 0) * scale, ing.unit);
   return { amount: amount ? `${amount}${ing.unit ? ` ${ing.unit}` : ''}` : '', name: ing.name };
+}
+
+/** One of the round buttons at the top of cooking mode (Big, Read, Voice, Ask). */
+interface HeaderButton {
+  key: string;
+  label: string;
+  on: boolean;
+  dim?: boolean;
+  icon: ReactNode;
+  onClick: () => void;
+  attrs: { 'aria-label': string } & Record<`data-${string}`, boolean>;
 }
 
 /**
@@ -507,7 +519,7 @@ export default function CookMode({
       }
     };
     fit();
-    const RO = (window as any).ResizeObserver;
+    const RO = window.ResizeObserver;
     if (!RO) return;
     const ro = new RO(() => fit());
     ro.observe(el);
@@ -777,7 +789,7 @@ export default function CookMode({
                   attrs: { 'data-cook-ask': true, 'aria-label': 'Ask a question about this recipe' },
                 },
               ] as const
-            ).map((b: any) => (
+            ).map((b: HeaderButton) => (
               <button
                 key={b.key}
                 type="button"
@@ -1007,7 +1019,7 @@ export default function CookMode({
           <div
             ref={fitRef}
             className="flex-1 min-h-0 overflow-y-auto px-5 pt-3 pb-2"
-            style={{ ['--fit' as any]: '30px' }}
+            style={{ '--fit': '30px' } as CSSProperties}
             data-big-fit
           >
             <div className="max-w-2xl mx-auto">

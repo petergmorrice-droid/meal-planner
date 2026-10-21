@@ -42,7 +42,7 @@ export function stampShoppingItem(
   let edited = false;
   for (const k of keys) {
     if (SHOP_QUIET.has(k)) continue;
-    if (!same((item as any)[k], (before as any)[k])) {
+    if (!same((item as unknown as Record<string, unknown>)[k], (before as unknown as Record<string, unknown>)[k])) {
       edited = true;
       break;
     }

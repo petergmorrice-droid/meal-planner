@@ -231,7 +231,7 @@ npm run build     # production build into dist/
 npm run build:single  # the whole app as ONE file: dist-single/index.html
 npm run preview   # serve the production build locally
 npm test          # tests for syncing, shopping quantities and recipe import
-npm run typecheck # strict TypeScript check (no loose types, nothing unused)
+npm run typecheck # strict TypeScript check (nothing unused)
 npm run lint      # code checks (ESLint, with React's rules for hooks)
 npm run format    # tidy the layout of every file (Prettier); format:check only checks
 npm run test:e2e  # builds the app and runs the browser tests (tests/e2e/README.md)
@@ -273,7 +273,11 @@ Layout is Prettier's (single quotes, lines up to 120 characters,
 `.prettierrc.json`), so nobody has to think about it. Run `npm run format`
 before committing; GitHub checks it. Code checks are in `eslint.config.js`:
 ESLint's and typescript-eslint's recommended rules plus React's two hook
-rules. A name starting with `_` marks something unused on purpose. For an
+rules. A name starting with `_` marks something unused on purpose. There's
+no `any` anywhere (the check fails on one): data from outside (the Gist,
+Gemini, backups, files, the browser's speech) is described as the shape the
+app expects with every field optional, or as `unknown`, and checked before
+it's used. `messageOf(err)` (`src/errors.ts`) reads what was thrown. For an
 empty list that shouldn't count as a change on every render, use
 `EMPTY_LIST` (`src/emptyList.ts`) rather than a new `[]`.
 
@@ -673,3 +677,16 @@ anything.
   that never change are `const`, and unused names in the tests are gone.
   Nothing looks different: the page is identical step by step before and
   after.
+- `No loose types` — the 157 places typed as "anything" (`any`) now have real
+  types, and the code checks fail on a new one. The sync merge (59 of them)
+  describes the synced data as the app expects it, with every field optional,
+  since any version of the app may have written it. The Gemini code (36)
+  describes what Gemini is asked to send back. Errors, files and the
+  browser's speech features are typed too. Only types changed, apart from:
+  - recipes Gemini writes or changes now give each ingredient its own id,
+    like recipes copied from text (a new unit test checks this);
+  - two helpers left over from the app's old Firebase days, which nothing
+    used, were removed.
+
+  Everything else works exactly as before: the page is identical step by
+  step, and all the tests pass.
