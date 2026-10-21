@@ -34,24 +34,27 @@ static files that can be hosted for free anywhere.
 
 ## Putting it online
 
-`npm run build:single` produces the app in `dist-single/`: the whole app in
-one `index.html`, plus four small files that let it open without signal and
-be added to the home screen (`sw.js`, `manifest.webmanifest`, `icon-192.png`,
-`icon-512.png`). To host it free on GitHub Pages:
+The code lives in the public `meal-planner` repository on GitHub. Every change
+pushed to `main` goes through the checks in `.github/workflows/check.yml`,
+and when they all pass, GitHub publishes the site (GitHub Pages, free). A
+change that fails a check never reaches the phones. The app is at
+`https://<your-username>.github.io/meal-planner/`.
 
-1. On github.com, create a new **public** repository (e.g. `meal-planner`).
-2. **Add file → Upload files**, drag in all five files together, and commit.
-3. **Settings → Pages**: set *Source* to "Deploy from a branch", branch
-   `main`, folder `/ (root)`, and save.
-4. After a minute the app is at `https://<your-username>.github.io/meal-planner/`.
-   Open it on each phone and add it to the home screen from the browser's
-   share menu (iPhone: Share → *Add to Home Screen*).
+Once, when setting up the repository: **Settings → Pages**, set *Source* to
+"GitHub Actions". After the first run that passes, open the address on each
+phone and add it to the home screen from the browser's share menu (iPhone:
+Share → *Add to Home Screen*).
 
-To update, upload the new files over the old ones (all five; if only
-`index.html` changed that's enough, but uploading all is always safe). The
-code holds no passwords or keys (those are entered on each phone), so a
-public repository is fine. Keep the address the same between updates: each
-phone's saved settings belong to the address.
+The site is five files (`npm run build:single` makes them in `dist-single/`):
+the whole app in one `index.html`, plus four small files that let it open
+without signal and be added to the home screen (`sw.js`,
+`manifest.webmanifest`, `icon-192.png`, `icon-512.png`). Every check run also
+attaches them as *site-files*, if you ever want to host them somewhere else.
+
+The code holds no passwords, keys or household data (keys are entered on each
+phone; your data is in a private Gist), so a public repository is fine. Keep
+the address the same between updates: each phone's saved settings belong to
+the address.
 
 **iPhone:** the home-screen app keeps its own storage, separate from Safari.
 The first time you open it from the home screen, enter the GitHub and Gemini
@@ -302,22 +305,11 @@ commit means everything passed; a red cross means something didn't. Open the
 run to see which step failed. When browser tests fail, their screenshots and
 logs are attached as *browser-test-results*.
 
-Every run that gets past the build also attaches **site-files**: the five
-files to upload to the website, built by GitHub rather than on one computer.
+When everything passes on `main`, the last step publishes the site (see
+*Putting it online*). Every run that gets past the build also attaches
+**site-files**, the five files of the site as GitHub built them.
 
-To switch it on, the code (not just the five site files) needs to be in a
-GitHub repository. Use a separate one from the website, and it can be
-private:
-
-1. On github.com, create a new **private** repository (e.g. `meal-planner-code`).
-2. Upload the project's files. Include the `.github` folder; on a Mac, press
-   Cmd+Shift+. in Finder to see it. If it doesn't upload, use *Add file →
-   Create new file*, type `.github/workflows/check.yml` as the name, and
-   paste the file in.
-3. The *Actions* tab shows the first run.
-
-Cost: public repositories run free with no limit. Private ones include 2,000
-free minutes a month, enough for about 200 runs.
+It's free: public repositories have no limit on these runs.
 
 `package-lock.json` (the exact version of every package) isn't in the code
 yet, because it can only be made where the package registry can be reached.
@@ -745,3 +737,8 @@ anything.
   tab and cooking mode are identical step by step before and after (13
   steps, including big steps, timers and ticking), as are Planning and the
   Shop, and all the tests pass.
+- `Published from GitHub` — the code now lives in the public `meal-planner`
+  repository, and the site is published from it automatically when every
+  check passes (GitHub Pages via Actions), instead of five files being
+  uploaded by hand. The history is published under GitHub's private
+  "noreply" address rather than a personal email address.

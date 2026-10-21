@@ -1,8 +1,12 @@
 # Checks every change on GitHub: the strict type check, the code checks (ESLint), the formatting
 # (Prettier), the unit tests, a full build and every browser test, on a fresh machine each time.
 # A red cross on a commit means one of them failed; open the run to see which (the browser tests'
-# screenshots and logs are attached when they fail). The built site files (the five to upload)
-# are attached to every run that gets that far.
+# screenshots and logs are attached when they fail). The built site files are attached to every
+# run that gets that far.
+#
+# When everything passes on main, the site is published (GitHub Pages), so a change that fails a
+# check never reaches the phones. (Once, in the repository's Settings → Pages, set Source to
+# "GitHub Actions".)
 name: Check
 
 on:
@@ -88,3 +92,28 @@ jobs:
           name: package-lock
           path: package-lock.json
           retention-days: 30
+
+  # Put the site online: the files the checks just built and tested, only from main.
+  publish:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-files
+          path: site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
