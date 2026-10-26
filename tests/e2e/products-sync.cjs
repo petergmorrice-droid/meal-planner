@@ -2,7 +2,7 @@
 // each product, Same as…, also-called names, tidy-up checks, removals that stick, reset), the Shop
 // staples sheet and Planning sides reading the same list, and two phones syncing weeks day by day,
 // staples item by item, and a phone that's been away for months.
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -280,6 +280,7 @@ function productSeed(old) {
 
     // ---- Products page ----
     await tab('Settings');
+    await settingsTab(page, 'shopping');
     check(
       /products: how they're sold, which aisle, what uses them/.test(await text('[data-setting-link="products"]')),
       'Products row',
@@ -506,6 +507,7 @@ function productSeed(old) {
 
     // ---- The Shop staples sheet and Planning sides read the same list ----
     await tab('Settings');
+    await settingsTab(page, 'shopping');
     await page.locator('[data-setting-link="staples"]').click();
     await page.waitForTimeout(700);
     const quick = page.getByPlaceholder('Quick add staple item (e.g. Milk, Eggs)');
@@ -560,6 +562,7 @@ function productSeed(old) {
 
     // ---- Reset to built-in: a real reset ----
     await tab('Settings');
+    await settingsTab(page, 'sync');
     await page.locator('[data-products-reset]').click();
     await page.waitForTimeout(200);
     await page.locator('[data-confirm-ok]').click();
@@ -641,6 +644,7 @@ function productSeed(old) {
     };
     const addStaple = async (page, name) => {
       await tabOn(page, 'Settings');
+      await settingsTab(page, 'shopping');
       await page.locator('[data-setting-link="staples"]').click();
       await page.waitForTimeout(700);
       const q = page.getByPlaceholder('Quick add staple item (e.g. Milk, Eggs)');
@@ -750,6 +754,7 @@ function productSeed(old) {
       'GitHub: same',
     );
     await tabOn(c, 'Settings');
+    await settingsTab(c, 'sync');
     check(
       /hadn't synced for over 3 months/.test(
         await c

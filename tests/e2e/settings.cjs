@@ -1,7 +1,7 @@
-// Settings on one page: this phone (who, Gemini key test), household, sync setup, shopping shortcuts, products, past weeks, backup & reset, version and the update banner.
+// Settings in four tabs (phone, household, shopping, sync & backup): this phone (who, Gemini key test), household, sync setup, shopping shortcuts, products, past weeks, backup & reset, version and the update banner.
 // cooking mode (amounts per step, get everything out, timers that survive leaving, big steps,
 // read aloud, method switch), finished screen (fridge, freezer, verdict, note), day panel, weeks.
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -193,8 +193,33 @@ function seed() {
 
   await tab('Settings');
   await shot('01-settings-top');
-  for (const sec of ['phone', 'household', 'reminders', 'sync', 'shopping', 'history', 'backup', 'about'])
-    check((await page.locator(`[data-settings-${sec}]`).count()) === 1, `section: ${sec}`);
+  check(
+    (await page.locator('[data-settings-tab]').allInnerTexts()).map((t) => t.trim()).join(',') ===
+      'Phone,Household,Shopping,Sync & backup',
+    'Settings: four tabs',
+  );
+  check(
+    (await page.locator('[data-settings-tab="phone"][aria-selected="true"]').count()) === 1,
+    'Settings: opens on Phone',
+  );
+  const sections = {
+    phone: ['phone', 'about'],
+    household: ['household', 'reminders', 'notifications', 'history'],
+    shopping: ['shopping'],
+    sync: ['sync', 'backup'],
+  };
+  for (const [id, secs] of Object.entries(sections)) {
+    await settingsTab(page, id);
+    const shown = await page.locator('[data-settings-panel] > section').evaluateAll((els) =>
+      els.map((el) =>
+        Object.keys(el.dataset)
+          .find((k) => k.startsWith('settings'))
+          .replace('settings', '')
+          .toLowerCase(),
+      ),
+    );
+    check(shown.join(',') === secs.join(','), `tab ${id}: ${secs.join(', ')}`, shown.join(','));
+  }
 
   // ---- Reminders: this week's meals as a calendar file ----
   const fs = require('fs');
@@ -204,6 +229,7 @@ function seed() {
     const f = await wait;
     return { name: f && f.suggestedFilename(), text: f ? fs.readFileSync(await f.path(), 'utf8') : '' };
   };
+  await settingsTab(page, 'household');
   await page.locator('[data-settings-reminders]').scrollIntoViewIfNeeded();
   check(
     (await page.locator('[data-notify-needs-sync]').count()) === 1,
@@ -258,6 +284,7 @@ function seed() {
   );
 
   // ---- This phone ----
+  await settingsTab(page, 'phone');
   await page.locator('[data-segmented="who"] button', { hasText: 'Rachel' }).click();
   await page.waitForTimeout(200);
   check((await page.evaluate(() => localStorage.getItem('currentUser'))) === 'R', "this is Rachel's phone");
@@ -279,6 +306,7 @@ function seed() {
   check((await page.evaluate(() => localStorage.getItem('gemini_api_key'))) === 'AIza-wrong', 'key kept on this phone');
 
   // ---- Household ----
+  await settingsTab(page, 'household');
   await page.locator('[data-setting-people] button[aria-label="One more person"]').click();
   await page.waitForTimeout(200);
   let st = await state();
@@ -291,6 +319,7 @@ function seed() {
   check((await state()).preferences.eatAt === '18:30', 'eat at 6:30');
 
   // ---- Sync (not connected) ----
+  await settingsTab(page, 'sync');
   check((await page.locator('[data-sync-setup]').count()) === 1, 'sync setup shown when not connected');
   await page.locator('[data-sync-connect]').click();
   await page.waitForTimeout(200);
@@ -301,12 +330,17 @@ function seed() {
   await shot('02-settings-sync');
 
   // ---- Shopping shortcuts ----
+  await settingsTab(page, 'shopping');
   await page.locator('[data-setting-link="aisles"]').click();
   await page.waitForTimeout(700);
   check((await page.locator('[aria-label="Arrange aisles"]').count()) >= 1, 'Arrange aisles opens in Shop');
   await page.locator('[aria-label="Arrange aisles"] button[aria-label="Close"]').click();
   await page.waitForTimeout(200);
   await tab('Settings');
+  check(
+    (await page.locator('[data-settings-tab="shopping"][aria-selected="true"]').count()) === 1,
+    'back in Settings: still on the Shopping tab',
+  );
   await page.locator('[data-setting-link="staples"]').click();
   await page.waitForTimeout(700);
   check((await page.locator('h3', { hasText: 'Weekly staples' }).count()) >= 1, 'Weekly staples opens in Shop');
@@ -377,6 +411,7 @@ function seed() {
   await page.waitForTimeout(300);
 
   // ---- Past weeks ----
+  await settingsTab(page, 'household');
   await page.locator('[data-setting-link="past-weeks"]').click();
   await page.waitForTimeout(400);
   const wk = await text('[data-history-week="2026-10-05"]');
@@ -422,6 +457,7 @@ function seed() {
   await tab('Settings');
 
   // ---- Backup & reset ----
+  await settingsTab(page, 'sync');
   const dl = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
   await page.locator('[data-backup-download]').click();
   const d = await dl;
@@ -468,6 +504,7 @@ function seed() {
   );
 
   // ---- Version and updates ----
+  await settingsTab(page, 'phone');
   const ver = await text('[data-app-version]');
   check(/· [0-9a-f]{7}/.test(ver), 'shows the version', ver);
   await page.locator('[data-update-check]').click();

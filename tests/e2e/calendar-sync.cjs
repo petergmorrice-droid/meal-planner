@@ -1,7 +1,7 @@
 // Settings → Reminders → Sync to my calendar: with calendar sync on, each upload to the sync Gist
 // also writes a calendar feed of the plan and reminders, which each person's calendar subscribes
 // to; changes made on either phone reach it, and switching it off takes the feed away.
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const { createMockGist } = require('./mockgist.cjs');
 const OUT = process.argv[2];
@@ -44,6 +44,7 @@ const check = (ok, label, detail = '') => {
   const settings = async (page) => {
     await goTab(page, 'Settings');
     await page.waitForTimeout(600);
+    await settingsTab(page, 'household');
     await page.locator('[data-calendar-sync]').scrollIntoViewIfNeeded();
   };
   const comeBack = async (page) => {

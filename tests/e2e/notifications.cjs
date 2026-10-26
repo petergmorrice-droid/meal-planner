@@ -1,7 +1,7 @@
 // Settings → Notifications: turning them on signs this phone up with the notification sender (on
 // Netlify) under a household key in the synced settings; adding things by hand sends one grouped
 // message a little later; Send test and Turn off. The sender and the phone's push system are stood in for.
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const { createMockGist } = require('./mockgist.cjs');
 const OUT = process.argv[2];
@@ -89,6 +89,7 @@ const check = (ok, label, detail = '') => {
   // ---------- Turn on ----------
   await goTab(page, 'Settings');
   await page.waitForTimeout(600);
+  await settingsTab(page, 'household');
   await page.locator('[data-settings-notifications]').scrollIntoViewIfNeeded();
   check(
     /Rachel adds things to the shopping list/.test(await text('[data-settings-notifications]')),
