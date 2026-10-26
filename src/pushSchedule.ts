@@ -9,6 +9,12 @@ import { plannedMealEvents, upcomingReminders } from './calendarReminders';
 
 /** When the morning notifications go off if you haven't said: 9am. */
 export const DEFAULT_MORNING_AT = '09:00';
+/**
+ * The morning time can be set from 6am to 11:45am: the sender only checks for morning
+ * notifications then (netlify/functions/push-schedule.mts).
+ */
+export const EARLIEST_MORNING = '06:00';
+export const LATEST_MORNING = '11:45';
 /** How far ahead the schedule goes. */
 const DAYS_AHEAD = 21;
 
@@ -20,11 +26,17 @@ export interface ScheduledNote {
   tab?: 'shop' | 'this_week';
 }
 
+/** A time the sender will be checking at (6am to 11:45am). */
+export function morningOk(t?: string | null): boolean {
+  const m = parseClock(t);
+  return m !== null && m >= parseClock(EARLIEST_MORNING)! && m <= parseClock(LATEST_MORNING)!;
+}
+
 export function morningSettings(prefs?: Partial<UserPreferences> | null) {
   return {
     dinner: prefs?.notifyDinner !== false,
     prep: prefs?.notifyPrep !== false,
-    at: parseClock(prefs?.notifyMorningAt) !== null ? prefs!.notifyMorningAt! : DEFAULT_MORNING_AT,
+    at: morningOk(prefs?.notifyMorningAt) ? prefs!.notifyMorningAt! : DEFAULT_MORNING_AT,
   };
 }
 

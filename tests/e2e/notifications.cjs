@@ -164,27 +164,36 @@ const check = (ok, label, detail = '') => {
   await page.locator('[data-notify-dinner-switch]').click();
   await page.screenshot({ path: `${OUT}/n2-morning.png`, fullPage: false });
 
-  // ---------- Adding things by hand: one message, a little later ----------
+  // ---------- Adding things by hand: sent straight away, each listing what was added just before ----------
   await goTab(page, 'Shop');
   await page.waitForTimeout(600);
-  for (const thing of ['bin bags', 'eggs']) {
-    await page.locator('[data-quick-add]').fill(thing);
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(400);
-  }
-  check(calls.filter((c) => c.action === 'notify' && !c.body.test).length === 0, 'not sent straight away');
-  await page.clock.runFor(25000);
-  await page.waitForTimeout(400);
-  const sent = calls.filter((c) => c.action === 'notify' && !c.body.test);
+  const listNotes = () => calls.filter((c) => c.action === 'notify' && !c.body.test);
+  await page.locator('[data-quick-add]').fill('bin bags');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(500);
   check(
-    sent.length === 1 && /^Peter added Bin Bags and Eggs$/i.test(sent[0].body.body) && sent[0].body.from === 'P',
-    'one message: "Peter added Bin Bags and Eggs"',
-    JSON.stringify(sent),
+    listNotes().length === 1 &&
+      /^Peter added Bin Bags$/i.test(listNotes()[0].body.body) &&
+      listNotes()[0].body.from === 'P',
+    'sent straight away: "Peter added Bin Bags"',
+    JSON.stringify(listNotes()),
   );
-
-  // ---------- Turn off ----------
+  await page.locator('[data-quick-add]').fill('eggs');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(500);
+  check(
+    listNotes().length === 2 && /^Peter added Bin Bags and Eggs$/i.test(listNotes()[1].body.body),
+    'the next one lists both (it replaces the first on the other phone)',
+    JSON.stringify(listNotes()),
+  );
+  // Morning time: only 6am to 11:45am
   await goTab(page, 'Settings');
   await page.waitForTimeout(600);
+  await page.locator('[data-notify-morning-at]').fill('14:00');
+  await page.waitForTimeout(300);
+  check((await state()).preferences.notifyMorningAt !== '14:00', 'an afternoon time is not taken');
+
+  // ---------- Turn off ----------
   await page.locator('[data-notify-off]').click();
   await page.waitForTimeout(600);
   check(

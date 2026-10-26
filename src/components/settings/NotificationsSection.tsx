@@ -7,7 +7,6 @@
 import { useState } from 'react';
 import { Bell, BellOff, Send, Timer } from 'lucide-react';
 import { UserPreferences } from '../../types';
-import { parseClock } from '../../cookInfo';
 import { personName } from '../PersonMark';
 import {
   disablePush,
@@ -18,7 +17,7 @@ import {
   sendTest,
   sendTestLater,
 } from '../../pushNotify';
-import { morningSettings } from '../../pushSchedule';
+import { EARLIEST_MORNING, LATEST_MORNING, morningOk, morningSettings } from '../../pushSchedule';
 import { messageOf } from '../../errors';
 import { card, row, sectionTitle } from './parts';
 import { SettingsTabProps } from './types';
@@ -216,8 +215,7 @@ export function NotificationsSection({
               <span className="flex-1 min-w-0">
                 <span className="block text-[15px] font-semibold text-zinc-900">Added to the list</span>
                 <span className="block text-[13px] text-zinc-500">
-                  “{other} added milk, eggs and bin bags”, a little after they finish. Not for meal ingredients from
-                  Send to list.
+                  “{other} added milk, eggs and bin bags”, straight away. Not for meal ingredients from Send to list.
                 </span>
               </span>
             </div>
@@ -252,15 +250,17 @@ export function NotificationsSection({
             <div className={row}>
               <span className="flex-1 min-w-0">
                 <span className="block text-[15px] font-semibold text-zinc-900">Morning time</span>
-                <span className="block text-[13px] text-zinc-500">For both phones</span>
+                <span className="block text-[13px] text-zinc-500">For both phones, between 6am and 11:45am</span>
               </span>
               <input
                 type="time"
                 value={morning.at}
                 onChange={(e) => {
-                  if (parseClock(e.target.value) !== null) store.updatePreferences({ notifyMorningAt: e.target.value });
+                  if (morningOk(e.target.value)) store.updatePreferences({ notifyMorningAt: e.target.value });
                 }}
                 className="h-10 px-2 bg-white border border-zinc-300 rounded-xl text-base font-bold tabular-nums"
+                min={EARLIEST_MORNING}
+                max={LATEST_MORNING}
                 aria-label="Morning notification time"
                 data-notify-morning-at
               />

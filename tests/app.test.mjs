@@ -2095,6 +2095,10 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     assert.ok(later.every((x) => x.id.endsWith('dinner') && new Date(x.at).getHours() === 7));
     assert.equal(morningSchedule(remState({ notifyDinner: false, notifyPrep: false }), monMorning).length, 0);
     assert.deepEqual(morningSettings(undefined), { dinner: true, prep: true, at: '09:00' });
+    assert.equal(morningSettings({ notifyMorningAt: '06:00' }).at, '06:00');
+    assert.equal(morningSettings({ notifyMorningAt: '11:45' }).at, '11:45');
+    assert.equal(morningSettings({ notifyMorningAt: '05:30' }).at, '09:00', 'before the sender checks: 9am');
+    assert.equal(morningSettings({ notifyMorningAt: '14:00' }).at, '09:00', 'afternoon: 9am');
   });
 
   test('calendar sync: the Gist gets the feed when on, and loses it when switched off', () => {

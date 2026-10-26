@@ -1,4 +1,4 @@
-// Every 15 minutes: send the morning notifications that are due ("Tonight: chilli con carne",
+// Every 15 minutes in the morning: send the morning notifications that are due ("Tonight: chilli con carne",
 // "Take the lasagne out of the freezer tonight"). The app keeps each household's schedule up to
 // date through /api/schedule; the logic is runSchedule in ../push-core.mts.
 import type { Config } from '@netlify/functions';
@@ -12,6 +12,7 @@ export default async () => {
 };
 
 export const config: Config = {
-  // Every 15 minutes (UTC; the schedule's times are absolute, so time zones don't matter here).
-  schedule: '*/15 * * * *',
+  // Every 15 minutes in the morning only: 05:00–11:45 UTC, which covers 6am–11:45am in the UK in
+  // both summer (BST, UTC+1) and winter (GMT). The app only lets the morning time be set in that range.
+  schedule: '*/15 5-11 * * *',
 };
