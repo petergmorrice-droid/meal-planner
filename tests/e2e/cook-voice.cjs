@@ -1,7 +1,7 @@
 // Voice in cooking mode: commands (next, back, repeat, timers, step N), chatter ignored, questions to Gemini (typed and spoken), and what happens without speech.
 // cooking mode (amounts per step, get everything out, timers that survive leaving, big steps,
 // read aloud, method switch), finished screen (fridge, freezer, verdict, note), day panel, weeks.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -153,7 +153,7 @@ function seed() {
   await page.goto(URL);
   await page.waitForTimeout(1500);
   const tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(700);
   };
   const shot = (n) => page.screenshot({ path: `${OUT}/${n}.png` });

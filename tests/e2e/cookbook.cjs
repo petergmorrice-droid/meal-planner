@@ -1,6 +1,6 @@
 // Cookbook: search, one-tap filters, favourites, share, and the new add-recipe flow (paste, link, photo,
 // check screen with Shop as, duplicates), plus Android share target. iPhone-sized screen, Gemini simulated.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -148,7 +148,7 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
   await page.goto(url);
   await page.waitForTimeout(1500);
   page.tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(700);
   };
   page.state = () => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));

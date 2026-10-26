@@ -1,7 +1,7 @@
 // Freezer tab: portions everywhere, frozen ago, use soon, planned/spare, grouping, item panel with Undo, Have it on…, Add from recipes.
 // cooking mode (amounts per step, get everything out, timers that survive leaving, big steps,
 // read aloud, method switch), finished screen (fridge, freezer, verdict, note), day panel, weeks.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -97,7 +97,7 @@ function seed() {
   await page.goto(URL);
   await page.waitForTimeout(1500);
   const tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(700);
   };
   const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));

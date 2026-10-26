@@ -1,5 +1,5 @@
 // Recipe cards and the one-page recipe pop-up, end to end on an iPhone-sized screen.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -67,7 +67,7 @@ async function open(browser) {
   await page.goto(URL);
   await page.waitForTimeout(1500);
   page.tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(700);
   };
   page.state = () => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));

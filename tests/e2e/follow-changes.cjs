@@ -2,7 +2,7 @@
 // soon after opening, a recipe shared to the app opens "Add a recipe" once, cooking mode opens on the
 // method you prefer and keeps the one you pick, and (two phones) a recipe edit in progress survives a
 // sync and only what was edited is saved.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed, iso, mondayOf, TEST_NOW } = require('./review-seed.cjs');
 const { createMockGist } = require('./mockgist.cjs');
 const OUT = process.argv[2];
@@ -83,7 +83,7 @@ function seed() {
   const cache = () => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));
   const lineIds = async () => ((await cache()).shoppingList || []).map((i) => i.id);
   const tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(600);
   };
   const text = async (sel) =>
@@ -197,7 +197,7 @@ function seed() {
     return p;
   }
   const tabOn = async (p, n) => {
-    await p.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(p, n);
     await p.waitForTimeout(600);
   };
   const cacheOf = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));

@@ -1,6 +1,6 @@
 // Edits work from the latest data. A window left open while the other phone changes the same
 // thing shows that change, and saving something in it doesn't undo the other phone's change.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const { createMockGist } = require('./mockgist.cjs');
 const OUT = process.argv[2];
@@ -40,7 +40,7 @@ const check = (ok, label, detail = '') => {
     return page;
   }
   const tabOn = async (page, n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(600);
   };
   const cacheOf = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));
