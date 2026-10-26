@@ -25,6 +25,15 @@ function createMockGist(initialFiles) {
     }
     return out;
   };
+  // Set `mock.tokenExpires` ("2026-10-24 10:00:00 UTC") to say when the token runs out, as GitHub does.
+  const extra = () =>
+    api.tokenExpires
+      ? {
+          'github-authentication-token-expiration': api.tokenExpires,
+          'access-control-expose-headers':
+            'ETag, Link, x-ratelimit-limit, x-ratelimit-remaining, GitHub-Authentication-Token-Expiration',
+        }
+      : {};
   const cors = {
     'access-control-allow-origin': '*',
     'access-control-expose-headers': 'ETag, Link, x-ratelimit-limit, x-ratelimit-remaining',
@@ -48,12 +57,12 @@ function createMockGist(initialFiles) {
       const inm = req.headers()['if-none-match'];
       if (inm && inm === etag()) {
         log.push({ who, method, status: 304 });
-        return route.fulfill({ status: 304, headers: { ...cors, etag: etag() } });
+        return route.fulfill({ status: 304, headers: { ...cors, ...extra(), etag: etag() } });
       }
       log.push({ who, method, status: 200, bytes: JSON.stringify(gist.files).length });
       return route.fulfill({
         status: 200,
-        headers: { ...cors, etag: etag() },
+        headers: { ...cors, ...extra(), etag: etag() },
         contentType: 'application/json',
         body: JSON.stringify({ id: gist.id, owner: { login: 'testuser' }, files: filesForApi() }),
       });
@@ -68,7 +77,7 @@ function createMockGist(initialFiles) {
       log.push({ who, method, status: 200, files: Object.keys(gist.files) });
       return route.fulfill({
         status: 200,
-        headers: { ...cors, etag: etag() },
+        headers: { ...cors, ...extra(), etag: etag() },
         contentType: 'application/json',
         body: JSON.stringify({ id: gist.id, owner: { login: 'testuser' }, files: filesForApi() }),
       });
@@ -76,7 +85,8 @@ function createMockGist(initialFiles) {
     return route.fulfill({ status: 405, headers: cors });
   }
 
-  return {
+  const api = {
+    tokenExpires: null,
     gist,
     log,
     handle,
@@ -90,6 +100,7 @@ function createMockGist(initialFiles) {
       return main;
     },
   };
+  return api;
 }
 
 module.exports = { createMockGist };

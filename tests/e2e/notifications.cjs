@@ -169,6 +169,14 @@ const check = (ok, label, detail = '') => {
     JSON.stringify(kind(notes, 'prep').map((n) => londonTime(n.at))),
   );
   check(
+    kind(notes, 'plan').length > 0 &&
+      kind(notes, 'plan').every(
+        (n) => n.tab === 'planning' && londonTime(n.at) === '09:00' && /next week/.test(n.title),
+      ),
+    'plan next week, at 9am, opening Planning',
+    JSON.stringify(kind(notes, 'plan')),
+  );
+  check(
     (await page.locator('[data-reminder-cook-window]').count()) === 1,
     'says start-cooking notifications only go out 3pm to 9:45pm',
   );
@@ -249,6 +257,15 @@ const check = (ok, label, detail = '') => {
       'With reminders' && /meal-planner-calendar-alerts\.ics$/.test(await text('[data-calendar-sync-url]')),
     'calendar: now offers the feed with the reminders as alerts',
     await text('[data-calendar-sync-url]'),
+  );
+
+  // ---------- Tapping a plan-next-week notification opens Planning ----------
+  await page.goto(URL + '?tab=planning');
+  await page.waitForTimeout(1500);
+  check(
+    (await page.locator('nav button[aria-current="page"]').innerText()).trim() === 'Planning',
+    'a notification for Planning opens it',
+    await page.locator('nav button[aria-current="page"]').innerText(),
   );
 
   check(errors.length === 0, 'no page errors', errors.join(' | '));

@@ -1,4 +1,5 @@
 import { AppState } from '../types';
+import { parseTokenExpiry } from '../syncHealth';
 
 export { mergeAppStates } from './syncMerge';
 
@@ -53,6 +54,7 @@ export function getGistConfig(): GistConfig | null {
 
 export function saveGistConfig(pat: string, gistId: string) {
   try {
+    if (localStorage.getItem('github_pat') !== pat.trim()) localStorage.removeItem(LS_TOKEN_EXPIRES);
     localStorage.setItem('github_pat', pat.trim());
     localStorage.setItem('github_gist_id', gistId.trim());
   } catch (e) {
@@ -77,11 +79,38 @@ export function saveGistOwner(owner: string) {
   }
 }
 
+const LS_TOKEN_EXPIRES = 'github_token_expires';
+
+/** When the token runs out (ms), if GitHub has said (newest answer kept; per phone). */
+export function getTokenExpiry(): number | null {
+  try {
+    const v = Number(localStorage.getItem(LS_TOKEN_EXPIRES));
+    return v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GitHub says on each reply when a token with an end date runs out, if the browser lets the app
+ * read it (GitHub-Authentication-Token-Expiration). Kept so the app can warn beforehand.
+ */
+function noteTokenExpiry(response: Response) {
+  const t = parseTokenExpiry(response.headers.get('github-authentication-token-expiration'));
+  if (t === null) return;
+  try {
+    localStorage.setItem(LS_TOKEN_EXPIRES, String(t));
+  } catch {
+    /* private browsing: no early warning */
+  }
+}
+
 export function clearGistConfig() {
   try {
     localStorage.removeItem('github_pat');
     localStorage.removeItem('github_gist_id');
     localStorage.removeItem('github_gist_owner');
+    localStorage.removeItem(LS_TOKEN_EXPIRES);
   } catch (e) {
     console.error('Failed to clear Gist config from localStorage', e);
   }
@@ -216,6 +245,7 @@ export async function fetchGist(config: GistConfig, etag?: string | null): Promi
     console.warn('Gist conditional requests unavailable; using full downloads.');
   }
 
+  noteTokenExpiry(response);
   if (response.status === 304) {
     return { notModified: true };
   }
@@ -258,6 +288,7 @@ export async function saveGist(
     },
     'update',
   );
+  noteTokenExpiry(response);
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));

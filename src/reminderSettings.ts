@@ -8,6 +8,9 @@ import { parseClock } from './cookInfo';
 export const DEFAULT_MORNING_AT = '09:00';
 /** When the night-before reminder goes off if you haven't said: 8pm. */
 export const DEFAULT_PREP_AT = '20:00';
+/** The days "Plan next week" can go off, and the one if you haven't said. */
+export const PLAN_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+export const DEFAULT_PLAN_DAY = 'Friday';
 
 /**
  * When the notification sender sends reminders, UK time: it checks every quarter of an hour in the
@@ -44,6 +47,10 @@ export interface ReminderSettings {
   prep: boolean;
   /** When the evening reminder goes off ("20:00"). */
   prepAt: string;
+  /** On one day a week, at the morning time: next week isn't planned, or isn't on the shopping list. */
+  plan: boolean;
+  /** Which day ("Friday"). */
+  planDay: string;
 }
 
 export function reminderSettings(prefs?: Partial<UserPreferences> | null): ReminderSettings {
@@ -54,5 +61,7 @@ export function reminderSettings(prefs?: Partial<UserPreferences> | null): Remin
     cookAlertBefore: Math.max(0, Number(prefs?.reminderCookBefore) || 0),
     prep: prefs?.reminderPrep !== false,
     prepAt: eveningOk(prefs?.reminderPrepAt) ? prefs!.reminderPrepAt! : DEFAULT_PREP_AT,
+    plan: prefs?.reminderPlan !== false,
+    planDay: PLAN_DAYS.includes(prefs?.reminderPlanDay || '') ? prefs!.reminderPlanDay! : DEFAULT_PLAN_DAY,
   };
 }

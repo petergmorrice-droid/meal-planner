@@ -11,6 +11,7 @@ import {
   DEFAULT_PREP_AT,
   EVENING_WINDOW,
   MORNING_WINDOW,
+  PLAN_DAYS,
   eveningOk,
   morningOk,
   reminderSettings,
@@ -53,7 +54,7 @@ export function RemindersSection({ store, who }: { store: SettingsTabProps['stor
   const minuteKey = Math.floor(now.getTime() / 60000);
   const coming = useMemo(() => reminderFileEvents(store.state, new Date(minuteKey * 60000)), [store.state, minuteKey]);
   const count = (k: string) => coming.filter((r) => r.kind === k).length;
-  const [mornings, cooks, preps] = [count('meal'), count('cook'), count('prep')];
+  const [mornings, cooks, preps, plans] = [count('meal'), count('cook'), count('prep'), count('plan')];
   const lastDay = coming.length ? coming[coming.length - 1].start : null;
   const alertAt = (r: (typeof coming)[number]) => new Date(r.start.getTime() - (r.alertBefore || 0) * 60000);
 
@@ -158,6 +159,36 @@ export function RemindersSection({ store, who }: { store: SettingsTabProps['stor
             attr="setting-reminder-prep-switch"
           />
         </div>
+        <div className={row} data-setting-reminder-plan>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-zinc-900">Plan next week</span>
+            <span className="block text-[13px] text-zinc-500">
+              At {clock(settings.morningAt)}, if next week has days with nothing planned or isn't on the shopping list
+              yet
+            </span>
+          </span>
+          {settings.plan && (
+            <select
+              value={settings.planDay}
+              onChange={(e) => store.updatePreferences({ reminderPlanDay: e.target.value })}
+              className="h-10 px-2 bg-white border border-zinc-300 rounded-xl text-base font-bold cursor-pointer"
+              aria-label="Day to plan next week"
+              data-setting-reminder-plan-day
+            >
+              {PLAN_DAYS.map((d) => (
+                <option key={d} value={d}>
+                  {d.slice(0, 3)}
+                </option>
+              ))}
+            </select>
+          )}
+          <Switch
+            on={settings.plan}
+            label="Plan next week reminders"
+            onClick={() => store.updatePreferences({ reminderPlan: !settings.plan })}
+            attr="setting-reminder-plan-switch"
+          />
+        </div>
         <div className={row} data-notify-kind="list">
           <span className="flex-1 min-w-0">
             <span className="block text-[15px] font-semibold text-zinc-900">Added to the shopping list</span>
@@ -174,12 +205,13 @@ export function RemindersSection({ store, who }: { store: SettingsTabProps['stor
                   mornings && `${mornings} ${mornings === 1 ? 'morning' : 'mornings'}`,
                   cooks && `${cooks} start-cooking`,
                   preps && `${preps} night-before`,
+                  plans && `${plans} plan-next-week`,
                 ]
                   .filter(Boolean)
                   .join(
                     ', ',
                   )}, up to ${lastDay!.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })}.`
-              : !settings.morning && !settings.cook && !settings.prep
+              : !settings.morning && !settings.cook && !settings.prep && !settings.plan
                 ? 'All the reminders are off.'
                 : 'Nothing planned from now on. Plan a week, then come back here.'}
           </span>

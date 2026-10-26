@@ -10,6 +10,9 @@ import {
   calendarFeedUrl,
   calendarFeedMissing,
   reminderFileEvents,
+  planReminders,
+  syncWarning,
+  parseTokenExpiry,
   webcalUrl,
   CALENDAR_FILE,
   CALENDAR_ALERTS_FILE,
@@ -2021,6 +2024,8 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
       cookAlertBefore: 0,
       prep: true,
       prepAt: '20:00',
+      plan: true,
+      planDay: 'Friday',
     });
     const early = upcomingReminders(remState({ reminderCookBefore: 30, reminderPrepAt: '19:15' }), monMorning);
     assert.equal(early.find((x) => x.kind === 'cook').alertBefore, 30);
@@ -2097,12 +2102,13 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     assert.equal((remindersCalendar(dinners, monMorning).match(/BEGIN:VALARM/g) || []).length, 0);
     const alerts = calendarFeedEvents(remState(), monMorning, true);
     assert.equal(alerts.filter((x) => x.kind === 'meal').length, 6);
-    assert.equal(alerts.filter((x) => x.kind !== 'meal').length, 6);
+    assert.equal(alerts.filter((x) => x.kind === 'cook' || x.kind === 'prep').length, 6);
+    assert.equal(alerts.filter((x) => x.kind === 'plan').length, 3, 'plan next week: three Fridays');
     const ics = remindersCalendar(alerts, monMorning);
-    assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 12);
+    assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 15);
     assert.equal(
       (ics.match(/BEGIN:VALARM/g) || []).length,
-      12,
+      15,
       'the morning heads-up on each dinner, and the reminders',
     );
     assert.ok(ics.includes('UID:2026-10-26-meal@family-meal-planner'));
@@ -2134,7 +2140,7 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
   });
 
   test('notifications: the same reminders, each morning, at the start time and the night before', () => {
-    const n = notificationSchedule(remState(), monMorning);
+    const n = notificationSchedule(remState({ reminderPlan: false }), monMorning);
     const at = (x) =>
       `${new Date(x.at).getDate()} ${new Date(x.at).getHours()}:${String(new Date(x.at).getMinutes()).padStart(2, '0')}`;
     assert.deepEqual(
@@ -2154,13 +2160,23 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
         '31 18:15 2026-10-31-cook | Heat up leftovers: Chicken tikka | To eat at 6:30pm. About 15 mins to heat through.',
       ],
     );
+    assert.deepEqual(
+      notificationSchedule(remState(), monMorning)
+        .filter((x) => x.id.endsWith('plan'))
+        .map((x) => `${at(x)} ${x.id} | ${x.title} | ${x.body} | ${x.tab}`),
+      [
+        '30 9:00 2026-10-30-plan | Plan next week | Nothing planned for 2 Nov to 8 Nov yet. | planning',
+        '6 9:00 2026-11-06-plan | Plan next week | Nothing planned for 9 Nov to 15 Nov yet. | planning',
+        '13 9:00 2026-11-13-plan | Plan next week | Nothing planned for 16 Nov to 22 Nov yet. | planning',
+      ],
+    );
     assert.ok(n.every((x) => x.tab === 'this_week'));
     // The same settings as the calendar's alerts
     const ids = (prefs) => notificationSchedule(remState(prefs), monMorning).map((x) => x.id.slice(11));
     assert.ok(!ids({ reminderCook: false }).includes('cook'));
     assert.ok(!ids({ reminderPrep: false }).includes('prep'));
     assert.ok(!ids({ notifyDinner: false }).includes('dinner'));
-    assert.equal(ids({ notifyDinner: false, reminderCook: false, reminderPrep: false }).length, 0);
+    assert.equal(ids({ notifyDinner: false, reminderCook: false, reminderPrep: false, reminderPlan: false }).length, 0);
     const before = notificationSchedule(remState({ reminderCookBefore: 10 }), monMorning).find((x) =>
       x.id.endsWith('cook'),
     );
@@ -2176,6 +2192,43 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     const lunch = notificationSchedule(remState({ eatAt: '13:00' }), monMorning);
     assert.ok(!lunch.some((x) => x.id.endsWith('cook')));
     assert.ok(lunch.some((x) => x.id.endsWith('dinner')));
+  });
+
+  test("plan next week: only when next week has empty days, isn't on the list, or changed since", () => {
+    const chilli = (id) => ({ id, type: 'recipe', recipeId: 'r1', name: 'Chilli con carne', servings: 2 });
+    const full = () =>
+      Object.fromEntries(
+        ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d, i) => [
+          d,
+          { date: `2026-11-0${2 + i}`, meals: [chilli(d)] },
+        ]),
+      );
+    const week = (days, extra = {}) => ({ id: 'n', startDate: '2026-11-02', days, status: 'draft', ...extra });
+    // Just this Friday (30 Oct), about the week of 2 Nov
+    const first = (plan, prefs = {}) =>
+      planReminders({ mealPlans: plan ? [plan] : [], preferences: prefs }, monMorning, 6);
+    const say = (r) => r.map((x) => `${hm(x.start)} ${x.title} | ${x.details}`);
+    assert.deepEqual(say(first(null)), ['30 9:00 Plan next week | Nothing planned for 2 Nov to 8 Nov yet.']);
+    const gaps = full();
+    gaps.Wednesday.meals = [];
+    gaps.Saturday.meals = [];
+    assert.deepEqual(say(first(week(gaps))), [
+      '30 9:00 Plan next week | Nothing planned yet for Wed and Sat (2 Nov to 8 Nov).',
+    ]);
+    assert.deepEqual(say(first(week(full()))), [
+      "30 9:00 Send next week to the shopping list | 2 Nov to 8 Nov is planned, but it isn't on the shopping list yet.",
+    ]);
+    const sent = week(full(), { status: 'finalized' });
+    sent.lastFinalizedSnapshot = listSnapshot(sent);
+    assert.deepEqual(first(sent), [], 'planned and on the list: nothing to say');
+    sent.days.Thursday.meals = [{ ...chilli('x'), servings: 4 }];
+    assert.deepEqual(say(first(sent)), [
+      "30 9:00 Update next week's shopping list | Thu changed since the list was made (2 Nov to 8 Nov).",
+    ]);
+    assert.deepEqual(first(null, { reminderPlan: false }), []);
+    const sunday = first(null, { reminderPlanDay: 'Sunday', notifyMorningAt: '10:00' });
+    assert.deepEqual(say(sunday), ['1 10:00 Plan next week | Nothing planned for 2 Nov to 8 Nov yet.']);
+    assert.equal(sunday[0].uid, '2026-11-01-plan@family-meal-planner');
   });
 
   test('calendar sync: the Gist gets both feeds when on, and loses them when switched off', () => {
@@ -2200,6 +2253,53 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     );
   });
 }
+
+// ---------- The sync warning on every tab ----------
+test("sync warning: a problem that won't fix itself straight away, a passing one after two days", () => {
+  const now = new Date('2026-10-26T12:00:00Z').getTime();
+  const hours = (h) => now - h * 3600 * 1000;
+  const base = { configured: true, status: 'synced', error: null, lastOkAt: hours(1), tokenExpiresAt: null, now };
+  assert.equal(syncWarning(base), null);
+  assert.equal(syncWarning({ ...base, configured: false, status: 'error', error: 'Unauthorized.' }), null);
+  const token = syncWarning({
+    ...base,
+    status: 'error',
+    error: 'Unauthorized. Please check your GitHub Personal Access Token.',
+    lastOkAt: hours(3),
+  });
+  assert.equal(token.kind, 'token');
+  assert.match(token.text, /didn't accept the token.*Last synced 3 hours ago/);
+  assert.equal(
+    syncWarning({
+      ...base,
+      status: 'error',
+      error: 'GitHub refused the request. Check the token has the "gist" permission.',
+    }).kind,
+    'token',
+  );
+  assert.equal(
+    syncWarning({ ...base, status: 'error', error: 'Gist not found. Please check your Gist ID.' }).kind,
+    'missing',
+  );
+  const offline = { ...base, status: 'error', error: "Can't reach GitHub (offline?)." };
+  assert.equal(syncWarning(offline), null, 'offline for an hour: nothing to say');
+  const stale = syncWarning({ ...offline, lastOkAt: hours(72) });
+  assert.equal(stale.kind, 'stale');
+  assert.match(stale.text, /^Last synced 3 days ago\. No internet just now/);
+  const day = 24 * 3600 * 1000;
+  assert.equal(syncWarning({ ...base, tokenExpiresAt: now + 30 * day }), null);
+  const soon = syncWarning({ ...base, tokenExpiresAt: now + 10 * day });
+  assert.equal(soon.kind, 'expiring');
+  assert.match(soon.text, /runs out on Thu 5 Nov/);
+  assert.equal(syncWarning({ ...base, tokenExpiresAt: now - day }).kind, 'token');
+});
+
+test("sync warning: reading GitHub's date for when the token runs out", () => {
+  assert.equal(parseTokenExpiry('2026-12-03 10:00:00 UTC'), Date.UTC(2026, 11, 3, 10));
+  assert.equal(parseTokenExpiry('2026-12-03 10:00:00 +0100'), Date.UTC(2026, 11, 3, 9));
+  assert.equal(parseTokenExpiry(null), null);
+  assert.equal(parseTokenExpiry('soon'), null);
+});
 
 // ---------- Shop notes remembered by product ----------
 test('a note is remembered by product and comes back on a new line; clearing forgets it', () => {

@@ -42,7 +42,7 @@ export interface ScheduledNote {
   title: string;
   body: string;
   /** The app's tab to open when tapped. */
-  tab?: 'shop' | 'this_week';
+  tab?: 'shop' | 'this_week' | 'planning';
 }
 
 /** Sends one notification; resolves with the push service's status code (404/410 = phone gone). */
@@ -92,7 +92,7 @@ export const phoneKey = async (household: string, endpoint: string) =>
   `${household}/${(await sha256Hex(endpoint)).slice(0, 40)}`;
 
 const DAY = 24 * 60 * 60 * 1000;
-const TABS = ['shop', 'this_week'];
+const TABS = ['shop', 'this_week', 'planning'];
 
 /** A schedule from the app, checked and trimmed; null if it isn't one. */
 export function cleanSchedule(raw: unknown, now: number): ScheduledNote[] | null {

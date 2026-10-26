@@ -4,6 +4,8 @@ import { type RemovedProduct } from '../../shopping';
 import type { AppStore } from '../../store';
 
 type ShopPanel = 'aisles' | 'staples' | 'history';
+/** Settings' own tabs. */
+export type SettingsSection = 'phone' | 'household' | 'shopping' | 'sync';
 
 /** "Are you sure?" before something that can't easily be undone. */
 export type Confirm = { title: string; body: string; action: string; danger?: boolean; run: () => void };
@@ -45,4 +47,7 @@ export interface SettingsTabProps {
   onNavigateTab?: (tab: TabName) => void;
   /** Open the Shop with one of its panels (aisles, staples, past shops). */
   onOpenShopPanel?: (panel: ShopPanel) => void;
+  /** Open on one of Settings' tabs (asked from elsewhere, e.g. the sync warning's Fix). */
+  openSection?: SettingsSection | null;
+  onOpenSectionHandled?: () => void;
 }

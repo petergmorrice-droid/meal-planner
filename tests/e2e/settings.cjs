@@ -310,6 +310,30 @@ function seed() {
   await page.locator('[data-setting-reminder-morning-switch]').click();
   await page.locator('[data-segmented="reminder-cook"] button', { hasText: 'At start' }).click();
   await page.waitForTimeout(300);
+  // Plan next week: Friday 9am, since next week still has days with nothing planned
+  const planItem = () => text('[data-reminders-list] [data-reminder="plan"]');
+  check(
+    /^Fri 16 Oct 9am · Plan next week/.test(await planItem()),
+    'plan next week: Friday at 9am, as next week has empty days',
+    await planItem(),
+  );
+  await page.locator('[data-setting-reminder-plan-day]').selectOption('Sunday');
+  await page.waitForTimeout(300);
+  check(
+    (await state()).preferences.reminderPlanDay === 'Sunday' && /^Sun 18 Oct 9am/.test(await planItem()),
+    'plan next week: moved to Sunday',
+    await planItem(),
+  );
+  await page.locator('[data-setting-reminder-plan-switch]').click();
+  await page.waitForTimeout(300);
+  check(
+    (await state()).preferences.reminderPlan === false &&
+      (await page.locator('[data-reminders-list] [data-reminder="plan"]').count()) === 0,
+    'plan next week: switched off',
+  );
+  await page.locator('[data-setting-reminder-plan-switch]').click();
+  await page.locator('[data-setting-reminder-plan-day]').selectOption('Friday');
+  await page.waitForTimeout(300);
   check(/Last added on this phone/.test(await text('[data-reminders-last-added]')), 'reminders: remembers when added');
 
   check(

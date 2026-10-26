@@ -144,9 +144,11 @@ export {
   calendarFeedUrl,
   calendarFeedMissing,
   reminderFileEvents,
+  planReminders,
   webcalUrl,
   CALENDAR_FILE,
   CALENDAR_ALERTS_FILE,
 } from '../src/calendarReminders';
 export { reminderSettings, senderChecksAt } from '../src/reminderSettings';
 export { notificationSchedule } from '../src/pushSchedule';
+export { syncWarning, parseTokenExpiry } from '../src/syncHealth';

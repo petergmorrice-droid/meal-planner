@@ -4,11 +4,12 @@
 // - Each morning: tonight's dinner, when to start it, and anything to do tonight for tomorrow.
 // - Time to start cooking (at the start time, or a little before).
 // - The night before: take a freezer meal out to defrost, or a marinate/soak step.
+// - Plan next week, on its day, when next week isn't planned or on the shopping list yet.
 // The sender only checks in the morning and from mid-afternoon to the evening (reminderSettings.ts),
 // so a reminder that falls outside those hours isn't sent as a notification.
 import { BatchItem, MealPlan, Recipe, UserPreferences } from './types';
 import { parseClock, clockText } from './cookInfo';
-import { plannedMealEvents, upcomingReminders } from './calendarReminders';
+import { planReminders, plannedMealEvents, upcomingReminders } from './calendarReminders';
 import { reminderSettings, senderChecksAt } from './reminderSettings';
 
 /** How far ahead the schedule goes. */
@@ -21,7 +22,7 @@ export interface ScheduledNote {
   at: number;
   title: string;
   body: string;
-  tab?: 'shop' | 'this_week';
+  tab?: 'shop' | 'this_week' | 'planning';
 }
 
 const iso = (d: Date) =>
@@ -73,7 +74,7 @@ export function notificationSchedule(
   const out: ScheduledNote[] = [];
   const add = (note: ScheduledNote) => {
     const at = Math.floor(note.at / QUARTER) * QUARTER;
-    if (senderChecksAt(clockOf(at))) out.push({ ...note, at, tab: 'this_week' });
+    if (senderChecksAt(clockOf(at))) out.push({ tab: 'this_week', ...note, at });
   };
 
   if (settings.morning) {
@@ -119,5 +120,9 @@ export function notificationSchedule(
       });
     }
   }
+  // Plan next week: on its day, if the week after isn't planned or on the list yet.
+  for (const r of planReminders(state, startOfToday, DAYS_AHEAD))
+    add({ id: `${r.date}-plan`, at: r.start.getTime(), title: r.title, body: r.details, tab: 'planning' });
+
   return out.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
 }

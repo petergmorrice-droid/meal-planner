@@ -218,6 +218,10 @@ export interface UserPreferences {
   reminderPrep?: boolean;
   /** When the evening-before reminder goes off ("20:00"; 8pm if not set; 3pm to 9:45pm). */
   reminderPrepAt?: string;
+  /** Settings → Reminders: "Plan next week" when it isn't planned or on the list yet (on unless switched off). */
+  reminderPlan?: boolean;
+  /** The day it goes off, at the morning time ("Friday" if not set). */
+  reminderPlanDay?: string;
   /** Settings → Calendar: keep calendar feeds of the plan (and of the reminders) in the sync Gist. */
   calendarSync?: boolean;
   /**

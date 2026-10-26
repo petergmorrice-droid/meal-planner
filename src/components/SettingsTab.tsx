@@ -18,9 +18,9 @@ import { ProductsPage } from './settings/ProductsPage';
 import { SyncSection } from './settings/SyncSection';
 import { ThisPhone } from './settings/ThisPhone';
 import { NavRow, Sheet, card, sectionTitle } from './settings/parts';
-import { Confirm, SettingsTabProps } from './settings/types';
+import { Confirm, SettingsSection, SettingsTabProps } from './settings/types';
 
-type Section = 'phone' | 'household' | 'shopping' | 'sync';
+type Section = SettingsSection;
 
 /** Settings' own tabs, each a short page of related settings. */
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
@@ -38,7 +38,13 @@ let lastSection: Section = 'phone';
  * reminders and how this phone gets them, the calendar, past weeks), shopping, and sync & backup. Products and past weeks
  * open as their own pages.
  */
-export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: SettingsTabProps) {
+export default function SettingsTab({
+  store,
+  onNavigateTab,
+  onOpenShopPanel,
+  openSection,
+  onOpenSectionHandled,
+}: SettingsTabProps) {
   const who = useDeviceIdentity();
   const prefs: UserPreferences = (store.state.preferences || {}) as UserPreferences;
   const [view, setView] = useState<'main' | 'products' | 'history'>('main');
@@ -49,6 +55,14 @@ export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: S
     setSectionState(s);
     scrollRef.current?.scrollTo({ top: 0 });
   };
+  // Asked to open on a tab (the sync warning's Fix): there, back on the main page.
+  useEffect(() => {
+    if (!openSection) return;
+    lastSection = openSection;
+    setSectionState(openSection);
+    setView('main');
+    onOpenSectionHandled?.();
+  }, [openSection, onOpenSectionHandled]);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [cleaning, setCleaning] = useState(false);

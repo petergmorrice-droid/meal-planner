@@ -7,7 +7,8 @@
 import { BatchItem, MealPlan, PlannedMeal, Recipe, UserPreferences } from './types';
 import { eatAtFor, parseClock, prepTonight, recipeMinutes, clockText } from './cookInfo';
 import { REHEAT_MINUTES, dayISO, isCookable } from './components/cook/cookDays';
-import { DAYS_OF_WEEK } from './utils';
+import { DAYS_OF_WEEK, formatWeekRange } from './utils';
+import { changedDaysSinceList } from './planning';
 import { reminderSettings } from './reminderSettings';
 
 /** A recipe with no times in it: assume this long. */
@@ -16,8 +17,11 @@ const UNKNOWN_RECIPE_MINUTES = 45;
 export interface CalendarReminder {
   /** Stays the same for the same day and kind, so adding again can replace rather than double up. */
   uid: string;
-  /** 'meal' is the planned dinner itself (its alert, if any, is the morning heads-up); 'cook' and 'prep' are the reminders. */
-  kind: 'meal' | 'cook' | 'prep';
+  /**
+   * 'meal' is the planned dinner itself (its alert, if any, is the morning heads-up); 'cook', 'prep'
+   * and 'plan' (plan next week) are the reminders.
+   */
+  kind: 'meal' | 'cook' | 'prep' | 'plan';
   /** The day it goes off ("2026-10-27"). */
   date: string;
   start: Date;
@@ -139,6 +143,66 @@ export function upcomingReminders(
   return out.sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
+const shortDays = (days: string[]) => {
+  const d = days.map((x) => x.slice(0, 3));
+  return d.length > 1 ? `${d.slice(0, -1).join(', ')} and ${d[d.length - 1]}` : d[0];
+};
+
+/**
+ * "Plan next week" on the chosen day each week (at the morning time), for the coming `days` from
+ * `now`, when the week after it isn't ready: days with nothing planned, its ingredients not on
+ * the shopping list yet, or meals changed since they were. Nothing when it's ready.
+ */
+export function planReminders(
+  state: { mealPlans?: MealPlan[]; preferences?: Partial<UserPreferences> },
+  now: Date,
+  days = 21,
+): CalendarReminder[] {
+  const settings = reminderSettings(state.preferences);
+  if (!settings.plan) return [];
+  const morning = parseClock(settings.morningAt)!;
+  const out: CalendarReminder[] = [];
+  for (let i = 0; i <= days; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const weekday = (d.getDay() + 6) % 7; // Monday 0
+    if (DAYS_OF_WEEK[weekday] !== settings.planDay) continue;
+    const date = isoDay(d);
+    const start = at(date, morning);
+    if (start.getTime() <= now.getTime()) continue;
+    const week = isoDay(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7 - weekday));
+    const plan = (state.mealPlans || []).find((p) => p.startDate === week);
+    const empty = DAYS_OF_WEEK.filter((day) => !plan?.days?.[day]?.meals?.length);
+    const changed = changedDaysSinceList(plan);
+    const range = formatWeekRange(week);
+    const say: [string, string] | null =
+      empty.length === 7
+        ? ['Plan next week', `Nothing planned for ${range} yet.`]
+        : empty.length
+          ? ['Plan next week', `Nothing planned yet for ${shortDays(empty)} (${range}).`]
+          : plan && plan.status !== 'finalized'
+            ? ['Send next week to the shopping list', `${range} is planned, but it isn't on the shopping list yet.`]
+            : changed.length
+              ? [
+                  "Update next week's shopping list",
+                  `${shortDays(changed)} changed since the list was made (${range}).`,
+                ]
+              : null;
+    if (!say) continue;
+    const [title, details] = say;
+    out.push({
+      uid: `${date}-plan@family-meal-planner`,
+      kind: 'plan',
+      date,
+      start,
+      end: new Date(start.getTime() + 15 * 60000),
+      title,
+      details,
+      alertBefore: 0,
+    });
+  }
+  return out;
+}
+
 /** How the planned dinner shows in the calendar ("Dinner: Chilli con carne", "Takeaway: Pizza"). */
 function mealTitle(meal: PlannedMeal, recipes: Recipe[], batches: BatchItem[]): string {
   const recipe = meal.recipeId ? recipes.find((r) => r.id === meal.recipeId) : null;
@@ -228,7 +292,8 @@ const byTime = (a: CalendarReminder, b: CalendarReminder) =>
 
 /**
  * What's in a feed: the planned dinners from two weeks ago on, and with `alerts`, the reminders
- * too: the morning heads-up on each dinner, and the start-cooking and night-before reminders.
+ * too: the morning heads-up on each dinner, and the start-cooking, night-before and plan-next-week
+ * reminders.
  */
 export function calendarFeedEvents(
   state: { mealPlans?: MealPlan[]; recipes?: Recipe[]; batches?: BatchItem[]; preferences?: Partial<UserPreferences> },
@@ -236,7 +301,7 @@ export function calendarFeedEvents(
   alerts = false,
 ): CalendarReminder[] {
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - FEED_PAST_DAYS);
-  const reminders = alerts ? upcomingReminders(state, from) : [];
+  const reminders = alerts ? [...upcomingReminders(state, from), ...planReminders(state, now)] : [];
   return [...plannedMealEvents(state, isoDay(from), alerts), ...reminders].sort(byTime);
 }
 
@@ -252,7 +317,9 @@ export function reminderFileEvents(
     (m) => m.alertBefore !== null && m.start.getTime() - m.alertBefore * 60000 > now.getTime(),
   );
   const alertAt = (r: CalendarReminder) => r.start.getTime() - (r.alertBefore || 0) * 60000;
-  return [...mornings, ...upcomingReminders(state, now)].sort((a, b) => alertAt(a) - alertAt(b) || byTime(a, b));
+  return [...mornings, ...upcomingReminders(state, now), ...planReminders(state, now)].sort(
+    (a, b) => alertAt(a) - alertAt(b) || byTime(a, b),
+  );
 }
 
 /**
