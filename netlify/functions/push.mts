@@ -2,7 +2,7 @@
 // /api/unsubscribe, /api/notify, /api/test-later and /api/schedule. The logic is in
 // ../push-core.mts and the Netlify wiring in ../push-wiring.mts. ALLOWED_ORIGINS (optional
 // environment variable, comma-separated) says where the app is served from.
-import type { Config, Context } from '@netlify/functions';
+import type { Config } from '@netlify/functions';
 import { TEST_DELAY_S, handle } from '../push-core.mts';
 import { dataStore, phoneStore, sender, signingKeys } from '../push-wiring.mts';
 
@@ -23,7 +23,7 @@ function corsHeaders(req: Request): Record<string, string> {
   };
 }
 
-export default async (req: Request, context: Context) => {
+export default async (req: Request) => {
   const cors = corsHeaders(req);
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return Response.json({ error: 'Use POST.' }, { status: 405, headers: cors });
@@ -39,17 +39,17 @@ export default async (req: Request, context: Context) => {
     if (action === 'key') return Response.json({ publicKey: keys.publicKey }, { headers: cors });
     const deps = { store: phoneStore(), data: dataStore(), send: sender(keys) };
     if (action === 'test-later') {
-      // A test that arrives with the app closed: answer now, send in a little while.
+      // A test that arrives with the app closed: wait, then send, then answer. The phone doesn't wait
+      // for the answer (it may be closed by then); waiting here keeps the function running until it's sent.
       const check = await handle('notify', { ...body, test: true, body: 'x' }, { ...deps, send: async () => 200 });
       if (check.status !== 200) return Response.json(check.body, { status: check.status, headers: cors });
-      context.waitUntil(
-        new Promise((resolve) => setTimeout(resolve, TEST_DELAY_S * 1000)).then(() =>
-          handle('notify', { ...body, test: true }, deps),
-        ),
-      );
-      return Response.json({ ok: true, in: TEST_DELAY_S }, { headers: cors });
+      await new Promise((resolve) => setTimeout(resolve, TEST_DELAY_S * 1000));
+      const sent = await handle('notify', { ...body, test: true }, deps);
+      console.log(`push test-later: ${JSON.stringify(sent.body)}`);
+      return Response.json({ ...sent.body, in: TEST_DELAY_S }, { status: sent.status, headers: cors });
     }
     const result = await handle(action, body, deps);
+    if (action === 'notify') console.log(`push notify: ${JSON.stringify(result.body)}`);
     return Response.json(result.body, { status: result.status, headers: cors });
   } catch (err) {
     console.error(`push ${action} failed:`, err);

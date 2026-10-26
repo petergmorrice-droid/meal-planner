@@ -54,13 +54,16 @@ export const sender =
     try {
       const res = await webpush.sendNotification(subscription, payload, {
         TTL: 60 * 60 * 12,
-        urgency: 'normal',
+        // High: Android delivers it straight away even when the phone is idle (normal can wait).
+        urgency: 'high',
         vapidDetails: { subject: SUBJECT, publicKey: keys.publicKey, privateKey: keys.privateKey },
       });
       return res.statusCode;
     } catch (err) {
-      const status = (err as { statusCode?: number }).statusCode;
-      if (typeof status === 'number') return status;
+      const e = err as { statusCode?: number; body?: string; message?: string };
+      // What the push service said, for the function logs (no keys or addresses in it).
+      console.warn(`push service refused: ${e.statusCode ?? '-'} ${String(e.body || e.message || '').slice(0, 300)}`);
+      if (typeof e.statusCode === 'number') return e.statusCode;
       throw err;
     }
   };

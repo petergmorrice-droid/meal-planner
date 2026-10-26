@@ -96,12 +96,10 @@ export function NotificationsSection({
       const n = await sendTest(prefs.pushHousehold!, who);
       say(n ? `Test sent to ${n} ${n === 1 ? 'phone' : 'phones'}` : 'No phones have notifications on yet');
     });
-  const testLater = () =>
-    run(async () => {
-      const s = await sendTestLater(prefs.pushHousehold!, who);
-      say(`Test coming in about ${s} seconds: close the app now`);
-    });
-
+  const testLater = () => {
+    const s = sendTestLater(prefs.pushHousehold!, who);
+    say(`Test coming in about ${s} seconds: close the app now`);
+  };
   const note = (text: React.ReactNode, attr: string) => (
     <span className="block text-[13px] text-zinc-500 mt-1" {...{ [`data-notify-${attr}`]: true }}>
       {text}
