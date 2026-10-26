@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { CalendarPlus, ChevronDown } from 'lucide-react';
 import { parseClock } from '../../cookInfo';
 import { DEFAULT_PREP_AT, reminderSettings, remindersCalendar, upcomingReminders } from '../../calendarReminders';
+import { UserPreferences } from '../../types';
 import { formatDateISO } from '../../utils';
 import { Segmented, card, row, sectionTitle } from './parts';
 import { SettingsTabProps } from './types';
@@ -27,7 +28,7 @@ const whenText = (d: Date, now: Date) => {
 };
 
 export function RemindersSection({ store, say }: { store: SettingsTabProps['store']; say: (t: string) => void }) {
-  const prefs = store.state.preferences || {};
+  const prefs: Partial<UserPreferences> = store.state.preferences || {};
   const settings = reminderSettings(prefs);
   const [open, setOpen] = useState(false);
   const [lastAdded, setLastAdded] = useState<string | null>(() => {
@@ -41,7 +42,6 @@ export function RemindersSection({ store, say }: { store: SettingsTabProps['stor
   const minuteKey = Math.floor(now.getTime() / 60000);
   const reminders = useMemo(
     () => upcomingReminders(store.state, new Date(minuteKey * 60000)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [store.state, minuteKey],
   );
   const cooks = reminders.filter((r) => r.kind === 'cook').length;
