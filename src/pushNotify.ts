@@ -4,6 +4,7 @@
 // message ("Rachel added milk, eggs and bin bags") to the other phones a little later.
 import { personName } from './components/PersonMark';
 import type { ShoppingListItem } from './types';
+import type { ScheduledNote } from './pushSchedule';
 
 /** The notification sender. */
 export const PUSH_API = 'https://morrice-meal-planner-push.netlify.app/api';
@@ -214,4 +215,39 @@ export async function sendTest(household: string, who: string): Promise<number> 
     body: `Test from ${personName(who) || 'the meal planner'}: notifications are working.`,
   });
   return Number(res.sent) || 0;
+}
+
+/** A test sent in about 45 seconds: close the app to check notifications arrive with it closed. Says how long. */
+export async function sendTestLater(household: string, who: string): Promise<number> {
+  const res = await post('test-later', {
+    household,
+    from: who,
+    title: 'Meal planner',
+    body: `Delayed test from ${personName(who) || 'the meal planner'}: notifications work with the app closed.`,
+  });
+  return Number(res.in) || 45;
+}
+
+// ---------- The morning notifications' schedule ----------
+
+const LS_SCHEDULE = 'mp-push-schedule';
+
+/**
+ * Send the sender the coming days' morning notifications, when they've changed since this phone last
+ * sent them (either phone can: both work it out from the same synced plan).
+ */
+export async function uploadSchedule(household: string, notes: ScheduledNote[]): Promise<boolean> {
+  const sig = `${household}|${JSON.stringify(notes)}`;
+  try {
+    if (localStorage.getItem(LS_SCHEDULE) === sig) return false;
+  } catch {
+    /* private browsing: just send it */
+  }
+  await post('schedule', { household, notes });
+  try {
+    localStorage.setItem(LS_SCHEDULE, sig);
+  } catch {
+    /* sent again next time */
+  }
+  return true;
 }

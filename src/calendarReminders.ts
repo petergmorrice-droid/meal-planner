@@ -230,14 +230,19 @@ export function calendarFeedUrl(owner: string, gistId: string): string {
 /** The same address for "Subscribe" on iPhone, iPad and Mac (webcal:// opens the Calendar app). */
 export const webcalUrl = (url: string) => url.replace(/^https:/, 'webcal:');
 
-/** Everything in the feed: the planned dinners and their reminders, from two weeks ago on. */
+/**
+ * Everything in the feed: the planned dinners and their reminders, from two weeks ago on. Once
+ * notifications are set up (Settings → Notifications), those send the reminders, so the feed has
+ * just the dinners and no alerts.
+ */
 export function calendarFeedEvents(
   state: { mealPlans?: MealPlan[]; recipes?: Recipe[]; batches?: BatchItem[]; preferences?: Partial<UserPreferences> },
   now: Date,
 ): CalendarReminder[] {
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - FEED_PAST_DAYS);
   const fromDate = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
-  return [...plannedMealEvents(state, fromDate), ...upcomingReminders(state, from)].sort(
+  const reminders = state.preferences?.pushHousehold ? [] : upcomingReminders(state, from);
+  return [...plannedMealEvents(state, fromDate), ...reminders].sort(
     (a, b) => a.start.getTime() - b.start.getTime() || a.kind.localeCompare(b.kind),
   );
 }
