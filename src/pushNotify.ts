@@ -201,20 +201,23 @@ export const TEST_LATER_S = 45;
 
 /**
  * A test sent in about 45 seconds: close the app to check notifications arrive with it closed. The
- * sender holds the request until it has sent the test, so this doesn't wait for its answer (the
- * request carries on with the app closed).
+ * sender takes it straight away and sends it later by itself (a background function), so nothing
+ * here waits. It goes as plain text, which the browser sends without asking first; the answer
+ * can't be read, and isn't needed.
  */
 export function sendTestLater(household: string, who: string): number {
-  post(
-    'test-later',
-    {
+  fetch(`${PUSH_API}/test-later`, {
+    method: 'POST',
+    mode: 'no-cors',
+    keepalive: true,
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({
       household,
       from: who,
       title: 'Meal planner',
       body: `Delayed test from ${personName(who) || 'the meal planner'}: notifications work with the app closed.`,
-    },
-    true,
-  ).catch((err) => console.warn('Delayed test not sent:', err));
+    }),
+  }).catch((err) => console.warn('Delayed test not sent:', err));
   return TEST_LATER_S;
 }
 
