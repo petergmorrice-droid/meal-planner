@@ -1,4 +1,7 @@
-/** "Send this week to the shopping list": every day in full first (meal, people, sides, notes), then send. */
+/**
+ * "Send this week to the shopping list": every day in full first (meal, people, sides, notes), then send.
+ * The same window for "Update list" once it's been sent, saying what changed and what updating does.
+ */
 import { AlertCircle, BookOpen, Check, CheckCircle2, Sparkles, StickyNote, X } from 'lucide-react';
 import { MealPlan, Recipe } from '../../types';
 import { DAYS_OF_WEEK, formatWeekRange } from '../../utils';
@@ -13,6 +16,7 @@ export default function SendToListModal({
   onEditDay,
   onSend,
   onClose,
+  update,
 }: {
   plan: MealPlan;
   recipes: Recipe[];
@@ -22,6 +26,8 @@ export default function SendToListModal({
   onEditDay: (day: string, hasMeal: boolean) => void;
   onSend: () => void;
   onClose: () => void;
+  /** Updating a week that's already been sent: the days changed, and how many meal ingredients were already ticked. */
+  update?: { changedDays: string[]; shopped: number };
 }) {
   return (
     <div
@@ -40,7 +46,7 @@ export default function SendToListModal({
             </div>
             <div className="min-w-0">
               <h3 className="text-base font-semibold text-zinc-900 leading-tight">
-                Send this week to the shopping list
+                {update ? 'Update the shopping list' : 'Send this week to the shopping list'}
               </h3>
               <p className="text-xs text-zinc-400 truncate">Week of {formatWeekRange(plan.startDate)}</p>
             </div>
@@ -57,6 +63,23 @@ export default function SendToListModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {update && (
+            <div
+              className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3.5 text-xs text-amber-950 space-y-1 shadow-2xs"
+              data-update-summary
+            >
+              <p className="font-semibold">
+                Changed since the list was made: {update.changedDays.length ? update.changedDays.join(', ') : 'nothing'}
+              </p>
+              {update.shopped > 0 && (
+                <p data-update-shopped>
+                  {update.shopped} meal {update.shopped === 1 ? 'ingredient has' : 'ingredients have'} already been
+                  ticked on the Shop tab. Updating starts the meal ingredients again, so{' '}
+                  {update.shopped === 1 ? 'it goes' : 'they go'} back on the list unticked.
+                </p>
+              )}
+            </div>
+          )}
           {/* Days with nothing planned, or all seven done */}
           {emptyDays.length > 0 ? (
             <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3.5 text-xs text-amber-950 flex items-start gap-2.5 shadow-2xs">
@@ -190,13 +213,21 @@ export default function SendToListModal({
           <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-200/80 text-[11px] text-zinc-600 space-y-1">
             <div className="flex items-center gap-1.5 font-medium text-zinc-800">
               <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span>What happens when you send it?</span>
+              <span>{update ? 'What happens when you update it?' : 'What happens when you send it?'}</span>
             </div>
-            <p className="text-zinc-500 leading-relaxed">
-              The week's ingredients go on the <strong>shopping list</strong> and the meals appear in the{' '}
-              <strong>Cook</strong> tab. You can still change the week afterwards: an <strong>Update list</strong>{' '}
-              button appears.
-            </p>
+            {update ? (
+              <p className="text-zinc-500 leading-relaxed">
+                The meal ingredients on the <strong>shopping list</strong> are worked out again from these meals, all
+                unticked, with the amounts the meals need. Weekly staples and things you added yourself stay as they
+                are, and so do your notes.
+              </p>
+            ) : (
+              <p className="text-zinc-500 leading-relaxed">
+                The week's ingredients go on the <strong>shopping list</strong> and the meals appear in the{' '}
+                <strong>Cook</strong> tab. You can still change the week afterwards: an <strong>Update list</strong>{' '}
+                button appears.
+              </p>
+            )}
           </div>
         </div>
 
@@ -211,10 +242,11 @@ export default function SendToListModal({
           <button
             type="button"
             onClick={onSend}
+            data-send-confirm
             className="px-4 py-2 text-white font-medium bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-2xs transition-colors text-xs cursor-pointer flex items-center gap-1.5"
           >
             <Check className="w-3.5 h-3.5" />
-            <span>Send to shopping list</span>
+            <span>{update ? 'Update shopping list' : 'Send to shopping list'}</span>
           </button>
         </div>
       </div>

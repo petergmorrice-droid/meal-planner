@@ -111,6 +111,34 @@ function UndoTick({ name, onUndo }: { name: string; onUndo: () => void }) {
   );
 }
 
+/**
+ * The item's note ("size: regular", "semi-skimmed"), in a coloured box on its own line, in full,
+ * so it's hard to miss in the shop. The colour is whoever wrote it (blue Peter, pink Rachel).
+ */
+function RowNote({
+  note,
+  look,
+  faded,
+  big = false,
+}: {
+  note: string;
+  look: ReturnType<typeof noteLook>;
+  faded: boolean;
+  big?: boolean;
+}) {
+  return (
+    <p
+      className={`mt-1 inline-flex items-start gap-1.5 max-w-full rounded-lg border px-2 py-1 font-semibold break-words ${big ? 'text-[15px]' : 'text-sm'} ${faded ? 'bg-zinc-50 border-zinc-200 text-zinc-400' : `${look.box} ${look.text}`}`}
+      data-row-note
+    >
+      <StickyNote
+        className={`${big ? 'w-4 h-4' : 'w-3.5 h-3.5'} shrink-0 mt-0.5 ${faded ? 'text-zinc-400' : look.icon}`}
+      />
+      <span className="min-w-0">{note}</span>
+    </p>
+  );
+}
+
 export function ShoppingModeItemRow({
   item,
   onToggle,
@@ -155,43 +183,40 @@ export function ShoppingModeItemRow({
         >
           {item.checked && <Check className="w-4 h-4 stroke-[3]" />}
         </button>
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <span
-            className={`text-base font-semibold truncate ${item.checked ? 'line-through text-zinc-400 font-medium' : out ? 'text-zinc-500' : 'text-zinc-900'}`}
-          >
-            {item.name}
-          </span>
-          {item.checkCupboard && !item.checked && (
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <span
-              className="shrink-0 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-px"
-              title="Store-cupboard item: check you have it"
+              className={`text-base font-semibold truncate ${item.checked ? 'line-through text-zinc-400 font-medium' : out ? 'text-zinc-500' : 'text-zinc-900'}`}
             >
-              cupboard
+              {item.name}
             </span>
-          )}
-          {item.needsCheck && !item.checked && (
-            <span
-              className="shrink-0 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 py-px"
-              title={item.quantityNote}
-            >
-              check
-            </span>
-          )}
-          {addedBy && !item.checked && <PersonMark who={addedBy} what="Added or changed" />}
-          {item.note && (
-            <span className={`min-w-0 truncate text-xs inline-flex items-center gap-0.5 ${note.text}`} data-row-note>
-              <StickyNote className={`w-3 h-3 shrink-0 ${note.icon}`} />
-              {item.note}
-            </span>
-          )}
-          {tickedBy && !justTicked && (
-            <span
-              className={`shrink-0 text-xs font-semibold px-1.5 py-px rounded-full ring-1 ring-inset ${tickerLook ? tickerLook.mark : 'text-emerald-700 ring-emerald-200'}`}
-              data-ticked-by
-            >
-              ✓ {tickedBy}
-            </span>
-          )}
+            {item.checkCupboard && !item.checked && (
+              <span
+                className="shrink-0 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded px-1 py-px"
+                title="Store-cupboard item: check you have it"
+              >
+                cupboard
+              </span>
+            )}
+            {item.needsCheck && !item.checked && (
+              <span
+                className="shrink-0 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 py-px"
+                title={item.quantityNote}
+              >
+                check
+              </span>
+            )}
+            {addedBy && !item.checked && <PersonMark who={addedBy} what="Added or changed" />}
+            {tickedBy && !justTicked && (
+              <span
+                className={`shrink-0 text-xs font-semibold px-1.5 py-px rounded-full ring-1 ring-inset ${tickerLook ? tickerLook.mark : 'text-emerald-700 ring-emerald-200'}`}
+                data-ticked-by
+              >
+                ✓ {tickedBy}
+              </span>
+            )}
+          </div>
+          {item.note && <RowNote note={item.note} look={note} faded={item.checked} />}
         </div>
         {justTicked ? (
           <UndoTick name={item.name} onUndo={() => onToggle(item.id)} />
@@ -279,12 +304,7 @@ export function ShoppingModeItemRow({
             </span>
           )}
         </div>
-        {item.note && (
-          <p className={`text-sm mt-1 flex items-center gap-1 ${note.text}`} data-row-note>
-            <StickyNote className={`w-3.5 h-3.5 shrink-0 ${note.icon}`} />
-            {item.note}
-          </p>
-        )}
+        {item.note && <RowNote note={item.note} look={note} faded={item.checked} big />}
         {item.quantityNote && !item.checked && (
           <p className={`text-xs mt-1 ${item.needsCheck ? 'text-rose-600' : 'text-zinc-500'}`}>{item.quantityNote}</p>
         )}

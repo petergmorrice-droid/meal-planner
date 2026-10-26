@@ -11,6 +11,7 @@ import { matchProduct, matchProductDetailed, catalogForState, canonicalUnit, for
 import {
   AggregatedShoppingListItem,
   aggregateShoppingItems,
+  rememberNote,
   shopQuantityText,
   formatWeekSpan,
   parseQuickAdd,
@@ -810,12 +811,16 @@ export default function ShopTab({
           onStep={(id, dir) => stepPart(openRow, id, dir)}
           onSetAmount={handleUpdateQtyAndUnit}
           onAddExtra={activePlan ? () => addExtraToRow(openRow) : undefined}
-          onSaveNote={(note) =>
+          onSaveNote={(note) => {
             updateParts(openRow.underlyingIds, (i) => {
               const { note: _old, ...rest } = i;
               return note ? { ...rest, note } : rest;
-            })
-          }
+            });
+            // Remembered for the product, so it comes back the next time it's added.
+            store.updatePreferences((latest) => ({
+              itemNotes: rememberNote(latest.itemNotes, openRow.key, note, store.currentUser),
+            }));
+          }}
           onRename={(name) =>
             updateParts(openRow.underlyingIds, (i) => {
               const { groceryId: _g, ...rest } = i;

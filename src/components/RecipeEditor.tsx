@@ -1,10 +1,23 @@
 import { useMemo, useState } from 'react';
 import Fuse from 'fuse.js';
-import { X, Plus, Flame, Zap, Leaf, Sparkles, Trash2, ShoppingCart, ChevronRight, Search, Check } from 'lucide-react';
+import {
+  X,
+  Plus,
+  Flame,
+  Zap,
+  Leaf,
+  CookingPot,
+  Sparkles,
+  Trash2,
+  ShoppingCart,
+  ChevronRight,
+  Search,
+  Check,
+} from 'lucide-react';
 import { Recipe, CookingMethod, Ingredient, GroceryItem } from '../types';
 import { catalogForState, productUnit } from '../shopping';
 import { GROCERY_AISLES, getGroceryAisle, type FoodAisle } from '../utils';
-import { recipeMethods, METHOD_LABEL, METHOD_ORDER } from '../recipeInfo';
+import { recipeMethods, isSlowCookRecipe, METHOD_LABEL, METHOD_ORDER } from '../recipeInfo';
 import type { AppStore } from '../store';
 
 const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-500';
@@ -172,6 +185,22 @@ export function RecipeEditor({
               </button>
             );
           })}
+          {(() => {
+            // Slow cook: on by itself when the steps say "slow cook"; tap to mark it either way.
+            const on = isSlowCookRecipe(recipe);
+            return (
+              <button
+                type="button"
+                onClick={() => onChange({ ...recipe, slowCook: !on })}
+                aria-pressed={on}
+                className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-300'}`}
+                data-editor-slow-cook
+              >
+                <CookingPot className="w-4 h-4" />
+                Slow cook
+              </button>
+            );
+          })()}
           {(
             [
               ['Vegetarian', 'isVegetarian'],

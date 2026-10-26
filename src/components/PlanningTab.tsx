@@ -20,6 +20,7 @@ import AddToDaySheet from './planner/AddToDaySheet';
 import DayPickerModal, { QuickMeal } from './planner/DayPickerModal';
 import CustomMealModal, { CustomMealDraft } from './planner/CustomMealModal';
 import SendToListModal, { NoMealsModal } from './planner/SendToListModal';
+import { mealLinesShopped } from '../planShopping';
 import CopyWeekModal from './planner/CopyWeekModal';
 import { HowAreYouHavingIt, RemoveLeftoversQuestion } from './planner/LeftoverPrompts';
 import FreezerWidget from './planner/FreezerWidget';
@@ -70,6 +71,8 @@ export default function PlanningTab({
   const [showWeekDropdown, setShowWeekDropdown] = useState(false);
   const [showViewOptions, setShowViewOptions] = useState(false);
   const [showFinalizeConfirmModal, setShowFinalizeConfirmModal] = useState(false);
+  /** The send window is for "Update list" (the week was already sent). */
+  const [updatingList, setUpdatingList] = useState(false);
   const [showNoMealsToFinalizeModal, setShowNoMealsToFinalizeModal] = useState(false);
 
   const picker = useDayPicker(store, currentPlan, selectedDay);
@@ -271,7 +274,10 @@ export default function PlanningTab({
           status={currentPlan?.status}
           changedDays={changedDays}
           mealsPlanned={totalPlannedMeals}
-          onUpdateList={editor.updateList}
+          onUpdateList={() => {
+            setUpdatingList(true);
+            setShowFinalizeConfirmModal(true);
+          }}
           onSent={() =>
             setToastMessage(
               'This week is on the shopping list.',
@@ -279,7 +285,10 @@ export default function PlanningTab({
             )
           }
           onNoMeals={() => setShowNoMealsToFinalizeModal(true)}
-          onSend={() => setShowFinalizeConfirmModal(true)}
+          onSend={() => {
+            setUpdatingList(false);
+            setShowFinalizeConfirmModal(true);
+          }}
         />
 
         {currentPlan && (
@@ -466,9 +475,15 @@ export default function PlanningTab({
           }}
           onSend={() => {
             setShowFinalizeConfirmModal(false);
-            editor.sendToList();
+            if (updatingList) editor.updateList();
+            else editor.sendToList();
           }}
           onClose={() => setShowFinalizeConfirmModal(false)}
+          update={
+            updatingList && currentPlan.status === 'finalized'
+              ? { changedDays, shopped: mealLinesShopped(store.state.shoppingList, currentPlan.id) }
+              : undefined
+          }
         />
       )}
 

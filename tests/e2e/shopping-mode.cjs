@@ -77,8 +77,39 @@ const check = (ok, label, detail = '') => {
     .click();
   await page.waitForTimeout(900);
   await tab('Shop');
+  // A note on one item, to see how it shows in shopping mode
+  const noted = await page.locator('[data-item]').first().getAttribute('data-item');
+  await page.locator(`[data-item="${noted}"] [data-open-item]`).click();
+  await page.waitForTimeout(300);
+  await page.locator('[data-item-note]').fill('Regular size, the purple box with the long name on it');
+  await page.locator('[data-item-done]').click();
+  await page.waitForTimeout(400);
   await page.locator('#btn-go-shopping').click();
   await page.waitForTimeout(700);
+  {
+    const n = row(noted).locator('[data-row-note]');
+    const box = await n.evaluate((e) => {
+      const c = getComputedStyle(e);
+      return {
+        bg: c.backgroundColor,
+        text: e.innerText,
+        weight: Number(c.fontWeight),
+        width: e.scrollWidth - e.clientWidth,
+      };
+    });
+    check(
+      box.text.trim() === 'Regular size, the purple box with the long name on it' && box.width <= 0,
+      'shopping mode: the note shows in full',
+      JSON.stringify(box),
+    );
+    check(
+      box.bg !== 'rgba(0, 0, 0, 0)' && box.weight >= 600,
+      'shopping mode: the note stands out (coloured box, bold)',
+      JSON.stringify(box),
+    );
+    await row(noted).scrollIntoViewIfNeeded();
+    await shot('m0-note');
+  }
 
   // ---------- Tidier header: week + count in the green bar; filters in the menu ----------
   const total = await page.locator('[data-row]').count();

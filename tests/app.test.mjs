@@ -31,11 +31,15 @@ import {
   changedFields,
   recipeMatchesSearch,
   matchesQuickFilters,
+  isSlowCookRecipe,
   findDuplicate,
   normaliseRecipeName,
   isJustAUrl,
   recipeShareText,
   aggregateShoppingItems,
+  withRememberedNote,
+  productKey,
+  rememberNote,
   shopQuantityText,
   defaultShopWeek,
   formatWeekSpan,
@@ -141,6 +145,7 @@ import {
   listWithStaples,
   getCatalog,
   listWithWeek,
+  mealLinesShopped,
   mealLinesOutOfDate,
   buildCatalog,
   INITIAL_GROCERY_DATABASE,
@@ -1891,6 +1896,50 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     // A week that hasn't been sent has nothing to be out of date.
     assert.deepEqual(mealLinesOutOfDate(old, { ...plan, status: 'draft' }, [pie], [], [], catalog), []);
   });
+
+  test("Planning's Update list starts the meal ingredients again: ticks, out of stock and hand amounts go", () => {
+    const shopped = fresh.map((i) =>
+      i.name === 'Green Lentils'
+        ? { ...i, checked: true, checkedBy: 'R' }
+        : i.name === 'Chopped Tomatoes'
+          ? { ...i, amount: 2, userAdjusted: true, outOfStock: true, note: 'Napolina', noteBy: 'P' }
+          : i,
+    );
+    const extra = [
+      { id: 'x1', name: 'Bin bags', amount: 1, unit: '', checked: true, isAdhoc: true, planId: plan.id },
+      {
+        id: 'x2',
+        name: 'Milk',
+        amount: 2,
+        unit: 'pints',
+        checked: true,
+        isAdhoc: false,
+        isRecurring: true,
+        planId: plan.id,
+      },
+    ];
+    const list = [...shopped, ...extra];
+    assert.equal(
+      mealLinesShopped(list, plan.id),
+      2,
+      'two meal ingredients ticked or out of stock; staples and extras not counted',
+    );
+    const staples = [{ id: 'milk', name: 'Milk', amount: 2, unit: 'pints' }];
+    const x2 = { ...extra[1], id: `recurring-${plan.id}-milk` };
+    const reset = listWithWeek([...shopped, extra[0], x2], plan, [pie], staples, [], catalog, { resetMeals: true });
+    const lentils = line(reset, 'Green Lentils');
+    const toms = line(reset, 'Chopped Tomatoes');
+    assert.equal(lentils.checked, false);
+    assert.equal(lentils.checkedBy, undefined);
+    assert.equal(lentils.id, line(fresh, 'Green Lentils').id, 'same line, so the other phone updates it');
+    assert.equal(toms.outOfStock, undefined);
+    assert.equal(toms.userAdjusted, undefined);
+    assert.equal(toms.amount, line(fresh, 'Chopped Tomatoes').amount, 'amount worked out again');
+    assert.equal(toms.note, 'Napolina', 'notes stay');
+    assert.equal(line(reset, 'Bin bags').checked, true, 'things you added stay ticked');
+    assert.equal(line(reset, 'Milk').checked, true, 'weekly staples stay ticked');
+    assert.equal(mealLinesShopped(reset, plan.id), 0);
+  });
 }
 
 // ---------- Settings → Reminders: the calendar file ----------
@@ -2026,6 +2075,53 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     assert.equal(webcalUrl(url), `webcal://gist.githubusercontent.com/pete/abc123/raw/${CALENDAR_FILE}`);
   });
 }
+
+// ---------- Shop notes remembered by product ----------
+test('a note is remembered by product and comes back on a new line; clearing forgets it', () => {
+  const line = { id: 'x', name: 'Tampons', amount: 1, unit: 'pack', checked: false, isAdhoc: true };
+  const key = productKey(line);
+  let notes = rememberNote(undefined, key, '  Regular, 18 pack ', 'R');
+  assert.deepEqual(notes, { [key]: { note: 'Regular, 18 pack', by: 'R' } });
+  assert.deepEqual(withRememberedNote(line, notes), { ...line, note: 'Regular, 18 pack', noteBy: 'R' });
+  assert.equal(withRememberedNote({ ...line, note: 'Super' }, notes).note, 'Super', 'its own note wins');
+  assert.equal(withRememberedNote({ ...line, name: 'Bin bags' }, notes).note, undefined, 'other products: nothing');
+  assert.equal(
+    withRememberedNote({ ...line, id: 'y', name: 'tampons' }, notes).note,
+    'Regular, 18 pack',
+    'any spelling',
+  );
+  notes = rememberNote(notes, key, '');
+  assert.deepEqual(notes, {});
+});
+
+test('Slow cook: worked out from the steps, name or tags, or marked on the recipe', () => {
+  const r = (extra) => ({
+    id: 's',
+    name: 'Beef stew',
+    description: '',
+    ingredients: [],
+    instructions: ['Brown the beef.'],
+    tags: [],
+    ...extra,
+  });
+  assert.equal(isSlowCookRecipe(r()), false);
+  assert.equal(isSlowCookRecipe(r({ instructions: ['Brown the beef.', 'Slow cook on low for 8 hours.'] })), true);
+  assert.equal(
+    isSlowCookRecipe(r({ methodInstructions: { ninja: ['Use the Slow-Cook setting, HIGH, 4 hrs.'] } })),
+    true,
+  );
+  assert.equal(isSlowCookRecipe(r({ name: 'Slow cooker pulled pork' })), true);
+  assert.equal(isSlowCookRecipe(r({ tags: ['Crockpot'] })), true);
+  assert.equal(
+    isSlowCookRecipe(r({ instructions: ['Cook slowly over a low heat.'] })),
+    false,
+    '"cook slowly" is not a slow cooker',
+  );
+  assert.equal(isSlowCookRecipe(r({ slowCook: true })), true, 'marked on');
+  assert.equal(isSlowCookRecipe(r({ name: 'Slow cooker stew', slowCook: false })), false, 'marked off wins');
+  assert.equal(matchesQuickFilters(r({ slowCook: true }), ['slow_cook'], { freezer: 0, today: '2026-10-26' }), true);
+  assert.equal(matchesQuickFilters(r(), ['slow_cook'], { freezer: 0, today: '2026-10-26' }), false);
+});
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
 process.exit(failures ? 1 : 0);

@@ -307,6 +307,9 @@ export default function ItemSheet({
               className="w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-[15px] focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none"
               data-item-note
             />
+            <span className="block text-xs text-zinc-500 mt-1" data-item-note-hint>
+              Remembered: it comes back whenever {row.name} goes on the list again. Clear it to forget it.
+            </span>
           </label>
 
           <label className="block">

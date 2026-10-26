@@ -20,17 +20,30 @@ export function weekLabelFor(startDate: string): string {
  * so later changes to the week can be spotted ("Shopping list out of date"). Works from the
  * latest copy of the week and the list (the screen's may be a moment behind).
  */
-export function sendWeekToShoppingList(store: AppStore, plan: MealPlan) {
+export function sendWeekToShoppingList(store: AppStore, plan: MealPlan, opts: { resetMeals?: boolean } = {}) {
   const latest = store.getState().mealPlans.find((p) => p.id === plan.id) || plan;
   const sentPlan: MealPlan = { ...latest, status: 'finalized', lastFinalizedSnapshot: listSnapshot(latest) };
   store.updateMealPlan(sentPlan);
   const removed: string[] = store.dismissedShoppingItemIds || [];
   store.updateShoppingList((list, s) =>
-    listWithWeek(list, sentPlan, s.recipes, s.preferences?.recurringItems || [], removed),
+    listWithWeek(list, sentPlan, s.recipes, s.preferences?.recurringItems || [], removed, undefined, opts),
   );
 }
 
-/** The shopping list with this week's staples and meal ingredients brought up to date (see above). */
+/** The week's meal-ingredient lines (not staples, things added by hand or batch cooks). */
+const isMealLine = (i: ShoppingListItem, planId: string) =>
+  i.planId === planId && !i.isAdhoc && !i.isBatch && !i.isRecurring;
+
+/** How many of the week's meal ingredients have been ticked (or marked out of stock) on the Shop tab. */
+export function mealLinesShopped(list: ShoppingListItem[], planId: string): number {
+  return list.filter((i) => isMealLine(i, planId) && (i.checked || i.outOfStock)).length;
+}
+
+/**
+ * The shopping list with this week's staples and meal ingredients brought up to date (see above).
+ * With `resetMeals` (Planning's "Update list"), the meal ingredients start again from the meals:
+ * ticks, out-of-stock marks and amounts changed by hand go; notes and cupboard answers stay.
+ */
 export function listWithWeek(
   list: ShoppingListItem[],
   plan: MealPlan,
@@ -38,6 +51,7 @@ export function listWithWeek(
   staples: RecurringItem[],
   dismissedItemIds: string[],
   catalog?: Catalog,
+  { resetMeals = false }: { resetMeals?: boolean } = {},
 ): ShoppingListItem[] {
   const targetItems = generateShoppingListForPlan(plan, recipes, catalog);
   const existingItemsForPlan = list.filter((i) => i.planId === plan.id);
@@ -82,7 +96,13 @@ export function listWithWeek(
   targetItems.forEach((target) => {
     const key = target.name.toLowerCase().trim();
     const existing = existingMealItems.find((e) => e.name.toLowerCase().trim() === key);
-    if (existing) {
+    if (existing && resetMeals) {
+      const line: ShoppingListItem = { ...target, id: existing.id };
+      for (const k of ['note', 'noteBy', 'cupboard', 'addedBy'] as const) {
+        if (existing[k] !== undefined) (line as unknown as Record<string, unknown>)[k] = existing[k];
+      }
+      syncedMealItems.push(line);
+    } else if (existing) {
       const keep = existing.userAdjusted;
       const line: ShoppingListItem = {
         ...existing,
@@ -123,7 +143,7 @@ export function mealLinesOutOfDate(
   catalog?: Catalog,
 ): string[] {
   if (plan.status !== 'finalized') return [];
-  const isMeal = (i: ShoppingListItem) => i.planId === plan.id && !i.isAdhoc && !i.isBatch && !i.isRecurring;
+  const isMeal = (i: ShoppingListItem) => isMealLine(i, plan.id);
   const updated = new Map(
     listWithWeek(list, plan, recipes, staples, dismissedItemIds, catalog)
       .filter(isMeal)

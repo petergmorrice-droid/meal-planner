@@ -23,6 +23,7 @@ function seed({ empty = false } = {}) {
   R('r-fajita').methodInstructions.ninja = ['Air fry the chicken and peppers for 12 mins.'];
   R('r-chilli').cookingMethods = ['oven_hob', 'ninja']; // marked Ninja but no Ninja steps
   R('r-sausage').notes = 'The kids love this one.';
+  R('r-chilli').tags = [...(R('r-chilli').tags || []), 'Slow cooker']; // slow cook, worked out from its tags
   return s;
 }
 
@@ -212,6 +213,13 @@ async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
       JSON.stringify(c) === '["Chicken fajitas"]',
       'Ninja: only recipes with Ninja steps (chilli is marked Ninja but has none)',
       JSON.stringify(c),
+    );
+    c = await only('slow_cook');
+    check(JSON.stringify(c) === '["Chilli con carne"]', 'Slow cook: the chilli (says slow cooker)', JSON.stringify(c));
+    check(
+      (await page.locator('[data-recipe-card="Chilli con carne"] [data-card-slow-cook]').count()) === 1 &&
+        (await page.locator('[data-card-slow-cook]').count()) === 1,
+      'Slow cook shows on its card only',
     );
     c = await only('freezer');
     check(JSON.stringify(c) === '["Chilli con carne"]', 'In the freezer', JSON.stringify(c));

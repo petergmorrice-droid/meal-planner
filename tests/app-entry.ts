@@ -18,6 +18,7 @@ export {
   changedFields,
   recipeMatchesSearch,
   matchesQuickFilters,
+  isSlowCookRecipe,
   findDuplicate,
   normaliseRecipeName,
   isJustAUrl,
@@ -25,6 +26,9 @@ export {
 } from '../src/recipeInfo';
 export {
   aggregateShoppingItems,
+  withRememberedNote,
+  productKey,
+  rememberNote,
   shopQuantityText,
   defaultShopWeek,
   formatWeekSpan,
@@ -128,7 +132,7 @@ export {
   listWithStaples,
 } from '../src/staples';
 export { getCatalog } from '../src/utils';
-export { listWithWeek, mealLinesOutOfDate } from '../src/planShopping';
+export { listWithWeek, mealLinesOutOfDate, mealLinesShopped } from '../src/planShopping';
 export { buildCatalog } from '../src/shopping';
 export { INITIAL_GROCERY_DATABASE } from '../src/utils/initialGroceryDb';
 export {

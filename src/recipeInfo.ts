@@ -238,13 +238,33 @@ export function recipeMatchesSearch(recipe: Recipe, query: string): boolean {
   );
 }
 
-export type QuickFilter = 'favourites' | 'not_lately' | 'quick' | 'veggie' | 'ninja' | 'freezer';
+/** "Slow cook", "slow-cooker", "slow cooked", "crock pot" in a step, the name, intro or tags. */
+const SLOW_COOK = /\bslow[\s-]?cook|\bcrock[\s-]?pot\b/i;
+
+/**
+ * Made with a slow cooker (or the Ninja's slow-cook setting): marked on the recipe, or else
+ * worked out from what it says.
+ */
+export function isSlowCookRecipe(recipe: Recipe): boolean {
+  if (typeof recipe.slowCook === 'boolean') return recipe.slowCook;
+  const texts = [
+    recipe.name,
+    recipe.description,
+    ...(recipe.tags || []),
+    ...(recipe.instructions || []),
+    ...Object.values(recipe.methodInstructions || {}).flat(),
+  ];
+  return texts.some((t) => typeof t === 'string' && SLOW_COOK.test(t));
+}
+
+export type QuickFilter = 'favourites' | 'not_lately' | 'quick' | 'veggie' | 'ninja' | 'slow_cook' | 'freezer';
 export const QUICK_FILTERS: { id: QuickFilter; label: string }[] = [
   { id: 'favourites', label: 'Favourites' },
   { id: 'not_lately', label: 'Not had lately' },
   { id: 'quick', label: 'Under 30 min' },
   { id: 'veggie', label: 'Veggie' },
   { id: 'ninja', label: 'Ninja' },
+  { id: 'slow_cook', label: 'Slow cook' },
   { id: 'freezer', label: 'In the freezer' },
 ];
 /** "Not had lately": not in the last 4 weeks and not already planned. */
@@ -272,6 +292,8 @@ export function matchesQuickFilters(
         return isVegetarianRecipe(recipe);
       case 'ninja':
         return recipeMethods(recipe).includes('ninja');
+      case 'slow_cook':
+        return isSlowCookRecipe(recipe);
       case 'freezer':
         return ctx.freezer > 0;
       default:

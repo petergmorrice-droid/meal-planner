@@ -155,12 +155,67 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
     await page.locator('[data-week-prev]').click();
     await page.waitForTimeout(500);
   }
+  // Update list opens the same window as Send to list, saying what changed and what updating does.
   await page.locator('[data-update-list]').click();
+  await page.waitForTimeout(400);
+  check(
+    (await page.getByText('Update the shopping list').count()) === 1 &&
+      (await page.locator('[data-send-breakdown] [data-send-day]').count()) === 7,
+    'Update list: the send window, with every day',
+  );
+  check(
+    /Changed since the list was made: Thursday/.test(await page.locator('[data-update-summary]').innerText()),
+    'Update list: says what changed',
+    await page
+      .locator('[data-update-summary]')
+      .innerText()
+      .catch(() => ''),
+  );
+  check((await page.locator('[data-update-shopped]').count()) === 0, 'Update list: nothing bought yet, no warning');
+  await page.locator('[data-send-confirm]').click();
   await page.waitForTimeout(600);
   check(
     /Shopping list updated/.test(await toast(page)) && (await page.locator('[data-sent]').count()) === 1,
     'Update list: list rebuilt, button back to "Sent"',
   );
+
+  // ---------- Some shopping done, then the week changes again: the meal ingredients start again ----------
+  const mealLine = (s) => s.shoppingList.find((i) => i.planId === thisId && !i.isAdhoc && !i.isBatch && !i.isRecurring);
+  const bought = mealLine(await page.state()).name;
+  await page.tab('Shop');
+  for (let i = 0; i < 4 && (await page.locator(`[data-item="${bought}"] [data-tick]`).count()) === 0; i++) {
+    await page.locator('[data-shop-week-prev]').click();
+    await page.waitForTimeout(400);
+  }
+  await page.locator(`[data-item="${bought}"] [data-tick]`).first().click();
+  await page.waitForTimeout(600);
+  const boughtLine = async () =>
+    (await page.state()).shoppingList.find((i) => i.planId === thisId && i.name === bought);
+  check((await boughtLine())?.checked === true, `Shop: ${bought} ticked`);
+  await page.tab('Planning');
+  if ((await weekName(page)) !== 'This Week') {
+    await page.locator('[data-week-prev]').click();
+    await page.waitForTimeout(500);
+  }
+  await openDay(page, 'Thursday');
+  await page.locator('[aria-label="One more person"]').click();
+  await page.locator('[data-day-done]').click();
+  await page.waitForTimeout(500);
+  await page.locator('[data-update-list]').click();
+  await page.waitForTimeout(400);
+  check(
+    /1 meal ingredient has already been ticked/.test(
+      await page
+        .locator('[data-update-shopped]')
+        .innerText()
+        .catch(() => ''),
+    ),
+    'Update list: warns the ticked ingredient will go back on unticked',
+  );
+  await page.screenshot({ path: OUT + '/w3b-update-window.png' });
+  await page.locator('[data-send-confirm]').click();
+  await page.waitForTimeout(600);
+  check((await boughtLine())?.checked === false, 'Update list: the meal ingredients start again (it is unticked)');
 
   // ---------- Move and swap with leftovers following ----------
   await openDay(page, 'Monday');
