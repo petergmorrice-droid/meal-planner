@@ -141,6 +141,7 @@ import {
   listWithStaples,
   getCatalog,
   listWithWeek,
+  mealLinesShopped,
   mealLinesOutOfDate,
   buildCatalog,
   INITIAL_GROCERY_DATABASE,
@@ -1890,6 +1891,50 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     assert.equal(line(listWithWeek(mine, plan, [pie], [], [], catalog), 'Chopped Tomatoes').amount, 2);
     // A week that hasn't been sent has nothing to be out of date.
     assert.deepEqual(mealLinesOutOfDate(old, { ...plan, status: 'draft' }, [pie], [], [], catalog), []);
+  });
+
+  test("Planning's Update list starts the meal ingredients again: ticks, out of stock and hand amounts go", () => {
+    const shopped = fresh.map((i) =>
+      i.name === 'Green Lentils'
+        ? { ...i, checked: true, checkedBy: 'R' }
+        : i.name === 'Chopped Tomatoes'
+          ? { ...i, amount: 2, userAdjusted: true, outOfStock: true, note: 'Napolina', noteBy: 'P' }
+          : i,
+    );
+    const extra = [
+      { id: 'x1', name: 'Bin bags', amount: 1, unit: '', checked: true, isAdhoc: true, planId: plan.id },
+      {
+        id: 'x2',
+        name: 'Milk',
+        amount: 2,
+        unit: 'pints',
+        checked: true,
+        isAdhoc: false,
+        isRecurring: true,
+        planId: plan.id,
+      },
+    ];
+    const list = [...shopped, ...extra];
+    assert.equal(
+      mealLinesShopped(list, plan.id),
+      2,
+      'two meal ingredients ticked or out of stock; staples and extras not counted',
+    );
+    const staples = [{ id: 'milk', name: 'Milk', amount: 2, unit: 'pints' }];
+    const x2 = { ...extra[1], id: `recurring-${plan.id}-milk` };
+    const reset = listWithWeek([...shopped, extra[0], x2], plan, [pie], staples, [], catalog, { resetMeals: true });
+    const lentils = line(reset, 'Green Lentils');
+    const toms = line(reset, 'Chopped Tomatoes');
+    assert.equal(lentils.checked, false);
+    assert.equal(lentils.checkedBy, undefined);
+    assert.equal(lentils.id, line(fresh, 'Green Lentils').id, 'same line, so the other phone updates it');
+    assert.equal(toms.outOfStock, undefined);
+    assert.equal(toms.userAdjusted, undefined);
+    assert.equal(toms.amount, line(fresh, 'Chopped Tomatoes').amount, 'amount worked out again');
+    assert.equal(toms.note, 'Napolina', 'notes stay');
+    assert.equal(line(reset, 'Bin bags').checked, true, 'things you added stay ticked');
+    assert.equal(line(reset, 'Milk').checked, true, 'weekly staples stay ticked');
+    assert.equal(mealLinesShopped(reset, plan.id), 0);
   });
 }
 

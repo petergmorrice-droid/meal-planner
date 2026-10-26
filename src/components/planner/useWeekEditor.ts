@@ -338,11 +338,14 @@ export function useWeekEditor({
     setToastMessage('Sent: the ingredients are on the shopping list.', seeTheList(plan.id));
   };
 
-  /** "Update list": the week changed after it was sent. */
+  /**
+   * "Update list": the week changed after it was sent. The meal ingredients start again from the
+   * meals (anything already ticked on the Shop tab is unticked); staples and things added stay.
+   */
   const updateList = () => {
     const plan = live();
     if (!plan) return;
-    sendWeekToShoppingList(store, plan);
+    sendWeekToShoppingList(store, plan, { resetMeals: true });
     setToastMessage('Shopping list updated.', seeTheList(plan.id));
   };
 

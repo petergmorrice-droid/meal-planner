@@ -128,7 +128,7 @@ export {
   listWithStaples,
 } from '../src/staples';
 export { getCatalog } from '../src/utils';
-export { listWithWeek, mealLinesOutOfDate } from '../src/planShopping';
+export { listWithWeek, mealLinesOutOfDate, mealLinesShopped } from '../src/planShopping';
 export { buildCatalog } from '../src/shopping';
 export { INITIAL_GROCERY_DATABASE } from '../src/utils/initialGroceryDb';
 export {
