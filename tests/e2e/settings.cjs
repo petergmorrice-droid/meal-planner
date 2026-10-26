@@ -169,6 +169,10 @@ function seed() {
   };
   await page.locator('[data-settings-reminders]').scrollIntoViewIfNeeded();
   check(
+    (await page.locator('[data-calendar-sync-needs]').count()) === 1,
+    'calendar sync: asks for Sync between phones first',
+  );
+  check(
     /dinner reminders/.test(await text('[data-reminders-summary]')),
     'reminders: says how many',
     await text('[data-reminders-summary]'),

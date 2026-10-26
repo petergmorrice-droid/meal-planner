@@ -32,6 +32,8 @@ export interface GistSnapshot {
   etag: string | null;
   /** File names currently in the Gist (needed to tidy up old part files). */
   files: string[];
+  /** The GitHub account the Gist belongs to (part of the calendar feed's address). */
+  owner: string | null;
 }
 
 export type FetchResult = { notModified: true } | { notModified: false; snapshot: GistSnapshot };
@@ -58,10 +60,28 @@ export function saveGistConfig(pat: string, gistId: string) {
   }
 }
 
+/** Who the sync Gist belongs to, as last seen (for the calendar feed's address). */
+export function getGistOwner(): string | null {
+  try {
+    return localStorage.getItem('github_gist_owner');
+  } catch {
+    return null;
+  }
+}
+
+export function saveGistOwner(owner: string) {
+  try {
+    localStorage.setItem('github_gist_owner', owner);
+  } catch {
+    /* private browsing: found again on the next sync */
+  }
+}
+
 export function clearGistConfig() {
   try {
     localStorage.removeItem('github_pat');
     localStorage.removeItem('github_gist_id');
+    localStorage.removeItem('github_gist_owner');
   } catch (e) {
     console.error('Failed to clear Gist config from localStorage', e);
   }
@@ -211,16 +231,21 @@ export async function fetchGist(config: GistConfig, etag?: string | null): Promi
       state: decodeGistFiles(data.files),
       etag: response.headers.get('ETag'),
       files: Object.keys(data.files || {}),
+      owner: data.owner?.login || null,
     },
   };
 }
 
-/** Upload the whole app state. Returns the new version tag and file list. */
+/**
+ * Upload the whole app state, plus any other files to write alongside it (the calendar feed).
+ * Returns the new version tag, file list and owner.
+ */
 export async function saveGist(
   config: GistConfig,
   state: AppState,
   existingFiles: string[] = [],
-): Promise<{ etag: string | null; files: string[] }> {
+  extraFiles: Record<string, { content: string } | null> = {},
+): Promise<{ etag: string | null; files: string[]; owner: string | null }> {
   const response = await request(
     `${API}/gists/${config.gistId}`,
     {
@@ -228,7 +253,7 @@ export async function saveGist(
       headers: authHeaders(config.pat, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         description: 'Family Meal Planner App Data',
-        files: encodeStateToGistFiles(state, existingFiles),
+        files: { ...extraFiles, ...encodeStateToGistFiles(state, existingFiles) },
       }),
     },
     'update',
@@ -239,14 +264,18 @@ export async function saveGist(
     throw describeHttpError(response, body, 'update');
   }
   const data = await response.json().catch(() => ({}));
-  return { etag: response.headers.get('ETag'), files: Object.keys(data.files || {}) };
+  return {
+    etag: response.headers.get('ETag'),
+    files: Object.keys(data.files || {}),
+    owner: data.owner?.login || null,
+  };
 }
 
 /** Create a new private Gist holding the given state. */
 export async function createPrivateGist(
   pat: string,
   initialState: AppState,
-): Promise<{ id: string; etag: string | null; files: string[] }> {
+): Promise<{ id: string; etag: string | null; files: string[]; owner: string | null }> {
   const files = encodeStateToGistFiles(initialState);
   const response = await request(
     `${API}/gists`,
@@ -263,5 +292,10 @@ export async function createPrivateGist(
     throw describeHttpError(response, body, 'create');
   }
   const data = await response.json();
-  return { id: data.id, etag: response.headers.get('ETag'), files: Object.keys(data.files || {}) };
+  return {
+    id: data.id,
+    etag: response.headers.get('ETag'),
+    files: Object.keys(data.files || {}),
+    owner: data.owner?.login || null,
+  };
 }

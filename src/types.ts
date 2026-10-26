@@ -216,6 +216,8 @@ export interface UserPreferences {
   reminderPrep?: boolean;
   /** When the evening-before alert goes off ("20:00"; 8pm if not set). */
   reminderPrepAt?: string;
+  /** Settings → Reminders: keep a calendar feed of the plan and reminders in the sync Gist. */
+  calendarSync?: boolean;
   /** A different time just for one evening, set on the Cook tab. */
   eatAtTonight?: { date: string; time: string };
   /** Things added to the list that you said aren't products (lower case): the Shop stops offering to save them. */

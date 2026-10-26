@@ -32,6 +32,7 @@ export interface SettingsTabProps {
     syncNotice?: string | null;
     clearSyncNotice?: () => void;
     githubConfig: { pat: string; gistId: string } | null;
+    gistOwner: string | null;
     syncStatus: 'idle' | 'loading' | 'synced' | 'error';
     lastSynced: Date | null;
     syncError: string | null;

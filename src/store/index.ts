@@ -13,8 +13,11 @@ import {
   fetchGist,
   saveGist,
   createPrivateGist,
+  getGistOwner,
+  saveGistOwner,
   GistConfig,
 } from '../services/gistStorage';
+import { calendarFeedFiles } from '../calendarReminders';
 import {
   mergeAppStates,
   applyLocalChange,
@@ -64,6 +67,15 @@ export function useStore() {
   const [syncError, setSyncError] = useState<string | null>(null);
   /** Something worth saying about the last sync (e.g. this phone had been away a long time). */
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  /** The GitHub account the sync Gist belongs to (for the calendar feed's address). */
+  const [gistOwner, setGistOwnerState] = useState<string | null>(getGistOwner);
+  const gistOwnerRef = useRef<string | null>(gistOwner);
+  const noteOwner = (owner: string | null | undefined) => {
+    if (!owner || owner === gistOwnerRef.current) return;
+    gistOwnerRef.current = owner;
+    saveGistOwner(owner);
+    setGistOwnerState(owner);
+  };
 
   // ---- Sync engine (refs so background work always sees the latest data) ----
   const stateRef = useRef<AppState>(state);
@@ -148,6 +160,7 @@ export function useStore() {
         if (!result.notModified) {
           etagRef.current = result.snapshot.etag;
           gistFilesRef.current = result.snapshot.files;
+          noteOwner(result.snapshot.owner);
           remote = result.snapshot.state;
           gistIsEmpty = remote === null;
         }
@@ -186,8 +199,14 @@ export function useStore() {
         if (willUpload) {
           if (quiet) setSyncStatus('loading');
           const editsBefore = editCountRef.current;
-          const saved = await saveGist(config, stateRef.current, gistFilesRef.current);
+          const saved = await saveGist(
+            config,
+            stateRef.current,
+            gistFilesRef.current,
+            calendarFeedFiles(stateRef.current, gistFilesRef.current, new Date()),
+          );
           etagRef.current = saved.etag;
+          noteOwner(saved.owner);
           if (saved.files.length) gistFilesRef.current = saved.files;
           if (editCountRef.current === editsBefore) {
             setPending(false);
@@ -299,6 +318,7 @@ export function useStore() {
       const remoteState = snapshot?.state || null;
       etagRef.current = snapshot?.etag || null;
       gistFilesRef.current = snapshot?.files || [];
+      noteOwner(snapshot?.owner);
       saveGistConfig(config.pat, config.gistId);
 
       if (syncMode === 'pull') {
@@ -306,18 +326,30 @@ export function useStore() {
           replaceState(normalizeState(remoteState));
         }
       } else if (syncMode === 'push') {
-        const saved = await saveGist(config, stateRef.current, gistFilesRef.current);
+        const saved = await saveGist(
+          config,
+          stateRef.current,
+          gistFilesRef.current,
+          calendarFeedFiles(stateRef.current, gistFilesRef.current, new Date()),
+        );
         etagRef.current = saved.etag;
         gistFilesRef.current = saved.files;
+        noteOwner(saved.owner);
       } else if (syncMode === 'merge') {
         if (remoteState) {
           replaceState(
             normalizeState(mergeAppStates(dropDefaultsMissingFrom(stateRef.current, remoteState), remoteState)),
           );
         }
-        const saved = await saveGist(config, stateRef.current, gistFilesRef.current);
+        const saved = await saveGist(
+          config,
+          stateRef.current,
+          gistFilesRef.current,
+          calendarFeedFiles(stateRef.current, gistFilesRef.current, new Date()),
+        );
         etagRef.current = saved.etag;
         gistFilesRef.current = saved.files;
+        noteOwner(saved.owner);
       }
       setPending(false);
       writeLastSyncOk(Date.now());
@@ -339,6 +371,7 @@ export function useStore() {
       const created = await createPrivateGist(pat.trim(), stateRef.current);
       etagRef.current = created.etag;
       gistFilesRef.current = created.files;
+      noteOwner(created.owner);
       saveGistConfig(pat, created.id);
       setPending(false);
       writeLastSyncOk(Date.now());
@@ -359,6 +392,8 @@ export function useStore() {
     if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
     etagRef.current = null;
     gistFilesRef.current = [];
+    gistOwnerRef.current = null;
+    setGistOwnerState(null);
     setPending(false);
     setGithubConfigState(null);
     setSyncStatus('idle');
@@ -383,6 +418,8 @@ export function useStore() {
     dismissedShoppingItemIds,
     // GitHub Gist exports
     githubConfig,
+    /** The GitHub account the sync Gist belongs to, once a sync has seen it. */
+    gistOwner,
     syncStatus,
     lastSynced,
     syncError,

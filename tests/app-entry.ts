@@ -131,4 +131,14 @@ export { getCatalog } from '../src/utils';
 export { listWithWeek, mealLinesOutOfDate } from '../src/planShopping';
 export { buildCatalog } from '../src/shopping';
 export { INITIAL_GROCERY_DATABASE } from '../src/utils/initialGroceryDb';
-export { upcomingReminders, remindersCalendar, reminderSettings } from '../src/calendarReminders';
+export {
+  upcomingReminders,
+  remindersCalendar,
+  reminderSettings,
+  plannedMealEvents,
+  calendarFeedEvents,
+  calendarFeedFiles,
+  calendarFeedUrl,
+  webcalUrl,
+  CALENDAR_FILE,
+} from '../src/calendarReminders';

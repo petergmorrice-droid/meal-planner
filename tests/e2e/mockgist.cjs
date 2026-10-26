@@ -55,7 +55,7 @@ function createMockGist(initialFiles) {
         status: 200,
         headers: { ...cors, etag: etag() },
         contentType: 'application/json',
-        body: JSON.stringify({ id: gist.id, files: filesForApi() }),
+        body: JSON.stringify({ id: gist.id, owner: { login: 'testuser' }, files: filesForApi() }),
       });
     }
     if (method === 'PATCH') {
@@ -70,7 +70,7 @@ function createMockGist(initialFiles) {
         status: 200,
         headers: { ...cors, etag: etag() },
         contentType: 'application/json',
-        body: JSON.stringify({ id: gist.id, files: filesForApi() }),
+        body: JSON.stringify({ id: gist.id, owner: { login: 'testuser' }, files: filesForApi() }),
       });
     }
     return route.fulfill({ status: 405, headers: cors });

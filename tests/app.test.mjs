@@ -4,6 +4,12 @@ import {
   upcomingReminders,
   remindersCalendar,
   reminderSettings,
+  plannedMealEvents,
+  calendarFeedEvents,
+  calendarFeedFiles,
+  calendarFeedUrl,
+  webcalUrl,
+  CALENDAR_FILE,
   orderedAisles,
   aislePositions,
   GROCERY_AISLES,
@@ -1979,6 +1985,45 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
       'long lines folded',
     );
     assert.ok(/DTSTART:\d{8}T\d{6}Z/.test(ics));
+  });
+
+  test('calendar sync: every planned dinner at eating time, cooked and takeaways too, no alert', () => {
+    const m = plannedMealEvents(remState(), '2026-10-27');
+    assert.deepEqual(
+      m.map((x) => `${hm(x.start)} ${x.title}`),
+      [
+        '27 18:30 Dinner: Chilli con carne',
+        '28 18:30 Dinner: Lasagne (from the freezer)',
+        '29 18:30 Dinner: Chicken tikka',
+        '30 18:30 Takeaway: Pizza',
+        '31 18:30 Dinner: Chicken tikka (leftovers)',
+      ],
+    );
+    assert.ok(m.every((x) => x.kind === 'meal' && x.alertBefore === null));
+    assert.equal(plannedMealEvents(remState(), '2026-10-01')[0].details, 'Cooked ✓');
+  });
+
+  test('calendar sync: the feed holds the dinners and reminders, alerts only on reminders', () => {
+    const ev = calendarFeedEvents(remState(), monMorning);
+    assert.equal(ev.filter((x) => x.kind === 'meal').length, 6, 'last few days kept, so Monday stays');
+    assert.equal(ev.filter((x) => x.kind !== 'meal').length, 6);
+    const ics = remindersCalendar(ev, monMorning);
+    assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 12);
+    assert.equal((ics.match(/BEGIN:VALARM/g) || []).length, 6);
+    assert.ok(ics.includes('UID:2026-10-26-meal@family-meal-planner'));
+    assert.ok(ics.includes('REFRESH-INTERVAL;VALUE=DURATION:PT1H'));
+  });
+
+  test('calendar sync: the Gist gets the feed when on, and loses it when switched off', () => {
+    const on = calendarFeedFiles(remState({ calendarSync: true }), [], monMorning);
+    assert.ok(on[CALENDAR_FILE].content.startsWith('BEGIN:VCALENDAR'));
+    assert.deepEqual(calendarFeedFiles(remState(), ['family-meal-planner.json', CALENDAR_FILE], monMorning), {
+      [CALENDAR_FILE]: null,
+    });
+    assert.deepEqual(calendarFeedFiles(remState(), ['family-meal-planner.json'], monMorning), {});
+    const url = calendarFeedUrl('pete', 'abc123');
+    assert.equal(url, `https://gist.githubusercontent.com/pete/abc123/raw/${CALENDAR_FILE}`);
+    assert.equal(webcalUrl(url), `webcal://gist.githubusercontent.com/pete/abc123/raw/${CALENDAR_FILE}`);
   });
 }
 
