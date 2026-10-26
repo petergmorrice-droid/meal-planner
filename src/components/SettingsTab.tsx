@@ -11,6 +11,7 @@ import { BackupSection } from './settings/BackupSection';
 import { HistoryPage } from './settings/HistoryPage';
 import { Household } from './settings/Household';
 import { RemindersSection } from './settings/RemindersSection';
+import { NotificationsSection } from './settings/NotificationsSection';
 import { ProductsPage } from './settings/ProductsPage';
 import { SyncSection } from './settings/SyncSection';
 import { ThisPhone } from './settings/ThisPhone';
@@ -75,6 +76,7 @@ export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: S
           <ThisPhone who={who} say={say} />
           <Household prefs={prefs} store={store} />
           <RemindersSection store={store} say={say} />
+          <NotificationsSection store={store} who={who} say={say} />
           <SyncSection store={store} say={say} setConfirm={setConfirm} />
           <section data-settings-shopping>
             <h3 className={sectionTitle}>Shopping</h3>

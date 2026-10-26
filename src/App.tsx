@@ -39,11 +39,34 @@ export default function App() {
     }
   });
   // Mid-shop (phone locked, app closed)? Open straight back into shopping mode.
-  const [activeTab, setActiveTab] = useState<TabName>(sharedRecipe ? 'cookbook' : readOpenShop() ? 'shop' : 'planning');
+  // Opened from an "added to the list" notification (?tab=shop): straight to the Shop.
+  const [fromNotification] = useState(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      if (q.get('tab') !== 'shop') return false;
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const [activeTab, setActiveTab] = useState<TabName>(
+    sharedRecipe ? 'cookbook' : fromNotification || readOpenShop() ? 'shop' : 'planning',
+  );
   // "Tab colours" theme: the screen takes its tab's colour.
   useEffect(() => {
     applyTabColour(activeTab);
   }, [activeTab]);
+  // A notification tapped while the app is already open: go to the Shop.
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'open-tab' && e.data.tab === 'shop') setActiveTab('shop');
+    };
+    sw.addEventListener('message', onMessage);
+    return () => sw.removeEventListener('message', onMessage);
+  }, []);
   // "Add to a day…" from a recipe in the Cookbook: Planning opens its day chooser for it.
   const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
 

@@ -225,6 +225,8 @@ export interface UserPreferences {
    * whenever that product goes on the list again: "Regular size", "semi-skimmed".
    */
   itemNotes?: Record<string, { note: string; by?: string }>;
+  /** Settings → Notifications: the household's key with the notification sender (both phones share it). */
+  pushHousehold?: string;
   /** A different time just for one evening, set on the Cook tab. */
   eatAtTonight?: { date: string; time: string };
   /** Things added to the list that you said aren't products (lower case): the Shop stops offering to save them. */

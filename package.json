@@ -13,21 +13,25 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "esbuild src/services/syncMerge.ts --bundle --format=esm --platform=node --outfile=.test-build/syncMerge.mjs --log-level=warning && esbuild tests/shopping-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/shopping.mjs --log-level=warning && esbuild tests/recipeImport-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/recipeImport.mjs --log-level=warning && esbuild tests/app-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/app.mjs --log-level=warning && esbuild tests/gemini-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/gemini.mjs --log-level=warning && node tests/syncMerge.test.mjs && node tests/shopping.test.mjs && node tests/recipeImport.test.mjs && node tests/app.test.mjs && node tests/gemini.test.mjs",
+    "test": "esbuild src/services/syncMerge.ts --bundle --format=esm --platform=node --outfile=.test-build/syncMerge.mjs --log-level=warning && esbuild tests/shopping-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/shopping.mjs --log-level=warning && esbuild tests/recipeImport-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/recipeImport.mjs --log-level=warning && esbuild tests/app-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/app.mjs --log-level=warning && esbuild tests/gemini-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/gemini.mjs --log-level=warning && esbuild tests/push-entry.ts --bundle --format=esm --platform=node --outfile=.test-build/push.mjs --log-level=warning && node tests/syncMerge.test.mjs && node tests/shopping.test.mjs && node tests/recipeImport.test.mjs && node tests/app.test.mjs && node tests/gemini.test.mjs && node tests/push.test.mjs",
     "test:e2e": "npm run build:single && node tests/e2e/run.mjs dist-single"
   },
   "dependencies": {
+    "@netlify/blobs": "^11.1.6",
     "fuse.js": "^7.5.0",
     "lucide-react": "^0.546.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
+    "@netlify/functions": "^6.0.3",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^5.0.4",
     "esbuild": "^0.25.0",
     "eslint": "^9.36.0",

@@ -206,6 +206,10 @@ function seed() {
   };
   await page.locator('[data-settings-reminders]').scrollIntoViewIfNeeded();
   check(
+    (await page.locator('[data-notify-needs-sync]').count()) === 1,
+    'notifications: ask for Sync between phones first',
+  );
+  check(
     (await page.locator('[data-calendar-sync-needs]').count()) === 1,
     'calendar sync: asks for Sync between phones first',
   );
