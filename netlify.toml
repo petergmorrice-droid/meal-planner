@@ -1,0 +1,9 @@
+# Netlify hosts only the notification sender (netlify/functions/push.mts); the app itself is on
+# GitHub Pages. Nothing to build: the "site" is one page saying what this is.
+[build]
+  command = ""
+  publish = "netlify/site"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

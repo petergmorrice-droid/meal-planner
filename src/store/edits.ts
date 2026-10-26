@@ -7,6 +7,7 @@ import { Recipe, MealPlan, PlannedMeal, BatchItem, ShoppingListItem, AppState, D
 import { getMonday, formatDateISO, isPastWeek, isWeekBeyondForwardLimit, cleanDays, DAYS_OF_WEEK } from '../utils';
 import { DEFAULT_PREFERENCES } from './saved';
 import { withRememberedNote } from '../shopList';
+import { listChanged } from '../pushNotify';
 
 /** What the ways to change the data are given by the store. */
 export interface StoreCore {
@@ -266,6 +267,8 @@ export function dataEdits({ state, latest: newest, commit, currentUser }: StoreC
       };
     });
 
+    // Things added by hand: the other phones get a notification (Settings → Notifications).
+    listChanged(base.shoppingList, processedList, base.preferences?.pushHousehold, currentUser);
     commit(base, { ...base, shoppingList: processedList });
   };
 

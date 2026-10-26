@@ -65,3 +65,38 @@ self.addEventListener('fetch', (event) => {
     });
   })());
 });
+
+// ---------- Notifications: "Rachel added milk and eggs" (Settings → Notifications) ----------
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  event.waitUntil(self.registration.showNotification(data.title || 'Shopping list', {
+    body: data.body || 'Something was added to the list.',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    tag: data.tag || 'list-added',
+    renotify: true,
+    data: { url: data.url || './?tab=shop' },
+  }));
+});
+
+// Tapping it opens the app on the Shop tab (or brings the open app forward).
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || './?tab=shop', self.registration.scope).href;
+  event.waitUntil((async () => {
+    const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const app = open.find((c) => c.url.startsWith(self.registration.scope));
+    if (app) {
+      await app.focus();
+      app.postMessage({ type: 'open-tab', tab: 'shop' });
+      return;
+    }
+    await self.clients.openWindow(target);
+  })());
+});
