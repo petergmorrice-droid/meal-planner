@@ -66,7 +66,7 @@ self.addEventListener('fetch', (event) => {
   })());
 });
 
-// ---------- Notifications: "Rachel added milk and eggs" (Settings → Notifications) ----------
+// ---------- Notifications: "Rachel added milk and eggs", "Tonight's dinner" (Settings → Notifications) ----------
 
 self.addEventListener('push', (event) => {
   let data = {};
@@ -85,7 +85,7 @@ self.addEventListener('push', (event) => {
   }));
 });
 
-// Tapping it opens the app on the Shop tab (or brings the open app forward).
+// Tapping it opens the app on its tab: the Shop, or the Cook tab for dinner (or brings the open app forward).
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = new URL(event.notification.data?.url || './?tab=shop', self.registration.scope).href;
@@ -94,7 +94,7 @@ self.addEventListener('notificationclick', (event) => {
     const app = open.find((c) => c.url.startsWith(self.registration.scope));
     if (app) {
       await app.focus();
-      app.postMessage({ type: 'open-tab', tab: 'shop' });
+      app.postMessage({ type: 'open-tab', tab: new URL(target).searchParams.get('tab') || 'shop' });
       return;
     }
     await self.clients.openWindow(target);

@@ -7,6 +7,7 @@ import React from 'react';
 import { useRef, useState } from 'react';
 import { BookOpen, Calendar, ShoppingCart, Snowflake, ChefHat, Sliders, Ellipsis } from 'lucide-react';
 import { useStore } from './store';
+import { useMorningSchedule } from './hooks/useMorningSchedule';
 import { firstUrl } from './recipeInfo';
 import CookBookTab from './components/CookBookTab';
 import PlanningTab from './components/PlanningTab';
@@ -39,30 +40,31 @@ export default function App() {
     }
   });
   // Mid-shop (phone locked, app closed)? Open straight back into shopping mode.
-  // Opened from an "added to the list" notification (?tab=shop): straight to the Shop.
-  const [fromNotification] = useState(() => {
+  // Opened from a notification (?tab=shop or ?tab=this_week): straight to that tab.
+  const [fromNotification] = useState<TabName | null>(() => {
     try {
-      const q = new URLSearchParams(window.location.search);
-      if (q.get('tab') !== 'shop') return false;
+      const tab = new URLSearchParams(window.location.search).get('tab');
+      if (tab !== 'shop' && tab !== 'this_week') return null;
       window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-      return true;
+      return tab;
     } catch {
-      return false;
+      return null;
     }
   });
   const [activeTab, setActiveTab] = useState<TabName>(
-    sharedRecipe ? 'cookbook' : fromNotification || readOpenShop() ? 'shop' : 'planning',
+    sharedRecipe ? 'cookbook' : fromNotification || (readOpenShop() ? 'shop' : 'planning'),
   );
   // "Tab colours" theme: the screen takes its tab's colour.
   useEffect(() => {
     applyTabColour(activeTab);
   }, [activeTab]);
-  // A notification tapped while the app is already open: go to the Shop.
+  // A notification tapped while the app is already open: go to its tab.
   useEffect(() => {
     const sw = navigator.serviceWorker;
     if (!sw) return;
     const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'open-tab' && e.data.tab === 'shop') setActiveTab('shop');
+      if (e.data?.type === 'open-tab' && (e.data.tab === 'shop' || e.data.tab === 'this_week'))
+        setActiveTab(e.data.tab);
     };
     sw.addEventListener('message', onMessage);
     return () => sw.removeEventListener('message', onMessage);
@@ -71,6 +73,8 @@ export default function App() {
   const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
 
   const store = useStore();
+  // The morning notifications (Settings → Notifications): kept up to date with the notification sender.
+  useMorningSchedule(store.state);
 
   // Shop opens on its own best week, unless you came from "See the list" for a particular week.
   const [shopPlanRequest, setShopPlanRequest] = useState<string | null>(null);

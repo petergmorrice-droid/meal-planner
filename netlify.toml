@@ -3,6 +3,9 @@
 [build]
   command = ""
   publish = "netlify/site"
+  # Only rebuild when the sender (or what it's built from) changed: app-only releases are skipped,
+  # which saves the Free plan's monthly allowance. "Exit 0" from this check means skip.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- netlify/ netlify.toml package.json package-lock.json"
 
 [functions]
   directory = "netlify/functions"

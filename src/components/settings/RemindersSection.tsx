@@ -193,6 +193,12 @@ export function RemindersSection({ store, say }: { store: SettingsTabProps['stor
                 On. Each change to the plan updates the calendar the next time this app syncs; calendars check for
                 changes every hour or so (Google Calendar can take up to a day).
               </span>
+              {prefs.pushHousehold && (
+                <span className="block text-[13px] text-zinc-500 mt-1" data-calendar-sync-no-alerts>
+                  Notifications are set up (below), so they send the reminders: the calendar shows just the dinners,
+                  with no alerts.
+                </span>
+              )}
               {!feedUrl ? (
                 <span className="block text-[13px] text-zinc-500 mt-2" data-calendar-sync-waiting>
                   Getting your calendar link from the sync…{' '}

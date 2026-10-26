@@ -227,6 +227,12 @@ export interface UserPreferences {
   itemNotes?: Record<string, { note: string; by?: string }>;
   /** Settings → Notifications: the household's key with the notification sender (both phones share it). */
   pushHousehold?: string;
+  /** Settings → Notifications: "Tonight's dinner" each morning (on unless switched off). */
+  notifyDinner?: boolean;
+  /** Settings → Notifications: the morning before, what to do tonight (defrost, marinate; on unless switched off). */
+  notifyPrep?: boolean;
+  /** When the morning notifications go off ("09:00"; 9am if not set). */
+  notifyMorningAt?: string;
   /** A different time just for one evening, set on the Cook tab. */
   eatAtTonight?: { date: string; time: string };
   /** Things added to the list that you said aren't products (lower case): the Shop stops offering to save them. */

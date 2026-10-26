@@ -10,6 +10,8 @@ import {
   calendarFeedUrl,
   webcalUrl,
   CALENDAR_FILE,
+  morningSchedule,
+  morningSettings,
   orderedAisles,
   aislePositions,
   GROCERY_AISLES,
@@ -2061,6 +2063,42 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     assert.equal((ics.match(/BEGIN:VALARM/g) || []).length, 6);
     assert.ok(ics.includes('UID:2026-10-26-meal@family-meal-planner'));
     assert.ok(ics.includes('REFRESH-INTERVAL;VALUE=DURATION:PT1H'));
+  });
+
+  test('calendar sync: once notifications are set up, the feed has just the dinners, no alerts', () => {
+    const ev = calendarFeedEvents(remState({ pushHousehold: 'a'.repeat(32) }), monMorning);
+    assert.ok(ev.length > 0 && ev.every((x) => x.kind === 'meal' && x.alertBefore === null));
+    assert.equal((remindersCalendar(ev, monMorning).match(/BEGIN:VALARM/g) || []).length, 0);
+  });
+
+  test("morning notifications: tonight's dinner at 9am with its start time, and what to do tonight", () => {
+    const n = morningSchedule(remState(), monMorning);
+    const at = (x) =>
+      `${new Date(x.at).getDate()} ${new Date(x.at).getHours()}:${String(new Date(x.at).getMinutes()).padStart(2, '0')}`;
+    assert.deepEqual(
+      n.map((x) => `${at(x)} ${x.id} | ${x.title} | ${x.body}`),
+      [
+        "26 9:00 2026-10-26-dinner | Tonight's dinner | Chilli con carne.",
+        "27 9:00 2026-10-27-dinner | Tonight's dinner | Chilli con carne. Start by 5:45pm.",
+        "27 9:00 2026-10-27-prep | To do tonight | Take the Lasagne out of the freezer tonight, for tomorrow's dinner.",
+        "28 9:00 2026-10-28-dinner | Tonight's dinner | Lasagne (from the freezer). Start by 6pm.",
+        "28 9:00 2026-10-28-prep | To do tonight | Marinate the chicken overnight in the yoghurt and spices (for tomorrow's Chicken tikka).",
+        "29 9:00 2026-10-29-dinner | Tonight's dinner | Chicken tikka. Start by 5:45pm.",
+        "30 9:00 2026-10-30-dinner | Tonight's dinner | Takeaway: Pizza.",
+        "31 9:00 2026-10-31-dinner | Tonight's dinner | Chicken tikka (leftovers). Start by 6:15pm.",
+      ],
+    );
+    assert.ok(n.every((x) => x.tab === 'this_week'));
+    // Calendar reminder settings don't matter; the notification switches and time do
+    assert.equal(morningSchedule(remState({ reminderCook: false, reminderPrep: false }), monMorning).length, 8);
+    const later = morningSchedule(remState({ notifyMorningAt: '07:30', notifyPrep: false }), monMorning);
+    assert.ok(later.every((x) => x.id.endsWith('dinner') && new Date(x.at).getHours() === 7));
+    assert.equal(morningSchedule(remState({ notifyDinner: false, notifyPrep: false }), monMorning).length, 0);
+    assert.deepEqual(morningSettings(undefined), { dinner: true, prep: true, at: '09:00' });
+    assert.equal(morningSettings({ notifyMorningAt: '06:00' }).at, '06:00');
+    assert.equal(morningSettings({ notifyMorningAt: '11:45' }).at, '11:45');
+    assert.equal(morningSettings({ notifyMorningAt: '05:30' }).at, '09:00', 'before the sender checks: 9am');
+    assert.equal(morningSettings({ notifyMorningAt: '14:00' }).at, '09:00', 'afternoon: 9am');
   });
 
   test('calendar sync: the Gist gets the feed when on, and loses it when switched off', () => {

@@ -1,16 +1,16 @@
 // Notifications when someone adds things to the shopping list (Settings → Notifications).
 // The phones sign up with the notification sender on Netlify (netlify/functions/push.mts) under a
-// household key kept in the synced settings. Adding things by hand on one phone sends one grouped
-// message ("Rachel added milk, eggs and bin bags") to the other phones a little later.
+// household key kept in the synced settings. Adding things by hand on one phone tells the other
+// phones straight away; each notification replaces the last one and lists everything added in the
+// last few minutes ("Rachel added milk, eggs and bin bags"), so a run of additions doesn't pile up.
 import { personName } from './components/PersonMark';
 import type { ShoppingListItem } from './types';
+import type { ScheduledNote } from './pushSchedule';
 
 /** The notification sender. */
 export const PUSH_API = 'https://morrice-meal-planner-push.netlify.app/api';
-/** Wait this long after the last thing added before sending, so a few additions make one message. */
-export const SEND_AFTER_MS = 20_000;
-/** ...but never longer than this after the first. */
-const SEND_AT_MOST_MS = 90_000;
+/** A notification lists what was added in this long (each one replaces the last on the other phone). */
+export const RECENT_MS = 10 * 60 * 1000;
 /** Remembered on the phone: this phone has notifications on. */
 const LS_ON = 'mp-push-on';
 
@@ -74,29 +74,17 @@ async function post(action: string, body: unknown, keepalive = false): Promise<R
 
 // ---------- Sending: things added on this phone ----------
 
-let pending: { household: string; who: string; items: ShoppingListItem[]; first: number } | null = null;
-let timer: ReturnType<typeof setTimeout> | null = null;
+let recent: { household: string; who: string; items: ShoppingListItem[]; last: number } | null = null;
 
-function flush(keepalive = false) {
-  if (timer) clearTimeout(timer);
-  timer = null;
-  const p = pending;
-  pending = null;
-  if (!p || !p.items.length) return;
-  post('notify', { household: p.household, from: p.who, body: addedMessage(p.who, p.items) }, keepalive).catch((err) =>
-    console.warn('Notification not sent:', err),
-  );
-}
-
-/** Things added by hand on this phone: tell the other phones, once this burst of adding is over. */
+/** Things added by hand on this phone: tell the other phones now, with whatever else was added just before. */
 export function queueAdded(household: string, who: string, items: ShoppingListItem[]) {
   if (!household || !items.length) return;
-  if (pending && (pending.household !== household || pending.who !== who)) flush();
   const now = Date.now();
-  pending = pending ? { ...pending, items: [...pending.items, ...items] } : { household, who, items, first: now };
-  if (timer) clearTimeout(timer);
-  const wait = Math.max(0, Math.min(SEND_AFTER_MS, pending.first + SEND_AT_MOST_MS - now));
-  timer = setTimeout(() => flush(), wait);
+  const carryOn = recent && recent.household === household && recent.who === who && now - recent.last < RECENT_MS;
+  recent = { household, who, items: [...(carryOn ? recent!.items : []), ...items], last: now };
+  post('notify', { household, from: who, body: addedMessage(who, recent.items) }, true).catch((err) =>
+    console.warn('Notification not sent:', err),
+  );
 }
 
 /** Every list line this phone has had (see addedByHand). */
@@ -116,14 +104,6 @@ export function listChanged(
   for (const i of before) seenIds.add(i.id);
   for (const i of after) seenIds.add(i.id);
   if (household && added.length) queueAdded(household, who, added);
-}
-
-// Leaving the app (switching away, locking the phone): send now, while it still can.
-if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flush(true);
-  });
-  window.addEventListener('pagehide', () => flush(true));
 }
 
 // ---------- This phone getting notifications ----------
@@ -214,4 +194,39 @@ export async function sendTest(household: string, who: string): Promise<number> 
     body: `Test from ${personName(who) || 'the meal planner'}: notifications are working.`,
   });
   return Number(res.sent) || 0;
+}
+
+/** A test sent in about 45 seconds: close the app to check notifications arrive with it closed. Says how long. */
+export async function sendTestLater(household: string, who: string): Promise<number> {
+  const res = await post('test-later', {
+    household,
+    from: who,
+    title: 'Meal planner',
+    body: `Delayed test from ${personName(who) || 'the meal planner'}: notifications work with the app closed.`,
+  });
+  return Number(res.in) || 45;
+}
+
+// ---------- The morning notifications' schedule ----------
+
+const LS_SCHEDULE = 'mp-push-schedule';
+
+/**
+ * Send the sender the coming days' morning notifications, when they've changed since this phone last
+ * sent them (either phone can: both work it out from the same synced plan).
+ */
+export async function uploadSchedule(household: string, notes: ScheduledNote[]): Promise<boolean> {
+  const sig = `${household}|${JSON.stringify(notes)}`;
+  try {
+    if (localStorage.getItem(LS_SCHEDULE) === sig) return false;
+  } catch {
+    /* private browsing: just send it */
+  }
+  await post('schedule', { household, notes });
+  try {
+    localStorage.setItem(LS_SCHEDULE, sig);
+  } catch {
+    /* sent again next time */
+  }
+  return true;
 }
