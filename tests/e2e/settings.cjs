@@ -156,8 +156,56 @@ function seed() {
   check((await page.locator('[data-update-banner]').count()) === 0, 'no update banner when up to date');
   await tab('Settings');
   await shot('01-settings-top');
-  for (const sec of ['phone', 'household', 'sync', 'shopping', 'history', 'backup', 'about'])
+  for (const sec of ['phone', 'household', 'reminders', 'sync', 'shopping', 'history', 'backup', 'about'])
     check((await page.locator(`[data-settings-${sec}]`).count()) === 1, `section: ${sec}`);
+
+  // ---- Reminders: this week's meals as a calendar file ----
+  const fs = require('fs');
+  const calendarFile = async () => {
+    const wait = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
+    await page.locator('[data-reminders-add]').click();
+    const f = await wait;
+    return { name: f && f.suggestedFilename(), text: f ? fs.readFileSync(await f.path(), 'utf8') : '' };
+  };
+  await page.locator('[data-settings-reminders]').scrollIntoViewIfNeeded();
+  check(
+    /dinner reminders/.test(await text('[data-reminders-summary]')),
+    'reminders: says how many',
+    await text('[data-reminders-summary]'),
+  );
+  await page.locator('[data-reminders-show]').click();
+  const remList = await text('[data-reminders-list]');
+  check(
+    /Start cooking: Chilli con carne/.test(remList) && /Take the Spaghetti bolognese out of the freezer/.test(remList),
+    "reminders: tonight's cook and tomorrow's freezer meal",
+    remList,
+  );
+  check(!/Takeout|Eating out|Spaghetti bolognese · Start cooking/.test(remList), 'reminders: no takeaways', remList);
+  await shot('01b-reminders');
+  let cal = await calendarFile();
+  check(cal.name === 'meal-reminders-2026-10-14.ics', 'reminders: calendar file downloads', cal.name);
+  check(
+    /BEGIN:VCALENDAR/.test(cal.text) && /BEGIN:VALARM/.test(cal.text) && /TRIGGER:PT0M/.test(cal.text),
+    'reminders: events with alerts',
+    cal.text.slice(0, 300),
+  );
+  await page.locator('[data-segmented="reminder-cook"] button', { hasText: '10 mins' }).click();
+  await page.waitForTimeout(300);
+  check((await state()).preferences.reminderCookBefore === 10, 'reminders: alert 10 mins before is saved');
+  cal = await calendarFile();
+  check(/TRIGGER:-PT10M/.test(cal.text), 'reminders: file uses 10 mins before', cal.text.slice(0, 300));
+  await page.locator('[data-setting-reminder-prep-switch]').click();
+  await page.waitForTimeout(300);
+  check(
+    (await page.locator('[data-reminders-list] [data-reminder="prep"]').count()) === 0 &&
+      (await page.locator('[data-reminders-list] [data-reminder="cook"]').count()) > 0,
+    'reminders: night-before switched off',
+  );
+  await page.locator('[data-setting-reminder-prep-switch]').click();
+  await page.locator('[data-segmented="reminder-cook"] button', { hasText: 'At start' }).click();
+  await page.waitForTimeout(300);
+  check(/Last added on this phone/.test(await text('[data-reminders-summary]')), 'reminders: remembers when added');
+
   check(
     (await page.locator('text=Multi-Cooker Model').count()) === 0 &&
       (await page.locator('text=Multi-cooker').count()) === 0,

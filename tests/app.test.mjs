@@ -1,6 +1,9 @@
 // Helpers behind the Shop screen and the recipe cards. Run with: npm test
 import assert from 'node:assert/strict';
 import {
+  upcomingReminders,
+  remindersCalendar,
+  reminderSettings,
   orderedAisles,
   aislePositions,
   GROCERY_AISLES,
@@ -1881,6 +1884,101 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     assert.equal(line(listWithWeek(mine, plan, [pie], [], [], catalog), 'Chopped Tomatoes').amount, 2);
     // A week that hasn't been sent has nothing to be out of date.
     assert.deepEqual(mealLinesOutOfDate(old, { ...plan, status: 'draft' }, [pie], [], [], catalog), []);
+  });
+}
+
+// ---------- Settings → Reminders: the calendar file ----------
+{
+  const day = (d, i) => `2026-10-${String(26 + i).padStart(2, '0')}`;
+  const names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const meals = {
+    Monday: { id: 'a', type: 'recipe', recipeId: 'r1', name: 'Chilli', cooked: true },
+    Tuesday: { id: 'b', type: 'recipe', recipeId: 'r1', name: 'Chilli' },
+    Wednesday: { id: 'c', type: 'batch', batchId: 'b1', name: 'Batch: Lasagne' },
+    Thursday: { id: 'd', type: 'recipe', recipeId: 'r2', name: 'Tikka' },
+    Friday: { id: 'e', type: 'takeout', name: 'Pizza' },
+    Saturday: { id: 'f', type: 'leftover', recipeId: 'r2', name: 'Leftovers: Tikka' },
+  };
+  const days = {};
+  names.forEach((d, i) => (days[d] = { date: day(d, i), meals: [meals[d]] }));
+  const remState = (prefs = {}) => ({
+    mealPlans: [{ id: 'p', startDate: '2026-10-26', days, status: 'finalized', isCurrent: true }],
+    recipes: [
+      {
+        id: 'r1',
+        name: 'Chilli con carne',
+        prepTime: 15,
+        cookTime: 60,
+        cookingMethods: ['oven_hob', 'ninja'],
+        methodPrepTime: { ninja: 10 },
+        methodCookTime: { ninja: 35 },
+        instructions: ['Fry, then simmer'],
+        ingredients: [],
+      },
+      {
+        id: 'r2',
+        name: 'Chicken tikka',
+        prepTime: 20,
+        cookTime: 25,
+        instructions: ['Marinate the chicken overnight in the yoghurt and spices.', 'Grill'],
+        ingredients: [],
+      },
+    ],
+    batches: [{ id: 'b1', name: 'Lasagne', portions: 2, dateAdded: '2026-10-01' }],
+    preferences: { eatAt: '18:30', preferredCookingMethod: 'ninja', ...prefs },
+  });
+  const monMorning = new Date('2026-10-26T09:00:00');
+  const hm = (d) => `${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+  test('reminders: start times like the Cook tab, freezer and get-ahead the night before', () => {
+    const r = upcomingReminders(remState(), monMorning);
+    assert.deepEqual(
+      r.map((x) => `${x.kind} ${hm(x.start)} ${x.title}`),
+      [
+        'cook 27 17:45 Start cooking: Chilli con carne',
+        'prep 27 20:00 Take the Lasagne out of the freezer',
+        'cook 28 18:00 Start reheating: Lasagne',
+        'prep 28 20:00 Get ahead: Marinate the chicken overnight in the yoghurt and spices.',
+        'cook 29 17:45 Start cooking: Chicken tikka',
+        'cook 31 18:15 Heat up leftovers: Chicken tikka',
+      ],
+    );
+    assert.equal(r[0].details, 'To eat at 6:30pm.\n45 mins prep and cooking (Ninja).');
+  });
+
+  test('reminders: cooked meals, takeaways and times already gone are left out', () => {
+    const tueEvening = new Date('2026-10-27T18:00:00');
+    const r = upcomingReminders(remState(), tueEvening);
+    assert.equal(r[0].title, 'Take the Lasagne out of the freezer');
+    assert.ok(!r.some((x) => /Pizza|Chilli/.test(x.title)));
+  });
+
+  test('reminders: alert timing and switching each kind off', () => {
+    assert.deepEqual(reminderSettings(undefined), { cook: true, cookAlertBefore: 0, prep: true, prepAt: '20:00' });
+    const early = upcomingReminders(remState({ reminderCookBefore: 30, reminderPrepAt: '19:15' }), monMorning);
+    assert.equal(early.find((x) => x.kind === 'cook').alertBefore, 30);
+    assert.equal(hm(early.find((x) => x.kind === 'prep').start), '27 19:15');
+    assert.ok(upcomingReminders(remState({ reminderPrep: false }), monMorning).every((x) => x.kind === 'cook'));
+    assert.ok(upcomingReminders(remState({ reminderCook: false }), monMorning).every((x) => x.kind === 'prep'));
+  });
+
+  test('reminders: a calendar file with an alert on each, safe text and the same id for the same day', () => {
+    const r = upcomingReminders(remState({ reminderCookBefore: 10 }), monMorning);
+    r[0].title = 'Start cooking: Fish, chips; peas';
+    const ics = remindersCalendar(r, monMorning);
+    assert.ok(ics.startsWith('BEGIN:VCALENDAR\r\nVERSION:2.0\r\n'));
+    assert.ok(ics.endsWith('END:VCALENDAR\r\n'));
+    assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 6);
+    assert.equal((ics.match(/BEGIN:VALARM/g) || []).length, 6);
+    assert.ok(ics.includes('UID:2026-10-27-cook@family-meal-planner'));
+    assert.ok(ics.includes('TRIGGER:-PT10M') && ics.includes('TRIGGER:PT0M'));
+    assert.ok(ics.includes('SUMMARY:Start cooking: Fish\\, chips\\; peas'));
+    assert.ok(ics.includes('DESCRIPTION:To eat at 6:30pm.\\n45 mins'));
+    assert.ok(
+      ics.split('\r\n').every((l) => new TextEncoder().encode(l).length <= 75),
+      'long lines folded',
+    );
+    assert.ok(/DTSTART:\d{8}T\d{6}Z/.test(ics));
   });
 }
 

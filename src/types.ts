@@ -208,6 +208,14 @@ export interface UserPreferences {
   shopHistory?: ShopRecord[];
   /** When you usually eat dinner ("18:00"; 6pm if not set), for "start by" times on the Cook tab. Settings → Household. */
   eatAt?: string;
+  /** Settings → Reminders: calendar alerts to start dinner (on unless switched off). */
+  reminderCook?: boolean;
+  /** Minutes before the start time the dinner alert goes off (0 = at the start time). */
+  reminderCookBefore?: number;
+  /** Settings → Reminders: evening-before alerts for freezer meals and get-ahead steps (on unless switched off). */
+  reminderPrep?: boolean;
+  /** When the evening-before alert goes off ("20:00"; 8pm if not set). */
+  reminderPrepAt?: string;
   /** A different time just for one evening, set on the Cook tab. */
   eatAtTonight?: { date: string; time: string };
   /** Things added to the list that you said aren't products (lower case): the Shop stops offering to save them. */
