@@ -43,6 +43,8 @@ export interface Recipe {
   cookingMethods?: CookingMethod[];
   isVegetarian?: boolean;
   isVegan?: boolean;
+  /** Made with a slow cooker or the slow-cook setting. Not set: worked out from the recipe's steps. */
+  slowCook?: boolean;
   costEstimate?: number;
   healthScore?: number;
 }

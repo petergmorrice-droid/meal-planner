@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Flame, Zap, Leaf, Snowflake, CalendarCheck, Star } from 'lucide-react';
+import { Clock, Flame, Zap, Leaf, Snowflake, CalendarCheck, Star, CookingPot } from 'lucide-react';
 import { Recipe, UserPreferences } from '../types';
 import { getRecipeEmojis, getEmojiLabel } from '../utils';
 import {
@@ -9,6 +9,7 @@ import {
   formatMinutes,
   isVegetarianRecipe,
   isVeganRecipe,
+  isSlowCookRecipe,
   formatAgo,
   formatPlannedDay,
   METHOD_LABEL,
@@ -79,6 +80,7 @@ export function RecipeCard({
 }) {
   const mins = fields.time ? totalMinutes(recipe) : null;
   const methods = fields.method ? recipeMethods(recipe) : [];
+  const slow = fields.method && isSlowCookRecipe(recipe);
   const veg = fields.veg ? (isVeganRecipe(recipe) ? 'Vegan' : isVegetarianRecipe(recipe) ? 'Veggie' : null) : null;
   const emojis = fields.emojis ? getRecipeEmojis(recipe) : [];
 
@@ -116,7 +118,7 @@ export function RecipeCard({
     ) : null;
 
   const facts =
-    mins || methods.length > 0 || veg ? (
+    mins || methods.length > 0 || slow || veg ? (
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[13px] text-zinc-700">
         {mins && (
           <span className="inline-flex items-center gap-1">
@@ -134,6 +136,12 @@ export function RecipeCard({
             {METHOD_LABEL[m]}
           </span>
         ))}
+        {slow && (
+          <span className="inline-flex items-center gap-1" data-card-slow-cook>
+            <CookingPot className="w-3.5 h-3.5 text-orange-600" />
+            Slow cook
+          </span>
+        )}
         {veg && (
           <span className="inline-flex items-center gap-1 text-emerald-800">
             <Leaf className="w-3.5 h-3.5 text-emerald-600" />

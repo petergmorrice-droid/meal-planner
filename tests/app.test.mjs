@@ -31,6 +31,7 @@ import {
   changedFields,
   recipeMatchesSearch,
   matchesQuickFilters,
+  isSlowCookRecipe,
   findDuplicate,
   normaliseRecipeName,
   isJustAUrl,
@@ -2091,6 +2092,35 @@ test('a note is remembered by product and comes back on a new line; clearing for
   );
   notes = rememberNote(notes, key, '');
   assert.deepEqual(notes, {});
+});
+
+test('Slow cook: worked out from the steps, name or tags, or marked on the recipe', () => {
+  const r = (extra) => ({
+    id: 's',
+    name: 'Beef stew',
+    description: '',
+    ingredients: [],
+    instructions: ['Brown the beef.'],
+    tags: [],
+    ...extra,
+  });
+  assert.equal(isSlowCookRecipe(r()), false);
+  assert.equal(isSlowCookRecipe(r({ instructions: ['Brown the beef.', 'Slow cook on low for 8 hours.'] })), true);
+  assert.equal(
+    isSlowCookRecipe(r({ methodInstructions: { ninja: ['Use the Slow-Cook setting, HIGH, 4 hrs.'] } })),
+    true,
+  );
+  assert.equal(isSlowCookRecipe(r({ name: 'Slow cooker pulled pork' })), true);
+  assert.equal(isSlowCookRecipe(r({ tags: ['Crockpot'] })), true);
+  assert.equal(
+    isSlowCookRecipe(r({ instructions: ['Cook slowly over a low heat.'] })),
+    false,
+    '"cook slowly" is not a slow cooker',
+  );
+  assert.equal(isSlowCookRecipe(r({ slowCook: true })), true, 'marked on');
+  assert.equal(isSlowCookRecipe(r({ name: 'Slow cooker stew', slowCook: false })), false, 'marked off wins');
+  assert.equal(matchesQuickFilters(r({ slowCook: true }), ['slow_cook'], { freezer: 0, today: '2026-10-26' }), true);
+  assert.equal(matchesQuickFilters(r(), ['slow_cook'], { freezer: 0, today: '2026-10-26' }), false);
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

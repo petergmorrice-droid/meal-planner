@@ -18,6 +18,7 @@ export {
   changedFields,
   recipeMatchesSearch,
   matchesQuickFilters,
+  isSlowCookRecipe,
   findDuplicate,
   normaliseRecipeName,
   isJustAUrl,
