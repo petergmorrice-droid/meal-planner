@@ -218,6 +218,11 @@ export interface UserPreferences {
   reminderPrepAt?: string;
   /** Settings → Reminders: keep a calendar feed of the plan and reminders in the sync Gist. */
   calendarSync?: boolean;
+  /**
+   * Notes written on Shop items, remembered by product (see productKey), so the note comes back
+   * whenever that product goes on the list again: "Regular size", "semi-skimmed".
+   */
+  itemNotes?: Record<string, { note: string; by?: string }>;
   /** A different time just for one evening, set on the Cook tab. */
   eatAtTonight?: { date: string; time: string };
   /** Things added to the list that you said aren't products (lower case): the Shop stops offering to save them. */

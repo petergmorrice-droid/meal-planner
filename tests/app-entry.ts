@@ -25,6 +25,9 @@ export {
 } from '../src/recipeInfo';
 export {
   aggregateShoppingItems,
+  withRememberedNote,
+  productKey,
+  rememberNote,
   shopQuantityText,
   defaultShopWeek,
   formatWeekSpan,

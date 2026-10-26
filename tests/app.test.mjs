@@ -36,6 +36,9 @@ import {
   isJustAUrl,
   recipeShareText,
   aggregateShoppingItems,
+  withRememberedNote,
+  productKey,
+  rememberNote,
   shopQuantityText,
   defaultShopWeek,
   formatWeekSpan,
@@ -2071,6 +2074,24 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     assert.equal(webcalUrl(url), `webcal://gist.githubusercontent.com/pete/abc123/raw/${CALENDAR_FILE}`);
   });
 }
+
+// ---------- Shop notes remembered by product ----------
+test('a note is remembered by product and comes back on a new line; clearing forgets it', () => {
+  const line = { id: 'x', name: 'Tampons', amount: 1, unit: 'pack', checked: false, isAdhoc: true };
+  const key = productKey(line);
+  let notes = rememberNote(undefined, key, '  Regular, 18 pack ', 'R');
+  assert.deepEqual(notes, { [key]: { note: 'Regular, 18 pack', by: 'R' } });
+  assert.deepEqual(withRememberedNote(line, notes), { ...line, note: 'Regular, 18 pack', noteBy: 'R' });
+  assert.equal(withRememberedNote({ ...line, note: 'Super' }, notes).note, 'Super', 'its own note wins');
+  assert.equal(withRememberedNote({ ...line, name: 'Bin bags' }, notes).note, undefined, 'other products: nothing');
+  assert.equal(
+    withRememberedNote({ ...line, id: 'y', name: 'tampons' }, notes).note,
+    'Regular, 18 pack',
+    'any spelling',
+  );
+  notes = rememberNote(notes, key, '');
+  assert.deepEqual(notes, {});
+});
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
 process.exit(failures ? 1 : 0);

@@ -55,6 +55,34 @@ export function productKey(item: { name: string; groceryId?: string }, catalog: 
 
 const isPlanned = (i: ShoppingListItem) => !i.isAdhoc && !i.isBatch && !i.isRecurring;
 
+/** Notes remembered by product (preferences.itemNotes). */
+export type RememberedNotes = Record<string, { note: string; by?: string }>;
+
+/** A new line on the list, with the note last written for its product (if it has none of its own). */
+export function withRememberedNote(
+  item: ShoppingListItem,
+  notes: RememberedNotes | undefined,
+  catalog?: Catalog,
+): ShoppingListItem {
+  if (!notes || (item.note || '').trim()) return item;
+  const saved = notes[productKey(item, catalog)];
+  if (!saved?.note) return item;
+  return { ...item, note: saved.note, ...(saved.by ? { noteBy: saved.by } : {}) };
+}
+
+/** The remembered notes with this product's note saved (or forgotten, when the note is cleared). */
+export function rememberNote(
+  notes: RememberedNotes | undefined,
+  key: string,
+  note: string,
+  by?: string,
+): RememberedNotes {
+  const next = { ...(notes || {}) };
+  if (note.trim()) next[key] = { note: note.trim(), ...(by ? { by } : {}) };
+  else delete next[key];
+  return next;
+}
+
 /**
  * Add up the list's lines into one row per product. `neededOf` gives what the meals use for a
  * meal line, worked out fresh from the week (otherwise the amount saved when the list was made).

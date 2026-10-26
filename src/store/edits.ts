@@ -6,6 +6,7 @@ import { stampShoppingItem, stampPlanDays, stampBatch, stampRecipeNotes } from '
 import { Recipe, MealPlan, PlannedMeal, BatchItem, ShoppingListItem, AppState, DayPlan } from '../types';
 import { getMonday, formatDateISO, isPastWeek, isWeekBeyondForwardLimit, cleanDays, DAYS_OF_WEEK } from '../utils';
 import { DEFAULT_PREFERENCES } from './saved';
+import { withRememberedNote } from '../shopList';
 
 /** What the ways to change the data are given by the store. */
 export interface StoreCore {
@@ -240,11 +241,13 @@ export function dataEdits({ state, latest: newest, commit, currentUser }: StoreC
     const base = fromLatest ? newest() : state;
     const list = fromLatest ? listOrChange(base.shoppingList, base) : listOrChange;
     if (fromLatest && list === base.shoppingList) return;
+    const remembered = base.preferences?.itemNotes;
     const processedList = list.map((item) => {
       const existingItem = base.shoppingList.find((i) => i.id === item.id);
       if (!existingItem) {
+        // Something new on the list: the note last written for this product comes with it.
         return {
-          ...stampShoppingItem(item, undefined, currentUser),
+          ...stampShoppingItem(withRememberedNote(item, remembered), undefined, currentUser),
           addedBy: item.addedBy || currentUser,
           lastModifiedBy: item.lastModifiedBy || currentUser,
           lastModifiedAt: item.lastModifiedAt || Date.now(),

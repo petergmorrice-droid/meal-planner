@@ -483,6 +483,45 @@ const check = (ok, label, detail = '') => {
     'typed again: goes straight to Pantry (remembered)',
   );
 
+  // ---------- A note is remembered: it comes back the next time the item goes on the list ----------
+  await page.locator('[data-item="Birthday candles"] [data-open-item]').click();
+  await page.waitForTimeout(300);
+  check(
+    /Remembered/.test(await page.locator('[data-item-note-hint]').innerText()),
+    'note box says the note is remembered',
+  );
+  await page.locator('[data-item-note]').fill('number 4, gold');
+  await page.locator('[data-item-done]').click();
+  await page.waitForTimeout(400);
+  st = await state();
+  check(
+    Object.values(st.preferences.itemNotes || {}).some((n) => n.note === 'number 4, gold'),
+    'note remembered for the product (synced)',
+    JSON.stringify(st.preferences.itemNotes),
+  );
+  await page.locator('[data-item="Birthday candles"] [data-open-item]').click();
+  await page.waitForTimeout(300);
+  await page.locator('[data-remove-item]').click();
+  await page.waitForTimeout(300);
+  await add('birthday candles');
+  await page.locator('[data-quick-add]').blur();
+  check(
+    /number 4, gold/.test(await page.locator('[data-item="Birthday candles"] [data-item-sub]').innerText()),
+    'added again: the note comes back with it',
+    await page.locator('[data-item="Birthday candles"]').innerText(),
+  );
+  // Cleared: forgotten
+  await page.locator('[data-item="Birthday candles"] [data-open-item]').click();
+  await page.waitForTimeout(300);
+  await page.locator('[data-item-note]').fill('');
+  await page.locator('[data-item-done]').click();
+  await page.waitForTimeout(400);
+  st = await state();
+  check(
+    !Object.values(st.preferences.itemNotes || {}).some((n) => n.note === 'number 4, gold'),
+    'clearing the note forgets it',
+  );
+
   // ---------- Save something new as a product (asked straight away), or say it isn't one ----------
   await add('party poppers');
   check(
