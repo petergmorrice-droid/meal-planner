@@ -1,5 +1,5 @@
 // Shared helpers for driving the app through its UI with a simulated Gemini.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 
 // What Gemini returns when asked to COPY the flow4 recipe: everything exactly as written (serves 4).
 const GEMINI_RECIPE = {
@@ -94,7 +94,7 @@ async function openApp({
 }
 
 const tab = async (page, name) => {
-  await page.locator('nav button', { hasText: new RegExp('^' + name + '$') }).click();
+  await goTab(page, name);
   await page.waitForTimeout(600);
 };
 const buttons = (page) =>

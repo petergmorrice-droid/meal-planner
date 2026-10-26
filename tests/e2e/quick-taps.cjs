@@ -1,6 +1,6 @@
 // Every change is worked out from the latest data: two taps before the screen has redrawn both
 // count. (A window left open while the other phone changes something: latest-edits.cjs.)
-const { chromium } = require('./pw.cjs');
+const { chromium, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
 let failures = 0;
@@ -35,7 +35,7 @@ const NOW = new Date('2026-10-18T12:00:00+01:00');
     await page.goto(URL);
     await page.waitForTimeout(1500);
     const tab = async (n) => {
-      await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+      await goTab(page, n);
       await page.waitForTimeout(700);
     };
     const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));

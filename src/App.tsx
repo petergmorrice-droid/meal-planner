@@ -4,8 +4,8 @@ import React from 'react';
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
-import { BookOpen, Calendar, ShoppingCart, Snowflake, ChefHat, Sliders } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { BookOpen, Calendar, ShoppingCart, Snowflake, ChefHat, Sliders, Ellipsis } from 'lucide-react';
 import { useStore } from './store';
 import { firstUrl } from './recipeInfo';
 import CookBookTab from './components/CookBookTab';
@@ -166,23 +166,101 @@ export default function App() {
             label="Cook"
             tone="orange"
           />
-          <TabButton
-            active={activeTab === 'batch'}
-            onClick={() => setActiveTab('batch')}
-            icon={<Snowflake className="w-[18px] h-[18px] stroke-[2]" />}
-            label="Freezer"
-            tone="cyan"
-          />
-          <TabButton
-            active={activeTab === 'settings'}
-            onClick={() => setActiveTab('settings')}
-            icon={<Sliders className="w-[18px] h-[18px] stroke-[2]" />}
-            label="Settings"
-            tone="zinc"
-          />
+          <MoreTab activeTab={activeTab} onPick={setActiveTab} />
         </div>
       </nav>
     </div>
+  );
+}
+
+/** The tabs under "More", with their own colours (the More button takes the colour of the one you're on). */
+const MORE_TABS = [
+  {
+    id: 'batch',
+    label: 'Freezer',
+    sub: "What's in the freezer",
+    tone: 'cyan',
+    icon: <Snowflake className="w-5 h-5 stroke-[2]" />,
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    sub: 'Reminders, sync, backup',
+    tone: 'zinc',
+    icon: <Sliders className="w-5 h-5 stroke-[2]" />,
+  },
+] as const;
+
+/** The last tab: opens a small menu above the bar to go to the Freezer or Settings. */
+function MoreTab({ activeTab, onPick }: { activeTab: TabName; onPick: (tab: TabName) => void }) {
+  const [open, setOpen] = useState(false);
+  const current = MORE_TABS.find((t) => t.id === activeTab);
+  const wrap = useRef<HTMLSpanElement>(null);
+  // Escape, or tapping anywhere outside the menu and the More button, closes it.
+  useEffect(() => {
+    if (!open) return;
+    const k = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const tap = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('keydown', k);
+    document.addEventListener('pointerdown', tap);
+    return () => {
+      window.removeEventListener('keydown', k);
+      document.removeEventListener('pointerdown', tap);
+    };
+  }, [open]);
+  return (
+    <span ref={wrap} className="contents">
+      {open && (
+        <div
+          className="absolute bottom-full right-2 mb-2 z-50 w-64 bg-white rounded-2xl border border-zinc-200 shadow-lg p-1.5 animate-in fade-in duration-150"
+          role="menu"
+          aria-label="More"
+          data-more-menu
+        >
+          {MORE_TABS.map((t) => {
+            const on = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onPick(t.id);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left cursor-pointer ${on ? TAB_TONES[t.tone].on : 'hover:bg-zinc-50 text-zinc-900'}`}
+                aria-current={on ? 'page' : undefined}
+                data-more-item={t.id}
+              >
+                <span className={`shrink-0 ${TAB_TONES[t.tone].icon}`}>{t.icon}</span>
+                <span className="min-w-0">
+                  <span className="block text-[15px] font-semibold">{t.label}</span>
+                  <span className="block text-[12px] text-zinc-500 truncate">{t.sub}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <TabButton
+        active={Boolean(current)}
+        onClick={() => setOpen((o) => !o)}
+        icon={
+          current ? (
+            React.cloneElement(current.icon, { className: 'w-[18px] h-[18px] stroke-[2]' })
+          ) : (
+            <Ellipsis className="w-[18px] h-[18px] stroke-[2]" />
+          )
+        }
+        label="More"
+        tone={current ? current.tone : 'zinc'}
+        expanded={open}
+      />
+    </span>
   );
 }
 
@@ -202,12 +280,15 @@ function TabButton({
   icon,
   label,
   tone,
+  expanded,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
   tone: keyof typeof TAB_TONES;
+  /** For the More tab: whether its menu is open. */
+  expanded?: boolean;
 }) {
   const t = TAB_TONES[tone];
   return (
@@ -217,6 +298,8 @@ function TabButton({
         active ? `${t.on} font-semibold` : 'text-zinc-500 hover:bg-zinc-50'
       }`}
       aria-current={active ? 'page' : undefined}
+      aria-haspopup={expanded === undefined ? undefined : 'menu'}
+      aria-expanded={expanded}
       data-tab-tone={tone}
     >
       <div className={`flex items-center justify-center h-5 shrink-0 ${t.icon} ${active ? '' : 'opacity-75'}`}>

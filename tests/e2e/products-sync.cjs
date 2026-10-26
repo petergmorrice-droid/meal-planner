@@ -2,7 +2,7 @@
 // each product, Same as…, also-called names, tidy-up checks, removals that stick, reset), the Shop
 // staples sheet and Planning sides reading the same list, and two phones syncing weeks day by day,
 // staples item by item, and a phone that's been away for months.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -184,7 +184,7 @@ function productSeed(old) {
     await page.goto(URL);
     await page.waitForTimeout(1500);
     const tab = async (n) => {
-      await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+      await goTab(page, n);
       await page.waitForTimeout(700);
     };
     const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));
@@ -621,7 +621,7 @@ function productSeed(old) {
       return page;
     }
     const tabOn = async (page, n) => {
-      await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+      await goTab(page, n);
       await page.waitForTimeout(600);
     };
     const cacheOf = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));

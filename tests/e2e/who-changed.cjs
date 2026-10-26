@@ -1,5 +1,5 @@
 // Who changed it: Peter blue, Rachel pink — shopping list (added by you, notes, who ticked), meals, freezer.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -26,7 +26,7 @@ const check = (ok, label, detail = '') => {
   await page.goto(URL);
   await page.waitForTimeout(1500);
   const tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(600);
   };
   const shot = (n) => page.screenshot({ path: `${OUT}/${n}.png` });

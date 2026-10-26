@@ -3,7 +3,7 @@
 // Planning: takeaway/no meal with a note, Undo, a freezer batch, "How are you having it?",
 // "Remove Leftovers?", the week menu's "Plan the week after", "Add a meal first", the freezer
 // corner. Shop: "Less than your meals need", "Bring back…", the products list, a recipe's ingredients.
-const { chromium } = require('./pw.cjs');
+const { chromium, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -36,7 +36,7 @@ const check = (ok, label, detail = '') => {
   await page.goto(URL);
   await page.waitForTimeout(1500);
   const tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(700);
   };
   const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));

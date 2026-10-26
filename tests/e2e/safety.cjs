@@ -1,6 +1,6 @@
 // Safety: one tab going wrong doesn't take the app down; a full phone says so; old shopping weeks are
 // cleared (and the old duplicate saved copies go).
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -71,11 +71,7 @@ const check = (ok, label, detail = '') => {
     await page.waitForTimeout(1500);
     return { ctx, page, errors };
   };
-  const tab = (page, n) =>
-    page
-      .locator('nav button', { hasText: new RegExp('^' + n + '$') })
-      .click()
-      .then(() => page.waitForTimeout(600));
+  const tab = (page, n) => goTab(page, n).then(() => page.waitForTimeout(600));
   const state = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));
 
   // ---------- Old shopping weeks cleared; old duplicate copies gone ----------

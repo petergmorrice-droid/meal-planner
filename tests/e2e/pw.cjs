@@ -14,4 +14,14 @@ function load() {
   );
 }
 const pw = load();
-module.exports = { chromium: pw.chromium, devices: pw.devices };
+/** Go to a tab by its name. Freezer and Settings are under the More tab, so that opens first. */
+const MORE_ITEMS = { Freezer: 'batch', Settings: 'settings' };
+async function goTab(page, name) {
+  if (MORE_ITEMS[name]) {
+    await page.locator('nav button', { hasText: /^More$/ }).click();
+    await page.locator(`[data-more-item="${MORE_ITEMS[name]}"]`).click();
+  } else {
+    await page.locator('nav button', { hasText: new RegExp('^' + name + '$') }).click();
+  }
+}
+module.exports = { chromium: pw.chromium, devices: pw.devices, goTab };

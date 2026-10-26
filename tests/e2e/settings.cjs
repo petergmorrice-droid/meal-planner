@@ -1,7 +1,7 @@
 // Settings on one page: this phone (who, Gemini key test), household, sync setup, shopping shortcuts, products, past weeks, backup & reset, version and the update banner.
 // cooking mode (amounts per step, get everything out, timers that survive leaving, big steps,
 // read aloud, method switch), finished screen (fridge, freezer, verdict, note), day panel, weeks.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -137,7 +137,7 @@ function seed() {
   await page.goto(URL);
   await page.waitForTimeout(1500);
   const tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(700);
   };
   const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));
@@ -154,6 +154,43 @@ function seed() {
       .trim();
 
   check((await page.locator('[data-update-banner]').count()) === 0, 'no update banner when up to date');
+
+  // ---- The tab bar: five tabs, Freezer and Settings under More ----
+  const navLabels = await page.locator('nav button[data-tab-tone]').allInnerTexts();
+  check(
+    navLabels.map((t) => t.trim()).join(',') === 'Cookbook,Planning,Shop,Cook,More',
+    'tab bar: five tabs ending in More',
+    navLabels.join(','),
+  );
+  const more = page.locator('nav button', { hasText: /^More$/ });
+  await more.click();
+  await page.waitForTimeout(200);
+  check(
+    (await page.locator('[data-more-menu] [data-more-item]').allInnerTexts()).join('|').replace(/\n/g, ' ') ===
+      "Freezer What's in the freezer|Settings Reminders, sync, backup",
+    'More: offers the Freezer and Settings',
+    await page
+      .locator('[data-more-menu]')
+      .innerText()
+      .catch(() => ''),
+  );
+  check((await more.getAttribute('aria-expanded')) === 'true', 'More: says its menu is open');
+  await shot('00-more-menu');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  check((await page.locator('[data-more-menu]').count()) === 0, 'More: Escape closes the menu');
+  await more.click();
+  await page.mouse.click(20, 200);
+  await page.waitForTimeout(200);
+  check((await page.locator('[data-more-menu]').count()) === 0, 'More: tapping elsewhere closes the menu');
+  check((await more.getAttribute('aria-current')) === null, 'More: not highlighted on another tab');
+  await tab('Freezer');
+  check(
+    (await page.locator('[data-more-menu]').count()) === 0 && (await more.getAttribute('aria-current')) === 'page',
+    'More: picking the Freezer opens it, and More shows as the current tab',
+  );
+  check((await more.getAttribute('data-tab-tone')) === 'cyan', "More: takes the Freezer's colour");
+
   await tab('Settings');
   await shot('01-settings-top');
   for (const sec of ['phone', 'household', 'reminders', 'sync', 'shopping', 'history', 'backup', 'about'])

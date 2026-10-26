@@ -2,7 +2,7 @@
 // date and "Update list" puts them right, keeping your ticks. The case found on a real phone:
 // BBC Good Food's veggie shepherd's pie, whose "410g can green lentils" came out as "205 g canses"
 // (a product made with Shop as -> new, unit "g can") and whose chopped tomatoes said "check amount".
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed, TEST_NOW } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -74,7 +74,7 @@ function seed() {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const tab = async (n) => {
-    await page.locator('nav button', { hasText: new RegExp('^' + n + '$') }).click();
+    await goTab(page, n);
     await page.waitForTimeout(700);
   };
   const qty = async (name) =>

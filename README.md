@@ -6,6 +6,9 @@ AI Studio (export dated 5 October 2026) and now maintained here.
 
 ## What's in the app
 
+The bar along the bottom has five tabs: Cookbook, Planning, Shop, Cook and **More**, which opens a small menu
+for the Freezer and Settings (More takes the colour of whichever of the two you're on).
+
 | Tab | What it does |
 | --- | --- |
 | **Cookbook** | Your recipe book. Add a recipe by pasting it, pasting a link to it (Gemini opens the page), taking a photo of a cookbook page, or asking Gemini to write one; on Android you can also share a recipe page from Chrome to the app. Gemini copies recipes exactly as written, then you check them on the same editor as the recipe page, where each ingredient shows what it's bought as on the shopping list (*Shop as*). It spots recipes you already have (replace or keep both). Search covers names, ingredients and notes; one-tap filters: Favourites, Not had lately, Under 30 min, Veggie, Ninja, In the freezer. Cards show the time, Oven/Hob or Ninja, vegetarian/vegan, when you last had it (or when it's planned) and portions in the freezer. Opening a recipe shows everything on one page, with Favourite, Share, *Start cooking* and *Add to a day…*. |
