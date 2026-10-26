@@ -7,7 +7,7 @@ import React from 'react';
 import { useRef, useState } from 'react';
 import { BookOpen, Calendar, ShoppingCart, Snowflake, ChefHat, Sliders, Ellipsis } from 'lucide-react';
 import { useStore } from './store';
-import { useMorningSchedule } from './hooks/useMorningSchedule';
+import { useNotificationSchedule } from './hooks/useNotificationSchedule';
 import { firstUrl } from './recipeInfo';
 import CookBookTab from './components/CookBookTab';
 import PlanningTab from './components/PlanningTab';
@@ -73,8 +73,8 @@ export default function App() {
   const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
 
   const store = useStore();
-  // The morning notifications (Settings → Notifications): kept up to date with the notification sender.
-  useMorningSchedule(store.state);
+  // The reminder notifications (Settings → Reminders): kept up to date with the notification sender.
+  useNotificationSchedule(store.state);
 
   // Shop opens on its own best week, unless you came from "See the list" for a particular week.
   const [shopPlanRequest, setShopPlanRequest] = useState<string | null>(null);

@@ -1,6 +1,7 @@
-// Settings → Notifications: turning them on signs this phone up with the notification sender (on
-// Netlify) under a household key in the synced settings; adding things by hand sends one grouped
-// message a little later; Send test and Turn off. The sender and the phone's push system are stood in for.
+// Settings → On this phone: turning notifications on signs this phone up with the notification sender
+// (on Netlify) under a household key in the synced settings; the reminders (Settings → Reminders) go to
+// the sender as a schedule; adding things by hand sends a message; Send test and Turn off. The sender
+// and the phone's push system are stood in for.
 const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const { createMockGist } = require('./mockgist.cjs');
@@ -19,7 +20,12 @@ const check = (ok, label, detail = '') => {
 
 (async () => {
   const browser = await chromium.launch();
-  const mock = createMockGist({ 'family-meal-planner.json': JSON.stringify(reviewSeed()) });
+  // Next Thursday's dinner from the freezer, so there's something to take out the night before.
+  const seed = reviewSeed();
+  seed.mealPlans[1].days.Thursday.meals = [
+    { id: 'n4', type: 'batch', batchId: 'b1', name: 'Batch: Chilli con carne', servings: 2 },
+  ];
+  const mock = createMockGist({ 'family-meal-planner.json': JSON.stringify(seed) });
   const ctx = await browser.newContext({
     ...devices['Pixel 7'],
     locale: 'en-GB',
@@ -110,7 +116,7 @@ const check = (ok, label, detail = '') => {
   );
   check(calls[0].action === 'key', "the sender's public key is fetched first");
   check(
-    /^On\. This phone hears/.test(await text('[data-notify-status]')),
+    /^On\. The reminders, and Rachel adding things/.test(await text('[data-notify-status]')),
     'shows it is on',
     await text('[data-notify-status]'),
   );
@@ -134,36 +140,72 @@ const check = (ok, label, detail = '') => {
   );
   check(/close the app now/.test(await page.locator('body').innerText()), 'says to close the app');
 
-  // ---------- The morning notifications: sent to the sender as a schedule ----------
+  // ---------- The reminders: sent to the sender as a schedule ----------
   await page.clock.runFor(6000);
   await page.waitForTimeout(400);
   const schedules = () => calls.filter((c) => c.action === 'schedule');
+  const kind = (notes, k) => (notes || []).filter((n) => n.id.endsWith(`-${k}`));
   const sched = schedules().at(-1);
   check(
     sched && sched.body.household === household && sched.body.notes.some((n) => n.title === "Tonight's dinner"),
-    "the coming days' morning notifications are sent to the sender",
+    "the coming days' reminders are sent to the sender",
     JSON.stringify(sched && sched.body.notes.slice(0, 2)),
   );
+  const notes = sched ? sched.body.notes : [];
   check(
-    sched && sched.body.notes.length > 0 && sched.body.notes.every((n) => londonTime(n.at) === '09:00'),
-    'at 9am',
-    JSON.stringify(sched && sched.body.notes.map((n) => londonTime(n.at))),
+    kind(notes, 'dinner').length > 0 && kind(notes, 'dinner').every((n) => londonTime(n.at) === '09:00'),
+    'each morning at 9am',
+    JSON.stringify(kind(notes, 'dinner').map((n) => londonTime(n.at))),
   );
-  check(/Each morning at 9am/.test(await text('[data-notify-kind="dinner"]')), "Tonight's dinner: each morning at 9am");
-  await page.locator('[data-notify-dinner-switch]').click();
-  await page.locator('[data-notify-morning-at]').fill('07:30');
+  check(
+    kind(notes, 'cook').length > 0 &&
+      kind(notes, 'cook').every((n) => /^Start|^Heat/.test(n.title) && /:(00|15|30|45)$/.test(londonTime(n.at))),
+    'time to start cooking, on the quarter hour',
+    JSON.stringify(kind(notes, 'cook').map((n) => `${londonTime(n.at)} ${n.title}`)),
+  );
+  check(
+    kind(notes, 'prep').length > 0 && kind(notes, 'prep').every((n) => londonTime(n.at) === '20:00'),
+    'the night before at 8pm',
+    JSON.stringify(kind(notes, 'prep').map((n) => londonTime(n.at))),
+  );
+  check(
+    (await page.locator('[data-reminder-cook-window]').count()) === 1,
+    'says start-cooking notifications only go out 3pm to 9:45pm',
+  );
+  await page.locator('[data-setting-reminder-morning-at]').fill('07:30');
+  await page.locator('[data-setting-reminder-prep-switch]').click();
   await page.waitForTimeout(300);
   await page.clock.runFor(6000);
   await page.waitForTimeout(400);
   const after = schedules().at(-1);
   check(
-    after !== sched && after.body.notes.every((n) => n.title !== "Tonight's dinner" && new Date(n.at).getHours() === 7),
-    'dinner switched off and time changed: the schedule follows',
+    after !== sched &&
+      kind(after.body.notes, 'prep').length === 0 &&
+      kind(after.body.notes, 'dinner').every((n) => londonTime(n.at) === '07:30'),
+    'night-before switched off and morning time changed: the schedule follows (the same settings as the calendar)',
     JSON.stringify(after && after.body.notes),
   );
-  check((await state()).preferences.notifyDinner === false, 'saved (both phones)');
-  await page.locator('[data-notify-dinner-switch]').click();
-  await page.screenshot({ path: `${OUT}/n2-morning.png`, fullPage: false });
+  check((await state()).preferences.notifyMorningAt === '07:30', 'saved (both phones)');
+  await page.locator('[data-setting-reminder-prep-switch]').click();
+  await page.locator('[data-setting-reminder-morning-at]').fill('09:00');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/n2-reminders.png`, fullPage: false });
+
+  // ---------- The calendar: just the dinners for a phone with notifications ----------
+  await page.locator('[data-calendar-sync-on]').click();
+  await page.waitForTimeout(2500);
+  await page.locator('[data-calendar-sync]').scrollIntoViewIfNeeded();
+  check(
+    (await page.locator('[data-segmented="calendar-feed"] button[aria-pressed="true"]').innerText()) ===
+      'Just the dinners',
+    'calendar: just the dinners, since this phone has notifications',
+  );
+  check(
+    /raw\/meal-planner-calendar\.ics$/.test(await text('[data-calendar-sync-url]')),
+    'calendar: the dinners-only feed link',
+    await text('[data-calendar-sync-url]'),
+  );
+  await page.screenshot({ path: `${OUT}/n3-calendar.png`, fullPage: false });
 
   // ---------- Adding things by hand: sent straight away, each listing what was added just before ----------
   await goTab(page, 'Shop');
@@ -190,7 +232,7 @@ const check = (ok, label, detail = '') => {
   // Morning time: only 6am to 11:45am
   await goTab(page, 'Settings');
   await page.waitForTimeout(600);
-  await page.locator('[data-notify-morning-at]').fill('14:00');
+  await page.locator('[data-setting-reminder-morning-at]').fill('14:00');
   await page.waitForTimeout(300);
   check((await state()).preferences.notifyMorningAt !== '14:00', 'an afternoon time is not taken');
 
@@ -202,6 +244,12 @@ const check = (ok, label, detail = '') => {
     'Turn off: this phone signs off',
   );
   check((await page.locator('[data-notify-on]').count()) === 1, 'and offers to turn it on again');
+  check(
+    (await page.locator('[data-segmented="calendar-feed"] button[aria-pressed="true"]').innerText()) ===
+      'With reminders' && /meal-planner-calendar-alerts\.ics$/.test(await text('[data-calendar-sync-url]')),
+    'calendar: now offers the feed with the reminders as alerts',
+    await text('[data-calendar-sync-url]'),
+  );
 
   check(errors.length === 0, 'no page errors', errors.join(' | '));
   await browser.close();

@@ -138,12 +138,15 @@ export { INITIAL_GROCERY_DATABASE } from '../src/utils/initialGroceryDb';
 export {
   upcomingReminders,
   remindersCalendar,
-  reminderSettings,
   plannedMealEvents,
   calendarFeedEvents,
   calendarFeedFiles,
   calendarFeedUrl,
+  calendarFeedMissing,
+  reminderFileEvents,
   webcalUrl,
   CALENDAR_FILE,
+  CALENDAR_ALERTS_FILE,
 } from '../src/calendarReminders';
-export { morningSchedule, morningSettings } from '../src/pushSchedule';
+export { reminderSettings, senderChecksAt } from '../src/reminderSettings';
+export { notificationSchedule } from '../src/pushSchedule';

@@ -204,7 +204,7 @@ function seed() {
   );
   const sections = {
     phone: ['phone', 'about'],
-    household: ['household', 'reminders', 'notifications', 'history'],
+    household: ['household', 'reminders', 'notifications', 'calendar', 'history'],
     shopping: ['shopping'],
     sync: ['sync', 'backup'],
   };
@@ -221,7 +221,7 @@ function seed() {
     check(shown.join(',') === secs.join(','), `tab ${id}: ${secs.join(', ')}`, shown.join(','));
   }
 
-  // ---- Reminders: this week's meals as a calendar file ----
+  // ---- Reminders: what you're reminded about (both phones), then how this phone gets them ----
   const fs = require('fs');
   const calendarFile = async () => {
     const wait = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
@@ -239,26 +239,44 @@ function seed() {
     (await page.locator('[data-calendar-sync-needs]').count()) === 1,
     'calendar sync: asks for Sync between phones first',
   );
+  await page.locator('[data-calendar-goto-sync]').click();
+  await page.waitForTimeout(200);
   check(
-    /dinner reminders/.test(await text('[data-reminders-summary]')),
-    'reminders: says how many',
+    (await page.locator('[data-settings-tab="sync"][aria-selected="true"]').count()) === 1 &&
+      (await page.locator('[data-settings-sync]').count()) === 1,
+    'Set up sync: opens the Sync & backup tab',
+  );
+  await settingsTab(page, 'household');
+  check(
+    /mornings/.test(await text('[data-reminders-summary]')) &&
+      /start-cooking/.test(await text('[data-reminders-summary]')),
+    'reminders: says what is coming',
     await text('[data-reminders-summary]'),
   );
   await page.locator('[data-reminders-show]').click();
   const remList = await text('[data-reminders-list]');
   check(
-    /Start cooking: Chilli con carne/.test(remList) && /Take the Spaghetti bolognese out of the freezer/.test(remList),
-    "reminders: tonight's cook and tomorrow's freezer meal",
+    /Start cooking: Chilli con carne/.test(remList) &&
+      /Take the Spaghetti bolognese out of the freezer/.test(remList) &&
+      /Tomorrow 9am · Tonight: Spaghetti bolognese/.test(remList),
+    "reminders: tonight's cook, tomorrow's freezer meal and tomorrow morning's heads-up",
     remList,
   );
-  check(!/Takeout|Eating out|Spaghetti bolognese · Start cooking/.test(remList), 'reminders: no takeaways', remList);
+  const cookItems = (await page.locator('[data-reminders-list] [data-reminder="cook"]').allInnerTexts()).join('|');
+  check(!/Takeout|Takeaway|Eating out/.test(cookItems), 'reminders: no cooking for takeaways', cookItems);
   await shot('01b-reminders');
+  await page.locator('[data-reminders-file-toggle]').click();
   let cal = await calendarFile();
   check(cal.name === 'meal-reminders-2026-10-14.ics', 'reminders: calendar file downloads', cal.name);
   check(
     /BEGIN:VCALENDAR/.test(cal.text) && /BEGIN:VALARM/.test(cal.text) && /TRIGGER:PT0M/.test(cal.text),
     'reminders: events with alerts',
     cal.text.slice(0, 300),
+  );
+  check(
+    /SUMMARY:Dinner: /.test(cal.text),
+    'reminders: the morning heads-up rides on the dinner',
+    cal.text.slice(0, 600),
   );
   await page.locator('[data-segmented="reminder-cook"] button', { hasText: '10 mins' }).click();
   await page.waitForTimeout(300);
@@ -273,9 +291,26 @@ function seed() {
     'reminders: night-before switched off',
   );
   await page.locator('[data-setting-reminder-prep-switch]').click();
+  await page.locator('[data-setting-reminder-prep-at]').fill('23:00');
+  await page.waitForTimeout(200);
+  check(
+    (await state()).preferences.reminderPrepAt !== '23:00',
+    'reminders: night-before only when notifications can go out (not 11pm)',
+  );
+  await page.locator('[data-setting-reminder-prep-at]').fill('19:30');
+  await page.waitForTimeout(200);
+  check((await state()).preferences.reminderPrepAt === '19:30', 'reminders: night-before at 7:30pm');
+  await page.locator('[data-setting-reminder-morning-switch]').click();
+  await page.waitForTimeout(300);
+  check(
+    (await state()).preferences.notifyDinner === false &&
+      (await page.locator('[data-reminders-list] [data-reminder="meal"]').count()) === 0,
+    'reminders: morning heads-up switched off',
+  );
+  await page.locator('[data-setting-reminder-morning-switch]').click();
   await page.locator('[data-segmented="reminder-cook"] button', { hasText: 'At start' }).click();
   await page.waitForTimeout(300);
-  check(/Last added on this phone/.test(await text('[data-reminders-summary]')), 'reminders: remembers when added');
+  check(/Last added on this phone/.test(await text('[data-reminders-last-added]')), 'reminders: remembers when added');
 
   check(
     (await page.locator('text=Multi-Cooker Model').count()) === 0 &&

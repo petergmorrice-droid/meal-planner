@@ -1,42 +1,22 @@
-// Settings → Reminders: the coming meals as calendar events, so each phone's own calendar sends
-// the alerts (when to start dinner, what to take out of the freezer the night before) even when
-// the app is closed. Pure functions (no React, no storage): the screen downloads the .ics file,
-// and with calendar sync on, every upload to the sync Gist also writes it there as a calendar feed
-// that each person's calendar subscribes to, so it follows the plan by itself.
+// Settings → Calendar: the planned dinners and the reminders (reminderSettings.ts) as calendar
+// events, so a phone without notifications still gets the reminders, from its own calendar, even
+// when the app is closed. Pure functions (no React, no storage). With calendar sync on, every upload
+// to the sync Gist also writes two calendar feeds there, which each person's calendar subscribes
+// to: just the dinners (for a phone that has notifications), or the dinners with the reminders as
+// alerts. The screen can also download the alerts once as a file.
 import { BatchItem, MealPlan, PlannedMeal, Recipe, UserPreferences } from './types';
 import { eatAtFor, parseClock, prepTonight, recipeMinutes, clockText } from './cookInfo';
 import { REHEAT_MINUTES, dayISO, isCookable } from './components/cook/cookDays';
 import { DAYS_OF_WEEK } from './utils';
+import { reminderSettings } from './reminderSettings';
 
-/** When the night-before reminder goes off if you haven't said: 8pm. */
-export const DEFAULT_PREP_AT = '20:00';
 /** A recipe with no times in it: assume this long. */
 const UNKNOWN_RECIPE_MINUTES = 45;
-
-export interface ReminderSettings {
-  /** Alerts when it's time to start dinner. */
-  cook: boolean;
-  /** How many minutes before the start time the alert goes off (0 = at the start time). */
-  cookAlertBefore: number;
-  /** Alerts the evening before: freezer meals to take out, steps to do ahead. */
-  prep: boolean;
-  /** When the evening alert goes off ("20:00"). */
-  prepAt: string;
-}
-
-export function reminderSettings(prefs?: Partial<UserPreferences> | null): ReminderSettings {
-  return {
-    cook: prefs?.reminderCook !== false,
-    cookAlertBefore: Math.max(0, Number(prefs?.reminderCookBefore) || 0),
-    prep: prefs?.reminderPrep !== false,
-    prepAt: parseClock(prefs?.reminderPrepAt) !== null ? prefs!.reminderPrepAt! : DEFAULT_PREP_AT,
-  };
-}
 
 export interface CalendarReminder {
   /** Stays the same for the same day and kind, so adding again can replace rather than double up. */
   uid: string;
-  /** 'meal' is the planned dinner itself (no alert); 'cook' and 'prep' are the reminders. */
+  /** 'meal' is the planned dinner itself (its alert, if any, is the morning heads-up); 'cook' and 'prep' are the reminders. */
   kind: 'meal' | 'cook' | 'prep';
   /** The day it goes off ("2026-10-27"). */
   date: string;
@@ -163,8 +143,11 @@ export function upcomingReminders(
 function mealTitle(meal: PlannedMeal, recipes: Recipe[], batches: BatchItem[]): string {
   const recipe = meal.recipeId ? recipes.find((r) => r.id === meal.recipeId) : null;
   const bare = meal.name.replace(/^(leftovers?|batch):\s*/i, '').trim();
-  if (meal.type === 'takeout') return bare ? `Takeaway: ${bare}` : 'Takeaway';
-  if (meal.type === 'eating_out') return bare ? `Eating out: ${bare}` : 'Eating out';
+  // A takeaway called "Takeaway" doesn't need saying twice.
+  const named = (label: string) =>
+    bare && bare.toLowerCase().replace('takeout', 'takeaway') !== label.toLowerCase() ? `${label}: ${bare}` : label;
+  if (meal.type === 'takeout') return named('Takeaway');
+  if (meal.type === 'eating_out') return named('Eating out');
   if (meal.type === 'batch')
     return `Dinner: ${batches.find((b) => b.id === meal.batchId)?.name || bare || 'from the freezer'} (from the freezer)`;
   if (meal.type === 'leftover') return `Dinner: ${recipe?.name || bare || 'leftovers'} (leftovers)`;
@@ -173,16 +156,20 @@ function mealTitle(meal: PlannedMeal, recipes: Recipe[], batches: BatchItem[]): 
 
 /**
  * The planned dinners themselves, from `fromDate` ("2026-10-19") on, at your usual eating time:
- * cooked or not, takeaways and eating out too (days with no meal are left out). No alerts; the
- * reminders carry those.
+ * cooked or not, takeaways and eating out too (days with no meal are left out). With `alerts`, each
+ * carries the morning heads-up (when that's on) as its alert; otherwise no alerts.
  */
 export function plannedMealEvents(
   state: { mealPlans?: MealPlan[]; recipes?: Recipe[]; batches?: BatchItem[]; preferences?: Partial<UserPreferences> },
   fromDate: string,
+  alerts = false,
 ): CalendarReminder[] {
   const recipes = state.recipes || [];
   const batches = state.batches || [];
   const eatAt = parseClock(eatAtFor(state.preferences, '').usual)!;
+  const settings = reminderSettings(state.preferences);
+  const morningBefore = eatAt - parseClock(settings.morningAt)!;
+  const alertBefore = alerts && settings.morning && morningBefore > 0 ? morningBefore : null;
   const meals = new Map<string, PlannedMeal>();
   const plans = [...(state.mealPlans || [])].sort((a, b) => a.startDate.localeCompare(b.startDate));
   for (const plan of plans)
@@ -209,56 +196,85 @@ export function plannedMealEvents(
       ]
         .filter(Boolean)
         .join('\n'),
-      alertBefore: null,
+      alertBefore,
     });
   }
   return out;
 }
 
-// ---------- Calendar sync: a feed in the sync Gist ----------
+// ---------- Calendar sync: two feeds in the sync Gist ----------
 
-/** The calendar feed's file name in the sync Gist. */
+/** The feed of just the dinners (for a phone whose reminders come as notifications). */
 export const CALENDAR_FILE = 'meal-planner-calendar.ics';
+/** The feed of the dinners and the reminders, with alerts (for a phone without notifications). */
+export const CALENDAR_ALERTS_FILE = 'meal-planner-calendar-alerts.ics';
+const CALENDAR_FILES = [CALENDAR_FILE, CALENDAR_ALERTS_FILE];
 /** Days already gone that stay in the feed, so last week's dinners don't vanish from the calendar. */
 const FEED_PAST_DAYS = 14;
 
-/** The address calendars subscribe to: the newest copy of the feed file in the Gist. */
-export function calendarFeedUrl(owner: string, gistId: string): string {
-  return `https://gist.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(gistId)}/raw/${CALENDAR_FILE}`;
+/** The address calendars subscribe to: the newest copy of that feed's file in the Gist. */
+export function calendarFeedUrl(owner: string, gistId: string, alerts = false): string {
+  const file = alerts ? CALENDAR_ALERTS_FILE : CALENDAR_FILE;
+  return `https://gist.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(gistId)}/raw/${file}`;
 }
 
 /** The same address for "Subscribe" on iPhone, iPad and Mac (webcal:// opens the Calendar app). */
 export const webcalUrl = (url: string) => url.replace(/^https:/, 'webcal:');
 
+const isoDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const byTime = (a: CalendarReminder, b: CalendarReminder) =>
+  a.start.getTime() - b.start.getTime() || a.kind.localeCompare(b.kind);
+
 /**
- * Everything in the feed: the planned dinners and their reminders, from two weeks ago on. Once
- * notifications are set up (Settings → Notifications), those send the reminders, so the feed has
- * just the dinners and no alerts.
+ * What's in a feed: the planned dinners from two weeks ago on, and with `alerts`, the reminders
+ * too: the morning heads-up on each dinner, and the start-cooking and night-before reminders.
  */
 export function calendarFeedEvents(
   state: { mealPlans?: MealPlan[]; recipes?: Recipe[]; batches?: BatchItem[]; preferences?: Partial<UserPreferences> },
   now: Date,
+  alerts = false,
 ): CalendarReminder[] {
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - FEED_PAST_DAYS);
-  const fromDate = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
-  const reminders = state.preferences?.pushHousehold ? [] : upcomingReminders(state, from);
-  return [...plannedMealEvents(state, fromDate), ...reminders].sort(
-    (a, b) => a.start.getTime() - b.start.getTime() || a.kind.localeCompare(b.kind),
-  );
+  const reminders = alerts ? upcomingReminders(state, from) : [];
+  return [...plannedMealEvents(state, isoDay(from), alerts), ...reminders].sort(byTime);
 }
 
 /**
- * The Gist files to write alongside the data: the calendar feed when calendar sync is on, or
- * (when it's been switched off) the old feed removed, so calendars empty out rather than go stale.
+ * The reminders still to come, as calendar events with alerts, in the order they go off: the same
+ * events (and ids) as the alerts feed, so downloading them again replaces rather than doubles up.
+ */
+export function reminderFileEvents(
+  state: { mealPlans?: MealPlan[]; recipes?: Recipe[]; batches?: BatchItem[]; preferences?: Partial<UserPreferences> },
+  now: Date,
+): CalendarReminder[] {
+  const mornings = plannedMealEvents(state, isoDay(now), true).filter(
+    (m) => m.alertBefore !== null && m.start.getTime() - m.alertBefore * 60000 > now.getTime(),
+  );
+  const alertAt = (r: CalendarReminder) => r.start.getTime() - (r.alertBefore || 0) * 60000;
+  return [...mornings, ...upcomingReminders(state, now)].sort((a, b) => alertAt(a) - alertAt(b) || byTime(a, b));
+}
+
+/**
+ * The Gist files to write alongside the data: both calendar feeds when calendar sync is on, or
+ * (when it's been switched off) the old feeds removed, so calendars empty out rather than go stale.
  */
 export function calendarFeedFiles(
   state: { mealPlans?: MealPlan[]; recipes?: Recipe[]; batches?: BatchItem[]; preferences?: Partial<UserPreferences> },
   existingFiles: string[],
   now: Date,
 ): Record<string, { content: string } | null> {
-  if (state.preferences?.calendarSync)
-    return { [CALENDAR_FILE]: { content: remindersCalendar(calendarFeedEvents(state, now), now) } };
-  return existingFiles.includes(CALENDAR_FILE) ? { [CALENDAR_FILE]: null } : {};
+  const out: Record<string, { content: string } | null> = {};
+  if (state.preferences?.calendarSync) {
+    out[CALENDAR_FILE] = { content: remindersCalendar(calendarFeedEvents(state, now), now) };
+    out[CALENDAR_ALERTS_FILE] = { content: remindersCalendar(calendarFeedEvents(state, now, true), now) };
+  } else for (const f of CALENDAR_FILES) if (existingFiles.includes(f)) out[f] = null;
+  return out;
+}
+
+/** Calendar sync is on but a feed isn't in the Gist yet (just turned on, or from before there were two). */
+export function calendarFeedMissing(state: { preferences?: Partial<UserPreferences> }, existingFiles: string[]) {
+  return Boolean(state.preferences?.calendarSync) && CALENDAR_FILES.some((f) => !existingFiles.includes(f));
 }
 
 // ---------- The .ics file ----------
@@ -286,7 +302,7 @@ function fold(line: string): string {
   return parts.join('\r\n ');
 }
 
-/** A calendar file holding the reminders, each with an alert. */
+/** A calendar file of these events, with an alert on each that has one. */
 export function remindersCalendar(reminders: CalendarReminder[], now: Date): string {
   const stamp = utc(now);
   // Higher than last time, so a calendar that tracks events by their id takes the newer one.

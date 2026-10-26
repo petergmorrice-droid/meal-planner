@@ -5,9 +5,11 @@ import { MealPlan, UserPreferences, GroceryItem, DatabaseCleanAction } from '../
 import { isPastWeek } from '../utils';
 import { catalogForState } from '../shopping';
 import { useDeviceIdentity } from '../hooks/useDeviceIdentity';
+import { pushOnHere } from '../pushNotify';
 import { CleanDatabaseModal } from './CleanDatabaseModal';
 import { AboutSection } from './settings/AboutSection';
 import { BackupSection } from './settings/BackupSection';
+import { CalendarSection } from './settings/CalendarSection';
 import { HistoryPage } from './settings/HistoryPage';
 import { Household } from './settings/Household';
 import { RemindersSection } from './settings/RemindersSection';
@@ -33,7 +35,7 @@ let lastSection: Section = 'phone';
 
 /**
  * Settings in four tabs: this phone (who, theme, Gemini key, version), household (people,
- * reminders, notifications, past weeks), shopping, and sync & backup. Products and past weeks
+ * reminders and how this phone gets them, the calendar, past weeks), shopping, and sync & backup. Products and past weeks
  * open as their own pages.
  */
 export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: SettingsTabProps) {
@@ -50,6 +52,8 @@ export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: S
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [cleaning, setCleaning] = useState(false);
+  // Whether this phone has notifications on: its calendar then needs just the dinners.
+  const [pushOn, setPushOn] = useState(pushOnHere);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), toast.undo ? 6000 : 3000);
@@ -109,8 +113,16 @@ export default function SettingsTab({ store, onNavigateTab, onOpenShopPanel }: S
           {section === 'household' && (
             <>
               <Household prefs={prefs} store={store} />
-              <RemindersSection store={store} say={say} />
-              <NotificationsSection store={store} who={who} say={say} />
+              <RemindersSection store={store} who={who} />
+              <NotificationsSection
+                store={store}
+                who={who}
+                say={say}
+                on={pushOn}
+                setOn={setPushOn}
+                onGoToSync={() => setSection('sync')}
+              />
+              <CalendarSection store={store} say={say} pushOn={pushOn} onGoToSync={() => setSection('sync')} />
               <section data-settings-history>
                 <h3 className={sectionTitle}>History</h3>
                 <div className={card}>

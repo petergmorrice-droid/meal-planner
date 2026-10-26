@@ -1,4 +1,4 @@
-/** Small pieces the Settings pages are built from: rows, a segmented choice, a sheet, a sub-page header. */
+/** Small pieces the Settings pages are built from: rows, a switch, a segmented choice, a sheet, a sub-page header. */
 import React, { useEffect } from 'react';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { GROCERY_AISLES } from '../../utils';
@@ -35,6 +35,35 @@ export function NavRow({
         {sub && <span className="block text-[13px] text-zinc-500 truncate">{sub}</span>}
       </span>
       <ChevronRight className="w-4 h-4 text-zinc-400 shrink-0" />
+    </button>
+  );
+}
+
+/** An on/off switch; `attr` names its data attribute ("setting-x-switch" → data-setting-x-switch). */
+export function Switch({
+  on,
+  label,
+  onClick,
+  attr,
+}: {
+  on: boolean;
+  label: string;
+  onClick: () => void;
+  attr: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={onClick}
+      className={`w-12 h-7 rounded-full p-0.5 shrink-0 cursor-pointer transition-colors ${on ? 'bg-emerald-600' : 'bg-zinc-300'}`}
+      {...{ [`data-${attr}`]: true }}
+    >
+      <span
+        className={`block w-6 h-6 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : ''}`}
+      />
     </button>
   );
 }

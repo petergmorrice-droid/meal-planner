@@ -221,12 +221,12 @@ export function sendTestLater(household: string, who: string): number {
   return TEST_LATER_S;
 }
 
-// ---------- The morning notifications' schedule ----------
+// ---------- The reminder notifications' schedule ----------
 
 const LS_SCHEDULE = 'mp-push-schedule';
 
 /**
- * Send the sender the coming days' morning notifications, when they've changed since this phone last
+ * Send the sender the coming days' reminder notifications, when they've changed since this phone last
  * sent them (either phone can: both work it out from the same synced plan).
  */
 export async function uploadSchedule(household: string, notes: ScheduledNote[]): Promise<boolean> {

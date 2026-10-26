@@ -8,10 +8,13 @@ import {
   calendarFeedEvents,
   calendarFeedFiles,
   calendarFeedUrl,
+  calendarFeedMissing,
+  reminderFileEvents,
   webcalUrl,
   CALENDAR_FILE,
-  morningSchedule,
-  morningSettings,
+  CALENDAR_ALERTS_FILE,
+  notificationSchedule,
+  senderChecksAt,
   orderedAisles,
   aislePositions,
   GROCERY_AISLES,
@@ -2011,12 +2014,33 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
   });
 
   test('reminders: alert timing and switching each kind off', () => {
-    assert.deepEqual(reminderSettings(undefined), { cook: true, cookAlertBefore: 0, prep: true, prepAt: '20:00' });
+    assert.deepEqual(reminderSettings(undefined), {
+      morning: true,
+      morningAt: '09:00',
+      cook: true,
+      cookAlertBefore: 0,
+      prep: true,
+      prepAt: '20:00',
+    });
     const early = upcomingReminders(remState({ reminderCookBefore: 30, reminderPrepAt: '19:15' }), monMorning);
     assert.equal(early.find((x) => x.kind === 'cook').alertBefore, 30);
     assert.equal(hm(early.find((x) => x.kind === 'prep').start), '27 19:15');
     assert.ok(upcomingReminders(remState({ reminderPrep: false }), monMorning).every((x) => x.kind === 'cook'));
     assert.ok(upcomingReminders(remState({ reminderCook: false }), monMorning).every((x) => x.kind === 'prep'));
+  });
+
+  test('reminders: times only when the notification sender is checking', () => {
+    assert.equal(reminderSettings({ notifyMorningAt: '06:00' }).morningAt, '06:00');
+    assert.equal(reminderSettings({ notifyMorningAt: '11:45' }).morningAt, '11:45');
+    assert.equal(reminderSettings({ notifyMorningAt: '05:30' }).morningAt, '09:00', 'before the sender checks: 9am');
+    assert.equal(reminderSettings({ notifyMorningAt: '14:00' }).morningAt, '09:00', 'afternoon: 9am');
+    assert.equal(reminderSettings({ reminderPrepAt: '21:45' }).prepAt, '21:45');
+    assert.equal(reminderSettings({ reminderPrepAt: '22:30' }).prepAt, '20:00', 'after the sender stops: 8pm');
+    assert.equal(reminderSettings({ reminderPrepAt: '14:30' }).prepAt, '20:00');
+    assert.deepEqual(
+      [6 * 60, 11 * 60 + 45, 12 * 60, 14 * 60 + 45, 15 * 60, 21 * 60 + 45, 22 * 60].map(senderChecksAt),
+      [true, true, false, false, true, true, false],
+    );
   });
 
   test('reminders: a calendar file with an alert on each, safe text and the same id for the same day', () => {
@@ -2052,65 +2076,128 @@ test('only the fields you changed are saved (the rest stays as the latest copy h
     );
     assert.ok(m.every((x) => x.kind === 'meal' && x.alertBefore === null));
     assert.equal(plannedMealEvents(remState(), '2026-10-01')[0].details, 'Cooked ✓');
+    const plain = structuredClone(remState());
+    plain.mealPlans[0].days.Friday.meals = [{ id: 'e', type: 'takeout', name: 'Takeaway' }];
+    assert.equal(plannedMealEvents(plain, '2026-10-30')[0].title, 'Takeaway', 'a takeaway called "Takeaway" said once');
   });
 
-  test('calendar sync: the feed holds the dinners and reminders, alerts only on reminders', () => {
-    const ev = calendarFeedEvents(remState(), monMorning);
-    assert.equal(ev.filter((x) => x.kind === 'meal').length, 6, 'last few days kept, so Monday stays');
-    assert.equal(ev.filter((x) => x.kind !== 'meal').length, 6);
-    const ics = remindersCalendar(ev, monMorning);
+  test('calendar sync: with alerts, each dinner carries the morning heads-up', () => {
+    const m = plannedMealEvents(remState({ notifyMorningAt: '08:00' }), '2026-10-27', true);
+    assert.ok(
+      m.every((x) => x.alertBefore === 630),
+      'eat at 6:30pm, so 10½ hours before',
+    );
+    assert.ok(plannedMealEvents(remState({ notifyDinner: false }), '2026-10-27', true).every((x) => !x.alertBefore));
+  });
+
+  test('calendar sync: two feeds, just the dinners and the dinners with the reminders as alerts', () => {
+    const dinners = calendarFeedEvents(remState(), monMorning);
+    assert.equal(dinners.length, 6, 'last few days kept, so Monday stays');
+    assert.ok(dinners.every((x) => x.kind === 'meal' && x.alertBefore === null));
+    assert.equal((remindersCalendar(dinners, monMorning).match(/BEGIN:VALARM/g) || []).length, 0);
+    const alerts = calendarFeedEvents(remState(), monMorning, true);
+    assert.equal(alerts.filter((x) => x.kind === 'meal').length, 6);
+    assert.equal(alerts.filter((x) => x.kind !== 'meal').length, 6);
+    const ics = remindersCalendar(alerts, monMorning);
     assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, 12);
-    assert.equal((ics.match(/BEGIN:VALARM/g) || []).length, 6);
+    assert.equal(
+      (ics.match(/BEGIN:VALARM/g) || []).length,
+      12,
+      'the morning heads-up on each dinner, and the reminders',
+    );
     assert.ok(ics.includes('UID:2026-10-26-meal@family-meal-planner'));
+    assert.ok(ics.includes('TRIGGER:-PT570M'), '9am for dinner at 6:30pm');
     assert.ok(ics.includes('REFRESH-INTERVAL;VALUE=DURATION:PT1H'));
+    // Notifications being set up for the household no longer changes either feed.
+    const withPush = calendarFeedEvents(remState({ pushHousehold: 'a'.repeat(32) }), monMorning, true);
+    assert.equal(withPush.length, alerts.length);
   });
 
-  test('calendar sync: once notifications are set up, the feed has just the dinners, no alerts', () => {
-    const ev = calendarFeedEvents(remState({ pushHousehold: 'a'.repeat(32) }), monMorning);
-    assert.ok(ev.length > 0 && ev.every((x) => x.kind === 'meal' && x.alertBefore === null));
-    assert.equal((remindersCalendar(ev, monMorning).match(/BEGIN:VALARM/g) || []).length, 0);
+  test('download once: the reminders still to come, in the order they go off', () => {
+    const r = reminderFileEvents(remState(), monMorning);
+    const alertAt = (x) => new Date(x.start.getTime() - x.alertBefore * 60000);
+    assert.deepEqual(
+      r.slice(0, 4).map((x) => `${x.kind} ${hm(alertAt(x))} ${x.title}`),
+      [
+        'meal 27 9:00 Dinner: Chilli con carne',
+        'cook 27 17:45 Start cooking: Chilli con carne',
+        'prep 27 20:00 Take the Lasagne out of the freezer',
+        'meal 28 9:00 Dinner: Lasagne (from the freezer)',
+      ],
+    );
+    assert.ok(
+      r.every((x) => x.alertBefore !== null),
+      'every one has an alert',
+    );
+    assert.ok(!r.some((x) => x.date === '2026-10-26'), "today's 9am has gone; Monday's dinner is cooked");
+    assert.ok(reminderFileEvents(remState({ notifyDinner: false }), monMorning).every((x) => x.kind !== 'meal'));
   });
 
-  test("morning notifications: tonight's dinner at 9am with its start time, and what to do tonight", () => {
-    const n = morningSchedule(remState(), monMorning);
+  test('notifications: the same reminders, each morning, at the start time and the night before', () => {
+    const n = notificationSchedule(remState(), monMorning);
     const at = (x) =>
       `${new Date(x.at).getDate()} ${new Date(x.at).getHours()}:${String(new Date(x.at).getMinutes()).padStart(2, '0')}`;
     assert.deepEqual(
       n.map((x) => `${at(x)} ${x.id} | ${x.title} | ${x.body}`),
       [
         "26 9:00 2026-10-26-dinner | Tonight's dinner | Chilli con carne.",
-        "27 9:00 2026-10-27-dinner | Tonight's dinner | Chilli con carne. Start by 5:45pm.",
-        "27 9:00 2026-10-27-prep | To do tonight | Take the Lasagne out of the freezer tonight, for tomorrow's dinner.",
-        "28 9:00 2026-10-28-dinner | Tonight's dinner | Lasagne (from the freezer). Start by 6pm.",
-        "28 9:00 2026-10-28-prep | To do tonight | Marinate the chicken overnight in the yoghurt and spices (for tomorrow's Chicken tikka).",
+        "27 9:00 2026-10-27-dinner | Tonight's dinner | Chilli con carne. Start by 5:45pm. Take the Lasagne out of the freezer tonight, for tomorrow's dinner.",
+        '27 17:45 2026-10-27-cook | Start cooking: Chilli con carne | To eat at 6:30pm. 45 mins prep and cooking (Ninja).',
+        "27 20:00 2026-10-27-prep | To do tonight | Take the Lasagne out of the freezer tonight, for tomorrow's dinner.",
+        "28 9:00 2026-10-28-dinner | Tonight's dinner | Lasagne (from the freezer). Start by 6pm. Marinate the chicken overnight in the yoghurt and spices (for tomorrow's Chicken tikka).",
+        '28 18:00 2026-10-28-cook | Start reheating: Lasagne | To eat at 6:30pm. About 30 mins to heat through.',
+        "28 20:00 2026-10-28-prep | To do tonight | Marinate the chicken overnight in the yoghurt and spices (for tomorrow's Chicken tikka).",
         "29 9:00 2026-10-29-dinner | Tonight's dinner | Chicken tikka. Start by 5:45pm.",
+        '29 17:45 2026-10-29-cook | Start cooking: Chicken tikka | To eat at 6:30pm. 45 mins prep and cooking (oven & hob).',
         "30 9:00 2026-10-30-dinner | Tonight's dinner | Takeaway: Pizza.",
         "31 9:00 2026-10-31-dinner | Tonight's dinner | Chicken tikka (leftovers). Start by 6:15pm.",
+        '31 18:15 2026-10-31-cook | Heat up leftovers: Chicken tikka | To eat at 6:30pm. About 15 mins to heat through.',
       ],
     );
     assert.ok(n.every((x) => x.tab === 'this_week'));
-    // Calendar reminder settings don't matter; the notification switches and time do
-    assert.equal(morningSchedule(remState({ reminderCook: false, reminderPrep: false }), monMorning).length, 8);
-    const later = morningSchedule(remState({ notifyMorningAt: '07:30', notifyPrep: false }), monMorning);
-    assert.ok(later.every((x) => x.id.endsWith('dinner') && new Date(x.at).getHours() === 7));
-    assert.equal(morningSchedule(remState({ notifyDinner: false, notifyPrep: false }), monMorning).length, 0);
-    assert.deepEqual(morningSettings(undefined), { dinner: true, prep: true, at: '09:00' });
-    assert.equal(morningSettings({ notifyMorningAt: '06:00' }).at, '06:00');
-    assert.equal(morningSettings({ notifyMorningAt: '11:45' }).at, '11:45');
-    assert.equal(morningSettings({ notifyMorningAt: '05:30' }).at, '09:00', 'before the sender checks: 9am');
-    assert.equal(morningSettings({ notifyMorningAt: '14:00' }).at, '09:00', 'afternoon: 9am');
+    // The same settings as the calendar's alerts
+    const ids = (prefs) => notificationSchedule(remState(prefs), monMorning).map((x) => x.id.slice(11));
+    assert.ok(!ids({ reminderCook: false }).includes('cook'));
+    assert.ok(!ids({ reminderPrep: false }).includes('prep'));
+    assert.ok(!ids({ notifyDinner: false }).includes('dinner'));
+    assert.equal(ids({ notifyDinner: false, reminderCook: false, reminderPrep: false }).length, 0);
+    const before = notificationSchedule(remState({ reminderCookBefore: 10 }), monMorning).find((x) =>
+      x.id.endsWith('cook'),
+    );
+    assert.equal(
+      `${at(before)} ${before.body}`,
+      '27 17:30 Start at 5:45pm. To eat at 6:30pm.',
+      'on the quarter before',
+    );
+    const later = notificationSchedule(remState({ notifyMorningAt: '07:40', reminderPrepAt: '19:00' }), monMorning);
+    assert.ok(later.filter((x) => x.id.endsWith('dinner')).every((x) => at(x).endsWith(' 7:30')));
+    assert.ok(later.filter((x) => x.id.endsWith('prep')).every((x) => at(x).endsWith(' 19:00')));
+    // A start time outside the sender's hours isn't sent as a notification
+    const lunch = notificationSchedule(remState({ eatAt: '13:00' }), monMorning);
+    assert.ok(!lunch.some((x) => x.id.endsWith('cook')));
+    assert.ok(lunch.some((x) => x.id.endsWith('dinner')));
   });
 
-  test('calendar sync: the Gist gets the feed when on, and loses it when switched off', () => {
+  test('calendar sync: the Gist gets both feeds when on, and loses them when switched off', () => {
     const on = calendarFeedFiles(remState({ calendarSync: true }), [], monMorning);
     assert.ok(on[CALENDAR_FILE].content.startsWith('BEGIN:VCALENDAR'));
-    assert.deepEqual(calendarFeedFiles(remState(), ['family-meal-planner.json', CALENDAR_FILE], monMorning), {
-      [CALENDAR_FILE]: null,
-    });
+    assert.ok(!on[CALENDAR_FILE].content.includes('VALARM'));
+    assert.ok(on[CALENDAR_ALERTS_FILE].content.includes('VALARM'));
+    assert.deepEqual(
+      calendarFeedFiles(remState(), ['family-meal-planner.json', CALENDAR_FILE, CALENDAR_ALERTS_FILE], monMorning),
+      { [CALENDAR_FILE]: null, [CALENDAR_ALERTS_FILE]: null },
+    );
     assert.deepEqual(calendarFeedFiles(remState(), ['family-meal-planner.json'], monMorning), {});
+    assert.equal(calendarFeedMissing(remState({ calendarSync: true }), [CALENDAR_FILE]), true, 'from before two feeds');
+    assert.equal(calendarFeedMissing(remState({ calendarSync: true }), [CALENDAR_FILE, CALENDAR_ALERTS_FILE]), false);
+    assert.equal(calendarFeedMissing(remState(), []), false);
     const url = calendarFeedUrl('pete', 'abc123');
     assert.equal(url, `https://gist.githubusercontent.com/pete/abc123/raw/${CALENDAR_FILE}`);
     assert.equal(webcalUrl(url), `webcal://gist.githubusercontent.com/pete/abc123/raw/${CALENDAR_FILE}`);
+    assert.equal(
+      calendarFeedUrl('pete', 'abc123', true),
+      `https://gist.githubusercontent.com/pete/abc123/raw/${CALENDAR_ALERTS_FILE}`,
+    );
   });
 }
 
