@@ -196,15 +196,26 @@ export async function sendTest(household: string, who: string): Promise<number> 
   return Number(res.sent) || 0;
 }
 
-/** A test sent in about 45 seconds: close the app to check notifications arrive with it closed. Says how long. */
-export async function sendTestLater(household: string, who: string): Promise<number> {
-  const res = await post('test-later', {
-    household,
-    from: who,
-    title: 'Meal planner',
-    body: `Delayed test from ${personName(who) || 'the meal planner'}: notifications work with the app closed.`,
-  });
-  return Number(res.in) || 45;
+/** How long the delayed test waits (netlify/push-core.mts TEST_DELAY_S). */
+export const TEST_LATER_S = 45;
+
+/**
+ * A test sent in about 45 seconds: close the app to check notifications arrive with it closed. The
+ * sender holds the request until it has sent the test, so this doesn't wait for its answer (the
+ * request carries on with the app closed).
+ */
+export function sendTestLater(household: string, who: string): number {
+  post(
+    'test-later',
+    {
+      household,
+      from: who,
+      title: 'Meal planner',
+      body: `Delayed test from ${personName(who) || 'the meal planner'}: notifications work with the app closed.`,
+    },
+    true,
+  ).catch((err) => console.warn('Delayed test not sent:', err));
+  return TEST_LATER_S;
 }
 
 // ---------- The morning notifications' schedule ----------

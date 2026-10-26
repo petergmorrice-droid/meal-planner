@@ -53,7 +53,7 @@ export const MAX_PHONES = 10;
 export const MAX_SCHEDULED = 80;
 /** A scheduled notification more than this late isn't sent (the plan changed after its time). */
 export const STALE_MS = 30 * 60 * 1000;
-/** How long the delayed test waits. */
+/** How long the delayed test waits (the function can run for 60 seconds at most). */
 export const TEST_DELAY_S = 45;
 
 const HOUSEHOLD = /^[0-9a-f]{32,64}$/;
