@@ -1,5 +1,5 @@
 // Planning week cards fit; leftover/freezer days coloured; Send to list shows the whole week; Our notes always there.
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, toThisWeek } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -90,7 +90,33 @@ const check = (ok, label, detail = '') => {
   await page.waitForTimeout(300);
 
   // ---------- Planning: week cards fit, nothing cut off; tones ----------
+  // On a Wednesday: Planning and the Shop open on next week, the Cook tab on this week.
+  const weekName = (sel) =>
+    page
+      .locator(sel)
+      .first()
+      .innerText()
+      .then((t) => t.trim())
+      .catch(() => '');
+  await tab('Shop');
+  check(
+    /^next week$/i.test(await weekName('[data-shop-week-name]')),
+    'Shop opens on next week',
+    await weekName('[data-shop-week-name]'),
+  );
+  await tab('Cook');
+  check(
+    /^this week$/i.test(await weekName('[data-cook-week-name]')),
+    'Cook opens on this week',
+    await weekName('[data-cook-week-name]'),
+  );
   await tab('Planning');
+  check(
+    /^next week$/i.test(await weekName('[data-week-name]')),
+    'Planning opens on next week',
+    await weekName('[data-week-name]'),
+  );
+  await toThisWeek(page);
   const strip = page.locator('[data-week-strip]');
   if (!(await strip.count())) {
     await page

@@ -29,4 +29,9 @@ async function settingsTab(page, id) {
   await page.locator(`[data-settings-tab="${id}"]`).click();
   await page.waitForTimeout(200);
 }
-module.exports = { chromium: pw.chromium, devices: pw.devices, goTab, settingsTab };
+/** Planning and the Shop open on next week: step back to this week. */
+async function toThisWeek(page) {
+  await page.locator('[data-week-prev], [data-shop-week-prev]').first().click();
+  await page.waitForTimeout(300);
+}
+module.exports = { chromium: pw.chromium, devices: pw.devices, goTab, settingsTab, toThisWeek };

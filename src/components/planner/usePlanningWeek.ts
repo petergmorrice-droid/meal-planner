@@ -15,7 +15,6 @@ import {
   MAX_FORWARD_WEEKS,
   syncRecurringStaplesForPlan,
 } from '../../utils';
-import { preferredWeekStart } from '../../planning';
 import type { AppStore } from '../../store';
 
 export function usePlanningWeek(
@@ -70,11 +69,7 @@ export function usePlanningWeek(
       if (match) return match.id;
     }
 
-    // Monday–Thursday: this week (what's for tea tonight); Friday–Sunday: next week (planning time).
-    const preferred = plans.find(
-      (p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr),
-    );
-    if (preferred) return preferred.id;
+    // Next week: the one you're planning (the Cook tab shows this week).
     const nextWeekPlan = plans.find((p: MealPlan) => p.startDate === nextMondayStr);
     if (nextWeekPlan) return nextWeekPlan.id;
 
@@ -102,12 +97,9 @@ export function usePlanningWeek(
     if (allowedPlans.length === 0) {
       if (selectedPlanId !== null) setSelectedPlanId(null);
     } else if (!selectedPlanId || !allowedPlans.some((p) => p.id === selectedPlanId)) {
-      const preferred = allowedPlans.find(
-        (p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr),
-      );
       const nextWeekPlan = allowedPlans.find((p: MealPlan) => p.startDate === nextMondayStr);
       const currentWeekPlan = allowedPlans.find((p: MealPlan) => p.startDate === currentMondayStr);
-      setSelectedPlanId(preferred?.id || nextWeekPlan?.id || currentWeekPlan?.id || allowedPlans[0].id);
+      setSelectedPlanId(nextWeekPlan?.id || currentWeekPlan?.id || allowedPlans[0].id);
     }
   }, [allowedPlans, selectedPlanId, nextMondayStr, currentMondayStr]);
 
@@ -115,9 +107,6 @@ export function usePlanningWeek(
   let currentPlan = allowedPlans.find((p: MealPlan) => p.id === selectedPlanId);
   if (!currentPlan && allowedPlans.length > 0) {
     currentPlan =
-      allowedPlans.find(
-        (p: MealPlan) => p.startDate === preferredWeekStart(new Date(), currentMondayStr, nextMondayStr),
-      ) ||
       allowedPlans.find((p: MealPlan) => p.startDate === nextMondayStr) ||
       allowedPlans.find((p: MealPlan) => p.startDate === currentMondayStr) ||
       allowedPlans[0];

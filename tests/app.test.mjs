@@ -115,7 +115,6 @@ import {
   changedDaysSinceList,
   cooksForText,
   leftoverSourceDay,
-  preferredWeekStart,
   isLeftoverOf,
   orphanedLeftoverDays,
   mealOnDay,
@@ -1528,14 +1527,6 @@ test('list out of date: only what changes the shopping (not notes), and only for
     [],
     'sent before records were kept',
   );
-});
-
-test('Planning opens on this week Monday–Thursday, next week Friday–Sunday', () => {
-  const at = (iso) => new Date(iso + 'T12:00:00');
-  assert.equal(preferredWeekStart(at('2026-10-12'), 'this', 'next'), 'this'); // Monday
-  assert.equal(preferredWeekStart(at('2026-10-15'), 'this', 'next'), 'this'); // Thursday
-  assert.equal(preferredWeekStart(at('2026-10-16'), 'this', 'next'), 'next'); // Friday
-  assert.equal(preferredWeekStart(at('2026-10-18'), 'this', 'next'), 'next'); // Sunday
 });
 
 // ---------- Changes to the shopping list (src/shopListEdits.ts) ----------
