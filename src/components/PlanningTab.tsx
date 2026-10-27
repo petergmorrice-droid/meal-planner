@@ -66,7 +66,8 @@ export default function PlanningTab({
   const [sidesEditingMeal, setSidesEditingMeal] = useState<{ dayName: string; meal: PlannedMeal } | null>(null);
   // Copy-a-week picker: 'pick' lists weeks; a plan means "confirm replacing this week's meals with it".
   const [copyWeekState, setCopyWeekState] = useState<'pick' | MealPlan | null>(null);
-  const [autoPopulating, setAutoPopulating] = useState(false);
+  // Auto populate: the whole week, or one day (from that day's "Select meal").
+  const [autoPopulating, setAutoPopulating] = useState<{ day?: string } | null>(null);
   const [draggedRecipe, setDraggedRecipe] = useState<Recipe | null>(null);
   const [assigningRecipe, setAssigningRecipe] = useState<Recipe | null>(null); // "Add to a day"
   const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
@@ -245,13 +246,7 @@ export default function PlanningTab({
             weekLabel={weekLabel}
             onPick={switchToPlan}
             onClose={() => setShowWeekDropdown(false)}
-            copyUnavailable={
-              currentPlan?.status === 'finalized'
-                ? "Not once it's on the shopping list"
-                : copyCandidates.length === 0
-                  ? 'No other weeks with meals yet'
-                  : null
-            }
+            copyUnavailable={copyCandidates.length === 0 ? 'No other weeks with meals yet' : null}
             onCopy={() => {
               setShowWeekDropdown(false);
               setCopyWeekState('pick');
@@ -259,7 +254,7 @@ export default function PlanningTab({
             autoPopulateUnavailable={canAutoPopulate ? null : 'Every day already has a meal'}
             onAutoPopulate={() => {
               setShowWeekDropdown(false);
-              setAutoPopulating(true);
+              setAutoPopulating({});
             }}
             canPlanNext={canPlanNext}
             maxWeeks={maxWeeks}
@@ -443,6 +438,10 @@ export default function PlanningTab({
           onRecipe={(r) => pickRecipe(selectedDay, r)}
           onQuick={pickQuick}
           onBatch={(batchId) => pickBatch(selectedDay, batchId)}
+          onAutoPopulate={() => {
+            setAutoPopulating({ day: selectedDay });
+            setSelectedDay(null);
+          }}
           onClose={() => setSelectedDay(null)}
         />
       )}
@@ -507,13 +506,14 @@ export default function PlanningTab({
         <AutoPopulateSheet
           store={store}
           plan={currentPlan}
+          day={autoPopulating.day}
           weekLabel={weekLabel}
           defaultServings={defaultServings}
           onApply={(picks, people, onHand) => {
-            editor.autoPopulate(picks, people, onHand);
-            setAutoPopulating(false);
+            editor.autoPopulate(picks, people, onHand, autoPopulating.day);
+            setAutoPopulating(null);
           }}
-          onClose={() => setAutoPopulating(false)}
+          onClose={() => setAutoPopulating(null)}
         />
       )}
 

@@ -168,6 +168,7 @@ import {
   weekUses,
   unusedLeftovers,
   pickId,
+  fillDays,
   QUICK_MINUTES,
 } from '../.test-build/app.mjs';
 
@@ -2675,6 +2676,54 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
       'Chicken stir fry',
       'never had (pasta and stir fry tie on that; the seed decides)',
     );
+  });
+
+  test('putting picks on the week: empty days only, unless a day is being replaced (its leftovers cook fresh)', () => {
+    let n = 0;
+    const newId = () => `new${++n}`;
+    const days = week({ Monday: cook('a', 'bol'), Tuesday: lefto('b', 'bol', 'Reheat from Monday') });
+    const pick = (day, recipeId) => ({
+      day,
+      kind: 'recipe',
+      recipeId,
+      name: recipeId,
+      reasons: [],
+      uses: {},
+      score: 1,
+    });
+    const kept = fillDays(days, [pick('Monday', 'pasta'), pick('Wednesday', 'pasta')], 2, { newId });
+    assert.equal(kept.added, 1, 'Monday has a meal: kept');
+    assert.equal(kept.days.Monday.meals[0].recipeId, 'bol');
+    assert.equal(kept.days.Wednesday.meals[0].recipeId, 'pasta');
+    const r = fillDays(days, [pick('Monday', 'pasta')], 3, { replace: ['Monday'], newId });
+    assert.equal(r.added, 1);
+    assert.deepEqual(r.days.Monday.meals[0], {
+      id: 'new2',
+      type: 'recipe',
+      recipeId: 'pasta',
+      name: 'pasta',
+      servings: 3,
+    });
+    assert.deepEqual(
+      r.replaced.map((m) => m.id),
+      ['a'],
+    );
+    assert.deepEqual(r.freshDays, ['Tuesday'], 'its leftovers day now cooks it fresh');
+    assert.equal(r.days.Tuesday.meals[0].type, 'recipe');
+    const frozen = fillDays(
+      days,
+      [{ day: 'Sunday', kind: 'freezer', batchId: 'b2', name: 'Lentil soup', reasons: [], uses: {}, score: 1 }],
+      2,
+      { newId },
+    );
+    assert.deepEqual(frozen.days.Sunday.meals[0], {
+      id: 'new3',
+      type: 'batch',
+      batchId: 'b2',
+      name: 'Batch: Lentil soup',
+      servings: 2,
+      note: '',
+    });
   });
 
   test('suggest: what the picks leave mostly untouched (for Gemini ideas)', () => {

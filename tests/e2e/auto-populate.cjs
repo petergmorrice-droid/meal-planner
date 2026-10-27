@@ -280,7 +280,7 @@ function geminiAnswer(prompt) {
   );
   await page.screenshot({ path: `${OUT}/auto-populate-5-shop.png` });
 
-  // ---- A full, sent week: both greyed out, saying why ----
+  // ---- A full, sent week: Copy a week can still be used; Auto populate is greyed out, saying why ----
   await page.locator('nav button', { hasText: /^Planning$/ }).click();
   await page.waitForTimeout(400);
   await page.locator('[data-week-name]').click();
@@ -288,9 +288,8 @@ function geminiAnswer(prompt) {
   const copyText = await page.locator('[data-menu-action="copy"]').innerText();
   const autoText = await page.locator('[data-menu-action="auto-populate"]').innerText();
   check(
-    (await page.locator('[data-menu-action="copy"]').isDisabled()) &&
-      /Not once it's on the shopping list/.test(copyText),
-    'sent week: Copy a week greyed out, saying why',
+    (await page.locator('[data-menu-action="copy"]').isEnabled()) && copyText.trim() === 'Copy a week',
+    'sent week: Copy a week can still be used (the list then says Update list)',
     copyText,
   );
   check(
@@ -311,26 +310,38 @@ function geminiAnswer(prompt) {
     /0 of 7 planned/.test(await page.locator('[data-planned-count]').innerText()),
     'the row under the week bar shows the count',
   );
-  for (const width of [390, 360]) {
-    await page.setViewportSize({ width, height: 800 });
+  // A short screen too: only the list of weeks scrolls; Copy a week and Auto populate always show.
+  for (const [width, height] of [
+    [390, 800],
+    [360, 600],
+  ]) {
+    await page.setViewportSize({ width, height });
     await page.waitForTimeout(200);
     await page.locator('[data-week-name]').click();
     await page.waitForTimeout(250);
     const box = await page.evaluate(() => {
       const r = (e) => e && e.getBoundingClientRect();
+      const menu = document.querySelector('[data-week-menu]');
       return {
+        menu: r(menu),
         copy: r(document.querySelector('[data-menu-action="copy"]')),
         auto: r(document.querySelector('[data-menu-action="auto-populate"]')),
+        menuScrolls: menu.scrollHeight > menu.clientHeight + 1,
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
     check(
-      box.copy && box.auto && box.auto.right <= width && box.auto.bottom <= 800 && box.copy.top >= 0,
-      `${width}px: both fit on screen`,
+      box.copy &&
+        box.auto &&
+        box.auto.right <= width &&
+        box.auto.bottom <= Math.min(height, box.menu.bottom) &&
+        box.copy.top >= Math.max(0, box.menu.top),
+      `${width}x${height}: Copy a week and Auto populate show without scrolling`,
       JSON.stringify(box),
     );
+    check(!box.menuScrolls, `${width}x${height}: only the list of weeks scrolls, not the menu`);
     check(box.overflow <= 0, `${width}px: no sideways scrolling`, box.overflow);
-    await page.screenshot({ path: `${OUT}/auto-populate-7-menu-${width}.png` });
+    await page.screenshot({ path: `${OUT}/auto-populate-7-menu-${width}x${height}.png` });
     if (width === 390) {
       await page.mouse.click(5, 5);
       await page.waitForTimeout(200);
@@ -339,6 +350,57 @@ function geminiAnswer(prompt) {
   await page.locator('[data-menu-action="auto-populate"]').click();
   check((await sheet.getAttribute('data-auto-populate')) === 'left', 'opens from an empty week too');
   await page.locator('[data-auto-populate] [aria-label="Close"]').click();
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.waitForTimeout(200);
+
+  // ---- From a day's "Select meal": Auto populate just that day ----
+  const emptyWeekId = (await state()).mealPlans
+    .map((p) => p.id)
+    .sort()
+    .pop();
+  await page.locator('[data-week-day="Monday"] button', { hasText: /Add meal/ }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/auto-populate-9-select-meal.png` });
+  await page.locator('[data-picker-auto-populate]').click();
+  await page.waitForTimeout(300);
+  check((await sheet.getAttribute('data-auto-populate')) === 'left', 'Select meal: Auto populate opens it');
+  check(/Auto populate Monday/.test(await sheet.innerText()), 'for Monday');
+  await page.locator('[data-ap-next]').click();
+  check(
+    (await page.locator('[data-fill-day="Monday"]').getAttribute('aria-pressed')) === 'true' &&
+      (await page.locator('[data-fill-day="Tuesday"]').getAttribute('aria-pressed')) === 'false',
+    'just Monday picked',
+  );
+  await page.locator('[data-ap-next]').click();
+  await page.waitForTimeout(200);
+  check((await page.locator('[data-pick-day]').count()) === 1, 'one suggestion, for Monday');
+  const monPick = (await page.locator('[data-pick-day="Monday"] [data-pick-name]').allInnerTexts())[0] || '';
+  check(/^Put 1 on the week$/.test((await page.locator('[data-ap-next]').innerText()).trim()), 'Put 1 on the week');
+  await page.locator('[data-ap-next]').click();
+  await page.waitForTimeout(400);
+  let monday = (await state()).mealPlans.find((p) => p.id === emptyWeekId).days.Monday.meals[0];
+  check(!!monPick && monday?.name.endsWith(monPick), 'Monday gets the suggestion', `${monPick} / ${monday?.name}`);
+
+  // ---- Change meal → Auto populate: replaces that day's meal ----
+  await page.locator('[data-week-day="Monday"]').click();
+  await page.waitForTimeout(300);
+  await page.locator('button', { hasText: /^Change meal$/ }).click();
+  await page.waitForTimeout(300);
+  await page.locator('[data-picker-auto-populate]').click();
+  await page.locator('[data-ap-next]').click();
+  check(
+    !(await page.locator('[data-fill-day="Monday"]').isDisabled()) &&
+      (await page.locator('[data-fill-day="Monday"]').getAttribute('aria-pressed')) === 'true',
+    "Monday can be picked although it has a meal (it's replaced)",
+  );
+  await page.locator('[data-ap-next]').click();
+  await page.waitForTimeout(200);
+  const newPick = (await page.locator('[data-pick-day="Monday"] [data-pick-name]').allInnerTexts())[0] || '';
+  await page.locator('[data-ap-next]').click();
+  await page.waitForTimeout(400);
+  monday = (await state()).mealPlans.find((p) => p.id === emptyWeekId).days.Monday.meals;
+  check(monday.length === 1 && monday[0].name.endsWith(newPick), 'the meal is replaced', JSON.stringify(monday));
+  check(/^Replaced .+ on Monday/.test(await page.locator('[data-notice]').innerText()), 'says what it replaced');
 
   // ---- The List view: the week bar is near the top, so the menu opens below it, all on screen ----
   await page.evaluate(() => localStorage.setItem('planning_view', 'list'));

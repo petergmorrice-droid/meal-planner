@@ -166,5 +166,6 @@ export {
   weekUses,
   unusedLeftovers,
   pickId,
+  fillDays,
   QUICK_MINUTES,
 } from '../src/autoPlan';

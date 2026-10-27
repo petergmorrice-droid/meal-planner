@@ -85,6 +85,7 @@ const chip = (on: boolean, disabled = false) =>
 export default function AutoPopulateSheet({
   store,
   plan,
+  day,
   weekLabel,
   defaultServings,
   onApply,
@@ -93,6 +94,8 @@ export default function AutoPopulateSheet({
   store: AppStore;
   /** The week being filled. */
   plan: MealPlan;
+  /** Started from this day's "Select meal": just this day to begin with (its meal, if any, is replaced). */
+  day?: string;
   weekLabel: (startDate: string) => string;
   defaultServings: number;
   onApply: (picks: DayPick[], people: number, onHand: OnHandItem[]) => void;
@@ -138,8 +141,16 @@ export default function AutoPopulateSheet({
   };
 
   // ---- Step 2: the week ----
-  const fillable = (day: string) => !plan.days[day]?.meals?.length && planDayDate(plan, day) >= today;
-  const [days, setDays] = useState<string[]>(() => WEEK_DAYS.filter(fillable));
+  const fillable = (d: string) => d === day || (!plan.days[d]?.meals?.length && planDayDate(plan, d) >= today);
+  const [days, setDays] = useState<string[]>(() => (day ? [day] : WEEK_DAYS.filter(fillable)));
+  // The meal being replaced doesn't count as planned (its recipe can come up again; it uses nothing).
+  const weekNow = useMemo(
+    () =>
+      day && plan.days[day]?.meals?.length
+        ? { ...plan, days: { ...plan.days, [day]: { ...plan.days[day], meals: [] } } }
+        : plan,
+    [plan, day],
+  );
   const [busy, setBusy] = useState<string[]>(() => prefs?.autoPlanBusyDays || []);
   const [people, setPeople] = useState(defaultServings);
   const [mood, setMood] = useState<AutoPlanMood>(prefs?.autoPlanMood || 'mix');
@@ -165,8 +176,8 @@ export default function AutoPopulateSheet({
     useFreezer: useFreezer && freezer.length > 0,
   };
   const alreadyUses = useMemo(
-    () => weekUses(plan, s.recipes, confirmed, catalog),
-    [plan, s.recipes, confirmed, catalog],
+    () => weekUses(weekNow, s.recipes, confirmed, catalog),
+    [weekNow, s.recipes, confirmed, catalog],
   );
   const ctx = (): AutoPlanContext => ({
     recipes: store.state.recipes,
@@ -177,7 +188,7 @@ export default function AutoPopulateSheet({
     freezer,
     weekStart: plan.startDate,
     today,
-    plannedRecipeIds: WEEK_DAYS.flatMap((d) => (plan.days[d]?.meals || []).map((m) => m.recipeId || '')).filter(
+    plannedRecipeIds: WEEK_DAYS.flatMap((d) => (weekNow.days[d]?.meals || []).map((m) => m.recipeId || '')).filter(
       Boolean,
     ),
     alreadyUses,
@@ -320,7 +331,7 @@ export default function AutoPopulateSheet({
               <div className="min-w-0">
                 <h3 className="text-lg font-semibold text-zinc-900 leading-tight">{title}</h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Auto populate {weekLabel(plan.startDate)} · step {stepNo} of 3
+                  Auto populate {day || weekLabel(plan.startDate)} · step {stepNo} of 3
                 </p>
               </div>
             </div>
@@ -446,7 +457,9 @@ export default function AutoPopulateSheet({
                 <section>
                   <h4 className="text-sm font-semibold text-zinc-900">Days to fill</h4>
                   <p className="text-xs text-zinc-500 mb-2">
-                    Days that already have a meal, or have gone, stay as they are.
+                    {day && plan.days[day]?.meals?.length
+                      ? `${day}'s meal is replaced. Other days that already have a meal, or have gone, stay as they are.`
+                      : 'Days that already have a meal, or have gone, stay as they are.'}
                   </p>
                   <div className="flex flex-wrap gap-1.5" data-fill-days>
                     {WEEK_DAYS.map((d) => {

@@ -16,7 +16,7 @@ import type { AutoPlanMood, DayPlan, MealPlan, PlannedMeal, Recipe, RecipeRating
 import type { FreezerGroup } from './freezer';
 import { frozenAgo } from './freezer';
 import type { Leftover } from './leftovers';
-import { WEEK_DAYS } from './planning';
+import { WEEK_DAYS, relinkLeftovers } from './planning';
 import { formatAgo, formatMinutes, totalMinutes, type RecipeHistory } from './recipeInfo';
 import { averageStars, ratingsFor } from './ratings';
 import { planIngredientInputs } from './utils';
@@ -324,19 +324,24 @@ export function unusedLeftovers(leftovers: Leftover[], picks: DayPick[], already
 
 /**
  * The picks as meals on the week (cooked fresh for `people`, or from the freezer). Only empty days
- * are filled: a day given a meal meanwhile (on the other phone, say) keeps it.
+ * are filled, and the days in `replace` (Auto populate from a day's "Select meal"): any other day
+ * given a meal meanwhile (on the other phone, say) keeps it. Leftover days that relied on a replaced
+ * meal become fresh cooks (`freshDays`).
  */
 export function fillDays(
   days: Record<string, DayPlan>,
   picks: DayPick[],
   people: number,
-  newId: () => string = () => crypto.randomUUID(),
-): { days: Record<string, DayPlan>; added: number } {
-  const out = { ...days };
+  { replace = [], newId = () => crypto.randomUUID() }: { replace?: string[]; newId?: () => string } = {},
+): { days: Record<string, DayPlan>; added: number; replaced: PlannedMeal[]; freshDays: string[] } {
+  let out = { ...days };
   let added = 0;
+  const replaced: PlannedMeal[] = [];
   for (const pick of picks) {
     const dp = out[pick.day] || { date: '', meals: [] };
-    if (dp.meals?.length || (pick.kind === 'recipe' && !pick.recipeId)) continue;
+    const was = dp.meals?.[0];
+    if ((was && !replace.includes(pick.day)) || (pick.kind === 'recipe' && !pick.recipeId)) continue;
+    if (was) replaced.push(was);
     const meal: PlannedMeal =
       pick.kind === 'freezer'
         ? {
@@ -352,5 +357,7 @@ export function fillDays(
     out[pick.day] = { ...dp, meals: [meal] };
     added++;
   }
-  return { days: out, added };
+  let freshDays: string[] = [];
+  if (replaced.length) ({ days: out, freshDays } = relinkLeftovers(out));
+  return { days: out, added, replaced, freshDays };
 }
