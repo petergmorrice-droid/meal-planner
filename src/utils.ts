@@ -1,4 +1,4 @@
-import { Recipe, MealPlan, DayPlan, ShoppingListItem, RecurringItem } from './types';
+import { Recipe, MealPlan, DayPlan, PlannedMeal, ShoppingListItem, RecurringItem } from './types';
 
 export const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const MAX_FORWARD_WEEKS = 4;
@@ -123,17 +123,14 @@ import { buildShoppingLines, matchKey, formatCookingAmount, type IngredientInput
 
 export * from './utils/shoppingConversion';
 
-/**
- * The shopping list for one week's plan: every recipe ingredient and side,
- * scaled to the number of people, combined per product and rounded up to what
- * you actually buy.
- */
-export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], catalog?: Catalog): ShoppingListItem[] {
-  if (!plan || !plan.days) return [];
-  const weekLabel = `Week of ${formatWeekRange(plan.startDate)}`;
-  const inputs: IngredientInput[] = [];
+/** One ingredient of a planned meal, scaled to the meal's people, with the day and meal it's for. */
+export type PlannedIngredient = IngredientInput & { day: string; meal: PlannedMeal };
 
-  (Object.values(plan.days) as DayPlan[]).forEach((day) => {
+/** Every recipe ingredient and side on the week, scaled to the number of people, day by day. */
+export function planIngredientInputs(plan: MealPlan, recipes: Recipe[]): PlannedIngredient[] {
+  const inputs: PlannedIngredient[] = [];
+  if (!plan || !plan.days) return inputs;
+  (Object.entries(plan.days) as [string, DayPlan][]).forEach(([dayName, day]) => {
     if (!day || !day.meals) return;
     day.meals.forEach((meal) => {
       if ((meal.type === 'recipe' || meal.type === 'leftover') && meal.recipeId) {
@@ -152,6 +149,8 @@ export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], c
               category: ing.category,
               groceryId: ing.groceryId,
               source: recipe.name,
+              day: dayName,
+              meal,
             });
           });
         }
@@ -166,13 +165,33 @@ export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], c
             unit: side.unit,
             category: side.category,
             source: `${meal.name} (Side)`,
+            day: dayName,
+            meal,
           });
         });
       }
     });
   });
+  return inputs;
+}
 
-  const lines = buildShoppingLines(inputs, catalog ?? getCatalog());
+/**
+ * The shopping list for one week's plan: every recipe ingredient and side,
+ * scaled to the number of people, combined per product and rounded up to what
+ * you actually buy, less anything you said you've already got (`plan.onHand`, from Auto populate).
+ */
+export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], catalog?: Catalog): ShoppingListItem[] {
+  if (!plan || !plan.days) return [];
+  const weekLabel = `Week of ${formatWeekRange(plan.startDate)}`;
+  const inputs: IngredientInput[] = planIngredientInputs(plan, recipes).map(({ day: _d, meal: _m, ...input }) => input);
+  const have: IngredientInput[] = (plan.onHand || []).map((h) => ({
+    name: h.name,
+    amount: h.amount,
+    unit: h.unit,
+    groceryId: h.groceryId,
+  }));
+
+  const lines = buildShoppingLines(inputs, catalog ?? getCatalog(), have);
   return lines.map((line) => {
     const cleanKey = (matchKey(line.name) || line.key).replace(/[^a-z0-9_-]/g, '_');
     const item: ShoppingListItem = {
@@ -192,6 +211,8 @@ export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], c
     if (line.needsCheck) item.needsCheck = true;
     if (line.note) item.quantityNote = line.note;
     if (line.needed) item.neededText = line.needed;
+    if (line.have) item.haveText = line.have;
+    if (line.covered) item.cupboard = 'have';
     return item;
   });
 }

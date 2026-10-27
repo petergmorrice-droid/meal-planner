@@ -30,6 +30,25 @@ export function sendWeekToShoppingList(store: AppStore, plan: MealPlan, opts: { 
   );
 }
 
+/**
+ * A meal line's cupboard answer once the week is worked out again: "Already got" because the
+ * week's leftovers cover it follows the leftovers (worked out again each time); an answer you gave
+ * yourself ("Have it", "Need it after all") stays.
+ */
+export function cupboardAfterUpdate(
+  existing: ShoppingListItem,
+  target: ShoppingListItem,
+): ShoppingListItem['cupboard'] {
+  const fromLeftovers = existing.cupboard === 'have' && !!existing.haveText;
+  return existing.cupboard && !fromLeftovers ? existing.cupboard : target.cupboard;
+}
+
+/** Sets or clears the line's cupboard answer. */
+function setCupboard(line: ShoppingListItem, value: ShoppingListItem['cupboard']) {
+  if (value) line.cupboard = value;
+  else delete line.cupboard;
+}
+
 /** The week's meal-ingredient lines (not staples, things added by hand or batch cooks). */
 const isMealLine = (i: ShoppingListItem, planId: string) =>
   i.planId === planId && !i.isAdhoc && !i.isBatch && !i.isRecurring;
@@ -98,9 +117,10 @@ export function listWithWeek(
     const existing = existingMealItems.find((e) => e.name.toLowerCase().trim() === key);
     if (existing && resetMeals) {
       const line: ShoppingListItem = { ...target, id: existing.id };
-      for (const k of ['note', 'noteBy', 'cupboard', 'addedBy'] as const) {
+      for (const k of ['note', 'noteBy', 'addedBy'] as const) {
         if (existing[k] !== undefined) (line as unknown as Record<string, unknown>)[k] = existing[k];
       }
+      setCupboard(line, cupboardAfterUpdate(existing, target));
       syncedMealItems.push(line);
     } else if (existing) {
       const keep = existing.userAdjusted;
@@ -110,7 +130,10 @@ export function listWithWeek(
         unit: keep ? existing.unit : target.unit,
         recipeNames: target.recipeNames,
         neededText: target.neededText,
+        haveText: target.haveText,
       };
+      if (!line.haveText) delete line.haveText;
+      setCupboard(line, cupboardAfterUpdate(existing, target));
       // "Check amount" goes with the amount it was about: worked out again, it's checked again.
       if (!keep) {
         delete line.needsCheck;

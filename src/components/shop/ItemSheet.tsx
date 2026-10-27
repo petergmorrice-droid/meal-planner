@@ -215,6 +215,11 @@ export default function ItemSheet({
                 Your meals use {row.neededText}
               </p>
             )}
+            {row.haveText && (
+              <p className="text-sm text-emerald-800 tabular-nums" data-item-sheet-have>
+                You've already got {row.haveText} (from Auto populate)
+              </p>
+            )}
           </div>
           <button
             type="button"

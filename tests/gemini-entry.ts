@@ -8,3 +8,4 @@ export {
   setBusyRetryWait,
   saveGeminiApiKey,
 } from '../src/services/gemini/client';
+export { suggestMealIdeasApi } from '../src/services/gemini/recipes';

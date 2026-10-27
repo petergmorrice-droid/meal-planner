@@ -151,3 +151,20 @@ export {
 export { reminderSettings, senderChecksAt } from '../src/reminderSettings';
 export { notificationSchedule } from '../src/pushSchedule';
 export { syncWarning, parseTokenExpiry } from '../src/syncHealth';
+export {
+  weekLeftovers,
+  typedLeftover,
+  keepsForDays,
+  leftoverAmountText,
+  productAmountText,
+  toOnHand,
+} from '../src/leftovers';
+export {
+  suggestWeek,
+  anotherPick,
+  recipeUses,
+  weekUses,
+  unusedLeftovers,
+  pickId,
+  QUICK_MINUTES,
+} from '../src/autoPlan';

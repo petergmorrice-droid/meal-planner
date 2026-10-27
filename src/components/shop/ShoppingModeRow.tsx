@@ -232,6 +232,11 @@ export function ShoppingModeItemRow({
                 need {item.neededText}
               </span>
             )}
+            {item.haveText && !item.checked && (
+              <span className="text-[11px] text-emerald-700 tabular-nums" data-row-have>
+                have {item.haveText}
+              </span>
+            )}
           </span>
         )}
         {onInfo && !justTicked && <InfoButton item={item} onInfo={onInfo} />}
@@ -279,7 +284,8 @@ export function ShoppingModeItemRow({
           </span>
           {item.neededText && !item.checked && (
             <span className="text-xs text-zinc-600 tabular-nums" data-row-need>
-              (meals use {item.neededText})
+              (meals use {item.neededText}
+              {item.haveText ? `, have ${item.haveText}` : ''})
             </span>
           )}
 

@@ -26,6 +26,8 @@ export {
   editRecipeApi,
   generateAlternativeInstructionsApi,
   askAboutRecipeApi,
+  suggestMealIdeasApi,
 } from './gemini/recipes';
+export type { MealIdea } from './gemini/recipes';
 export { validateAndNormalizeRecipe, normalizeParsedRecipe, applyGeminiEdit } from './gemini/recipeRules';
 export { cleanGroceryDatabaseApi } from './gemini/products';

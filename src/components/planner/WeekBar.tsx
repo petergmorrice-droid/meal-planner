@@ -10,18 +10,25 @@ import {
   Plus,
   RefreshCw,
   ShoppingCart,
+  WandSparkles,
 } from 'lucide-react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { MealPlan } from '../../types';
 
-/** The list of weeks (opens above the bar), with Copy a week, Plan the week after and Past weeks. */
+/**
+ * The list of weeks (opens above the bar), with Plan the week after and Past weeks, and under them
+ * Copy a week and Auto populate (greyed out, saying why, when they can't be used on this week).
+ */
 export function WeekMenu({
   plans,
   currentPlan,
   weekLabel,
   onPick,
   onClose,
-  canCopy,
+  copyUnavailable,
   onCopy,
+  autoPopulateUnavailable,
+  onAutoPopulate,
   canPlanNext,
   maxWeeks,
   onPlanNext,
@@ -32,19 +39,57 @@ export function WeekMenu({
   weekLabel: (startDate: string) => string;
   onPick: (id: string) => void;
   onClose: () => void;
-  /** There are other weeks to copy from (and this week isn't sent yet). */
-  canCopy: boolean;
+  /** Why this week can't be copied into ("Not once it's on the shopping list"), or null if it can. */
+  copyUnavailable: string | null;
   onCopy: () => void;
+  /** Why this week can't be auto-populated ("Every day already has a meal"), or null if it can. */
+  autoPopulateUnavailable: string | null;
+  onAutoPopulate: () => void;
   canPlanNext: boolean;
   maxWeeks: number;
   onPlanNext: () => void;
   /** To Settings (left out when there's nowhere to go). */
   onPastWeeks?: () => void;
 }) {
+  // Opens above the week bar when it fits (the Classic view), otherwise where there's more room
+  // (below it in the List view, where the bar is near the top), and never off the screen.
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{ style: CSSProperties; below: boolean }>({
+    style: { visibility: 'hidden' },
+    below: false,
+  });
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    const bar = menu?.parentElement?.querySelector('[data-week-name]');
+    if (!menu || !bar) {
+      setPlace({ style: {}, below: false });
+      return;
+    }
+    const b = bar.getBoundingClientRect();
+    const panel = menu.parentElement!.getBoundingClientRect();
+    const left = Math.max(8, panel.left + (window.innerWidth >= 640 ? 16 : 8));
+    const above = b.top - 16;
+    const below = window.innerHeight - b.bottom - 16;
+    const goBelow = menu.scrollHeight > above && below > above;
+    setPlace({
+      below: goBelow,
+      style: goBelow
+        ? { top: b.bottom + 8, left, maxHeight: below }
+        : { bottom: window.innerHeight - b.top + 8, left, maxHeight: above },
+    });
+  }, []);
+
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute left-2 sm:left-4 bottom-full mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-zinc-200 p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
+      <div
+        ref={menuRef}
+        style={place.style}
+        className={`fixed w-72 max-w-[calc(100vw-16px)] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-zinc-200 p-2 z-50 animate-in fade-in ${
+          place.below ? 'slide-in-from-top-2' : 'slide-in-from-bottom-2'
+        }`}
+        data-week-menu
+      >
         <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Weeks</div>
 
         <div className="max-h-60 overflow-y-auto space-y-1">
@@ -77,16 +122,6 @@ export function WeekMenu({
         </div>
 
         <div className="pt-2 mt-1 border-t border-zinc-100 space-y-1">
-          {canCopy && (
-            <button
-              type="button"
-              onClick={onCopy}
-              className="w-full text-left px-3 py-2 rounded-xl text-xs font-medium text-zinc-900 hover:bg-zinc-100 flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copy meals from another week</span>
-            </button>
-          )}
           {canPlanNext ? (
             <button
               onClick={onPlanNext}
@@ -114,9 +149,63 @@ export function WeekMenu({
               <span className="text-[11px] text-zinc-500 font-medium">in Settings →</span>
             </button>
           )}
+
+          <div className="pt-1 space-y-1" data-menu-fill>
+            <MenuAction
+              icon={<Copy className="w-3.5 h-3.5" />}
+              label="Copy a week"
+              unavailable={copyUnavailable}
+              onClick={onCopy}
+              tone="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+              data="copy"
+            />
+            <MenuAction
+              icon={<WandSparkles className="w-3.5 h-3.5" />}
+              label="Auto populate"
+              unavailable={autoPopulateUnavailable}
+              onClick={onAutoPopulate}
+              tone="border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100"
+              data="auto-populate"
+            />
+          </div>
         </div>
       </div>
     </>
+  );
+}
+
+/** Copy a week / Auto populate in the week menu: tinted when you can, greyed out with the reason when not. */
+function MenuAction({
+  icon,
+  label,
+  unavailable,
+  onClick,
+  tone,
+  data,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  unavailable: string | null;
+  onClick: () => void;
+  tone: string;
+  data: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!!unavailable}
+      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
+        unavailable ? 'border-zinc-100 bg-white text-zinc-400 cursor-not-allowed' : `${tone} cursor-pointer`
+      }`}
+      data-menu-action={data}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="min-w-0">
+        <span className="block">{label}</span>
+        {unavailable && <span className="block text-[11px] font-normal">{unavailable}</span>}
+      </span>
+    </button>
   );
 }
 

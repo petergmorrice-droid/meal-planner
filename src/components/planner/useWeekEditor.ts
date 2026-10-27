@@ -8,7 +8,17 @@
  * change touched.
  */
 import { useState } from 'react';
-import { BatchItem, DayPlan, MealPlan, MealType, PlannedMeal, PlannedMealSide, Recipe, TabName } from '../../types';
+import {
+  BatchItem,
+  DayPlan,
+  MealPlan,
+  MealType,
+  OnHandItem,
+  PlannedMeal,
+  PlannedMealSide,
+  Recipe,
+  TabName,
+} from '../../types';
 import { canPlanFollowingWeek, createEmptyPlan, formatDateISO, syncRecurringStaplesForPlan } from '../../utils';
 import {
   changeDayMeal,
@@ -22,6 +32,7 @@ import {
 } from '../../planning';
 import { sendWeekToShoppingList } from '../../planShopping';
 import { freezerBatchesFor } from '../../recipeInfo';
+import { fillDays, type DayPick } from '../../autoPlan';
 import type { ToastAction } from './usePlanToast';
 import type { AppStore } from '../../store';
 
@@ -310,6 +321,32 @@ export function useWeekEditor({
     return done;
   };
 
+  /**
+   * Auto populate: the meals you kept onto the week's empty days, and what you said you've already
+   * got (it comes off the week's shopping). Says how many, with Undo for the meals. Returns how many.
+   */
+  const autoPopulate = (picks: DayPick[], people: number, onHand: OnHandItem[]): number => {
+    if (!currentPlan) return 0;
+    let added = 0;
+    let before: Days | null = null;
+    let after: Days | null = null;
+    store.changeMealPlan(currentPlan.id, (p) => {
+      const r = fillDays(p.days, picks, people);
+      if (!r.added && JSON.stringify(p.onHand || []) === JSON.stringify(onHand)) return null;
+      added = r.added;
+      before = p.days;
+      after = r.days;
+      const { onHand: _was, ...rest } = p;
+      const keepRecord =
+        p.status === 'finalized' && !p.lastFinalizedSnapshot ? { lastFinalizedSnapshot: listSnapshot(p) } : {};
+      return { ...rest, ...keepRecord, ...(onHand.length ? { onHand } : {}), days: r.days };
+    });
+    if (before && after && added) {
+      offerUndo(`Added ${added} meal${added === 1 ? '' : 's'}`, currentPlan.id, before, after);
+    }
+    return added;
+  };
+
   const seeTheList = (planId: string) =>
     onNavigateTab ? { label: 'See the list', run: () => onNavigateTab('shop', planId) } : null;
 
@@ -363,6 +400,7 @@ export function useWeekEditor({
     removeMeal,
     saveSides,
     copyWeek,
+    autoPopulate,
     sendToList,
     updateList,
   };

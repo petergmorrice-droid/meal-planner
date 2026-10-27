@@ -41,6 +41,8 @@ export interface AggregatedShoppingListItem {
   quantityNote?: string;
   /** What your meals actually use, when it's less than you buy ("100 g" of a 300 g pack). */
   neededText?: string;
+  /** What you've already got of it (the week's leftovers), taken off what you buy. */
+  haveText?: string;
   /** Marked "out of stock" at the shop (and not ticked). */
   outOfStock?: boolean;
   /** Who ticked it. */
@@ -158,6 +160,12 @@ export function aggregateShoppingItems(
           .filter(Boolean)
           .join('; ') || undefined,
       neededText: needs.join(' + ') || undefined,
+      haveText:
+        groupItems
+          .filter(isPlanned)
+          .map((i) => i.haveText)
+          .filter(Boolean)
+          .join(' + ') || undefined,
     });
   }
   return result;
