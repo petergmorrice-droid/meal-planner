@@ -1,6 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Notice from './Notice';
-import { ListOrdered, RotateCcw, Trophy, Package, History, Smartphone, Users, ShoppingCart, Cloud } from 'lucide-react';
+import {
+  ListOrdered,
+  RotateCcw,
+  Trophy,
+  Package,
+  History,
+  Smartphone,
+  Users,
+  ShoppingCart,
+  Cloud,
+  Bell,
+} from 'lucide-react';
 import { MealPlan, UserPreferences, GroceryItem, DatabaseCleanAction } from '../types';
 import { isPastWeek } from '../utils';
 import { catalogForState } from '../shopping';
@@ -8,6 +19,7 @@ import { useDeviceIdentity } from '../hooks/useDeviceIdentity';
 import { pushOnHere } from '../pushNotify';
 import { CleanDatabaseModal } from './CleanDatabaseModal';
 import { AboutSection } from './settings/AboutSection';
+import { AlertsOverview } from './settings/AlertsOverview';
 import { BackupSection } from './settings/BackupSection';
 import { CalendarSection } from './settings/CalendarSection';
 import { HistoryPage } from './settings/HistoryPage';
@@ -23,8 +35,14 @@ import { Confirm, SettingsSection, SettingsTabProps } from './settings/types';
 type Section = SettingsSection;
 
 /** Settings' own tabs, each a short page of related settings. */
-const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
+const SECTIONS: { id: Section; label: string; name?: string; icon: React.ReactNode }[] = [
   { id: 'phone', label: 'Phone', icon: <Smartphone className="w-4 h-4" /> },
+  {
+    id: 'alerts',
+    label: 'Alerts & calendar',
+    name: 'Notifications & calendar',
+    icon: <Bell className="w-4 h-4" />,
+  },
   { id: 'household', label: 'Household', icon: <Users className="w-4 h-4" /> },
   { id: 'shopping', label: 'Shopping', icon: <ShoppingCart className="w-4 h-4" /> },
   { id: 'sync', label: 'Sync & backup', icon: <Cloud className="w-4 h-4" /> },
@@ -34,9 +52,9 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
 let lastSection: Section = 'phone';
 
 /**
- * Settings in four tabs: this phone (who, theme, Gemini key, version), household (people,
- * reminders and how this phone gets them, the calendar, past weeks), shopping, and sync & backup. Products and past weeks
- * open as their own pages.
+ * Settings in five tabs: this phone (who, theme, Gemini key, version), notifications & calendar
+ * (what you're reminded about and how this phone gets it), household (people, past weeks),
+ * shopping, and sync & backup. Products and past weeks open as their own pages.
  */
 export default function SettingsTab({
   store,
@@ -127,16 +145,6 @@ export default function SettingsTab({
           {section === 'household' && (
             <>
               <Household prefs={prefs} store={store} />
-              <RemindersSection store={store} who={who} />
-              <NotificationsSection
-                store={store}
-                who={who}
-                say={say}
-                on={pushOn}
-                setOn={setPushOn}
-                onGoToSync={() => setSection('sync')}
-              />
-              <CalendarSection store={store} say={say} pushOn={pushOn} onGoToSync={() => setSection('sync')} />
               <section data-settings-history>
                 <h3 className={sectionTitle}>History</h3>
                 <div className={card}>
@@ -153,6 +161,21 @@ export default function SettingsTab({
                   />
                 </div>
               </section>
+            </>
+          )}
+          {section === 'alerts' && (
+            <>
+              <AlertsOverview store={store} pushOn={pushOn} />
+              <RemindersSection store={store} who={who} />
+              <NotificationsSection
+                store={store}
+                who={who}
+                say={say}
+                on={pushOn}
+                setOn={setPushOn}
+                onGoToSync={() => setSection('sync')}
+              />
+              <CalendarSection store={store} say={say} pushOn={pushOn} onGoToSync={() => setSection('sync')} />
             </>
           )}
           {section === 'shopping' && (
@@ -216,7 +239,7 @@ export default function SettingsTab({
           <div className="max-w-2xl mx-auto">
             <h2 className="text-[15px] font-bold text-zinc-900">Settings</h2>
             <div
-              className="mt-2 grid grid-cols-4 gap-1 bg-zinc-100 p-1 rounded-xl"
+              className="mt-2 grid grid-cols-5 gap-1 bg-zinc-100 p-1 rounded-xl"
               role="tablist"
               aria-label="Settings"
             >
@@ -227,8 +250,9 @@ export default function SettingsTab({
                   type="button"
                   role="tab"
                   aria-selected={section === t.id}
+                  aria-label={t.name}
                   onClick={() => setSection(t.id)}
-                  className={`min-h-12 px-1 py-1 rounded-lg flex flex-col items-center justify-center gap-0.5 text-[12px] leading-tight font-semibold text-center cursor-pointer ${section === t.id ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-500'}`}
+                  className={`min-h-12 px-1 py-1 rounded-lg flex flex-col items-center justify-center gap-0.5 text-[11px] leading-tight font-semibold text-center cursor-pointer ${section === t.id ? 'bg-white text-zinc-900 shadow-2xs' : 'text-zinc-500'}`}
                   data-settings-tab={t.id}
                 >
                   {t.icon}

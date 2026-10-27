@@ -5,7 +5,7 @@ import type { AppStore } from '../../store';
 
 type ShopPanel = 'aisles' | 'staples' | 'history';
 /** Settings' own tabs. */
-export type SettingsSection = 'phone' | 'household' | 'shopping' | 'sync';
+export type SettingsSection = 'phone' | 'alerts' | 'household' | 'shopping' | 'sync';
 
 /** "Are you sure?" before something that can't easily be undone. */
 export type Confirm = { title: string; body: string; action: string; danger?: boolean; run: () => void };

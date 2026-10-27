@@ -206,7 +206,7 @@ export function CalendarSection({
                       <li>
                         <b>Google Calendar / Android:</b> tap <i>Google Calendar</i> and <i>Add</i> (or on a computer,
                         Other calendars → <i>From URL</i> and paste the link). Google shows the meals but doesn't send
-                        alerts for calendars added by link, so on Android turn on notifications (On this phone, above)
+                        alerts for calendars added by link, so on Android turn on notifications (Notifications, above)
                         for the reminders.
                       </li>
                       <li>
