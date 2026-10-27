@@ -1,6 +1,6 @@
 // Every change is worked out from the latest data: two taps before the screen has redrawn both
 // count. (A window left open while the other phone changes something: latest-edits.cjs.)
-const { chromium, goTab } = require('./pw.cjs');
+const { chromium, goTab, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
 let failures = 0;
@@ -85,6 +85,7 @@ const NOW = new Date('2026-10-18T12:00:00+01:00');
     await page.waitForTimeout(300);
 
     await tab('Settings');
+    await settingsTab(page, 'household');
     const people = async () => (await state()).preferences.defaultServings || 2;
     const p0 = await people();
     await twice('[data-setting-people] button[aria-label="One more person"]');

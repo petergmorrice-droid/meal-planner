@@ -17,7 +17,7 @@ import {
   saveGistOwner,
   GistConfig,
 } from '../services/gistStorage';
-import { calendarFeedFiles } from '../calendarReminders';
+import { calendarFeedFiles, calendarFeedMissing } from '../calendarReminders';
 import {
   mergeAppStates,
   applyLocalChange,
@@ -195,7 +195,8 @@ export function useStore() {
         if (upgradeProductsIfDue()) merged = stateRef.current;
 
         const gistIsBehind = remote ? !statesEqual(merged, remote) : false;
-        const willUpload = pendingRef.current || gistIsBehind || gistIsEmpty;
+        const feedMissing = calendarFeedMissing(stateRef.current, gistFilesRef.current);
+        const willUpload = pendingRef.current || gistIsBehind || gistIsEmpty || feedMissing;
         if (willUpload) {
           if (quiet) setSyncStatus('loading');
           const editsBefore = editCountRef.current;

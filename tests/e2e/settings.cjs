@@ -1,7 +1,7 @@
-// Settings on one page: this phone (who, Gemini key test), household, sync setup, shopping shortcuts, products, past weeks, backup & reset, version and the update banner.
+// Settings in four tabs (phone, household, shopping, sync & backup): this phone (who, Gemini key test), household, sync setup, shopping shortcuts, products, past weeks, backup & reset, version and the update banner.
 // cooking mode (amounts per step, get everything out, timers that survive leaving, big steps,
 // read aloud, method switch), finished screen (fridge, freezer, verdict, note), day panel, weeks.
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -193,10 +193,35 @@ function seed() {
 
   await tab('Settings');
   await shot('01-settings-top');
-  for (const sec of ['phone', 'household', 'reminders', 'sync', 'shopping', 'history', 'backup', 'about'])
-    check((await page.locator(`[data-settings-${sec}]`).count()) === 1, `section: ${sec}`);
+  check(
+    (await page.locator('[data-settings-tab]').allInnerTexts()).map((t) => t.trim()).join(',') ===
+      'Phone,Household,Shopping,Sync & backup',
+    'Settings: four tabs',
+  );
+  check(
+    (await page.locator('[data-settings-tab="phone"][aria-selected="true"]').count()) === 1,
+    'Settings: opens on Phone',
+  );
+  const sections = {
+    phone: ['phone', 'about'],
+    household: ['household', 'reminders', 'notifications', 'calendar', 'history'],
+    shopping: ['shopping'],
+    sync: ['sync', 'backup'],
+  };
+  for (const [id, secs] of Object.entries(sections)) {
+    await settingsTab(page, id);
+    const shown = await page.locator('[data-settings-panel] > section').evaluateAll((els) =>
+      els.map((el) =>
+        Object.keys(el.dataset)
+          .find((k) => k.startsWith('settings'))
+          .replace('settings', '')
+          .toLowerCase(),
+      ),
+    );
+    check(shown.join(',') === secs.join(','), `tab ${id}: ${secs.join(', ')}`, shown.join(','));
+  }
 
-  // ---- Reminders: this week's meals as a calendar file ----
+  // ---- Reminders: what you're reminded about (both phones), then how this phone gets them ----
   const fs = require('fs');
   const calendarFile = async () => {
     const wait = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
@@ -204,6 +229,7 @@ function seed() {
     const f = await wait;
     return { name: f && f.suggestedFilename(), text: f ? fs.readFileSync(await f.path(), 'utf8') : '' };
   };
+  await settingsTab(page, 'household');
   await page.locator('[data-settings-reminders]').scrollIntoViewIfNeeded();
   check(
     (await page.locator('[data-notify-needs-sync]').count()) === 1,
@@ -213,26 +239,44 @@ function seed() {
     (await page.locator('[data-calendar-sync-needs]').count()) === 1,
     'calendar sync: asks for Sync between phones first',
   );
+  await page.locator('[data-calendar-goto-sync]').click();
+  await page.waitForTimeout(200);
   check(
-    /dinner reminders/.test(await text('[data-reminders-summary]')),
-    'reminders: says how many',
+    (await page.locator('[data-settings-tab="sync"][aria-selected="true"]').count()) === 1 &&
+      (await page.locator('[data-settings-sync]').count()) === 1,
+    'Set up sync: opens the Sync & backup tab',
+  );
+  await settingsTab(page, 'household');
+  check(
+    /mornings/.test(await text('[data-reminders-summary]')) &&
+      /start-cooking/.test(await text('[data-reminders-summary]')),
+    'reminders: says what is coming',
     await text('[data-reminders-summary]'),
   );
   await page.locator('[data-reminders-show]').click();
   const remList = await text('[data-reminders-list]');
   check(
-    /Start cooking: Chilli con carne/.test(remList) && /Take the Spaghetti bolognese out of the freezer/.test(remList),
-    "reminders: tonight's cook and tomorrow's freezer meal",
+    /Start cooking: Chilli con carne/.test(remList) &&
+      /Take the Spaghetti bolognese out of the freezer/.test(remList) &&
+      /Tomorrow 9am · Tonight: Spaghetti bolognese/.test(remList),
+    "reminders: tonight's cook, tomorrow's freezer meal and tomorrow morning's heads-up",
     remList,
   );
-  check(!/Takeout|Eating out|Spaghetti bolognese · Start cooking/.test(remList), 'reminders: no takeaways', remList);
+  const cookItems = (await page.locator('[data-reminders-list] [data-reminder="cook"]').allInnerTexts()).join('|');
+  check(!/Takeout|Takeaway|Eating out/.test(cookItems), 'reminders: no cooking for takeaways', cookItems);
   await shot('01b-reminders');
+  await page.locator('[data-reminders-file-toggle]').click();
   let cal = await calendarFile();
   check(cal.name === 'meal-reminders-2026-10-14.ics', 'reminders: calendar file downloads', cal.name);
   check(
     /BEGIN:VCALENDAR/.test(cal.text) && /BEGIN:VALARM/.test(cal.text) && /TRIGGER:PT0M/.test(cal.text),
     'reminders: events with alerts',
     cal.text.slice(0, 300),
+  );
+  check(
+    /SUMMARY:Dinner: /.test(cal.text),
+    'reminders: the morning heads-up rides on the dinner',
+    cal.text.slice(0, 600),
   );
   await page.locator('[data-segmented="reminder-cook"] button', { hasText: '10 mins' }).click();
   await page.waitForTimeout(300);
@@ -247,9 +291,50 @@ function seed() {
     'reminders: night-before switched off',
   );
   await page.locator('[data-setting-reminder-prep-switch]').click();
+  await page.locator('[data-setting-reminder-prep-at]').fill('23:00');
+  await page.waitForTimeout(200);
+  check(
+    (await state()).preferences.reminderPrepAt !== '23:00',
+    'reminders: night-before only when notifications can go out (not 11pm)',
+  );
+  await page.locator('[data-setting-reminder-prep-at]').fill('19:30');
+  await page.waitForTimeout(200);
+  check((await state()).preferences.reminderPrepAt === '19:30', 'reminders: night-before at 7:30pm');
+  await page.locator('[data-setting-reminder-morning-switch]').click();
+  await page.waitForTimeout(300);
+  check(
+    (await state()).preferences.notifyDinner === false &&
+      (await page.locator('[data-reminders-list] [data-reminder="meal"]').count()) === 0,
+    'reminders: morning heads-up switched off',
+  );
+  await page.locator('[data-setting-reminder-morning-switch]').click();
   await page.locator('[data-segmented="reminder-cook"] button', { hasText: 'At start' }).click();
   await page.waitForTimeout(300);
-  check(/Last added on this phone/.test(await text('[data-reminders-summary]')), 'reminders: remembers when added');
+  // Plan next week: Friday 9am, since next week still has days with nothing planned
+  const planItem = () => text('[data-reminders-list] [data-reminder="plan"]');
+  check(
+    /^Fri 16 Oct 9am · Plan next week/.test(await planItem()),
+    'plan next week: Friday at 9am, as next week has empty days',
+    await planItem(),
+  );
+  await page.locator('[data-setting-reminder-plan-day]').selectOption('Sunday');
+  await page.waitForTimeout(300);
+  check(
+    (await state()).preferences.reminderPlanDay === 'Sunday' && /^Sun 18 Oct 9am/.test(await planItem()),
+    'plan next week: moved to Sunday',
+    await planItem(),
+  );
+  await page.locator('[data-setting-reminder-plan-switch]').click();
+  await page.waitForTimeout(300);
+  check(
+    (await state()).preferences.reminderPlan === false &&
+      (await page.locator('[data-reminders-list] [data-reminder="plan"]').count()) === 0,
+    'plan next week: switched off',
+  );
+  await page.locator('[data-setting-reminder-plan-switch]').click();
+  await page.locator('[data-setting-reminder-plan-day]').selectOption('Friday');
+  await page.waitForTimeout(300);
+  check(/Last added on this phone/.test(await text('[data-reminders-last-added]')), 'reminders: remembers when added');
 
   check(
     (await page.locator('text=Multi-Cooker Model').count()) === 0 &&
@@ -258,6 +343,7 @@ function seed() {
   );
 
   // ---- This phone ----
+  await settingsTab(page, 'phone');
   await page.locator('[data-segmented="who"] button', { hasText: 'Rachel' }).click();
   await page.waitForTimeout(200);
   check((await page.evaluate(() => localStorage.getItem('currentUser'))) === 'R', "this is Rachel's phone");
@@ -279,6 +365,7 @@ function seed() {
   check((await page.evaluate(() => localStorage.getItem('gemini_api_key'))) === 'AIza-wrong', 'key kept on this phone');
 
   // ---- Household ----
+  await settingsTab(page, 'household');
   await page.locator('[data-setting-people] button[aria-label="One more person"]').click();
   await page.waitForTimeout(200);
   let st = await state();
@@ -291,6 +378,7 @@ function seed() {
   check((await state()).preferences.eatAt === '18:30', 'eat at 6:30');
 
   // ---- Sync (not connected) ----
+  await settingsTab(page, 'sync');
   check((await page.locator('[data-sync-setup]').count()) === 1, 'sync setup shown when not connected');
   await page.locator('[data-sync-connect]').click();
   await page.waitForTimeout(200);
@@ -301,12 +389,17 @@ function seed() {
   await shot('02-settings-sync');
 
   // ---- Shopping shortcuts ----
+  await settingsTab(page, 'shopping');
   await page.locator('[data-setting-link="aisles"]').click();
   await page.waitForTimeout(700);
   check((await page.locator('[aria-label="Arrange aisles"]').count()) >= 1, 'Arrange aisles opens in Shop');
   await page.locator('[aria-label="Arrange aisles"] button[aria-label="Close"]').click();
   await page.waitForTimeout(200);
   await tab('Settings');
+  check(
+    (await page.locator('[data-settings-tab="shopping"][aria-selected="true"]').count()) === 1,
+    'back in Settings: still on the Shopping tab',
+  );
   await page.locator('[data-setting-link="staples"]').click();
   await page.waitForTimeout(700);
   check((await page.locator('h3', { hasText: 'Weekly staples' }).count()) >= 1, 'Weekly staples opens in Shop');
@@ -377,6 +470,7 @@ function seed() {
   await page.waitForTimeout(300);
 
   // ---- Past weeks ----
+  await settingsTab(page, 'household');
   await page.locator('[data-setting-link="past-weeks"]').click();
   await page.waitForTimeout(400);
   const wk = await text('[data-history-week="2026-10-05"]');
@@ -422,6 +516,7 @@ function seed() {
   await tab('Settings');
 
   // ---- Backup & reset ----
+  await settingsTab(page, 'sync');
   const dl = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
   await page.locator('[data-backup-download]').click();
   const d = await dl;
@@ -468,6 +563,7 @@ function seed() {
   );
 
   // ---- Version and updates ----
+  await settingsTab(page, 'phone');
   const ver = await text('[data-app-version]');
   check(/· [0-9a-f]{7}/.test(ver), 'shows the version', ver);
   await page.locator('[data-update-check]').click();

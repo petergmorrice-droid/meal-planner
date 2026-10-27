@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Copy, X, RefreshCw } from 'lucide-react';
 import { agoText, syncProblemText } from '../../settingsInfo';
 import { messageOf } from '../../errors';
+import { getTokenExpiry } from '../../services/gistStorage';
 import { card, row, sectionTitle } from './parts';
 import { Confirm, SettingsTabProps } from './types';
 
@@ -28,6 +29,10 @@ export function SyncSection({
   const [problem, setProblem] = useState('');
   const status = store.syncStatus;
   const problemNow = status === 'error' ? syncProblemText(store.syncError) : '';
+  const expires = getTokenExpiry();
+  const tokenEnds = expires
+    ? `${new Date(expires).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} ${new Date(expires).getFullYear()}`
+    : null;
 
   const connect = async () => {
     if (!pat.trim()) {
@@ -76,6 +81,11 @@ export function SyncSection({
                   {problemNow ||
                     `Changes go up straight away; the other phone's appear within about ${store.syncPollSeconds || 20} seconds.`}
                 </span>
+                {tokenEnds && (
+                  <span className="block text-[13px] text-zinc-500" data-sync-token-expires>
+                    The GitHub token runs out on {tokenEnds}.
+                  </span>
+                )}
               </span>
               <button
                 type="button"

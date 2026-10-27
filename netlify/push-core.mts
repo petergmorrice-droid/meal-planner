@@ -2,8 +2,9 @@
 // Each phone that turns notifications on is saved under its household (a long random key both phones
 // share through the synced app data), one entry per phone. When a phone adds things to the list, it
 // asks for the household to be told: every other phone in it gets a push notification.
-// The app also sends a schedule of the coming days' morning notifications ("Tonight: chilli", "Take
-// the lasagne out of the freezer tonight"); every 15 minutes the sender sends whatever is due.
+// The app also sends a schedule of the coming days' reminder notifications ("Tonight: chilli", "Start
+// cooking", "Take the lasagne out of the freezer tonight"); every 15 minutes (in the morning and from
+// mid-afternoon to the evening) the sender sends whatever is due.
 
 /** A phone's push sign-up, as the browser gives it (PushSubscription.toJSON()). */
 export interface PushSubscriptionJSON {
@@ -41,7 +42,7 @@ export interface ScheduledNote {
   title: string;
   body: string;
   /** The app's tab to open when tapped. */
-  tab?: 'shop' | 'this_week';
+  tab?: 'shop' | 'this_week' | 'planning';
 }
 
 /** Sends one notification; resolves with the push service's status code (404/410 = phone gone). */
@@ -49,8 +50,8 @@ export type Sender = (subscription: PushSubscriptionJSON, payload: string) => Pr
 
 /** At most this many phones per household (two people, a few new phones over the years). */
 export const MAX_PHONES = 10;
-/** At most this many scheduled notifications per household (a few weeks of mornings). */
-export const MAX_SCHEDULED = 80;
+/** At most this many scheduled notifications per household (three weeks of three a day). */
+export const MAX_SCHEDULED = 100;
 /** A scheduled notification more than this late isn't sent (the plan changed after its time). */
 export const STALE_MS = 30 * 60 * 1000;
 /** How long the delayed test waits (the function can run for 60 seconds at most). */
@@ -91,7 +92,7 @@ export const phoneKey = async (household: string, endpoint: string) =>
   `${household}/${(await sha256Hex(endpoint)).slice(0, 40)}`;
 
 const DAY = 24 * 60 * 60 * 1000;
-const TABS = ['shop', 'this_week'];
+const TABS = ['shop', 'this_week', 'planning'];
 
 /** A schedule from the app, checked and trimmed; null if it isn't one. */
 export function cleanSchedule(raw: unknown, now: number): ScheduledNote[] | null {

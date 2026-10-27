@@ -210,15 +210,19 @@ export interface UserPreferences {
   shopHistory?: ShopRecord[];
   /** When you usually eat dinner ("18:00"; 6pm if not set), for "start by" times on the Cook tab. Settings → Household. */
   eatAt?: string;
-  /** Settings → Reminders: calendar alerts to start dinner (on unless switched off). */
+  /** Settings → Reminders: time to start dinner, by notification or calendar alert (on unless switched off). */
   reminderCook?: boolean;
-  /** Minutes before the start time the dinner alert goes off (0 = at the start time). */
+  /** Minutes before the start time the start-dinner reminder goes off (0 = at the start time). */
   reminderCookBefore?: number;
-  /** Settings → Reminders: evening-before alerts for freezer meals and get-ahead steps (on unless switched off). */
+  /** Settings → Reminders: evening-before reminders for freezer meals and get-ahead steps (on unless switched off). */
   reminderPrep?: boolean;
-  /** When the evening-before alert goes off ("20:00"; 8pm if not set). */
+  /** When the evening-before reminder goes off ("20:00"; 8pm if not set; 3pm to 9:45pm). */
   reminderPrepAt?: string;
-  /** Settings → Reminders: keep a calendar feed of the plan and reminders in the sync Gist. */
+  /** Settings → Reminders: "Plan next week" when it isn't planned or on the list yet (on unless switched off). */
+  reminderPlan?: boolean;
+  /** The day it goes off, at the morning time ("Friday" if not set). */
+  reminderPlanDay?: string;
+  /** Settings → Calendar: keep calendar feeds of the plan (and of the reminders) in the sync Gist. */
   calendarSync?: boolean;
   /**
    * Notes written on Shop items, remembered by product (see productKey), so the note comes back
@@ -227,11 +231,11 @@ export interface UserPreferences {
   itemNotes?: Record<string, { note: string; by?: string }>;
   /** Settings → Notifications: the household's key with the notification sender (both phones share it). */
   pushHousehold?: string;
-  /** Settings → Notifications: "Tonight's dinner" each morning (on unless switched off). */
+  /** Settings → Reminders: each morning, tonight's dinner and anything to do tonight (on unless switched off). */
   notifyDinner?: boolean;
-  /** Settings → Notifications: the morning before, what to do tonight (defrost, marinate; on unless switched off). */
+  /** No longer used: what to do tonight is now in the morning heads-up and the night-before reminder. */
   notifyPrep?: boolean;
-  /** When the morning notifications go off ("09:00"; 9am if not set). */
+  /** When the morning heads-up goes off ("09:00"; 9am if not set; 6am to 11:45am). */
   notifyMorningAt?: string;
   /** A different time just for one evening, set on the Cook tab. */
   eatAtTonight?: { date: string; time: string };

@@ -7,7 +7,7 @@ import React from 'react';
 import { useRef, useState } from 'react';
 import { BookOpen, Calendar, ShoppingCart, Snowflake, ChefHat, Sliders, Ellipsis } from 'lucide-react';
 import { useStore } from './store';
-import { useMorningSchedule } from './hooks/useMorningSchedule';
+import { useNotificationSchedule } from './hooks/useNotificationSchedule';
 import { firstUrl } from './recipeInfo';
 import CookBookTab from './components/CookBookTab';
 import PlanningTab from './components/PlanningTab';
@@ -17,11 +17,14 @@ import BatchTab from './components/BatchTab';
 import CookTab from './components/CookTab';
 import { TimerDock } from './components/cook/TimerBar';
 import { checkForUpdate, updateNow } from './appVersion';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import SettingsTab from './components/SettingsTab';
 import { applyTabColour } from './theme';
 import ErrorBoundary, { TestBreak } from './components/ErrorBoundary';
-import { getGistConfig } from './services/gistStorage';
+import { getGistConfig, getTokenExpiry } from './services/gistStorage';
+import { readLastSyncOk } from './store/saved';
+import { syncWarning, type SyncWarning } from './syncHealth';
+import type { SettingsSection } from './components/settings/types';
 import type { TabName } from './types';
 
 export default function App() {
@@ -40,11 +43,11 @@ export default function App() {
     }
   });
   // Mid-shop (phone locked, app closed)? Open straight back into shopping mode.
-  // Opened from a notification (?tab=shop or ?tab=this_week): straight to that tab.
+  // Opened from a notification (?tab=shop, this_week or planning): straight to that tab.
   const [fromNotification] = useState<TabName | null>(() => {
     try {
       const tab = new URLSearchParams(window.location.search).get('tab');
-      if (tab !== 'shop' && tab !== 'this_week') return null;
+      if (tab !== 'shop' && tab !== 'this_week' && tab !== 'planning') return null;
       window.history.replaceState(null, '', window.location.pathname + window.location.hash);
       return tab;
     } catch {
@@ -63,7 +66,7 @@ export default function App() {
     const sw = navigator.serviceWorker;
     if (!sw) return;
     const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'open-tab' && (e.data.tab === 'shop' || e.data.tab === 'this_week'))
+      if (e.data?.type === 'open-tab' && ['shop', 'this_week', 'planning'].includes(e.data.tab))
         setActiveTab(e.data.tab);
     };
     sw.addEventListener('message', onMessage);
@@ -73,12 +76,14 @@ export default function App() {
   const [pendingAddRecipeId, setPendingAddRecipeId] = useState<string | null>(null);
 
   const store = useStore();
-  // The morning notifications (Settings → Notifications): kept up to date with the notification sender.
-  useMorningSchedule(store.state);
+  // The reminder notifications (Settings → Reminders): kept up to date with the notification sender.
+  useNotificationSchedule(store.state);
 
   // Shop opens on its own best week, unless you came from "See the list" for a particular week.
   const [shopPlanRequest, setShopPlanRequest] = useState<string | null>(null);
   const [shopPanelRequest, setShopPanelRequest] = useState<'aisles' | 'staples' | 'history' | null>(null);
+  const [settingsSectionRequest, setSettingsSectionRequest] = useState<SettingsSection | null>(null);
+  const settingsSectionHandled = useCallback(() => setSettingsSectionRequest(null), []);
   const handleNavigateTab = (tab: TabName, planId?: string) => {
     if (planId) {
       store.setSelectedPlanId?.(planId);
@@ -90,6 +95,20 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen app-page text-zinc-900 overflow-hidden">
       <UpdateBanner />
+      <SyncBanner
+        warning={syncWarning({
+          configured: Boolean(store.githubConfig),
+          status: store.syncStatus,
+          error: store.syncError,
+          lastOkAt: readLastSyncOk(),
+          tokenExpiresAt: getTokenExpiry(),
+          now: Date.now(),
+        })}
+        onFix={() => {
+          setSettingsSectionRequest('sync');
+          setActiveTab('settings');
+        }}
+      />
       {store.saveProblem && <SaveProblemBanner exportAll={store.exportAllData} />}
       <main className="flex-1 overflow-hidden relative flex flex-col">
         {activeTab === 'cookbook' && (
@@ -154,6 +173,8 @@ export default function App() {
                 setShopPanelRequest(panel);
                 setActiveTab('shop');
               }}
+              openSection={settingsSectionRequest}
+              onOpenSectionHandled={settingsSectionHandled}
             />
           </ErrorBoundary>
         )}
@@ -384,6 +405,43 @@ function SaveProblemBanner({ exportAll }: { exportAll: () => string }) {
  * this phone is running (checked on opening and when coming back to the app, at most every
  * 10 minutes).
  */
+/**
+ * On every tab: Sync between phones has stopped (or the token is about to run out), so both
+ * phones don't quietly drift apart. Fix opens Settings → Sync & backup; Later hides it until the
+ * app is next opened, or until it's a different problem.
+ */
+function SyncBanner({ warning, onFix }: { warning: SyncWarning | null; onFix: () => void }) {
+  const [later, setLater] = useState<SyncWarning['kind'] | null>(null);
+  if (!warning || warning.kind === later) return null;
+  const urgent = warning.kind === 'token' || warning.kind === 'missing';
+  return (
+    <div
+      className={`shrink-0 px-4 py-2 flex items-center gap-3 text-sm ${urgent ? 'bg-rose-700 text-white' : 'bg-amber-100 text-amber-950'}`}
+      role="alert"
+      data-sync-banner={warning.kind}
+    >
+      <span className="flex-1 min-w-0">{warning.text}</span>
+      <button
+        type="button"
+        onClick={onFix}
+        className={`h-8 px-3 rounded-lg font-bold cursor-pointer shrink-0 ${urgent ? 'bg-white text-rose-800' : 'bg-amber-900 text-white'}`}
+        data-sync-banner-fix
+      >
+        Fix
+      </button>
+      <button
+        type="button"
+        onClick={() => setLater(warning.kind)}
+        className={`h-8 px-2 font-semibold cursor-pointer shrink-0 ${urgent ? 'text-rose-100' : 'text-amber-900'}`}
+        aria-label="Not now"
+        data-sync-banner-later
+      >
+        Later
+      </button>
+    </div>
+  );
+}
+
 function UpdateBanner() {
   const [show, setShow] = useState(false);
   useEffect(() => {

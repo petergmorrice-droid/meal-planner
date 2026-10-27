@@ -24,4 +24,9 @@ async function goTab(page, name) {
     await page.locator('nav button', { hasText: new RegExp('^' + name + '$') }).click();
   }
 }
-module.exports = { chromium: pw.chromium, devices: pw.devices, goTab };
+/** Open one of Settings' own tabs: phone, household, shopping or sync. */
+async function settingsTab(page, id) {
+  await page.locator(`[data-settings-tab="${id}"]`).click();
+  await page.waitForTimeout(200);
+}
+module.exports = { chromium: pw.chromium, devices: pw.devices, goTab, settingsTab };

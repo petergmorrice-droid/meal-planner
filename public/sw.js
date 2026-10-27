@@ -85,7 +85,7 @@ self.addEventListener('push', (event) => {
   }));
 });
 
-// Tapping it opens the app on its tab: the Shop, or the Cook tab for dinner (or brings the open app forward).
+// Tapping it opens the app on its tab: the Shop, the Cook tab for dinner, or Planning (or brings the open app forward).
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = new URL(event.notification.data?.url || './?tab=shop', self.registration.scope).href;

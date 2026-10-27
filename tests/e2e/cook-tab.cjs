@@ -1,7 +1,7 @@
 // Cook tab: tonight card, start-by, tomorrow's prep, compact week, freezer on tick (with undo),
 // cooking mode (amounts per step, get everything out, timers that survive leaving, big steps,
 // read aloud, method switch), finished screen (fridge, freezer, verdict, note), day panel, weeks.
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -246,6 +246,7 @@ function seed() {
   );
   // The usual time lives in Settings → my household
   await tab('Settings');
+  await settingsTab(page, 'household');
   check((await page.locator('[data-setting-eat-at-input]').inputValue()) === '18:00', 'Settings shows 6pm by default');
   await page.locator('[data-setting-eat-at-input]').fill('18:30');
   await page.waitForTimeout(300);

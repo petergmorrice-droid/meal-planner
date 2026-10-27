@@ -1,43 +1,28 @@
-// The morning notifications (Settings → Notifications), worked out from the plan on the phone and
-// sent to the notification sender, which sends each one at its time even with the app closed:
-// - "Tonight's dinner": the day's meal and when to start (9am unless changed).
-// - "For tomorrow": the evening before a meal that needs it, at the same morning time, what to do
-//   tonight: take a freezer meal out to defrost, or a marinate/soak step.
+// The reminders as notifications (Settings → Reminders, for phones with notifications on), worked
+// out from the plan on the phone and sent to the notification sender, which sends each one at its
+// time even with the app closed. They follow the same settings as the calendar's alerts:
+// - Each morning: tonight's dinner, when to start it, and anything to do tonight for tomorrow.
+// - Time to start cooking (at the start time, or a little before).
+// - The night before: take a freezer meal out to defrost, or a marinate/soak step.
+// - Plan next week, on its day, when next week isn't planned or on the shopping list yet.
+// The sender only checks in the morning and from mid-afternoon to the evening (reminderSettings.ts),
+// so a reminder that falls outside those hours isn't sent as a notification.
 import { BatchItem, MealPlan, Recipe, UserPreferences } from './types';
 import { parseClock, clockText } from './cookInfo';
-import { plannedMealEvents, upcomingReminders } from './calendarReminders';
+import { planReminders, plannedMealEvents, upcomingReminders } from './calendarReminders';
+import { reminderSettings, senderChecksAt } from './reminderSettings';
 
-/** When the morning notifications go off if you haven't said: 9am. */
-export const DEFAULT_MORNING_AT = '09:00';
-/**
- * The morning time can be set from 6am to 11:45am: the sender only checks for morning
- * notifications then (netlify/functions/push-schedule.mts).
- */
-export const EARLIEST_MORNING = '06:00';
-export const LATEST_MORNING = '11:45';
 /** How far ahead the schedule goes. */
 const DAYS_AHEAD = 21;
+/** The sender checks every quarter of an hour, so each one is set for the quarter it's due in. */
+const QUARTER = 15 * 60 * 1000;
 
 export interface ScheduledNote {
   id: string;
   at: number;
   title: string;
   body: string;
-  tab?: 'shop' | 'this_week';
-}
-
-/** A time the sender will be checking at (6am to 11:45am). */
-export function morningOk(t?: string | null): boolean {
-  const m = parseClock(t);
-  return m !== null && m >= parseClock(EARLIEST_MORNING)! && m <= parseClock(LATEST_MORNING)!;
-}
-
-export function morningSettings(prefs?: Partial<UserPreferences> | null) {
-  return {
-    dinner: prefs?.notifyDinner !== false,
-    prep: prefs?.notifyPrep !== false,
-    at: morningOk(prefs?.notifyMorningAt) ? prefs!.notifyMorningAt! : DEFAULT_MORNING_AT,
-  };
+  tab?: 'shop' | 'this_week' | 'planning';
 }
 
 const iso = (d: Date) =>
@@ -46,6 +31,10 @@ const atTime = (date: string, minutes: number) => {
   const d = new Date(date + 'T00:00:00');
   d.setMinutes(minutes);
   return d.getTime();
+};
+const clockOf = (ms: number) => {
+  const d = new Date(ms);
+  return d.getHours() * 60 + d.getMinutes();
 };
 
 /** "Take the Lasagne out of the freezer tonight, for tomorrow's dinner." / "Marinate the chicken… (for tomorrow's Chicken tikka)." */
@@ -56,58 +45,84 @@ function prepBody(step: string, dish: string): string {
     : `${what} (for tomorrow's ${dish}).`;
 }
 
-/** The morning notifications from today on (today's included even if its time has passed: the sender skips late ones). */
-export function morningSchedule(
+/** The reminder notifications from today on (today's included even if their time has passed: the sender skips late ones). */
+export function notificationSchedule(
   state: { mealPlans?: MealPlan[]; recipes?: Recipe[]; batches?: BatchItem[]; preferences?: Partial<UserPreferences> },
   now: Date,
 ): ScheduledNote[] {
-  const settings = morningSettings(state.preferences);
-  const morning = parseClock(settings.at)!;
+  const settings = reminderSettings(state.preferences);
   const today = iso(now);
   const last = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + DAYS_AHEAD));
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  // Start times and do-ahead steps, whatever the calendar reminders are set to.
-  const reminders = upcomingReminders(
+  // Every start time and do-ahead step: the morning heads-up mentions them even when their own
+  // reminders are off.
+  const all = upcomingReminders(
     {
       ...state,
       preferences: { ...state.preferences, reminderCook: true, reminderCookBefore: 0, reminderPrep: true },
     },
     startOfToday,
-  );
-  const out: ScheduledNote[] = [];
-
-  if (settings.dinner) {
-    for (const meal of plannedMealEvents(state, today)) {
-      if (meal.date > last) continue;
-      const cook = reminders.find((r) => r.kind === 'cook' && r.date === meal.date);
-      const dish = meal.title.replace(/^Dinner:\s*/, '');
-      const start = cook ? ` Start by ${clockText(cook.start.getHours() * 60 + cook.start.getMinutes())}.` : '';
-      out.push({
-        id: `${meal.date}-dinner`,
-        at: atTime(meal.date, morning),
-        title: "Tonight's dinner",
-        body: `${dish}.${start}`.replace('..', '.'),
-        tab: 'this_week',
-      });
-    }
-  }
-
-  if (settings.prep) {
-    for (const r of reminders) {
-      if (r.kind !== 'prep' || r.date < today || r.date > last) continue;
-      // r.date is the evening before the meal; the details' first line names tomorrow's dinner.
-      const forWhat = r.details
+  ).filter((r) => r.date >= today && r.date <= last);
+  const prepFor = (r: (typeof all)[number]) =>
+    prepBody(
+      r.title,
+      r.details
         .split('\n')[0]
         .replace(/^For tomorrow's dinner:\s*/, '')
-        .replace(/\.$/, '');
-      out.push({
-        id: `${r.date}-prep`,
-        at: atTime(r.date, morning),
-        title: 'To do tonight',
-        body: prepBody(r.title, forWhat),
-        tab: 'this_week',
+        .replace(/\.$/, ''),
+    );
+  const out: ScheduledNote[] = [];
+  const add = (note: ScheduledNote) => {
+    const at = Math.floor(note.at / QUARTER) * QUARTER;
+    if (senderChecksAt(clockOf(at))) out.push({ tab: 'this_week', ...note, at });
+  };
+
+  if (settings.morning) {
+    const morning = parseClock(settings.morningAt)!;
+    const meals = plannedMealEvents(state, today).filter((m) => m.date <= last);
+    const dates = [
+      ...new Set([...meals.map((m) => m.date), ...all.filter((r) => r.kind === 'prep').map((r) => r.date)]),
+    ];
+    for (const date of dates.sort()) {
+      const meal = meals.find((m) => m.date === date);
+      const cook = all.find((r) => r.kind === 'cook' && r.date === date);
+      const prep = all.find((r) => r.kind === 'prep' && r.date === date);
+      const dish = meal ? `${meal.title.replace(/^Dinner:\s*/, '')}.` : '';
+      const start = meal && cook ? `Start by ${clockText(clockOf(cook.start.getTime()))}.` : '';
+      add({
+        id: `${date}-dinner`,
+        at: atTime(date, morning),
+        title: meal ? "Tonight's dinner" : 'To do tonight',
+        body: [dish.replace('..', '.'), start, prep ? prepFor(prep) : ''].filter(Boolean).join(' '),
       });
     }
   }
+
+  for (const r of all) {
+    if (r.kind === 'cook' && settings.cook) {
+      const before = settings.cookAlertBefore;
+      const [eat, how] = r.details.split('\n');
+      add({
+        id: `${r.date}-cook`,
+        at: r.start.getTime() - before * 60000,
+        title: r.title,
+        body: before
+          ? `Start at ${clockText(clockOf(r.start.getTime()))}. ${eat}`
+          : [eat, how].filter(Boolean).join(' '),
+      });
+    }
+    if (r.kind === 'prep' && settings.prep) {
+      add({
+        id: `${r.date}-prep`,
+        at: atTime(r.date, parseClock(settings.prepAt)!),
+        title: 'To do tonight',
+        body: prepFor(r),
+      });
+    }
+  }
+  // Plan next week: on its day, if the week after isn't planned or on the list yet.
+  for (const r of planReminders(state, startOfToday, DAYS_AHEAD))
+    add({ id: `${r.date}-plan`, at: r.start.getTime(), title: r.title, body: r.details, tab: 'planning' });
+
   return out.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
 }
