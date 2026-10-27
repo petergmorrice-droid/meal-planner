@@ -1,6 +1,6 @@
 /**
- * Settings → On this phone: notifications for this phone. When they're on, the reminders (Settings
- * → Reminders) and the other person's additions to the shopping list arrive as notifications, even
+ * Settings → Notifications & calendar → Notifications: for this phone. When they're on, the
+ * reminders (Reminders, above) and the other person's additions to the shopping list arrive as notifications, even
  * with the app closed. The household key is in the synced settings, so it needs Sync between phones.
  * A phone without them gets the reminders as calendar alerts instead (Calendar, below).
  */
@@ -110,7 +110,7 @@ export function NotificationsSection({
 
   return (
     <section data-settings-notifications>
-      <h3 className={sectionTitle}>On this phone</h3>
+      <h3 className={sectionTitle}>Notifications on this phone</h3>
       <div className={card}>
         <div className="px-4 py-3">
           <span className="flex items-center gap-2 text-[15px] font-semibold text-zinc-900">

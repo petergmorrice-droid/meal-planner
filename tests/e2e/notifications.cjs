@@ -1,4 +1,4 @@
-// Settings → On this phone: turning notifications on signs this phone up with the notification sender
+// Settings → Notifications & calendar: turning notifications on signs this phone up with the notification sender
 // (on Netlify) under a household key in the synced settings; the reminders (Settings → Reminders) go to
 // the sender as a schedule; adding things by hand sends a message; Send test and Turn off. The sender
 // and the phone's push system are stood in for.
@@ -95,7 +95,7 @@ const check = (ok, label, detail = '') => {
   // ---------- Turn on ----------
   await goTab(page, 'Settings');
   await page.waitForTimeout(600);
-  await settingsTab(page, 'household');
+  await settingsTab(page, 'alerts');
   await page.locator('[data-settings-notifications]').scrollIntoViewIfNeeded();
   check(
     /Rachel adds things to the shopping list/.test(await text('[data-settings-notifications]')),

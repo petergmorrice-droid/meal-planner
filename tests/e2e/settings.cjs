@@ -1,4 +1,4 @@
-// Settings in four tabs (phone, household, shopping, sync & backup): this phone (who, Gemini key test), household, sync setup, shopping shortcuts, products, past weeks, backup & reset, version and the update banner.
+// Settings in five tabs (phone, notifications & calendar, household, shopping, sync & backup): this phone (who, Gemini key test), reminders, notifications, calendar, household, sync setup, shopping shortcuts, products, past weeks, backup & reset, version and the update banner.
 // cooking mode (amounts per step, get everything out, timers that survive leaving, big steps,
 // read aloud, method switch), finished screen (fridge, freezer, verdict, note), day panel, weeks.
 const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
@@ -195,8 +195,8 @@ function seed() {
   await shot('01-settings-top');
   check(
     (await page.locator('[data-settings-tab]').allInnerTexts()).map((t) => t.trim()).join(',') ===
-      'Phone,Household,Shopping,Sync & backup',
-    'Settings: four tabs',
+      'Phone,Alerts & calendar,Household,Shopping,Sync & backup',
+    'Settings: five tabs',
   );
   check(
     (await page.locator('[data-settings-tab="phone"][aria-selected="true"]').count()) === 1,
@@ -204,7 +204,8 @@ function seed() {
   );
   const sections = {
     phone: ['phone', 'about'],
-    household: ['household', 'reminders', 'notifications', 'calendar', 'history'],
+    alerts: ['overview', 'reminders', 'notifications', 'calendar'],
+    household: ['household', 'history'],
     shopping: ['shopping'],
     sync: ['sync', 'backup'],
   };
@@ -229,7 +230,8 @@ function seed() {
     const f = await wait;
     return { name: f && f.suggestedFilename(), text: f ? fs.readFileSync(await f.path(), 'utf8') : '' };
   };
-  await settingsTab(page, 'household');
+  await settingsTab(page, 'alerts');
+  await shot('01a-alerts');
   await page.locator('[data-settings-reminders]').scrollIntoViewIfNeeded();
   check(
     (await page.locator('[data-notify-needs-sync]').count()) === 1,
@@ -246,7 +248,13 @@ function seed() {
       (await page.locator('[data-settings-sync]').count()) === 1,
     'Set up sync: opens the Sync & backup tab',
   );
-  await settingsTab(page, 'household');
+  await settingsTab(page, 'alerts');
+  check(
+    /\d of 4 on/.test(await text('[data-alerts-step="reminders"]')) &&
+      /Off/.test(await text('[data-alerts-step="notifications"]')) &&
+      /Off/.test(await text('[data-alerts-step="calendar"]')),
+    'notifications & calendar: the overview says how each is set',
+  );
   check(
     /mornings/.test(await text('[data-reminders-summary]')) &&
       /start-cooking/.test(await text('[data-reminders-summary]')),

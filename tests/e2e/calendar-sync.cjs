@@ -45,7 +45,7 @@ const check = (ok, label, detail = '') => {
   const settings = async (page) => {
     await goTab(page, 'Settings');
     await page.waitForTimeout(600);
-    await settingsTab(page, 'household');
+    await settingsTab(page, 'alerts');
     await page.locator('[data-calendar-sync]').scrollIntoViewIfNeeded();
   };
   const comeBack = async (page) => {

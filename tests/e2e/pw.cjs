@@ -24,7 +24,7 @@ async function goTab(page, name) {
     await page.locator('nav button', { hasText: new RegExp('^' + name + '$') }).click();
   }
 }
-/** Open one of Settings' own tabs: phone, household, shopping or sync. */
+/** Open one of Settings' own tabs: phone, alerts, household, shopping or sync. */
 async function settingsTab(page, id) {
   await page.locator(`[data-settings-tab="${id}"]`).click();
   await page.waitForTimeout(200);
