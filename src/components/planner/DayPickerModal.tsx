@@ -177,7 +177,7 @@ export default function DayPickerModal({
                   <div className="min-w-0">
                     <span className="font-semibold text-sm text-violet-950 block">Auto populate</span>
                     <span className="block text-xs leading-snug text-violet-900/80">
-                      Suggests a meal for {day} that uses up last week's leftovers
+                      Suggests a meal for {day} from your cookbook, or a new one from Gemini
                     </span>
                   </div>
                 </button>

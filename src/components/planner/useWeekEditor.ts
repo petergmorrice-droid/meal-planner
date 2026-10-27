@@ -327,9 +327,10 @@ export function useWeekEditor({
   /**
    * Auto populate: the meals you kept onto the week's empty days (and onto `replaceDay`, when it was
    * started from that day's "Select meal"), and what you said you've already got (it comes off the
-   * week's shopping). Says what changed, with Undo for the meals. Returns how many meals it added.
+   * week's shopping; left out when leftovers weren't used, so the week keeps what it had). Says what
+   * changed, with Undo for the meals. Returns how many meals it added.
    */
-  const autoPopulate = (picks: DayPick[], people: number, onHand: OnHandItem[], replaceDay?: string): number => {
+  const autoPopulate = (picks: DayPick[], people: number, onHand?: OnHandItem[], replaceDay?: string): number => {
     if (!currentPlan) return 0;
     let added = 0;
     let replaced: PlannedMeal[] = [];
@@ -338,16 +339,17 @@ export function useWeekEditor({
     let after: Days | null = null;
     store.changeMealPlan(currentPlan.id, (p) => {
       const r = fillDays(p.days, picks, people, { replace: replaceDay ? [replaceDay] : [] });
-      if (!r.added && JSON.stringify(p.onHand || []) === JSON.stringify(onHand)) return null;
+      if (!r.added && (!onHand || JSON.stringify(p.onHand || []) === JSON.stringify(onHand))) return null;
       added = r.added;
       replaced = r.replaced;
       freshDays = r.freshDays;
       before = p.days;
       after = r.days;
-      const { onHand: _was, ...rest } = p;
+      const { onHand: was, ...rest } = p;
       const keepRecord =
         p.status === 'finalized' && !p.lastFinalizedSnapshot ? { lastFinalizedSnapshot: listSnapshot(p) } : {};
-      return { ...rest, ...keepRecord, ...(onHand.length ? { onHand } : {}), days: r.days };
+      const got = onHand ?? was ?? [];
+      return { ...rest, ...keepRecord, ...(got.length ? { onHand: got } : {}), days: r.days };
     });
     if (before && after && added) {
       const one = added === 1 && picks.length === 1 ? picks[0] : null;

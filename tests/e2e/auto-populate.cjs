@@ -130,8 +130,34 @@ function geminiAnswer(prompt) {
   await page.locator('[data-menu-action="auto-populate"]').click();
   await page.waitForTimeout(300);
 
-  // ---- Step 1: still got these? ----
-  check((await sheet.getAttribute('data-auto-populate')) === 'left', 'opens on "Still got these?"');
+  // ---- Step 1: your week ----
+  check((await sheet.getAttribute('data-auto-populate')) === 'week', 'opens on "Your week"');
+  check(/step 1 of 3/.test(await sheet.innerText()), 'step 1 of 3 (with leftovers)');
+  check(await page.locator('[data-fill-day="Monday"]').isDisabled(), 'Monday already has fajitas: left alone');
+  check(
+    (await page.locator('[data-fill-day="Tuesday"]').getAttribute('aria-pressed')) === 'true' &&
+      (await page.locator('[data-fill-day="Sunday"]').getAttribute('aria-pressed')) === 'true',
+    'the empty days are picked',
+  );
+  await page.locator('[data-busy-day="Wednesday"]').click();
+  check(
+    (await page.locator('[data-busy-day="Wednesday"]').getAttribute('aria-pressed')) === 'true',
+    'Wednesday marked busy',
+  );
+  check((await page.locator('[data-people]').innerText()) === '2', 'your usual number of people');
+  check(await page.locator('[data-use-leftovers]').isChecked(), "Use up last week's leftovers: on, as there are some");
+  check(
+    /Probably left: chicken breasts/.test(await page.locator('[data-leftovers-hint]').innerText()),
+    'says what is probably left',
+    await page.locator('[data-leftovers-hint]').innerText(),
+  );
+  await page.screenshot({ path: `${OUT}/auto-populate-2-week.png` });
+  check((await page.locator('[data-ap-next]').innerText()).trim() === 'Next', 'Next: the leftovers');
+  await page.locator('[data-ap-next]').click();
+
+  // ---- Step 2: still got these? (using up leftovers) ----
+  check((await sheet.getAttribute('data-auto-populate')) === 'left', 'then "Still got these?"');
+  check(/step 2 of 3/.test(await sheet.innerText()), 'step 2 of 3');
   const leftovers = await page
     .locator('[data-leftover]')
     .evaluateAll((els) =>
@@ -167,23 +193,7 @@ function geminiAnswer(prompt) {
   await page.locator('[data-auto-populate] button[type="submit"]').click();
   check(/Courgette/.test(await page.locator('[data-typed-leftovers]').innerText()), 'typed one added');
   await page.screenshot({ path: `${OUT}/auto-populate-1-left.png` });
-  await page.locator('[data-ap-next]').click();
-
-  // ---- Step 2: your week ----
-  check((await sheet.getAttribute('data-auto-populate')) === 'week', 'step 2: your week');
-  check(await page.locator('[data-fill-day="Monday"]').isDisabled(), 'Monday already has fajitas: left alone');
-  check(
-    (await page.locator('[data-fill-day="Tuesday"]').getAttribute('aria-pressed')) === 'true' &&
-      (await page.locator('[data-fill-day="Sunday"]').getAttribute('aria-pressed')) === 'true',
-    'the empty days are picked',
-  );
-  await page.locator('[data-busy-day="Wednesday"]').click();
-  check(
-    (await page.locator('[data-busy-day="Wednesday"]').getAttribute('aria-pressed')) === 'true',
-    'Wednesday marked busy',
-  );
-  check((await page.locator('[data-people]').innerText()) === '2', 'your usual number of people');
-  await page.screenshot({ path: `${OUT}/auto-populate-2-week.png` });
+  check((await page.locator('[data-ap-next]').innerText()).trim() === 'Suggest meals', 'then Suggest meals');
   await page.locator('[data-ap-next]').click();
   await page.waitForTimeout(200);
 
@@ -348,7 +358,7 @@ function geminiAnswer(prompt) {
     }
   }
   await page.locator('[data-menu-action="auto-populate"]').click();
-  check((await sheet.getAttribute('data-auto-populate')) === 'left', 'opens from an empty week too');
+  check((await sheet.getAttribute('data-auto-populate')) === 'week', 'opens from an empty week too');
   await page.locator('[data-auto-populate] [aria-label="Close"]').click();
   await page.setViewportSize({ width: 390, height: 800 });
   await page.waitForTimeout(200);
@@ -363,16 +373,33 @@ function geminiAnswer(prompt) {
   await page.screenshot({ path: `${OUT}/auto-populate-9-select-meal.png` });
   await page.locator('[data-picker-auto-populate]').click();
   await page.waitForTimeout(300);
-  check((await sheet.getAttribute('data-auto-populate')) === 'left', 'Select meal: Auto populate opens it');
+  check((await sheet.getAttribute('data-auto-populate')) === 'week', 'Select meal: Auto populate opens it');
   check(/Auto populate Monday/.test(await sheet.innerText()), 'for Monday');
-  await page.locator('[data-ap-next]').click();
   check(
     (await page.locator('[data-fill-day="Monday"]').getAttribute('aria-pressed')) === 'true' &&
       (await page.locator('[data-fill-day="Tuesday"]').getAttribute('aria-pressed')) === 'false',
     'just Monday picked',
   );
+  // Not about leftovers this time: two steps
+  if (await page.locator('[data-use-leftovers]').isChecked()) await page.locator('[data-use-leftovers]').uncheck();
+  check(
+    /step 1 of 2/.test(await sheet.innerText()) &&
+      (await page.locator('[data-ap-next]').innerText()).trim() === 'Suggest meals',
+    'leftovers off: two steps, straight to the suggestions',
+  );
   await page.locator('[data-ap-next]').click();
   await page.waitForTimeout(200);
+  check((await sheet.getAttribute('data-auto-populate')) === 'picks', 'suggestions');
+  // Gemini still offers new meals, without leftovers
+  const before = asked.length;
+  await page.locator('[data-ask-ideas]').click();
+  await page.locator('[data-idea]').first().waitFor({ timeout: 5000 });
+  const newIdeas = asked.slice(before).find((p) => /Suggest 4 different dinners/.test(p)) || '';
+  check(
+    /new ideas for our cookbook/.test(newIdeas) && !/leftovers/.test(newIdeas),
+    'Gemini ideas without leftovers: new meals for the cookbook',
+    newIdeas,
+  );
   check((await page.locator('[data-pick-day]').count()) === 1, 'one suggestion, for Monday');
   const monPick = (await page.locator('[data-pick-day="Monday"] [data-pick-name]').allInnerTexts())[0] || '';
   check(/^Put 1 on the week$/.test((await page.locator('[data-ap-next]').innerText()).trim()), 'Put 1 on the week');
@@ -387,12 +414,13 @@ function geminiAnswer(prompt) {
   await page.locator('button', { hasText: /^Change meal$/ }).click();
   await page.waitForTimeout(300);
   await page.locator('[data-picker-auto-populate]').click();
-  await page.locator('[data-ap-next]').click();
+  await page.waitForTimeout(300);
   check(
     !(await page.locator('[data-fill-day="Monday"]').isDisabled()) &&
       (await page.locator('[data-fill-day="Monday"]').getAttribute('aria-pressed')) === 'true',
     "Monday can be picked although it has a meal (it's replaced)",
   );
+  if (await page.locator('[data-use-leftovers]').isChecked()) await page.locator('[data-use-leftovers]').uncheck();
   await page.locator('[data-ap-next]').click();
   await page.waitForTimeout(200);
   const newPick = (await page.locator('[data-pick-day="Monday"] [data-pick-name]').allInnerTexts())[0] || '';
