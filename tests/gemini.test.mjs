@@ -342,5 +342,29 @@ await test('meal ideas for leftovers: what is left and your taste go in; tidy ca
   assert.equal(calls[0].body.generationConfig.responseMimeType, 'application/json');
 });
 
+await test('recipe ideas without leftovers: new ideas for the cookbook, with your wishes', async () => {
+  google(
+    says(
+      JSON.stringify({ ideas: [{ name: 'Halloumi traybake', description: 'Easy.', uses: ['halloumi', 'peppers'] }] }),
+    ),
+  );
+  saveGeminiApiKey('k');
+  const ideas = await suggestMealIdeasApi([], {
+    people: 4,
+    appliance: 'oven_hob',
+    liked: [],
+    disliked: [],
+    have: [],
+    wishes: ['quick: 30 minutes or less in all', 'vegetarian', '  '],
+  });
+  assert.deepEqual(ideas[0].uses, ['halloumi', 'peppers']);
+  const sent = calls[0].body.contents[0].parts[0].text;
+  assert.match(sent, /for 4 people: new ideas for our cookbook\./);
+  assert.doesNotMatch(sent, /leftovers/);
+  assert.match(sent, /What we'd like: quick: 30 minutes or less in all; vegetarian\./);
+  assert.match(sent, /an oven and hob/);
+  assert.match(sent, /its two or three main ingredients/);
+});
+
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
 process.exit(failures ? 1 : 0);

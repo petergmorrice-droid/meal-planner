@@ -407,8 +407,9 @@ export interface MealIdea {
 }
 
 /**
- * Ideas for dinners that use up what's left: four short cards. Writing one out is the usual
- * "Ask Gemini to write one" (generateRecipeApi), so only the one you pick costs a full request.
+ * Ideas for dinners: four short cards, using up what's left when `leftovers` lists anything,
+ * otherwise new ideas for the cookbook. Writing one out is the usual "Ask Gemini to write one"
+ * (generateRecipeApi), so only the one you pick costs a full request.
  */
 export async function suggestMealIdeasApi(
   leftovers: string[],
@@ -421,6 +422,8 @@ export async function suggestMealIdeasApi(
     disliked: string[];
     /** Meals already in the cookbook (not suggested again). */
     have: string[];
+    /** What else you'd like: "quick: 30 minutes or less in all", "vegetarian", or your own words. */
+    wishes?: string[];
   },
 ): Promise<MealIdea[]> {
   const apiKey = getGeminiApiKey();
@@ -438,14 +441,23 @@ export async function suggestMealIdeasApi(
       ? `Already in our cookbook (suggest something else): ${context.have.slice(0, 60).join('; ')}.`
       : '',
   ].filter(Boolean);
+  const people = Math.max(1, context.people);
+  const wishes = (context.wishes || []).map((w) => w.trim()).filter(Boolean);
   const prompt = [
-    `Suggest 4 different dinners for ${Math.max(1, context.people)} people that use up these leftovers before they go off. Each should use as many of them as makes sense:`,
-    ...leftovers.map((x) => `- ${x}`),
+    ...(leftovers.length
+      ? [
+          `Suggest 4 different dinners for ${people} people that use up these leftovers before they go off. Each should use as many of them as makes sense:`,
+          ...leftovers.map((x) => `- ${x}`),
+        ]
+      : [`Suggest 4 different dinners for ${people} people: new ideas for our cookbook.`]),
     '',
     `Everyday home cooking from UK supermarket ingredients, made with ${cooking}.`,
+    ...(wishes.length ? [`What we'd like: ${wishes.join('; ')}.`] : []),
     ...taste,
     '',
-    'For each: a short plain name, one sentence about it, which of the leftovers above it uses (worded exactly as listed), and roughly how many minutes it takes in all.',
+    leftovers.length
+      ? 'For each: a short plain name, one sentence about it, which of the leftovers above it uses (worded exactly as listed), and roughly how many minutes it takes in all.'
+      : 'For each: a short plain name, one sentence about it, its two or three main ingredients, and roughly how many minutes it takes in all.',
   ].join('\n');
   const schema = {
     type: 'OBJECT',
@@ -457,7 +469,11 @@ export async function suggestMealIdeasApi(
           properties: {
             name: { type: 'STRING', description: 'Short plain name, e.g. "Chicken and coriander noodles"' },
             description: { type: 'STRING', description: 'One sentence about it' },
-            uses: { type: 'ARRAY', items: { type: 'STRING' }, description: 'The leftovers it uses, exactly as listed' },
+            uses: {
+              type: 'ARRAY',
+              items: { type: 'STRING' },
+              description: 'The leftovers it uses, exactly as listed (or its main ingredients when there are none)',
+            },
             minutes: { type: 'INTEGER', description: 'Roughly how long it takes in all, in minutes' },
           },
           required: ['name', 'description', 'uses'],

@@ -40,6 +40,7 @@ import {
 } from '../../autoPlan';
 import { NoGeminiKeyError, geminiDetail, suggestMealIdeasApi, type MealIdea } from '../../services/geminiService';
 import { AddRecipe } from '../AddRecipe';
+import { MealIdeaCard, useIdeasInView } from '../MealIdeaCard';
 import { messageOf } from '../../errors';
 import type { AppStore } from '../../store';
 
@@ -232,6 +233,7 @@ export default function AutoPopulateSheet({
 
   // ---- Ideas from Gemini for what's left ----
   const [ideas, setIdeas] = useState<MealIdea[] | null>(null);
+  const ideasRef = useIdeasInView(ideas);
   const [ideasBusy, setIdeasBusy] = useState(false);
   const [ideasError, setIdeasError] = useState({ text: '', detail: '' });
   const [ideaDay, setIdeaDay] = useState<Record<string, string>>({});
@@ -682,21 +684,11 @@ export default function AutoPopulateSheet({
                     </div>
                   )}
                   {ideas && ideas.length > 0 && (
-                    <ul className="space-y-1.5" data-ideas>
+                    <ul className="space-y-1.5 scroll-mt-2" data-ideas ref={ideasRef}>
                       {ideas.map((idea) => {
                         const day = ideaDay[idea.name] || days[0];
                         return (
-                          <li key={idea.name} className="bg-white rounded-lg border border-violet-100 p-2.5" data-idea>
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="text-sm font-semibold text-zinc-900">{idea.name}</span>
-                              {idea.minutes !== null && (
-                                <span className="text-xs text-zinc-500 tabular-nums shrink-0">{idea.minutes} min</span>
-                              )}
-                            </div>
-                            {idea.description && <p className="text-xs text-zinc-600 mt-0.5">{idea.description}</p>}
-                            {idea.uses.length > 0 && (
-                              <p className="text-xs text-violet-900/80 mt-0.5">Uses {idea.uses.join(', ')}</p>
-                            )}
+                          <MealIdeaCard key={idea.name} idea={idea}>
                             {written[idea.name] ? (
                               <p className="text-xs font-semibold text-emerald-700 mt-1.5 flex items-center gap-1">
                                 <Check className="w-3.5 h-3.5" /> In your cookbook, on {written[idea.name]}
@@ -730,7 +722,7 @@ export default function AutoPopulateSheet({
                                 </div>
                               )
                             )}
-                          </li>
+                          </MealIdeaCard>
                         );
                       })}
                     </ul>
