@@ -117,12 +117,6 @@ export function cooksForText(days: Record<string, DayPlan>, day: string, meal: P
   return later.length ? `Cook for ${(meal.servings || 2) + extra}: leftovers ${later.join(', ')}` : null;
 }
 
-/** Which week Planning should open on: Monday–Thursday this week, Friday–Sunday next week. */
-export function preferredWeekStart(now: Date, thisMonday: string, nextMonday: string): string {
-  const dow = now.getDay(); // 0 Sun … 6 Sat
-  return dow === 0 || dow >= 5 ? nextMonday : thisMonday;
-}
-
 // ---------- Changing the meals on a week (Planning) ----------
 
 /** Is `candidate` a leftovers meal of `main` (same recipe, freezer batch, or name)? */

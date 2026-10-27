@@ -1,5 +1,5 @@
 // Who changed it: Peter blue, Rachel pink — shopping list (added by you, notes, who ticked), meals, freezer.
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, toThisWeek } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -155,6 +155,7 @@ const check = (ok, label, detail = '') => {
     JSON.stringify(thuDay),
   );
   await tab('Planning');
+  await toThisWeek(page);
   const planMark = await page
     .locator('[data-week-day="Thursday"] [data-person-mark="R"], [data-list-day="Thursday"] [data-person-mark="R"]')
     .count();

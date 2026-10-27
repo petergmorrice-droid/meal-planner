@@ -1,5 +1,5 @@
 // Lines added by hand before they were saved as products ("1" + "1 pack") add up to "2 packs" on opening the Shop.
-const { chromium, devices } = require('./pw.cjs');
+const { chromium, devices, toThisWeek } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -52,6 +52,7 @@ const check = (ok, label, detail = '') => {
   await page.waitForTimeout(1500);
   await page.locator('nav button', { hasText: /^Shop$/ }).click();
   await page.waitForTimeout(900);
+  await toThisWeek(page);
   const qty = (await page.locator('[data-item="Belvita Breakfast Bar"] [data-item-qty]').first().innerText()).trim();
   check(qty === '2 packs', 'a "1" from before it was a product and a "1 pack" show as 2 packs', qty);
   await page.screenshot({ path: `${OUT}/belvita.png` });

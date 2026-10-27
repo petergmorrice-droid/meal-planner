@@ -5,7 +5,6 @@
 import { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { MealPlan } from '../../types';
 import { carryItemsToWeek, defaultShopWeek, weekStartShort } from '../../shopList';
-import { preferredWeekStart } from '../../planning';
 import {
   canPlanFollowingWeek,
   createEmptyPlan,
@@ -31,16 +30,11 @@ export function useShopWeek(store: AppStore, openPlanId?: string | null, onOpenP
       .sort((a: MealPlan, b: MealPlan) => a.startDate.localeCompare(b.startDate));
   }, [store.state.mealPlans]);
 
-  // The week to open on: the one you're most likely shopping for that still has things to buy
-  // (this week Mon–Thu, next week Fri–Sun), else the earliest sent week with things to buy.
+  // The week to open on: next week (the one you're shopping for), else the nearest with things to buy.
   const defaultWeekId = () => {
     const plans = (store.state.mealPlans || []).filter((p: MealPlan) => isWeekWithinForwardLimit(p.startDate));
-    return defaultShopWeek(
-      plans,
-      store.state.shoppingList || [],
-      preferredWeekStart(new Date(), currentMondayStr, nextMondayStr),
-      nextMondayStr,
-    );
+    const next = plans.find((p: MealPlan) => p.startDate === nextMondayStr);
+    return next?.id ?? defaultShopWeek(plans, store.state.shoppingList || [], nextMondayStr, nextMondayStr);
   };
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
     const plans: MealPlan[] = store.state.mealPlans || [];

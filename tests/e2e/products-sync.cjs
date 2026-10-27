@@ -2,7 +2,7 @@
 // each product, Same as…, also-called names, tidy-up checks, removals that stick, reset), the Shop
 // staples sheet and Planning sides reading the same list, and two phones syncing weeks day by day,
 // staples item by item, and a phone that's been away for months.
-const { chromium, devices, goTab, settingsTab } = require('./pw.cjs');
+const { chromium, devices, goTab, toThisWeek, settingsTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -534,6 +534,7 @@ function productSeed(old) {
     await page.mouse.click(5, 5);
     await page.waitForTimeout(200);
     await tab('Planning');
+    await toThisWeek(page);
     await page.locator('[data-list-day="Sunday"] button').first().click();
     await page.waitForTimeout(400);
     await page.locator('[data-day-sides] button').click();

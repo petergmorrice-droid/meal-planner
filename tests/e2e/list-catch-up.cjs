@@ -2,7 +2,7 @@
 // date and "Update list" puts them right, keeping your ticks. The case found on a real phone:
 // BBC Good Food's veggie shepherd's pie, whose "410g can green lentils" came out as "205 g canses"
 // (a product made with Shop as -> new, unit "g can") and whose chopped tomatoes said "check amount".
-const { chromium, devices, goTab } = require('./pw.cjs');
+const { chromium, devices, goTab, toThisWeek } = require('./pw.cjs');
 const { reviewSeed, TEST_NOW } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
@@ -101,6 +101,7 @@ function seed() {
   await page.goto(URL);
   await page.waitForTimeout(1200);
   await tab('Planning');
+  await toThisWeek(page);
   await page.locator('[data-send-to-list]').click();
   await page.waitForTimeout(400);
   await page
@@ -109,6 +110,7 @@ function seed() {
     .click();
   await page.waitForTimeout(800);
   await tab('Shop');
+  await toThisWeek(page);
   check(/^1 can/.test(await qty('Green Lentils')), 'sent now: Green Lentils is 1 can', await qty('Green Lentils'));
   check(
     /^1 can/.test(await qty('Chopped Tomatoes')) && !/check amount/.test(await row('Chopped Tomatoes')),
@@ -134,6 +136,7 @@ function seed() {
   await page.reload();
   await page.waitForTimeout(1200);
   await tab('Shop');
+  await toThisWeek(page);
   check(/205 g canses/.test(await qty('Green Lentils')), 'the old list: "205 g canses"', await qty('Green Lentils'));
   const said = (
     await notice()

@@ -82,7 +82,6 @@ export {
   changedDaysSinceList,
   cooksForText,
   leftoverSourceDay,
-  preferredWeekStart,
   isLeftoverOf,
   orphanedLeftoverDays,
   mealOnDay,
