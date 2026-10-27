@@ -2,7 +2,7 @@
  * The recipe requests: read a recipe from a web page, a photo or pasted text; write one; change
  * one; write the other appliance's steps; answer a question while cooking.
  */
-import { Recipe, Ingredient, CookingMethod } from '../../types';
+import { Recipe, Ingredient, CookingMethod, CookWith } from '../../types';
 import {
   GeminiReply,
   NoGeminiKeyError,
@@ -189,7 +189,7 @@ ${productNames.join('; ')}`;
  */
 export async function generateRecipeApi(
   promptText: string,
-  cookingMethod: 'ninja' | 'oven_hob',
+  cookingMethod: CookWith,
   usualServings = 2,
 ): Promise<Recipe> {
   const apiKey = getGeminiApiKey();
@@ -197,14 +197,19 @@ export async function generateRecipeApi(
     throw new Error('GEMINI_API_KEY_MISSING');
   }
 
+  // A slow-cooker recipe is saved as an oven/hob one (anything browned first is done on the hob), marked slow cook.
+  const slow = cookingMethod === 'slow_cook';
   const selectedMethod = cookingMethod === 'ninja' ? 'ninja' : 'oven_hob';
-  const methodNameLabel =
-    selectedMethod === 'ninja' ? 'Ninja Combi Multi-cooker / Air Fryer' : 'Stove / Oven (Traditional Hob / Oven)';
+  const methodNameLabel = slow
+    ? 'Slow cooker (anything browned first is done on the hob; give the slow cooker setting and hours)'
+    : selectedMethod === 'ninja'
+      ? 'Ninja Combi Multi-cooker / Air Fryer'
+      : 'Stove / Oven (Traditional Hob / Oven)';
 
   const prompt = `Create an original, delicious, complete recipe from scratch based on the following idea:
 "${promptText.trim()}"
 
-Target Cooking Appliance: ${methodNameLabel} ("${selectedMethod}").
+Target Cooking Appliance: ${methodNameLabel} ("${slow ? 'slow_cook' : selectedMethod}").
 
 CRITICAL INSTRUCTIONS:
 1. Dynamic Prep & Cook Times:
@@ -232,7 +237,8 @@ CRITICAL INSTRUCTIONS:
       waitSeconds: 90,
     });
     const data: GeminiRecipe = readJsonAnswer(rawText);
-    return validateAndNormalizeRecipe(data, selectedMethod, promptText, usualServings);
+    const recipe = validateAndNormalizeRecipe(data, selectedMethod, promptText, usualServings);
+    return slow ? { ...recipe, slowCook: true } : recipe;
   } catch (err) {
     console.error('Gemini generateRecipeApi failed:', err);
     throw geminiFailure(err, 'create this recipe');
@@ -395,6 +401,12 @@ export async function askAboutRecipeApi(
     .trim();
 }
 
+const COOK_WITH_TEXT: Record<CookWith, string> = {
+  oven_hob: 'an oven and hob',
+  ninja: 'a Ninja Combi multi-cooker',
+  slow_cook: 'a slow cooker',
+};
+
 /** A meal idea for using up what's left (Auto populate): a card, not yet a recipe. */
 export interface MealIdea {
   name: string;
@@ -415,7 +427,10 @@ export async function suggestMealIdeasApi(
   leftovers: string[],
   context: {
     people: number;
-    appliance: 'ninja' | 'oven_hob' | 'all';
+    /** What it's cooked with (none: any of them). */
+    cooking: CookWith[];
+    /** Ingredients you'd like to use ("salmon", "chickpeas"). */
+    ingredients?: string[];
     /** Meals you like (favourites, high stars), for a sense of taste. */
     liked: string[];
     /** Meals you said are "Not for us". */
@@ -428,12 +443,11 @@ export async function suggestMealIdeasApi(
 ): Promise<MealIdea[]> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new NoGeminiKeyError();
-  const cooking =
-    context.appliance === 'ninja'
-      ? 'a Ninja Combi multi-cooker'
-      : context.appliance === 'oven_hob'
-        ? 'an oven and hob'
-        : 'an oven and hob, or a Ninja Combi multi-cooker';
+  const ways = (context.cooking.length ? context.cooking : (['oven_hob', 'ninja', 'slow_cook'] as const)).map(
+    (c) => COOK_WITH_TEXT[c],
+  );
+  const cooking = ways.length > 1 ? `${ways.slice(0, -1).join(', ')} or ${ways[ways.length - 1]}` : ways[0];
+  const ingredients = (context.ingredients || []).map((i) => i.trim()).filter(Boolean);
   const taste = [
     context.liked.length ? `Meals we like: ${context.liked.slice(0, 12).join('; ')}.` : '',
     context.disliked.length ? `Not for us: ${context.disliked.slice(0, 12).join('; ')}.` : '',
@@ -452,6 +466,9 @@ export async function suggestMealIdeasApi(
       : [`Suggest 4 different dinners for ${people} people: new ideas for our cookbook.`]),
     '',
     `Everyday home cooking from UK supermarket ingredients, made with ${cooking}.`,
+    ...(ingredients.length
+      ? [`Ingredients we'd like to use (each idea should use at least one): ${ingredients.join(', ')}.`]
+      : []),
     ...(wishes.length ? [`What we'd like: ${wishes.join('; ')}.`] : []),
     ...taste,
     '',

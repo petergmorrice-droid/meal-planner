@@ -100,6 +100,15 @@ function geminiAnswer(prompt) {
   );
   await page.locator('[data-wish="quick"]').click();
   await page.locator('[aria-label="What should Gemini write?"]').fill('no mushrooms');
+  // A slow-cooker recipe, with chicken
+  await page.locator('[data-appliance="slow_cook"]').click();
+  await page.locator('[aria-label="Ingredients you\'d like to use"]').fill('chicken, leeks');
+  await page.locator('[data-add-ingredient]').click();
+  check(
+    (await page.locator('[data-ingredient="chicken"]').count()) === 1 &&
+      (await page.locator('[data-ingredient="leeks"]').count()) === 1,
+    'two ingredients to use, typed together',
+  );
   await page.screenshot({ path: `${OUT}/recipe-ideas-1.png` });
 
   // Ideas that use up what's left, quick, going by what you typed
@@ -110,6 +119,11 @@ function geminiAnswer(prompt) {
   check(
     /What we'd like: quick: 30 minutes or less in all; no mushrooms\./.test(prompt),
     'quick, and what you typed',
+    prompt,
+  );
+  check(
+    /made with a slow cooker\./.test(prompt) && /should use at least one\): chicken, leeks\./.test(prompt),
+    'slow cooker, chicken and leeks',
     prompt,
   );
   check((await page.locator('[data-idea]').count()) === 2, 'two idea cards');
@@ -148,10 +162,10 @@ function geminiAnswer(prompt) {
   await page.locator('button', { hasText: /^Save to cookbook$/ }).click();
   await page.waitForTimeout(500);
   const st = await page.evaluate(() => JSON.parse(localStorage.getItem('mealPlannerAppStateCache')));
-  check(
-    st.recipes.some((r) => r.name === IDEA),
-    'saved to the cookbook',
-  );
+  const saved = st.recipes.find((r) => r.name === IDEA);
+  check(!!saved, 'saved to the cookbook');
+  check(saved?.slowCook === true, 'as a slow-cooker recipe');
+  check(/Slow cooker/.test(write) && /With chicken\./.test(write), 'written for the slow cooker, with chicken', write);
   check(errors.length === 0, 'no page errors', errors.join(' | '));
   await browser.close();
   console.log(failures ? `${failures} FAILED` : 'all passed');

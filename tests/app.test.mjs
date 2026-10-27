@@ -169,6 +169,8 @@ import {
   unusedLeftovers,
   pickId,
   fillDays,
+  cookedWith,
+  wantedIn,
   QUICK_MINUTES,
 } from '../.test-build/app.mjs';
 
@@ -2724,6 +2726,68 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
       servings: 2,
       note: '',
     });
+  });
+
+  test('cooking with: only meals made that way; a slow-cooker meal needs the slow cooker', () => {
+    const oven = R('o', 'Lasagne', { cookingMethods: ['oven_hob'] });
+    const ninja = R('n', 'Ninja wings', { cookingMethods: ['ninja'] });
+    const both = R('b', 'Chicken thighs', { cookingMethods: ['oven_hob', 'ninja'] });
+    const unsaid = R('u', 'Soup');
+    const slow = R('s', 'Pulled pork', { slowCook: true, cookingMethods: ['oven_hob'] });
+    const ninjaSlow = R('ns', 'Ninja stew', { slowCook: true, cookingMethods: ['ninja'] });
+    const ok = (r, cooking) => cookedWith(r, cooking);
+    assert.ok(
+      [oven, ninja, both, unsaid, slow].every((r) => ok(r, [])),
+      'nothing chosen: anything',
+    );
+    assert.deepEqual(
+      [oven, ninja, both, unsaid, slow].filter((r) => ok(r, ['oven_hob'])).map((r) => r.id),
+      ['o', 'b', 'u'],
+      'oven/hob (a recipe that does not say counts), not the slow cooker',
+    );
+    assert.deepEqual(
+      [oven, ninja, both, slow, ninjaSlow].filter((r) => ok(r, ['ninja'])).map((r) => r.id),
+      ['n', 'b', 'ns'],
+      'Ninja: a slow cook with Ninja steps (its slow-cook setting) too',
+    );
+    assert.deepEqual(
+      [oven, ninja, slow, ninjaSlow].filter((r) => ok(r, ['slow_cook'])).map((r) => r.id),
+      ['s', 'ns'],
+    );
+  });
+
+  test('ingredients you would like to use: found by product or by name', () => {
+    const r = R('x', 'Salmon traybake', {
+      ingredients: [
+        { name: 'salmon fillets', amount: 2, unit: '' },
+        { name: 'cherry tomatoes', amount: 200, unit: 'g' },
+      ],
+    });
+    assert.deepEqual(wantedIn(r, ['Salmon', 'chickpeas', 'tomatoes'], catalog), ['Salmon', 'tomatoes']);
+    assert.deepEqual(wantedIn(r, [], catalog), []);
+  });
+
+  test('suggest: cooking with and ingredients you would like to use', () => {
+    const salmon = R('salmon', 'Salmon traybake', {
+      prepTime: 10,
+      cookTime: 40,
+      cookingMethods: ['oven_hob'],
+      ingredients: [{ name: 'salmon fillets', amount: 2, unit: '' }],
+    });
+    const stew = R('stew', 'Slow cooker beef stew', { prepTime: 20, cookTime: 480, slowCook: true });
+    const wings = R('wings', 'Ninja wings', { prepTime: 5, cookTime: 20, cookingMethods: ['ninja'] });
+    const c = ctx({ recipes: [risotto, pasta, salmon, stew, wings], leftovers: [], freezer: [] });
+    const a = (extra) => answers({ days: ['Tuesday'], busyDays: [], ...extra });
+    const tue = (extra, cx = c) => suggestWeek(a(extra), cx)[0];
+    assert.equal(tue({ ingredients: ['salmon'] }).name, 'Salmon traybake', 'has the salmon: first');
+    assert.ok(tue({ ingredients: ['salmon'] }).reasons.includes('With salmon'));
+    assert.equal(tue({ cooking: ['ninja'] }).name, 'Ninja wings', 'only Ninja meals');
+    assert.equal(tue({ cooking: ['slow_cook'] }).name, 'Slow cooker beef stew');
+    // A busy night: the slow cooker's fine (ready when you get in), but only when you're using it
+    const busy = (cooking) => suggestWeek(a({ busyDays: ['Tuesday'], cooking, useFreezer: false }), c)[0];
+    assert.equal(busy(['slow_cook']).name, 'Slow cooker beef stew');
+    assert.ok(busy(['slow_cook']).reasons.includes('Slow cooker: ready when you get in'));
+    assert.notEqual(busy([]).name, 'Slow cooker beef stew', 'not chosen: 8 hours is too long for a busy night');
   });
 
   test('suggest: what the picks leave mostly untouched (for Gemini ideas)', () => {

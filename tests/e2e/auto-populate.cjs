@@ -387,9 +387,33 @@ function geminiAnswer(prompt) {
       (await page.locator('[data-ap-next]').innerText()).trim() === 'Suggest meals',
     'leftovers off: two steps, straight to the suggestions',
   );
+  // Cooking with: nothing in the cookbook is a slow-cooker meal, so nothing to suggest…
+  check(
+    (await page.locator('[data-cook]').count()) === 3 &&
+      (await page.locator('[data-cook][aria-pressed="true"]').count()) === 0,
+    'Cooking with: Oven/Hob, Ninja Combi, Slow cooker (none picked: anything)',
+  );
+  await page.locator('[data-cook="slow_cook"]').click();
+  await page.locator('[data-ap-next]').click();
+  await page.waitForTimeout(200);
+  check(
+    /Left empty/.test(await page.locator('[data-pick-day="Monday"]').innerText()),
+    'slow cooker only: nothing to suggest',
+  );
+  // …oven and hob instead, with salmon
+  await page.locator('[data-auto-populate] button', { hasText: /^Back$/ }).click();
+  await page.locator('[data-cook="slow_cook"]').click();
+  await page.locator('[data-cook="oven_hob"]').click();
+  await page.locator('[aria-label="Ingredients you\'d like to use"]').fill('salmon');
+  await page.locator('[data-add-ingredient]').click();
+  check((await page.locator('[data-ingredient="salmon"]').count()) === 1, 'salmon added as an ingredient to use');
   await page.locator('[data-ap-next]').click();
   await page.waitForTimeout(200);
   check((await sheet.getAttribute('data-auto-populate')) === 'picks', 'suggestions');
+  check(
+    !/Left empty/.test(await page.locator('[data-pick-day="Monday"]').innerText()),
+    'oven/hob: a suggestion for Monday',
+  );
   // Gemini still offers new meals, without leftovers
   const before = asked.length;
   await page.locator('[data-ask-ideas]').click();
@@ -398,6 +422,12 @@ function geminiAnswer(prompt) {
   check(
     /new ideas for our cookbook/.test(newIdeas) && !/leftovers/.test(newIdeas),
     'Gemini ideas without leftovers: new meals for the cookbook',
+    newIdeas,
+  );
+  check(
+    /made with an oven and hob\./.test(newIdeas) &&
+      /we'd like to use \(each idea should use at least one\): salmon\./.test(newIdeas),
+    'Gemini: oven and hob, with salmon',
     newIdeas,
   );
   check((await page.locator('[data-pick-day]').count()) === 1, 'one suggestion, for Monday');

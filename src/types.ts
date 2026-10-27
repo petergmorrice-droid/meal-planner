@@ -13,6 +13,9 @@ export interface Ingredient {
 
 export type CookingMethod = 'ninja' | 'oven_hob';
 
+/** What a meal's cooked with, when choosing or asking for meals: the two methods, or the slow cooker. */
+export type CookWith = CookingMethod | 'slow_cook';
+
 export interface Recipe {
   addedBy?: string;
   lastModifiedBy?: string;
@@ -269,6 +272,8 @@ export interface UserPreferences {
   autoPlanMood?: AutoPlanMood;
   /** Auto populate: put freezer meals on busy nights (on unless switched off). */
   autoPlanFreezer?: boolean;
+  /** Auto populate: what you're cooking with (none: anything). */
+  autoPlanCooking?: CookWith[];
 }
 
 export type AutoPlanMood = 'favourites' | 'mix' | 'new';
