@@ -18,6 +18,7 @@ import { MealPlan } from '../../types';
 /**
  * The list of weeks (opens above the bar), with Plan the week after and Past weeks, and under them
  * Copy a week and Auto populate (greyed out, saying why, when they can't be used on this week).
+ * Everything under the weeks always shows: when there isn't room, only the list of weeks scrolls.
  */
 export function WeekMenu({
   plans,
@@ -85,14 +86,16 @@ export function WeekMenu({
       <div
         ref={menuRef}
         style={place.style}
-        className={`fixed w-72 max-w-[calc(100vw-16px)] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-zinc-200 p-2 z-50 animate-in fade-in ${
+        className={`fixed w-72 max-w-[calc(100vw-16px)] flex flex-col overflow-hidden bg-white rounded-2xl shadow-2xl border border-zinc-200 p-2 z-50 animate-in fade-in ${
           place.below ? 'slide-in-from-top-2' : 'slide-in-from-bottom-2'
         }`}
         data-week-menu
       >
-        <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Weeks</div>
+        <div className="shrink-0 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+          Weeks
+        </div>
 
-        <div className="max-h-60 overflow-y-auto space-y-1">
+        <div className="min-h-0 max-h-60 overflow-y-auto space-y-1" data-week-list>
           {plans.map((plan: MealPlan) => {
             const isSelected = plan.id === currentPlan?.id;
             return (
@@ -121,7 +124,7 @@ export function WeekMenu({
           })}
         </div>
 
-        <div className="pt-2 mt-1 border-t border-zinc-100 space-y-1">
+        <div className="shrink-0 pt-2 mt-1 border-t border-zinc-100 space-y-1">
           {canPlanNext ? (
             <button
               onClick={onPlanNext}

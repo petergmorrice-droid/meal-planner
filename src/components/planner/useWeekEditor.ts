@@ -308,9 +308,12 @@ export function useWeekEditor({
     return saved;
   };
 
-  /** Copy every day's meals from another week into the week on screen (not once it's sent). */
+  /**
+   * Copy every day's meals from another week into the week on screen. A week already sent to the
+   * list gets an "Update list" button afterwards, as for any other change.
+   */
   const copyWeek = (source: MealPlan): boolean => {
-    if (!currentPlan || currentPlan.status === 'finalized') return false;
+    if (!currentPlan) return false;
     let copied = 0;
     const done = editDays((days) => {
       const r = copyWeekMeals(days, source);
@@ -322,27 +325,40 @@ export function useWeekEditor({
   };
 
   /**
-   * Auto populate: the meals you kept onto the week's empty days, and what you said you've already
-   * got (it comes off the week's shopping). Says how many, with Undo for the meals. Returns how many.
+   * Auto populate: the meals you kept onto the week's empty days (and onto `replaceDay`, when it was
+   * started from that day's "Select meal"), and what you said you've already got (it comes off the
+   * week's shopping; left out when leftovers weren't used, so the week keeps what it had). Says what
+   * changed, with Undo for the meals. Returns how many meals it added.
    */
-  const autoPopulate = (picks: DayPick[], people: number, onHand: OnHandItem[]): number => {
+  const autoPopulate = (picks: DayPick[], people: number, onHand?: OnHandItem[], replaceDay?: string): number => {
     if (!currentPlan) return 0;
     let added = 0;
+    let replaced: PlannedMeal[] = [];
+    let freshDays: string[] = [];
     let before: Days | null = null;
     let after: Days | null = null;
     store.changeMealPlan(currentPlan.id, (p) => {
-      const r = fillDays(p.days, picks, people);
-      if (!r.added && JSON.stringify(p.onHand || []) === JSON.stringify(onHand)) return null;
+      const r = fillDays(p.days, picks, people, { replace: replaceDay ? [replaceDay] : [] });
+      if (!r.added && (!onHand || JSON.stringify(p.onHand || []) === JSON.stringify(onHand))) return null;
       added = r.added;
+      replaced = r.replaced;
+      freshDays = r.freshDays;
       before = p.days;
       after = r.days;
-      const { onHand: _was, ...rest } = p;
+      const { onHand: was, ...rest } = p;
       const keepRecord =
         p.status === 'finalized' && !p.lastFinalizedSnapshot ? { lastFinalizedSnapshot: listSnapshot(p) } : {};
-      return { ...rest, ...keepRecord, ...(onHand.length ? { onHand } : {}), days: r.days };
+      const got = onHand ?? was ?? [];
+      return { ...rest, ...keepRecord, ...(got.length ? { onHand: got } : {}), days: r.days };
     });
     if (before && after && added) {
-      offerUndo(`Added ${added} meal${added === 1 ? '' : 's'}`, currentPlan.id, before, after);
+      const one = added === 1 && picks.length === 1 ? picks[0] : null;
+      const label =
+        one && replaceDay
+          ? describeMealChange(one.day, replaced[0] || null, mealOnDay(after as Days, one.day) || null)
+          : `Added ${added} meal${added === 1 ? '' : 's'}`;
+      const fresh = freshDays.length ? ` ${freshDays.join(' and ')} now cooked fresh.` : '';
+      offerUndo(label + (fresh ? '.' + fresh : ''), currentPlan.id, before, after);
     }
     return added;
   };

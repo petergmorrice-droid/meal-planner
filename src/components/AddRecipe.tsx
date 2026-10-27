@@ -1,6 +1,17 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { X, ClipboardPaste, Camera, Flame, Zap, Link2, Sparkles, ChevronDown, ArrowLeft } from 'lucide-react';
-import { Recipe, CookingMethod, TabName, Ingredient } from '../types';
+import {
+  X,
+  ClipboardPaste,
+  Camera,
+  CookingPot,
+  Flame,
+  Zap,
+  Link2,
+  Sparkles,
+  ChevronDown,
+  ArrowLeft,
+} from 'lucide-react';
+import { Recipe, CookingMethod, CookWith, TabName, Ingredient } from '../types';
 import { buildCatalog, namesNeedingSuggestion, linkIngredients } from '../shopping';
 import {
   parseRecipeApi,
@@ -10,23 +21,40 @@ import {
   generateAlternativeInstructionsApi,
   readRecipePageApi,
   readRecipePhotoApi,
+  suggestMealIdeasApi,
+  NoGeminiKeyError,
   geminiDetail,
+  type MealIdea,
 } from '../services/geminiService';
 import { RecipeEditor } from './RecipeEditor';
-import { firstUrl, isJustAUrl, findDuplicate, siteName, recipeMethods, METHOD_LABEL } from '../recipeInfo';
+import { MealIdeaCard, useIdeasInView } from './MealIdeaCard';
+import { IngredientChips } from './IngredientChips';
+import { firstUrl, isJustAUrl, findDuplicate, siteName, recipeMethods, METHOD_LABEL, todayISO } from '../recipeInfo';
+import { weekLeftovers, leftoverAmountText, type Leftover } from '../leftovers';
+import { averagesById } from '../ratings';
+import { getCatalog, getCurrentMondayStr } from '../utils';
 import type { AppStore } from '../store';
 import { messageOf } from '../errors';
 
 type Busy = null | 'page' | 'photo' | 'copy' | 'match' | 'write';
 
 const APPLIANCE_KEY = 'add_recipe_appliance';
-const readAppliance = (): CookingMethod => {
+const readAppliance = (): CookWith => {
   try {
-    return localStorage.getItem(APPLIANCE_KEY) === 'ninja' ? 'ninja' : 'oven_hob';
+    const saved = localStorage.getItem(APPLIANCE_KEY);
+    return saved === 'ninja' || saved === 'slow_cook' ? saved : 'oven_hob';
   } catch {
     return 'oven_hob';
   }
 };
+
+/** "Cooking with" on Add a recipe: a slow-cooker recipe is an oven/hob one, marked slow cook. */
+const APPLIANCES: { id: CookWith; label: string }[] = [
+  { id: 'oven_hob', label: METHOD_LABEL.oven_hob },
+  { id: 'ninja', label: METHOD_LABEL.ninja },
+  { id: 'slow_cook', label: 'Slow cooker' },
+];
+const APPLIANCE_ICON = { oven_hob: Flame, ninja: Zap, slow_cook: CookingPot };
 
 const BUSY_TEXT: Record<Exclude<Busy, null>, string> = {
   page: 'Reading the page…',
@@ -70,6 +98,7 @@ export function AddRecipe({
   initialText,
   initialMode = 'paste',
   autoStart = false,
+  initialAppliance,
 }: {
   store: AppStore;
   onClose: () => void;
@@ -79,11 +108,15 @@ export function AddRecipe({
   initialMode?: 'paste' | 'generate';
   /** Start straight away with `initialText` (once). */
   autoStart?: boolean;
+  /** Cooking with this (just this time: not remembered for next time). */
+  initialAppliance?: CookWith;
 }) {
   const [step, setStep] = useState<'input' | 'review'>('input');
   const [mode, setMode] = useState<'paste' | 'generate'>(initialMode);
   const [text, setText] = useState(initialText || '');
-  const [appliance, setApplianceState] = useState<CookingMethod>(readAppliance);
+  const [appliance, setApplianceState] = useState<CookWith>(() => initialAppliance ?? readAppliance());
+  /** The method a recipe copied or written now is for (a slow-cooker one is oven/hob, marked slow cook). */
+  const asMethod: CookingMethod = appliance === 'ninja' ? 'ninja' : 'oven_hob';
   const [busy, setBusy] = useState<Busy>(null);
   // What went wrong, and the small print (what happened on each Gemini model) when there is some.
   const [error, setErrorState] = useState({ text: '', detail: '' });
@@ -96,11 +129,84 @@ export function AddRecipe({
   const [refineError, setRefineError] = useState('');
   const [writing, setWriting] = useState<CookingMethod | null>(null);
   const [dupOf, setDupOf] = useState<Recipe | null>(null);
+
+  // "Not sure? Let Gemini suggest some": new ideas (using up this week's leftovers, if you like),
+  // then the one you pick is written like any other.
+  const [leftovers] = useState<Leftover[]>(() => {
+    const st = store.state;
+    return weekLeftovers({
+      plan: st.mealPlans.find((p) => p.startDate === getCurrentMondayStr()),
+      recipes: st.recipes,
+      shoppingList: st.shoppingList,
+      catalog: getCatalog(),
+      today: todayISO(),
+      staples: st.preferences?.recurringItems,
+    });
+  });
+  const [wish, setWish] = useState({ leftovers: leftovers.length > 0, quick: false, veggie: false });
+  const [ingredients, setIngredients] = useState<string[]>([]);
+  const [ideas, setIdeas] = useState<{ list: MealIdea[]; leftovers: boolean } | null>(null);
+  const ideasRef = useIdeasInView(ideas);
+  const [ideasBusy, setIdeasBusy] = useState(false);
+  const [ideasError, setIdeasError] = useState({ text: '', detail: '' });
+  const wishes = () =>
+    [wish.quick ? 'quick: 30 minutes or less in all' : '', wish.veggie ? 'vegetarian' : '', text.trim()].filter(
+      Boolean,
+    );
+  const askIdeas = async () => {
+    setIdeasBusy(true);
+    setIdeasError({ text: '', detail: '' });
+    try {
+      const recipes = store.state.recipes;
+      const stars = averagesById(store.state.preferences?.ratings);
+      const useLeftovers = wish.leftovers && leftovers.length > 0;
+      const list = await suggestMealIdeasApi(
+        useLeftovers ? leftovers.map((l) => `${leftoverAmountText(l, getCatalog())} ${l.name.toLowerCase()}`) : [],
+        {
+          people: store.state.preferences?.defaultServings || 2,
+          cooking: [appliance],
+          ingredients,
+          liked: recipes
+            .filter((r) => r.favourite || r.verdict === 'again' || (stars.get(r.id) ?? 0) >= 4)
+            .map((r) => r.name),
+          disliked: recipes.filter((r) => r.verdict === 'not_for_us').map((r) => r.name),
+          have: recipes.map((r) => r.name),
+          wishes: wishes(),
+        },
+      );
+      setIdeas({ list, leftovers: useLeftovers });
+      if (!list.length) setIdeasError({ text: 'Gemini had no ideas this time. Try again.', detail: '' });
+    } catch (err) {
+      setIdeasError(
+        err instanceof NoGeminiKeyError
+          ? { text: 'Gemini needs its key first: add it in Settings → Phone.', detail: '' }
+          : { text: explain(err), detail: geminiDetail(err) },
+      );
+    } finally {
+      setIdeasBusy(false);
+    }
+  };
+  const writeIdea = (idea: MealIdea) => {
+    // The ingredients you'd like to use that this idea mentions.
+    const about = [idea.name, idea.description, ...idea.uses].join(' ').toLowerCase();
+    const withThese = ingredients.filter((i) => about.includes(i.toLowerCase()));
+    const parts = [
+      `${idea.name}.`,
+      idea.description,
+      ideas?.leftovers && idea.uses.length ? `Use up ${idea.uses.join(', ')}.` : '',
+      withThese.length ? `With ${withThese.join(', ')}.` : '',
+      wish.quick ? 'Quick: 30 minutes or less in all.' : '',
+      wish.veggie ? 'Vegetarian.' : '',
+    ];
+    const t = parts.filter(Boolean).join(' ');
+    setText(t);
+    void handleGo(t);
+  };
   const photoRef = useRef<HTMLInputElement>(null);
   const canPaste = typeof navigator !== 'undefined' && !!navigator.clipboard?.readText;
   const linkOnly = mode === 'paste' && isJustAUrl(text);
 
-  const setAppliance = (m: CookingMethod) => {
+  const setAppliance = (m: CookWith) => {
     setApplianceState(m);
     try {
       localStorage.setItem(APPLIANCE_KEY, m);
@@ -143,6 +249,7 @@ export function AddRecipe({
       id: data.id || crypto.randomUUID(),
       servings: data.servings || 2,
       sourceUrl: sourceUrl || data.sourceUrl,
+      ...(appliance === 'slow_cook' ? { slowCook: true } : {}),
       ingredients: linked.ingredients.map((i) => ({
         ...i,
         id: i?.id || crypto.randomUUID(),
@@ -153,19 +260,20 @@ export function AddRecipe({
 
   const toReview = (recipe: Recipe) => {
     setDraft(recipe);
-    setMethod(recipeMethods(recipe)[0] || appliance);
+    setMethod(recipeMethods(recipe)[0] || asMethod);
     setStep('review');
   };
 
   const copyRecipe = async (recipeText: string, sourceUrl?: string) => {
     setBusy('copy');
-    const data = await parseRecipeApi(recipeText, appliance);
+    const data = await parseRecipeApi(recipeText, asMethod);
     toReview(await toDraft(data, sourceUrl || firstUrl(recipeText)));
   };
 
-  const handleGo = async () => {
+  /** Copy, read or write: from the box, or from `override` (an idea you picked to write). */
+  const handleGo = async (override?: string) => {
     setError('');
-    const t = text.trim();
+    const t = (override ?? text).trim();
     if (!t) {
       setError(
         mode === 'generate' ? 'Say what you would like Gemini to write.' : 'Paste a recipe, or a link to one, first.',
@@ -306,6 +414,37 @@ export function AddRecipe({
 
   const dupNow = draft ? findDuplicate(store.state.recipes || [], draft) : undefined;
 
+  // What it's cooked with: above Gemini's ideas when writing one (they're for it too), last when pasting.
+  const cookingWith = (
+    <div>
+      <span className="text-sm font-semibold text-zinc-800 block mb-1.5">Cooking with</span>
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Cooking with">
+        {APPLIANCES.map(({ id: m, label }) => {
+          const Icon = APPLIANCE_ICON[m];
+          return (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={appliance === m}
+              onClick={() => setAppliance(m)}
+              disabled={!!busy}
+              data-appliance={m}
+              className={`h-14 px-1 rounded-xl border text-sm font-semibold leading-tight inline-flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                appliance === m
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white text-zinc-700 border-zinc-300'
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-150"
@@ -417,44 +556,114 @@ export function AddRecipe({
                   )}
                 </div>
               ) : (
-                <label className="block">
-                  <span className="text-sm font-semibold text-zinc-800 block mb-1.5">What would you like?</span>
-                  <textarea
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    rows={4}
-                    disabled={!!busy}
-                    placeholder="e.g. a quick veggie curry for 4, no mushrooms"
-                    aria-label="What should Gemini write?"
-                    className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base sm:text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  />
-                </label>
+                <>
+                  <label className="block">
+                    <span className="text-sm font-semibold text-zinc-800 block mb-1.5">What would you like?</span>
+                    <textarea
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      rows={4}
+                      disabled={!!busy}
+                      placeholder="e.g. a quick veggie curry for 4, no mushrooms"
+                      aria-label="What should Gemini write?"
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base sm:text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    />
+                  </label>
+                  {cookingWith}
+                  {!autoStart && (
+                    <section
+                      className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2"
+                      data-recipe-ideas
+                    >
+                      <div>
+                        <h3 className="text-sm font-semibold text-violet-950">Not sure? Let Gemini suggest some</h3>
+                        <p className="text-xs text-violet-900/80 mt-0.5">
+                          New ideas that aren't in your cookbook yet
+                          {text.trim() ? ', going by what you typed above' : ''}. Pick one and Gemini writes it.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(
+                          [
+                            ...(leftovers.length ? [['leftovers', "Use up what's left"] as const] : []),
+                            ['quick', 'Quick (30 min)'],
+                            ['veggie', 'Vegetarian'],
+                          ] as const
+                        ).map(([k, label]) => (
+                          <button
+                            key={k}
+                            type="button"
+                            aria-pressed={wish[k]}
+                            onClick={() => setWish((w) => ({ ...w, [k]: !w[k] }))}
+                            disabled={ideasBusy || !!busy}
+                            className={`h-8 px-2.5 rounded-lg border text-xs font-semibold cursor-pointer ${
+                              wish[k]
+                                ? 'bg-violet-600 border-violet-600 text-white'
+                                : 'bg-white border-violet-200 text-violet-900'
+                            }`}
+                            data-wish={k}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-violet-950 block mb-1">
+                          Ingredients you'd like to use
+                        </span>
+                        <IngredientChips value={ingredients} onChange={setIngredients} disabled={ideasBusy || !!busy} />
+                      </div>
+                      {wish.leftovers && leftovers.length > 0 && (
+                        <p className="text-xs text-violet-900/80" data-wish-leftovers>
+                          Left this week:{' '}
+                          {leftovers
+                            .slice(0, 5)
+                            .map((l) => l.name.toLowerCase())
+                            .join(', ')}
+                          {leftovers.length > 5 ? ` and ${leftovers.length - 5} more` : ''}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={askIdeas}
+                        disabled={ideasBusy || !!busy}
+                        className="h-9 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold inline-flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                        data-suggest-ideas
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        {ideasBusy ? 'Thinking…' : ideas ? 'Other ideas' : 'Suggest some ideas'}
+                      </button>
+                      {ideasError.text && (
+                        <div className="text-sm text-rose-800" role="alert">
+                          {ideasError.text}
+                          {ideasError.detail && (
+                            <span className="block text-[11px] text-rose-700/80 mt-0.5">{ideasError.detail}</span>
+                          )}
+                        </div>
+                      )}
+                      {ideas && ideas.list.length > 0 && (
+                        <ul className="space-y-1.5 scroll-mt-2" data-ideas ref={ideasRef}>
+                          {ideas.list.map((idea) => (
+                            <MealIdeaCard key={idea.name} idea={idea} usesLabel={ideas.leftovers ? 'Uses' : 'With'}>
+                              <button
+                                type="button"
+                                onClick={() => writeIdea(idea)}
+                                disabled={!!busy}
+                                className="mt-2 h-8 px-2.5 rounded-lg border border-violet-300 text-violet-800 text-xs font-semibold hover:bg-violet-50 disabled:opacity-50 cursor-pointer"
+                                data-write-idea
+                              >
+                                Write it
+                              </button>
+                            </MealIdeaCard>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  )}
+                </>
               )}
 
-              <div>
-                <span className="text-sm font-semibold text-zinc-800 block mb-1.5">Cooking with</span>
-                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Cooking with">
-                  {(['oven_hob', 'ninja'] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      role="radio"
-                      aria-checked={appliance === m}
-                      onClick={() => setAppliance(m)}
-                      disabled={!!busy}
-                      data-appliance={m}
-                      className={`h-12 rounded-xl border text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${
-                        appliance === m
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-white text-zinc-700 border-zinc-300'
-                      }`}
-                    >
-                      {m === 'ninja' ? <Zap className="w-4 h-4" /> : <Flame className="w-4 h-4" />}
-                      {METHOD_LABEL[m]}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {mode === 'paste' && cookingWith}
             </div>
             <div
               className="px-4 py-3 border-t border-zinc-200 shrink-0"
@@ -488,7 +697,7 @@ export function AddRecipe({
               )}
               <button
                 type="button"
-                onClick={handleGo}
+                onClick={() => handleGo()}
                 disabled={!!busy}
                 data-add-go
                 className="w-full h-12 rounded-xl bg-emerald-700 text-white text-base font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-80 cursor-pointer"

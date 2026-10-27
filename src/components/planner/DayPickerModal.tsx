@@ -1,5 +1,8 @@
-/** "Select meal for <day>": search, cooked earlier this week, quick options, freezer batches, the cook book. */
-import { ChefHat, Plus, RotateCcw, Search, ShoppingBag, Snowflake, Utensils, X } from 'lucide-react';
+/**
+ * "Select meal for <day>": search, cooked earlier this week, quick options (and Auto populate, which
+ * suggests one for the day), freezer batches, the cook book.
+ */
+import { ChefHat, Plus, RotateCcw, Search, ShoppingBag, Snowflake, Utensils, WandSparkles, X } from 'lucide-react';
 import { BatchItem, Recipe } from '../../types';
 
 export type QuickMeal = 'takeout' | 'eating_out' | 'no_meal';
@@ -16,6 +19,7 @@ export default function DayPickerModal({
   onRecipe,
   onQuick,
   onBatch,
+  onAutoPopulate,
   onClose,
 }: {
   day: string;
@@ -33,6 +37,8 @@ export default function DayPickerModal({
   onRecipe: (recipe: Recipe) => void;
   onQuick: (type: QuickMeal) => void;
   onBatch: (batchId: string) => void;
+  /** Auto populate this day (left out where it isn't offered). */
+  onAutoPopulate?: () => void;
   onClose: () => void;
 }) {
   return (
@@ -158,6 +164,24 @@ export default function DayPickerModal({
                   <span className="text-[11px] text-zinc-400">Add note</span>
                 </button>
               </div>
+              {onAutoPopulate && (
+                <button
+                  type="button"
+                  onClick={onAutoPopulate}
+                  className="mt-2 w-full text-left p-2.5 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 flex items-center gap-2.5 transition-colors cursor-pointer shadow-2xs"
+                  data-picker-auto-populate
+                >
+                  <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
+                    <WandSparkles className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-semibold text-sm text-violet-950 block">Auto populate</span>
+                    <span className="block text-xs leading-snug text-violet-900/80">
+                      Suggests a meal for {day} from your cookbook, or a new one from Gemini
+                    </span>
+                  </div>
+                </button>
+              )}
             </div>
           )}
 

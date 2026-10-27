@@ -11,8 +11,8 @@ for the Freezer and Settings (More takes the colour of whichever of the two you'
 
 | Tab | What it does |
 | --- | --- |
-| **Cookbook** | Your recipe book. Add a recipe by pasting it, pasting a link to it (Gemini opens the page), taking a photo of a cookbook page, or asking Gemini to write one; on Android you can also share a recipe page from Chrome to the app. Gemini copies recipes exactly as written, then you check them on the same editor as the recipe page, where each ingredient shows what it's bought as on the shopping list (*Shop as*). It spots recipes you already have (replace or keep both). Search covers names, ingredients and notes; one-tap filters: Favourites, Not had lately, Under 30 min, Veggie, Ninja, Slow cook, In the freezer (*Slow cook* is worked out from a recipe saying "slow cook", "slow cooker" or "crock pot" in its steps, name or tags, or set with the *Slow cook* switch on the recipe's editor). Cards show the time, Oven/Hob or Ninja, Slow cook, vegetarian/vegan, when you last had it (or when it's planned) and portions in the freezer. Opening a recipe shows everything on one page, with Favourite, Share, *Start cooking* and *Add to a day…*. |
-| **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → Household*). It opens on next week; ‹ › switch weeks. Two views, chosen per phone under the eye button: *Classic* (search and one-tap filters for your meals, drag them onto the week strip below) and *List* (the seven days as a list). Today is highlighted, past days greyed, cooked meals ticked, leftovers say where they're from ("Leftovers from Mon") and the cook day says how many to cook for. Adding a recipe that's in the freezer, or that an earlier day already cooks, asks how you're having it: *Leftovers from Wed*, *From the freezer* (nothing to buy) or *Cook it fresh*. Tap a day for one panel: people, sides, notes, change meal, move or swap (leftovers follow), remove (with Undo). An M–S row shows the week at a glance. *Send to shopping list* puts the week's ingredients on the list; change it afterwards and an *Update list* button appears (and a note on Shop), which opens the same check-the-week window, saying which days changed; updating starts the week's meal ingredients again (anything already ticked or marked out of stock on Shop goes back on unticked, and the window says how many first), keeping weekly staples, things you added and notes. Tap the week's name for the list of weeks, *Plan the week after* and *Past weeks*, and under them *Copy a week* (fills the week from another; not once it's on the shopping list) and *Auto populate* (fills the empty days from your cookbook, using up last week's leftovers first: see *How Auto populate works*); either is greyed out, saying why, when it can't be used on that week. The menu opens above the week bar, or below it when there isn't room (the List view). |
+| **Cookbook** | Your recipe book. Add a recipe by pasting it, pasting a link to it (Gemini opens the page), taking a photo of a cookbook page, or asking Gemini to write one; on Android you can also share a recipe page from Chrome to the app. Not sure what to ask for? *Ask Gemini to write one* has *Not sure? Let Gemini suggest some*: idea cards for new recipes, using up this week's leftovers (*Use up what's left*), *Quick (30 min)* and/or *Vegetarian*, with *Ingredients you'd like to use*, for what you're *Cooking with* (Oven/Hob, Ninja or *Slow cooker*: a slow-cooker recipe is saved marked *Slow cook*), going by anything you typed; *Write it* writes the one you pick, to check and save as usual. Gemini copies recipes exactly as written, then you check them on the same editor as the recipe page, where each ingredient shows what it's bought as on the shopping list (*Shop as*). It spots recipes you already have (replace or keep both). Search covers names, ingredients and notes; one-tap filters: Favourites, Not had lately, Under 30 min, Veggie, Ninja, Slow cook, In the freezer (*Slow cook* is worked out from a recipe saying "slow cook", "slow cooker" or "crock pot" in its steps, name or tags, or set with the *Slow cook* switch on the recipe's editor). Cards show the time, Oven/Hob or Ninja, Slow cook, vegetarian/vegan, when you last had it (or when it's planned) and portions in the freezer. Opening a recipe shows everything on one page, with Favourite, Share, *Start cooking* and *Add to a day…*. |
+| **Planning** | Pick meals for each day of the week, up to 4 weeks ahead: one tap adds a recipe for your usual number of people (*Settings → Household*). It opens on next week; ‹ › switch weeks. Two views, chosen per phone under the eye button: *Classic* (search and one-tap filters for your meals, drag them onto the week strip below) and *List* (the seven days as a list). Today is highlighted, past days greyed, cooked meals ticked, leftovers say where they're from ("Leftovers from Mon") and the cook day says how many to cook for. Adding a recipe that's in the freezer, or that an earlier day already cooks, asks how you're having it: *Leftovers from Wed*, *From the freezer* (nothing to buy) or *Cook it fresh*. Tap a day for one panel: people, sides, notes, change meal, move or swap (leftovers follow), remove (with Undo). An M–S row shows the week at a glance. *Send to shopping list* puts the week's ingredients on the list; change it afterwards and an *Update list* button appears (and a note on Shop), which opens the same check-the-week window, saying which days changed; updating starts the week's meal ingredients again (anything already ticked or marked out of stock on Shop goes back on unticked, and the window says how many first), keeping weekly staples, things you added and notes. Tap the week's name for the list of weeks, *Plan the week after* and *Past weeks*, and under them *Copy a week* (fills the week from another; on a week already sent to the list, *Update list* then appears) and *Auto populate* (fills the empty days from your cookbook or with new meals from Gemini, using up last week's leftovers too if you like: see *How Auto populate works*); either is greyed out, saying why, when it can't be used on that week. These always show: when there isn't room, only the list of weeks scrolls. The menu opens above the week bar, or below it when there isn't room (the List view). A day's *Select meal* also has *Auto populate*, for just that day (replacing its meal, if it has one). |
 | **Shop** | The week's list: meal ingredients, weekly staples and anything you add, one row per product, aisle by aisle in the order you walk your shop (*Arrange aisles…*; shared by both phones). ‹ › switch weeks; it opens on next week. Type to add ("2 pints milk", "6 eggs", "bin bags"), or *Browse*; *Add a recipe's ingredients…* for a batch cook or anything not on the plan. Tick the circle (it stays in place, crossed out with *Undo*, for a few seconds before moving down, here and in shopping mode); tap the rest of a row for its panel: amount, note ("semi-skimmed"; remembered for that product, so it comes back whenever it goes on the list again, until you clear it), aisle (remembered), which meals it's for, favourite, move to the following week, remove (with Undo). Adding something new asks straight away whether to save it as a product (and a weekly staple or favourite). A *cupboard check* takes off the oils, spices, rice and stock you already have. Leftovers you kept in *Auto populate* come off too: "need 300 g · have 200 g" (buying for the rest), or under *Already got* when you've got all of it (*Need it after all* puts it back). Share copies the list as text. *Go shopping* is full screen, notes in a coloured box under the item, with % done (milestones at 25/50/75%, a buzz on Android, a party at 100%): finished aisles fold away, *Undo* for the last tick stays in the bottom bar, press and hold for *out of stock* (doesn't count against the %), ticks from the other phone show within seconds ("✓ Rachel"), the screen stays on, and it reopens mid-shop if the phone locks. *Done shopping* moves, keeps or removes anything you didn't get (out-of-stock things only move if you ask), saves the shop to *Past shops* (best and average time) and learns your route round the shop: the aisles and items follow the order you usually pick things up, unless you've arranged the aisles yourself. |
 | **Cook** | This week Monday to Sunday as compact cards, opening at today's. Each card has the date down the left, the meal, one line about it (Freezer / Leftovers from Wed / Takeaway, people or "Cook for 4 (2 for Fri)", minutes, sides), the note, a tick on the right, and small *Swap*, *Recipe* and *Note* buttons (the recipe has *Start cooking*). Past days just show the tick. Today's card has more: "Start by 4:45pm to eat at 6pm" (your usual time is in *Settings → Household*, 6pm unless you change it; tap the time to change it just for tonight), anything to do tonight for tomorrow ("Take the chilli out of the freezer tonight", or a marinate/soak/overnight step) and a *Start cooking* button. *Swap* moves the meal to a free day or swaps it with another (Undo). Tapping a meal opens the same panel as Planning. Ticking a freezer meal takes its portions out of the Freezer; ticking a "freeze 4" batch cook asks how many went in; unticking (or Undo) puts it right. Cooking mode: one column starting with *Get everything out* (a checklist with amounts), each step showing what it uses and a *Start N min timer* button; named timers, several at once, +1 min, they ring and buzz until stopped and keep going on every tab; *Voice* (hands-free: say "next", "back", "repeat", "go to step 3", "start the timer", "set a timer for 10 minutes", "how long left", "stop", "what do I need", or "question, …" to ask anything; it reads each step out as you move and only acts on short commands, so kitchen chatter doesn't move the steps; it uses the browser's own speech recognition, so it needs Chrome or Safari and internet), *Ask* (type a question; Gemini answers from the recipe as you're cooking it: your amounts, people, appliance and step; needs the Gemini key), *Big steps* (one step at a time, the text as big as fits on the screen, a normal-sized Next) and *Read* (reads each step aloud as you move to it, with *Read it again*; it uses the phone's own voice, which works in Chrome and Safari and the home-screen app but not inside some other apps' browsers, and says so there); Oven/Hob or Ninja. *Finished* says what goes in the fridge for later leftovers, adds portions to the freezer, asks "Have it again" or "Not for us" (shown on the recipe) and saves a note for next time to the recipe's notes. |
 | **Freezer** | What's in the freezer by dish (two chilli batches are one line), oldest first, in **portions** (one person's helping, the same as everywhere else in the app) with "enough for 3 meals for 2". Each shows how long it's been frozen ("Use soon" after 3 months), what the plan already wants from it ("Planned Thu (2) · 5 spare", or a warning if there isn't enough) and *Have it on…* to plan it (nothing to buy). Tap one for its panel: portions, the date it was frozen, a note ("garage freezer, blue tub"), the recipe, and Remove with Undo. *Add* picks from your recipes or takes any name, with portions, date and note. |
@@ -159,10 +159,21 @@ standard names.
 ## How Auto populate works
 
 *Auto populate* (in the week menu, under *Past weeks*) fills the week's empty days from your
-cookbook, using up what's left from the week before first. It asks three things, one screen each:
+cookbook, or with new meals from Gemini, and can use up what's left from the week before too. A
+day's *Select meal* has it as well, for just that day: it starts with only that day picked and, on
+a day that already has a meal, replaces it (leftover days that relied on the old meal become fresh
+cooks). One screen at a time:
 
-1. **Still got these?** What's probably left from last week, worked out from what was bought and
-   what was cooked (`src/leftovers.ts`):
+1. **Your week.** Which days to fill (days with a meal, or gone, stay as they are), busy nights
+   (quick meals of 30 min or less, or a freezer meal), how many people, *Favourites*, *A mix* or
+   *Something new*, **Cooking with** (Oven/Hob, Ninja Combi, Slow cooker: only meals made that way;
+   none picked means anything; with the slow cooker, slow-cooker meals can go on busy nights, as
+   they're ready when you get in), **Ingredients you'd like to use** ("salmon, chickpeas": meals with
+   them come first and Gemini's ideas use them; they don't come off the shopping), freezer meals on
+   busy nights, and **Use up last week's leftovers** (on when there seem to be some, saying what).
+   Busy nights, the sort of week, cooking with and the freezer choice are remembered (both phones).
+2. **Still got these?** Only when using up leftovers: what's probably left from last week, worked
+   out from what was bought and what was cooked (`src/leftovers.ts`):
    - *more bought than used*: the list rounds up to whole packs (500 g of chicken for 300 g, a bunch
      of coriander for a tablespoon), so the rest is in the fridge;
    - *meals that didn't happen*: a past day not ticked as cooked (in a week where you tick meals)
@@ -172,22 +183,22 @@ cookbook, using up what's left from the week before first. It asks three things,
    Only things that go off are listed, the soonest first ("Use first" for meat and fish): not the
    store cupboard, the freezer, long keepers (onions, potatoes, eggs, butter, hard cheese) or weekly
    staples. Untick anything that's gone, and type anything else to use up ("half a cabbage").
-2. **Your week.** Which days to fill (days with a meal, or gone, stay as they are), busy nights
-   (quick meals of 30 min or less, or a freezer meal), how many people, and *Favourites*, *A mix* or
-   *Something new*. Busy nights, the sort of week and the freezer choice are remembered (both phones).
-3. **Suggested meals.** One per day (`src/autoPlan.ts`): each recipe is scored on how much of
-   what's left it uses (what goes off soonest counts most, so it goes early in the week), your
-   stars, favourites and *Have it again* (never *Not for us*), and how long since you had it (not
-   twice in a fortnight). Each says why ("Uses your chicken breasts and coriander", "A favourite",
-   "From the freezer, frozen 4 months ago"). *Another* for something else, × to leave a day empty,
-   *Shuffle* for a different week. **Ideas from Gemini** suggests new meals for what's still not
-   used up; *Write it* opens the usual *Ask Gemini to write one* screen with the idea filled in,
-   you check it and *Save to cookbook*, and it goes on the day you chose.
+3. **Suggested meals.** One per day (`src/autoPlan.ts`): each recipe is scored on your stars,
+   favourites and *Have it again* (never *Not for us*), how long since you had it (not twice in a
+   fortnight), and, when using up leftovers, how much of what's left it uses (what goes off soonest
+   counts most, so it goes early in the week). Each says why ("A favourite", "Last had 2 months
+   ago", "Uses your chicken breasts and coriander", "From the freezer, frozen 4 months ago").
+   *Another* for something else, × to leave a day empty, *Shuffle* for a different week.
+   **Ideas from Gemini** suggests new meals: for what's still not used up, or otherwise new ideas
+   for your cookbook (along the lines of what you like for *Favourites*, something different for
+   *Something new*). *Write it* opens the usual *Ask Gemini to write one* screen with the idea filled
+   in (quick, if its day is a busy night), you check it and *Save to cookbook*, and it goes on the
+   day you chose.
 
-*Put on the week* adds them (with Undo; a day filled meanwhile on the other phone keeps its meal),
-and keeps what you said you've got on the week (`MealPlan.onHand`), so it comes off that week's
-shopping list, in each product's own measure. Running it again on the same week remembers what you
-ticked and added.
+*Put on the week* adds them (with Undo; a day filled meanwhile on the other phone keeps its meal).
+When using up leftovers, what you said you've got is kept on the week (`MealPlan.onHand`), so it
+comes off that week's shopping list, in each product's own measure; running it again remembers
+what you ticked and added. Run without leftovers, the week keeps what it had.
 
 ## How a recipe is imported
 
@@ -888,3 +899,25 @@ next run that passes saves a new one.
   off the week's shopping ("have 200 g", *Already got*). Tests: unit tests for
   the leftovers, the scoring, the shopping and the Gemini request, and a
   browser test of the whole flow.
+- `Auto populate a day` — a day's *Select meal* has *Auto populate* (for just
+  that day, replacing its meal if it has one). In the week menu, *Copy a
+  week* and *Auto populate* always show (only the list of weeks scrolls),
+  and *Copy a week* works on a week already sent to the list (*Update list*
+  then appears). Tests: a unit test and browser checks.
+- `Recipe ideas from Gemini` — *Add a recipe → Ask Gemini to write one* has
+  *Not sure? Let Gemini suggest some*: four idea cards for new recipes (not
+  ones in the cookbook), using up this week's leftovers if you like, quick
+  or vegetarian, going by anything you typed; *Write it* writes the one you
+  pick. The same idea cards as Auto populate, which now scroll into view
+  when they arrive. Tests: a unit test and a browser test.
+- `Auto populate for any week` — it opens on *Your week*, with *Use up last
+  week's leftovers* as a switch there (the *Still got these?* step only comes
+  when it's on), and Gemini's ideas are always offered: new meals for the
+  cookbook, or for what's left. Tests: browser checks for both ways.
+- `Cooking with and ingredients to use` — Auto populate's *Your week* and Add
+  a recipe's Gemini ideas take *Cooking with* (Oven/Hob, Ninja Combi, Slow
+  cooker) and *Ingredients you'd like to use*: suggestions are only meals
+  made that way (slow-cooker meals allowed on busy nights when using the
+  slow cooker), meals with the ingredients come first, and Gemini's ideas and
+  the recipes it writes follow both. Add a recipe's *Cooking with* has *Slow
+  cooker* too. Tests: unit tests and browser checks.

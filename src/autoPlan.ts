@@ -6,18 +6,28 @@
  * - your stars, favourites and "Have it again" (never "Not for us");
  * - how long since you had it (not twice in a fortnight; "Something new" prefers ones you haven't
  *   had, "Favourites" the ones you like);
- * - busy nights only get quick meals (30 min or less) or something from the freezer.
+ * - busy nights only get quick meals (30 min or less), something from the freezer, or (when you're
+ *   cooking with the slow cooker) a slow-cooker meal;
+ * - only what you're cooking with (oven and hob, Ninja, slow cooker), and recipes with the
+ *   ingredients you'd like to use come first.
  *
  * Days are filled in order, so what goes off first is used early in the week, and each pick takes
  * what it uses off what's left before the next day is chosen. A little randomness (from `seed`)
  * breaks ties, so "Shuffle" gives a different week. Everything here is plain functions.
  */
-import type { AutoPlanMood, DayPlan, MealPlan, PlannedMeal, Recipe, RecipeRating } from './types';
+import type { AutoPlanMood, CookWith, DayPlan, MealPlan, PlannedMeal, Recipe, RecipeRating } from './types';
 import type { FreezerGroup } from './freezer';
 import { frozenAgo } from './freezer';
 import type { Leftover } from './leftovers';
-import { WEEK_DAYS } from './planning';
-import { formatAgo, formatMinutes, totalMinutes, type RecipeHistory } from './recipeInfo';
+import { WEEK_DAYS, relinkLeftovers } from './planning';
+import {
+  formatAgo,
+  formatMinutes,
+  isSlowCookRecipe,
+  recipeMethods,
+  totalMinutes,
+  type RecipeHistory,
+} from './recipeInfo';
 import { averageStars, ratingsFor } from './ratings';
 import { planIngredientInputs } from './utils';
 import { canonicalUnit, groupingKey, matchProduct, parseAmount, toBase, type Catalog } from './shopping';
@@ -34,6 +44,43 @@ export interface AutoPlanAnswers {
   mood: AutoPlanMood;
   /** Freezer meals on busy nights. */
   useFreezer: boolean;
+  /** What you're cooking with (none: anything). */
+  cooking?: CookWith[];
+  /** Ingredients you'd like to use ("salmon", "chickpeas"): recipes with them come first. */
+  ingredients?: string[];
+}
+
+/**
+ * Whether a recipe is cooked with any of these (none: anything). A recipe that doesn't say is oven
+ * and hob; a slow-cooker recipe needs the slow cooker (or the Ninja, when it has Ninja steps).
+ */
+export function cookedWith(recipe: Recipe, cooking: CookWith[] = []): boolean {
+  if (!cooking.length) return true;
+  const methods = recipeMethods(recipe);
+  const ways: CookWith[] = methods.length ? methods : ['oven_hob'];
+  if (isSlowCookRecipe(recipe))
+    return cooking.includes('slow_cook') || (cooking.includes('ninja') && ways.includes('ninja'));
+  return ways.some((m) => cooking.includes(m));
+}
+
+/** The ingredients you'd like to use that a recipe has (as you typed them). */
+export function wantedIn(recipe: Recipe, wanted: string[], catalog: Catalog): string[] {
+  if (!wanted.length || !Array.isArray(recipe.ingredients)) return [];
+  const ids = new Set<string>();
+  const names: string[] = [];
+  for (const ing of recipe.ingredients) {
+    if (!ing?.name) continue;
+    names.push(ing.name.toLowerCase());
+    const p = matchProduct(catalog, ing.name, { groceryId: ing.groceryId, unit: ing.unit });
+    if (p) ids.add(p.id);
+  }
+  return wanted.filter((w) => {
+    const text = w.trim().toLowerCase();
+    if (!text) return false;
+    const p = matchProduct(catalog, w);
+    const key = groupingKey(w);
+    return (p && ids.has(p.id)) || names.some((n) => n.includes(text) || (!!key && groupingKey(n).includes(key)));
+  });
 }
 
 export interface DayPick {
@@ -181,6 +228,9 @@ function candidates(day: string, answers: AutoPlanAnswers, ctx: AutoPlanContext,
     ? [...state.freezerSpare.values()].reduce((n, spare) => n + Math.floor(Math.max(0, spare) / people), 0)
     : 0;
   const saveQuick = !busy && busyLater > freezerMeals;
+  const cooking = answers.cooking || [];
+  const slowCooker = cooking.includes('slow_cook');
+  const wanted = (answers.ingredients || []).filter((w) => w.trim());
 
   const out: DayPick[] = [];
   if (busy && answers.useFreezer) {
@@ -203,10 +253,13 @@ function candidates(day: string, answers: AutoPlanAnswers, ctx: AutoPlanContext,
   }
 
   for (const r of ctx.recipes) {
-    if (!r?.id || r.verdict === 'not_for_us' || state.taken.has(r.id)) continue;
+    if (!r?.id || r.verdict === 'not_for_us' || state.taken.has(r.id) || !cookedWith(r, cooking)) continue;
     const minutes = totalMinutes(r);
     const quick = minutes !== null && minutes <= QUICK_MINUTES;
-    if (busy && !quick) continue;
+    // A slow-cooker meal is ready when you get in: fine on a busy night when you're using it.
+    const slowBusy = busy && slowCooker && isSlowCookRecipe(r);
+    if (busy && !quick && !slowBusy) continue;
+    const has = wantedIn(r, wanted, ctx.catalog);
 
     // Using up what's left
     const uses = recipeUses(r, people, ctx.leftovers, ctx.catalog);
@@ -243,12 +296,14 @@ function candidates(day: string, answers: AutoPlanAnswers, ctx: AutoPlanContext,
 
     const reasons: string[] = [];
     if (usedNames.length) reasons.push(`Uses your ${andList(usedNames.slice(0, 3))}`);
+    if (has.length) reasons.push(`With ${andList(has.map((w) => w.trim().toLowerCase()))}`);
     if (r.favourite) reasons.push('A favourite');
     else if (r.verdict === 'again') reasons.push('You said have it again');
     else if (stars !== null && stars >= 4) reasons.push(`Rated ${stars} stars`);
     if (h?.lastHad && gap !== null && gap > 42) reasons.push(`Last had ${formatAgo(h.lastHad, ctx.today)}`);
     else if (gap === null) reasons.push('Not had it yet');
-    if (busy && minutes !== null) reasons.push(`Quick: ${formatMinutes(minutes)}`);
+    if (slowBusy) reasons.push('Slow cooker: ready when you get in');
+    else if (busy && minutes !== null) reasons.push(`Quick: ${formatMinutes(minutes)}`);
 
     out.push({
       day,
@@ -257,14 +312,21 @@ function candidates(day: string, answers: AutoPlanAnswers, ctx: AutoPlanContext,
       name: r.name,
       reasons,
       uses,
-      score: use * 4 + like + fresh + (saveQuick && quick ? -1 : 0) + jitter(seed, r.id) * 0.6,
+      score: use * 4 + has.length * 3 + like + fresh + (saveQuick && quick ? -1 : 0) + jitter(seed, r.id) * 0.6,
     });
   }
 
   // A busy night with nothing quick: the quickest there is, saying so.
   if (busy && !out.length) {
     const quickest = ctx.recipes
-      .filter((r) => r?.id && r.verdict !== 'not_for_us' && !state.taken.has(r.id) && totalMinutes(r) !== null)
+      .filter(
+        (r) =>
+          r?.id &&
+          r.verdict !== 'not_for_us' &&
+          !state.taken.has(r.id) &&
+          cookedWith(r, cooking) &&
+          totalMinutes(r) !== null,
+      )
       .sort((a, b) => (totalMinutes(a) ?? 0) - (totalMinutes(b) ?? 0))[0];
     if (quickest) {
       out.push({
@@ -324,19 +386,24 @@ export function unusedLeftovers(leftovers: Leftover[], picks: DayPick[], already
 
 /**
  * The picks as meals on the week (cooked fresh for `people`, or from the freezer). Only empty days
- * are filled: a day given a meal meanwhile (on the other phone, say) keeps it.
+ * are filled, and the days in `replace` (Auto populate from a day's "Select meal"): any other day
+ * given a meal meanwhile (on the other phone, say) keeps it. Leftover days that relied on a replaced
+ * meal become fresh cooks (`freshDays`).
  */
 export function fillDays(
   days: Record<string, DayPlan>,
   picks: DayPick[],
   people: number,
-  newId: () => string = () => crypto.randomUUID(),
-): { days: Record<string, DayPlan>; added: number } {
-  const out = { ...days };
+  { replace = [], newId = () => crypto.randomUUID() }: { replace?: string[]; newId?: () => string } = {},
+): { days: Record<string, DayPlan>; added: number; replaced: PlannedMeal[]; freshDays: string[] } {
+  let out = { ...days };
   let added = 0;
+  const replaced: PlannedMeal[] = [];
   for (const pick of picks) {
     const dp = out[pick.day] || { date: '', meals: [] };
-    if (dp.meals?.length || (pick.kind === 'recipe' && !pick.recipeId)) continue;
+    const was = dp.meals?.[0];
+    if ((was && !replace.includes(pick.day)) || (pick.kind === 'recipe' && !pick.recipeId)) continue;
+    if (was) replaced.push(was);
     const meal: PlannedMeal =
       pick.kind === 'freezer'
         ? {
@@ -352,5 +419,7 @@ export function fillDays(
     out[pick.day] = { ...dp, meals: [meal] };
     added++;
   }
-  return { days: out, added };
+  let freshDays: string[] = [];
+  if (replaced.length) ({ days: out, freshDays } = relinkLeftovers(out));
+  return { days: out, added, replaced, freshDays };
 }

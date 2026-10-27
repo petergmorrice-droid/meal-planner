@@ -319,7 +319,7 @@ await test('meal ideas for leftovers: what is left and your taste go in; tidy ca
   saveGeminiApiKey('k');
   const ideas = await suggestMealIdeasApi(['about 200 g chicken breasts', 'about 1 bunch coriander'], {
     people: 2,
-    appliance: 'ninja',
+    cooking: ['ninja'],
     liked: ['Fajitas'],
     disliked: ['Fish pie'],
     have: ['Chilli'],
@@ -340,6 +340,41 @@ await test('meal ideas for leftovers: what is left and your taste go in; tidy ca
   assert.match(sent, /Not for us: Fish pie\./);
   assert.match(sent, /suggest something else\): Chilli\./);
   assert.equal(calls[0].body.generationConfig.responseMimeType, 'application/json');
+});
+
+await test('recipe ideas without leftovers: new ideas for the cookbook, with your wishes', async () => {
+  google(
+    says(
+      JSON.stringify({ ideas: [{ name: 'Halloumi traybake', description: 'Easy.', uses: ['halloumi', 'peppers'] }] }),
+    ),
+  );
+  saveGeminiApiKey('k');
+  const ideas = await suggestMealIdeasApi([], {
+    people: 4,
+    cooking: ['oven_hob', 'slow_cook'],
+    ingredients: ['salmon', ' chickpeas ', ''],
+    liked: [],
+    disliked: [],
+    have: [],
+    wishes: ['quick: 30 minutes or less in all', 'vegetarian', '  '],
+  });
+  assert.deepEqual(ideas[0].uses, ['halloumi', 'peppers']);
+  const sent = calls[0].body.contents[0].parts[0].text;
+  assert.match(sent, /for 4 people: new ideas for our cookbook\./);
+  assert.doesNotMatch(sent, /leftovers/);
+  assert.match(sent, /What we'd like: quick: 30 minutes or less in all; vegetarian\./);
+  assert.match(sent, /made with an oven and hob or a slow cooker\./, 'what you are cooking with');
+  assert.match(sent, /Ingredients we'd like to use \(each idea should use at least one\): salmon, chickpeas\./);
+  assert.match(sent, /its two or three main ingredients/);
+});
+
+await test('recipe ideas with nothing chosen to cook with: any of the three', async () => {
+  google(says(JSON.stringify({ ideas: [] })));
+  saveGeminiApiKey('k');
+  await suggestMealIdeasApi([], { people: 2, cooking: [], liked: [], disliked: [], have: [] });
+  const sent = calls[0].body.contents[0].parts[0].text;
+  assert.match(sent, /made with an oven and hob, a Ninja Combi multi-cooker or a slow cooker\./);
+  assert.doesNotMatch(sent, /Ingredients we'd like/);
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

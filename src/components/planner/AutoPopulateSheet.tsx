@@ -1,17 +1,33 @@
 /**
- * Auto populate: meals for the week's empty days from your cookbook, using up last week's
- * leftovers first. Three steps:
- *  1. "Still got these?": what's probably left from the week before (src/leftovers.ts), to tick
- *     or untick, and anything else you want to use up.
- *  2. "Your week": which days, busy nights, how many people, and what sort of week.
- *  3. The suggested meals (src/autoPlan.ts): Another, leave a day empty, Shuffle, and ideas from
- *     Gemini for what's left (written out and checked on the usual Add a recipe screen, saved to
- *     the cookbook and put on the day you pick). Then "Put on the week".
- * What you kept in step 1 is saved on the week, so it comes off the week's shopping.
+ * Auto populate: meals for the week's empty days (or one day) from your cookbook, or new ones from
+ * Gemini, using up last week's leftovers too if you like. The steps:
+ *  1. "Your week": which days, busy nights, how many people, what sort of week, what you're
+ *     cooking with (oven and hob, Ninja, slow cooker), ingredients you'd like to use, freezer meals,
+ *     and whether to use up last week's leftovers.
+ *  2. "Still got these?" (only when using up leftovers): what's probably left from the week before
+ *     (src/leftovers.ts), to tick or untick, and anything else you want to use up.
+ *  3. The suggested meals (src/autoPlan.ts): Another, leave a day empty, Shuffle, and new meals
+ *     from Gemini (for what's left, or just new ideas: written out and checked on the usual Add a
+ *     recipe screen, saved to the cookbook and put on the day you pick). Then "Put on the week".
+ * The leftovers you kept are saved on the week, so they come off the week's shopping.
  */
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Check, Minus, Plus, RefreshCw, Shuffle, Snowflake, Sparkles, WandSparkles, X } from 'lucide-react';
-import type { AutoPlanMood, MealPlan, OnHandItem, Recipe } from '../../types';
+import {
+  ArrowLeft,
+  Check,
+  CookingPot,
+  Flame,
+  Minus,
+  Plus,
+  RefreshCw,
+  Shuffle,
+  Snowflake,
+  Sparkles,
+  WandSparkles,
+  X,
+  Zap,
+} from 'lucide-react';
+import type { AutoPlanMood, CookWith, MealPlan, OnHandItem, Recipe } from '../../types';
 import { WEEK_DAYS } from '../../planning';
 import { freezerGroups, planDayDate } from '../../freezer';
 import { recipeHistories, todayISO } from '../../recipeInfo';
@@ -29,6 +45,7 @@ import {
   QUICK_MINUTES,
   andList,
   anotherPick,
+  wantedIn,
   pickId,
   recipeUses,
   suggestWeek,
@@ -40,6 +57,8 @@ import {
 } from '../../autoPlan';
 import { NoGeminiKeyError, geminiDetail, suggestMealIdeasApi, type MealIdea } from '../../services/geminiService';
 import { AddRecipe } from '../AddRecipe';
+import { MealIdeaCard, useIdeasInView } from '../MealIdeaCard';
+import { IngredientChips } from '../IngredientChips';
 import { messageOf } from '../../errors';
 import type { AppStore } from '../../store';
 
@@ -73,6 +92,13 @@ function fromOnHand(h: OnHandItem, catalog: ReturnType<typeof getCatalog>): Left
   };
 }
 
+const COOK_WITH: { id: CookWith; label: string }[] = [
+  { id: 'oven_hob', label: 'Oven/Hob' },
+  { id: 'ninja', label: 'Ninja Combi' },
+  { id: 'slow_cook', label: 'Slow cooker' },
+];
+const COOK_ICON = { oven_hob: Flame, ninja: Zap, slow_cook: CookingPot };
+
 const chip = (on: boolean, disabled = false) =>
   `h-9 min-w-11 px-2.5 rounded-lg border text-sm font-semibold transition-colors ${
     disabled
@@ -85,6 +111,7 @@ const chip = (on: boolean, disabled = false) =>
 export default function AutoPopulateSheet({
   store,
   plan,
+  day,
   weekLabel,
   defaultServings,
   onApply,
@@ -93,9 +120,12 @@ export default function AutoPopulateSheet({
   store: AppStore;
   /** The week being filled. */
   plan: MealPlan;
+  /** Started from this day's "Select meal": just this day to begin with (its meal, if any, is replaced). */
+  day?: string;
   weekLabel: (startDate: string) => string;
   defaultServings: number;
-  onApply: (picks: DayPick[], people: number, onHand: OnHandItem[]) => void;
+  /** `onHand` is left out when leftovers weren't used (what the week already has is kept). */
+  onApply: (picks: DayPick[], people: number, onHand?: OnHandItem[]) => void;
   onClose: () => void;
 }) {
   const s = store.state;
@@ -107,7 +137,7 @@ export default function AutoPopulateSheet({
   const lastLabel = weekLabel(lastStart);
   const lastText = /^(This|Last|Next) Week$/.test(lastLabel) ? lastLabel.toLowerCase() : `the week of ${lastLabel}`;
 
-  // ---- Step 1: what's left ----
+  // ---- What's left (the second step, when using up leftovers) ----
   const [found] = useState<Leftover[]>(() =>
     weekLeftovers({
       plan: lastWeek,
@@ -130,6 +160,9 @@ export default function AutoPopulateSheet({
     () => [...found.filter((l) => keep[l.key] && !typed.some((t) => t.key === l.key)), ...typed],
     [found, keep, typed],
   );
+  // On when there's probably something left (or this week was done with leftovers before).
+  const [useLeftovers, setUseLeftovers] = useState(() => found.length > 0 || !!plan.onHand?.length);
+  const inUse = useMemo(() => (useLeftovers ? confirmed : []), [useLeftovers, confirmed]);
   const addTyped = () => {
     const l = typedLeftover(typing, catalog);
     if (!l) return;
@@ -137,13 +170,28 @@ export default function AutoPopulateSheet({
     setTyping('');
   };
 
-  // ---- Step 2: the week ----
-  const fillable = (day: string) => !plan.days[day]?.meals?.length && planDayDate(plan, day) >= today;
-  const [days, setDays] = useState<string[]>(() => WEEK_DAYS.filter(fillable));
+  // ---- Your week (the first step) ----
+  const fillable = (d: string) => d === day || (!plan.days[d]?.meals?.length && planDayDate(plan, d) >= today);
+  const [days, setDays] = useState<string[]>(() => (day ? [day] : WEEK_DAYS.filter(fillable)));
+  // The meal being replaced doesn't count as planned (its recipe can come up again; it uses nothing).
+  const weekNow = useMemo(
+    () =>
+      day && plan.days[day]?.meals?.length
+        ? { ...plan, days: { ...plan.days, [day]: { ...plan.days[day], meals: [] } } }
+        : plan,
+    [plan, day],
+  );
   const [busy, setBusy] = useState<string[]>(() => prefs?.autoPlanBusyDays || []);
   const [people, setPeople] = useState(defaultServings);
   const [mood, setMood] = useState<AutoPlanMood>(prefs?.autoPlanMood || 'mix');
   const [useFreezer, setUseFreezer] = useState(prefs?.autoPlanFreezer !== false);
+  // What you're cooking with: as last time, else your usual appliance (Settings → Household), else anything.
+  const [cooking, setCooking] = useState<CookWith[]>(() => {
+    if (prefs?.autoPlanCooking) return prefs.autoPlanCooking;
+    const usual = prefs?.preferredCookingMethod;
+    return usual === 'ninja' || usual === 'oven_hob' ? [usual] : [];
+  });
+  const [ingredients, setIngredients] = useState<string[]>([]);
   const freezer = useMemo(
     () => freezerGroups(s.batches, s.recipes, s.mealPlans, today).filter((g) => g.spare > 0),
     [s.batches, s.recipes, s.mealPlans, today],
@@ -151,8 +199,8 @@ export default function AutoPopulateSheet({
   const toggle = (list: string[], day: string) =>
     list.includes(day) ? list.filter((d) => d !== day) : WEEK_DAYS.filter((d) => d === day || list.includes(d));
 
-  // ---- Step 3: the suggestions ----
-  const [step, setStep] = useState<Step>('left');
+  // ---- The suggestions ----
+  const [step, setStep] = useState<Step>('week');
   const [seed, setSeed] = useState(1);
   const [picks, setPicks] = useState<DayPick[]>([]);
   const [seen, setSeen] = useState<Record<string, string[]>>({});
@@ -163,21 +211,20 @@ export default function AutoPopulateSheet({
     people,
     mood,
     useFreezer: useFreezer && freezer.length > 0,
+    cooking,
+    ingredients,
   };
-  const alreadyUses = useMemo(
-    () => weekUses(plan, s.recipes, confirmed, catalog),
-    [plan, s.recipes, confirmed, catalog],
-  );
+  const alreadyUses = useMemo(() => weekUses(weekNow, s.recipes, inUse, catalog), [weekNow, s.recipes, inUse, catalog]);
   const ctx = (): AutoPlanContext => ({
     recipes: store.state.recipes,
-    leftovers: confirmed,
+    leftovers: inUse,
     catalog,
     history: recipeHistories(s.mealPlans, today),
     ratings: prefs?.ratings,
     freezer,
     weekStart: plan.startDate,
     today,
-    plannedRecipeIds: WEEK_DAYS.flatMap((d) => (plan.days[d]?.meals || []).map((m) => m.recipeId || '')).filter(
+    plannedRecipeIds: WEEK_DAYS.flatMap((d) => (weekNow.days[d]?.meals || []).map((m) => m.recipeId || '')).filter(
       Boolean,
     ),
     alreadyUses,
@@ -196,9 +243,15 @@ export default function AutoPopulateSheet({
     if (
       JSON.stringify(was?.autoPlanBusyDays || []) !== JSON.stringify(busyNow) ||
       (was?.autoPlanMood || 'mix') !== mood ||
-      (was?.autoPlanFreezer !== false) !== useFreezer
+      (was?.autoPlanFreezer !== false) !== useFreezer ||
+      JSON.stringify(was?.autoPlanCooking) !== JSON.stringify(cooking)
     ) {
-      store.updatePreferences({ autoPlanBusyDays: busyNow, autoPlanMood: mood, autoPlanFreezer: useFreezer });
+      store.updatePreferences({
+        autoPlanBusyDays: busyNow,
+        autoPlanMood: mood,
+        autoPlanFreezer: useFreezer,
+        autoPlanCooking: cooking,
+      });
     }
     suggest();
     setStep('picks');
@@ -219,15 +272,18 @@ export default function AutoPopulateSheet({
   const leaveEmpty = (day: string) => setPicks((list) => list.filter((p) => p.day !== day));
   const keptPicks = picks.filter((p) => days.includes(p.day));
 
-  // ---- Ideas from Gemini for what's left ----
+  // ---- New meals from Gemini: for what's left, or just new ideas ----
   const [ideas, setIdeas] = useState<MealIdea[] | null>(null);
+  const [ideasUseLeftovers, setIdeasUseLeftovers] = useState(false);
+  const ideasRef = useIdeasInView(ideas);
   const [ideasBusy, setIdeasBusy] = useState(false);
   const [ideasError, setIdeasError] = useState({ text: '', detail: '' });
   const [ideaDay, setIdeaDay] = useState<Record<string, string>>({});
   const [written, setWritten] = useState<Record<string, string>>({});
   const [writing, setWriting] = useState<{ idea: MealIdea; day: string } | null>(null);
-  const unused = unusedLeftovers(confirmed, keptPicks, alreadyUses);
-  const forIdeas = unused.length ? unused : confirmed;
+  const unused = unusedLeftovers(inUse, keptPicks, alreadyUses);
+  // Ideas use up what the picks leave untouched; with nothing left over, they're just new ideas.
+  const forIdeas = unused;
   const leftText = (l: Leftover) => `${leftoverAmountText(l, catalog)} ${l.name.toLowerCase()}`;
   // The day an idea goes on: one with nothing yet, else the one whose pick uses least of what's left.
   const defaultIdeaDay = () =>
@@ -243,16 +299,25 @@ export default function AutoPopulateSheet({
     try {
       const recipes = store.state.recipes;
       const stars = averagesById(prefs?.ratings);
-      const got = await suggestMealIdeasApi(forIdeas.map(leftText), {
+      const withLeftovers = forIdeas.length > 0;
+      const allBusy = days.length > 0 && days.every((d) => answers.busyDays.includes(d));
+      const got = await suggestMealIdeasApi(withLeftovers ? forIdeas.map(leftText) : [], {
         people,
-        appliance: prefs?.preferredCookingMethod || 'all',
+        cooking,
+        ingredients,
         liked: recipes
           .filter((r: Recipe) => r.favourite || r.verdict === 'again' || (stars.get(r.id) ?? 0) >= 4)
           .map((r) => r.name),
         disliked: recipes.filter((r: Recipe) => r.verdict === 'not_for_us').map((r) => r.name),
         have: recipes.map((r) => r.name),
+        wishes: [
+          mood === 'favourites' ? 'along the lines of the meals we like' : '',
+          mood === 'new' ? 'something different from what we usually have' : '',
+          allBusy ? 'quick: 30 minutes or less in all' : '',
+        ],
       });
       setIdeas(got);
+      setIdeasUseLeftovers(withLeftovers);
       const d = defaultIdeaDay();
       setIdeaDay(Object.fromEntries(got.map((i) => [i.name, d])));
       if (!got.length) setIdeasError({ text: 'Gemini had no ideas this time. Try again.', detail: '' });
@@ -266,17 +331,30 @@ export default function AutoPopulateSheet({
       setIdeasBusy(false);
     }
   };
-  const ideaText = (idea: MealIdea) => {
+  /**
+   * What Gemini is asked to write: the idea, what it uses up, the ingredients you'd like to use that
+   * it mentions, and quick if its day is a busy night.
+   */
+  const ideaText = (idea: MealIdea, day: string) => {
     const uses = forIdeas.filter((l) => idea.uses.some((u) => u.toLowerCase().includes(l.name.toLowerCase())));
-    return `${idea.name} for ${people}. ${idea.description} Use up ${(uses.length ? uses : forIdeas)
-      .map(leftText)
-      .join(', ')}.`;
+    const about = [idea.name, idea.description, ...idea.uses].join(' ').toLowerCase();
+    const withThese = ingredients.filter((i) => about.includes(i.toLowerCase()));
+    return [
+      `${idea.name} for ${people}.`,
+      idea.description,
+      ideasUseLeftovers && forIdeas.length ? `Use up ${(uses.length ? uses : forIdeas).map(leftText).join(', ')}.` : '',
+      withThese.length ? `With ${withThese.join(', ')}.` : '',
+      answers.busyDays.includes(day) ? 'Quick: 30 minutes or less in all.' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
   };
   const savedIdea = (recipe: Recipe) => {
     if (!writing) return;
     const day = writing.day;
-    const uses = recipeUses(recipe, people, confirmed, catalog);
-    const usedNames = confirmed.filter((l) => uses[l.key]).map((l) => l.name.toLowerCase());
+    const uses = recipeUses(recipe, people, inUse, catalog);
+    const usedNames = inUse.filter((l) => uses[l.key]).map((l) => l.name.toLowerCase());
+    const has = wantedIn(recipe, ingredients, catalog);
     setPicks((list) => [
       ...list.filter((p) => p.day !== day),
       {
@@ -287,6 +365,7 @@ export default function AutoPopulateSheet({
         reasons: [
           'New: written by Gemini, now in your cookbook',
           ...(usedNames.length ? [`Uses your ${andList(usedNames.slice(0, 3))}`] : []),
+          ...(has.length ? [`With ${andList(has.map((w) => w.toLowerCase()))}`] : []),
         ],
         uses,
         score: 100,
@@ -297,7 +376,8 @@ export default function AutoPopulateSheet({
   };
 
   const title = step === 'left' ? 'Still got these?' : step === 'week' ? 'Your week' : 'Suggested meals';
-  const stepNo = step === 'left' ? 1 : step === 'week' ? 2 : 3;
+  const steps = useLeftovers ? 3 : 2;
+  const stepNo = step === 'week' ? 1 : step === 'left' ? 2 : steps;
 
   return (
     <>
@@ -320,7 +400,7 @@ export default function AutoPopulateSheet({
               <div className="min-w-0">
                 <h3 className="text-lg font-semibold text-zinc-900 leading-tight">{title}</h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Auto populate {weekLabel(plan.startDate)} · step {stepNo} of 3
+                  Auto populate {day || weekLabel(plan.startDate)} · step {stepNo} of {steps}
                 </p>
               </div>
             </div>
@@ -446,7 +526,9 @@ export default function AutoPopulateSheet({
                 <section>
                   <h4 className="text-sm font-semibold text-zinc-900">Days to fill</h4>
                   <p className="text-xs text-zinc-500 mb-2">
-                    Days that already have a meal, or have gone, stay as they are.
+                    {day && plan.days[day]?.meals?.length
+                      ? `${day}'s meal is replaced. Other days that already have a meal, or have gone, stay as they are.`
+                      : 'Days that already have a meal, or have gone, stay as they are.'}
                   </p>
                   <div className="flex flex-wrap gap-1.5" data-fill-days>
                     {WEEK_DAYS.map((d) => {
@@ -548,6 +630,47 @@ export default function AutoPopulateSheet({
                   </div>
                 </section>
 
+                <section>
+                  <h4 className="text-sm font-semibold text-zinc-900">Cooking with</h4>
+                  <p className="text-xs text-zinc-500 mb-2">
+                    Only meals made this way. Pick any; none means anything.
+                    {cooking.includes('slow_cook') ? ' Slow-cooker meals can go on busy nights.' : ''}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5" data-cook-with>
+                    {COOK_WITH.map(({ id, label }) => {
+                      const Icon = COOK_ICON[id];
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          aria-pressed={cooking.includes(id)}
+                          onClick={() =>
+                            setCooking((list) =>
+                              list.includes(id)
+                                ? list.filter((c) => c !== id)
+                                : COOK_WITH.map((c) => c.id).filter((c) => c === id || list.includes(c)),
+                            )
+                          }
+                          className={`${chip(cooking.includes(id))} inline-flex items-center gap-1.5`}
+                          data-cook={id}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section>
+                  <h4 className="text-sm font-semibold text-zinc-900">Ingredients you'd like to use</h4>
+                  <p className="text-xs text-zinc-500 mb-2">
+                    Meals with them come first, and Gemini's ideas use them. (To use up what's in the fridge, use the
+                    leftovers switch below.)
+                  </p>
+                  <IngredientChips value={ingredients} onChange={setIngredients} />
+                </section>
+
                 {freezer.length > 0 && (
                   <label className="flex items-center justify-between gap-3 cursor-pointer">
                     <span>
@@ -566,6 +689,29 @@ export default function AutoPopulateSheet({
                     />
                   </label>
                 )}
+
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-zinc-900">Use up last week's leftovers</span>
+                    <span className="block text-xs text-zinc-500" data-leftovers-hint>
+                      {found.length
+                        ? `Probably left: ${found
+                            .slice(0, 4)
+                            .map((l) => l.name.toLowerCase())
+                            .join(
+                              ', ',
+                            )}${found.length > 4 ? ` and ${found.length - 4} more` : ''}. You check them next.`
+                        : `Nothing obvious left from ${lastText}; you can add anything you want to use up.`}
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={useLeftovers}
+                    onChange={(e) => setUseLeftovers(e.target.checked)}
+                    className="w-5 h-5 accent-emerald-600 shrink-0"
+                    data-use-leftovers
+                  />
+                </label>
               </>
             )}
 
@@ -638,28 +784,28 @@ export default function AutoPopulateSheet({
                 <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2" data-gemini-ideas>
                   <div>
                     <h4 className="text-sm font-semibold text-violet-950">
-                      {confirmed.length && unused.length
+                      {unused.length
                         ? `Not used up yet: ${unused.map((l) => l.name.toLowerCase()).join(', ')}`
                         : 'New meals from Gemini'}
                     </h4>
                     <p className="text-xs text-violet-900/80 mt-0.5">
-                      {confirmed.length
-                        ? 'Gemini can suggest new meals that use them up. Pick one and it writes the recipe; check it, save it to your cookbook, and it goes on the day you choose.'
-                        : 'Tell Gemini what you have in step 1 and it can suggest new meals that use it up.'}
+                      {unused.length
+                        ? 'Gemini can suggest new meals that use them up. '
+                        : "Gemini can suggest new meals that aren't in your cookbook yet. "}
+                      Pick one and it writes the recipe; check it, save it to your cookbook, and it goes on the day you
+                      choose.
                     </p>
                   </div>
-                  {confirmed.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={askIdeas}
-                      disabled={ideasBusy}
-                      className="h-9 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
-                      data-ask-ideas
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      {ideasBusy ? 'Thinking…' : ideas ? 'Other ideas' : 'Ideas from Gemini'}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={askIdeas}
+                    disabled={ideasBusy}
+                    className="h-9 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                    data-ask-ideas
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    {ideasBusy ? 'Thinking…' : ideas ? 'Other ideas' : 'Ideas from Gemini'}
+                  </button>
                   {ideasError.text && (
                     <div className="text-sm text-rose-800" role="alert">
                       {ideasError.text}
@@ -669,21 +815,11 @@ export default function AutoPopulateSheet({
                     </div>
                   )}
                   {ideas && ideas.length > 0 && (
-                    <ul className="space-y-1.5" data-ideas>
+                    <ul className="space-y-1.5 scroll-mt-2" data-ideas ref={ideasRef}>
                       {ideas.map((idea) => {
                         const day = ideaDay[idea.name] || days[0];
                         return (
-                          <li key={idea.name} className="bg-white rounded-lg border border-violet-100 p-2.5" data-idea>
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="text-sm font-semibold text-zinc-900">{idea.name}</span>
-                              {idea.minutes !== null && (
-                                <span className="text-xs text-zinc-500 tabular-nums shrink-0">{idea.minutes} min</span>
-                              )}
-                            </div>
-                            {idea.description && <p className="text-xs text-zinc-600 mt-0.5">{idea.description}</p>}
-                            {idea.uses.length > 0 && (
-                              <p className="text-xs text-violet-900/80 mt-0.5">Uses {idea.uses.join(', ')}</p>
-                            )}
+                          <MealIdeaCard key={idea.name} idea={idea} usesLabel={ideasUseLeftovers ? 'Uses' : 'With'}>
                             {written[idea.name] ? (
                               <p className="text-xs font-semibold text-emerald-700 mt-1.5 flex items-center gap-1">
                                 <Check className="w-3.5 h-3.5" /> In your cookbook, on {written[idea.name]}
@@ -717,7 +853,7 @@ export default function AutoPopulateSheet({
                                 </div>
                               )
                             )}
-                          </li>
+                          </MealIdeaCard>
                         );
                       })}
                     </ul>
@@ -728,7 +864,7 @@ export default function AutoPopulateSheet({
           </div>
 
           <div className="px-4 py-3 border-t border-zinc-100 flex items-center gap-2 shrink-0">
-            {step === 'left' ? (
+            {step === 'week' ? (
               <button
                 type="button"
                 onClick={onClose}
@@ -739,7 +875,7 @@ export default function AutoPopulateSheet({
             ) : (
               <button
                 type="button"
-                onClick={() => setStep(step === 'picks' ? 'week' : 'left')}
+                onClick={() => setStep(step === 'picks' && useLeftovers ? 'left' : 'week')}
                 className="h-11 px-3 text-zinc-700 font-medium bg-zinc-100 hover:bg-zinc-200 rounded-xl text-sm flex items-center gap-1 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -764,14 +900,18 @@ export default function AutoPopulateSheet({
               type="button"
               disabled={(step === 'week' && days.length === 0) || (step === 'picks' && keptPicks.length === 0)}
               onClick={() => {
-                if (step === 'left') setStep('week');
-                else if (step === 'week') toSuggestions();
-                else onApply(keptPicks, people, confirmed.map(toOnHand));
+                if (step === 'week' && useLeftovers) setStep('left');
+                else if (step !== 'picks') toSuggestions();
+                else onApply(keptPicks, people, useLeftovers ? confirmed.map(toOnHand) : undefined);
               }}
               className="ml-auto h-11 px-4 text-white font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm disabled:opacity-40 cursor-pointer"
               data-ap-next
             >
-              {step === 'left' ? 'Next' : step === 'week' ? 'Suggest meals' : `Put ${keptPicks.length} on the week`}
+              {step === 'week' && useLeftovers
+                ? 'Next'
+                : step !== 'picks'
+                  ? 'Suggest meals'
+                  : `Put ${keptPicks.length} on the week`}
             </button>
           </div>
         </div>
@@ -783,7 +923,8 @@ export default function AutoPopulateSheet({
           store={store}
           initialMode="generate"
           autoStart
-          initialText={ideaText(writing.idea)}
+          initialText={ideaText(writing.idea, writing.day)}
+          initialAppliance={cooking.length === 1 ? cooking[0] : undefined}
           onClose={() => setWriting(null)}
           onSaved={savedIdea}
         />
