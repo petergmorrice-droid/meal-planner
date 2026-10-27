@@ -379,13 +379,10 @@ export function WeekGlance({
   days,
   today,
   onJump,
-  action,
 }: {
   days: Record<string, DayPlan>;
   today: string;
   onJump: (day: string) => void;
-  /** Shown instead of the count, e.g. "Copy a week" on an empty week. */
-  action?: React.ReactNode;
 }) {
   const planned = WEEK_DAYS.filter((d) => (days[d]?.meals || []).length > 0).length;
   return (
@@ -416,13 +413,9 @@ export function WeekGlance({
           </button>
         );
       })}
-      {action ? (
-        <span className="ml-auto">{action}</span>
-      ) : (
-        <span className="ml-auto text-xs font-medium text-zinc-600 whitespace-nowrap" data-planned-count>
-          {planned} of 7 planned
-        </span>
-      )}
+      <span className="ml-auto text-xs font-medium text-zinc-600 whitespace-nowrap" data-planned-count>
+        {planned} of 7 planned
+      </span>
     </div>
   );
 }

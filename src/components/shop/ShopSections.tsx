@@ -163,7 +163,9 @@ export function InCupboardSection({
       >
         <span className="flex items-center gap-1.5">
           <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-          <span className="text-xs font-bold uppercase tracking-wider text-zinc-600">Already in the cupboard</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-zinc-600">
+            {items.some((i) => i.haveText) ? 'Already got' : 'Already in the cupboard'}
+          </span>
         </span>
         <span className="text-xs text-zinc-500">{items.length} · not on the list</span>
       </button>
@@ -171,7 +173,10 @@ export function InCupboardSection({
         <ul className="border-t border-zinc-100 divide-y divide-zinc-100">
           {items.map((item) => (
             <li key={item.id} className="flex items-center justify-between gap-3 px-3.5 py-2">
-              <span className="text-sm text-zinc-600 min-w-0 truncate">{item.name}</span>
+              <span className="text-sm text-zinc-600 min-w-0 truncate">
+                {item.name}
+                {item.haveText && <span className="text-xs text-emerald-700"> · have {item.haveText}</span>}
+              </span>
               <button
                 type="button"
                 onClick={() => onNeed(item.id)}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { X, ClipboardPaste, Camera, Flame, Zap, Link2, Sparkles, ChevronDown, ArrowLeft } from 'lucide-react';
 import { Recipe, CookingMethod, TabName, Ingredient } from '../types';
 import { buildCatalog, namesNeedingSuggestion, linkIngredients } from '../shopping';
@@ -60,6 +60,7 @@ async function photoForGemini(file: File, maxSide = 1600): Promise<{ data: strin
 /**
  * Adding a recipe: paste it (or a link to it, or a photo of it), or ask Gemini to write one.
  * Then check it on the same editor as the recipe page, and save. Nothing is saved before that.
+ * Auto populate opens it on "Ask Gemini to write one" with an idea filled in, already writing.
  */
 export function AddRecipe({
   store,
@@ -67,15 +68,20 @@ export function AddRecipe({
   onSaved,
   onNavigateTab,
   initialText,
+  initialMode = 'paste',
+  autoStart = false,
 }: {
   store: AppStore;
   onClose: () => void;
   onSaved: (recipe: Recipe) => void;
   onNavigateTab?: (tab: TabName) => void;
   initialText?: string;
+  initialMode?: 'paste' | 'generate';
+  /** Start straight away with `initialText` (once). */
+  autoStart?: boolean;
 }) {
   const [step, setStep] = useState<'input' | 'review'>('input');
-  const [mode, setMode] = useState<'paste' | 'generate'>('paste');
+  const [mode, setMode] = useState<'paste' | 'generate'>(initialMode);
   const [text, setText] = useState(initialText || '');
   const [appliance, setApplianceState] = useState<CookingMethod>(readAppliance);
   const [busy, setBusy] = useState<Busy>(null);
@@ -184,6 +190,17 @@ export function AddRecipe({
       setBusy(null);
     }
   };
+
+  // Asked to start straight away: once, even when React runs effects twice while developing.
+  const started = useRef(false);
+  const startNow = useEffectEvent(() => {
+    if (started.current) return;
+    started.current = true;
+    void handleGo();
+  });
+  useEffect(() => {
+    if (autoStart && initialText?.trim()) startNow();
+  }, [autoStart, initialText]);
 
   const handlePhoto = async (file?: File | null) => {
     if (!file) return;

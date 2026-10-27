@@ -5,10 +5,10 @@
  * picker, changing the week), and src/planning.ts has the week changes as plain functions.
  */
 import { useState, useEffect, useEffectEvent, useMemo, useRef } from 'react';
-import { Copy } from 'lucide-react';
 import Notice from './Notice';
 import { Recipe, MealPlan, PlannedMeal, TabName } from '../types';
 import { DAYS_OF_WEEK, canPlanFollowingWeek } from '../utils';
+import { planDayDate } from '../freezer';
 import { changedDaysSinceList, cooksForText, leftoverSourceDay } from '../planning';
 import { todayISO } from '../recipeInfo';
 import { RecipeModal } from './CookBookTab';
@@ -22,6 +22,7 @@ import CustomMealModal, { CustomMealDraft } from './planner/CustomMealModal';
 import SendToListModal, { NoMealsModal } from './planner/SendToListModal';
 import { mealLinesShopped } from '../planShopping';
 import CopyWeekModal from './planner/CopyWeekModal';
+import AutoPopulateSheet from './planner/AutoPopulateSheet';
 import { HowAreYouHavingIt, RemoveLeftoversQuestion } from './planner/LeftoverPrompts';
 import FreezerWidget from './planner/FreezerWidget';
 import { SidesModalInner } from './planner/SidesModal';
@@ -65,6 +66,7 @@ export default function PlanningTab({
   const [sidesEditingMeal, setSidesEditingMeal] = useState<{ dayName: string; meal: PlannedMeal } | null>(null);
   // Copy-a-week picker: 'pick' lists weeks; a plan means "confirm replacing this week's meals with it".
   const [copyWeekState, setCopyWeekState] = useState<'pick' | MealPlan | null>(null);
+  const [autoPopulating, setAutoPopulating] = useState(false);
   const [draggedRecipe, setDraggedRecipe] = useState<Recipe | null>(null);
   const [assigningRecipe, setAssigningRecipe] = useState<Recipe | null>(null); // "Add to a day"
   const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
@@ -129,6 +131,11 @@ export default function PlanningTab({
     if (!currentPlan) return [];
     return DAYS_OF_WEEK.filter((day) => !currentPlan.days[day] || currentPlan.days[day].meals.length === 0);
   }, [currentPlan]);
+
+  // Auto populate: only while the week has empty days still to come.
+  const canAutoPopulate =
+    !!currentPlan &&
+    DAYS_OF_WEEK.some((d) => !currentPlan.days[d]?.meals?.length && planDayDate(currentPlan, d) >= today);
 
   // Weeks you could copy the meals from (most recent first).
   const copyCandidates: MealPlan[] = useMemo(() => {
@@ -238,10 +245,21 @@ export default function PlanningTab({
             weekLabel={weekLabel}
             onPick={switchToPlan}
             onClose={() => setShowWeekDropdown(false)}
-            canCopy={!!currentPlan && currentPlan.status !== 'finalized' && copyCandidates.length > 0}
+            copyUnavailable={
+              currentPlan?.status === 'finalized'
+                ? "Not once it's on the shopping list"
+                : copyCandidates.length === 0
+                  ? 'No other weeks with meals yet'
+                  : null
+            }
             onCopy={() => {
               setShowWeekDropdown(false);
               setCopyWeekState('pick');
+            }}
+            autoPopulateUnavailable={canAutoPopulate ? null : 'Every day already has a meal'}
+            onAutoPopulate={() => {
+              setShowWeekDropdown(false);
+              setAutoPopulating(true);
             }}
             canPlanNext={canPlanNext}
             maxWeeks={maxWeeks}
@@ -291,26 +309,7 @@ export default function PlanningTab({
           }}
         />
 
-        {currentPlan && (
-          <WeekGlance
-            days={currentPlan.days}
-            today={today}
-            onJump={jumpToDay}
-            action={
-              currentPlan.status !== 'finalized' && totalPlannedMeals === 0 && copyCandidates.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setCopyWeekState('pick')}
-                  className="h-8 flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 rounded-lg border border-emerald-200 cursor-pointer whitespace-nowrap"
-                  title="Fill this week with the meals from another week"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy a week</span>
-                </button>
-              ) : undefined
-            }
-          />
-        )}
+        {currentPlan && <WeekGlance days={currentPlan.days} today={today} onJump={jumpToDay} />}
 
         {planningView === 'list' && currentPlan ? (
           <div className="flex-1 min-h-0 overflow-y-auto bg-zinc-50/60" data-day-list ref={listRef}>
@@ -501,6 +500,20 @@ export default function PlanningTab({
             if (editor.copyWeek(source)) setCopyWeekState(null);
           }}
           onClose={() => setCopyWeekState(null)}
+        />
+      )}
+
+      {autoPopulating && currentPlan && (
+        <AutoPopulateSheet
+          store={store}
+          plan={currentPlan}
+          weekLabel={weekLabel}
+          defaultServings={defaultServings}
+          onApply={(picks, people, onHand) => {
+            editor.autoPopulate(picks, people, onHand);
+            setAutoPopulating(false);
+          }}
+          onClose={() => setAutoPopulating(false)}
         />
       )}
 

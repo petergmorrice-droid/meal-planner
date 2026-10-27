@@ -46,6 +46,10 @@ export interface ShoppingLine {
   note?: string;
   /** What the recipes actually use, when it's less than you buy ("100 g" of a 300 g pack, "3 cloves" of a bulb). */
   needed?: string;
+  /** What you've already got of it, taken off what you buy ("200 g"). */
+  have?: string;
+  /** What you've got covers everything the recipes use: nothing to buy. */
+  covered?: boolean;
   sources: string[];
 }
 
@@ -100,9 +104,14 @@ interface Part {
 
 /**
  * Combine ingredients (already scaled to the servings you're cooking) into
- * shopping lines: one per product, in buyable quantities.
+ * shopping lines: one per product, in buyable quantities. `have` is what you've already got
+ * (only products, in amounts that convert): it comes off what you buy.
  */
-export function buildShoppingLines(inputs: IngredientInput[], catalog: Catalog): ShoppingLine[] {
+export function buildShoppingLines(
+  inputs: IngredientInput[],
+  catalog: Catalog,
+  have: IngredientInput[] = [],
+): ShoppingLine[] {
   const groups = new Map<string, { product: Product | null; name: string; category: string; parts: Part[] }>();
   const order: string[] = [];
 
@@ -129,13 +138,25 @@ export function buildShoppingLines(inputs: IngredientInput[], catalog: Catalog):
     groups.get(key)!.parts.push({ amount: valid ? amount : 0, unit, source: input.source, valid });
   }
 
+  // What you've already got, in each product's measure.
+  const haveBase = new Map<string, number>();
+  for (const h of have) {
+    if (!h || typeof h.name !== 'string' || !h.name.trim()) continue;
+    const amount = parseAmount(h.amount);
+    if (!isFinite(amount) || amount <= 0) continue;
+    const product = matchProduct(catalog, h.name, { groceryId: h.groceryId ?? undefined, unit: String(h.unit ?? '') });
+    const base = product ? toBase(product, amount, h.unit) : null;
+    if (!product || base === null) continue;
+    haveBase.set(`p:${product.id}`, (haveBase.get(`p:${product.id}`) ?? 0) + base);
+  }
+
   const lines: ShoppingLine[] = [];
   for (const key of order) {
     const g = groups.get(key)!;
     const sources = [...new Set(g.parts.map((p) => p.source).filter((s): s is string => Boolean(s)))];
     lines.push(
       g.product
-        ? productLine(key, g.product, g.parts, sources)
+        ? productLine(key, g.product, g.parts, sources, haveBase.get(key) ?? 0)
         : unknownLine(key, g.name, g.category, g.parts, sources),
     );
   }
@@ -172,7 +193,13 @@ function neededText(product: Product, parts: Part[], total: number, boughtBase: 
   return `${vague ? 'about ' : ''}${neededAmountText(amount, baseUnit)}`;
 }
 
-function productLine(key: string, product: Product, parts: Part[], sources: string[]): ShoppingLine {
+/** An amount in a product's own measure, as a recipe would say it ("200 g", "1.2 kg", "3"). */
+function baseAmountText(product: Product, amount: number): string {
+  const baseUnit = product.base === 'each' ? 'each' : product.base;
+  return neededAmountText(product.base === 'each' ? round2(amount) : Math.round(amount), baseUnit);
+}
+
+function productLine(key: string, product: Product, parts: Part[], sources: string[], have = 0): ShoppingLine {
   let total = 0;
   let converted = 0;
   const leftovers: string[] = [];
@@ -187,7 +214,13 @@ function productLine(key: string, product: Product, parts: Part[], sources: stri
     }
   }
 
-  const bought = buyQuantity(product, total);
+  // Already got some: buy for the rest. Got all of it (and every amount converted): nothing to buy,
+  // but the line keeps what you'd buy, for "Need it after all".
+  const haveUsed = have > 0 && total > 0 ? Math.min(have, total) : 0;
+  const covered = haveUsed > 0 && leftovers.length === 0 && total - haveUsed <= total * ROUND_TOLERANCE;
+  const toBuy = haveUsed > 0 && !covered ? total - haveUsed : total;
+
+  const bought = buyQuantity(product, toBuy);
   let amount: number;
   let unit: string;
   if (bought) {
@@ -196,7 +229,7 @@ function productLine(key: string, product: Product, parts: Part[], sources: stri
   } else {
     // We know the product but not its pack size: list the exact amount in its base measure.
     const baseUnit = product.base === 'each' ? 'each' : product.base;
-    amount = neatRoundUp(total || 1, baseUnit);
+    amount = neatRoundUp(toBuy || 1, baseUnit);
     unit = formatUnit(baseUnit, amount);
   }
 
@@ -210,8 +243,13 @@ function productLine(key: string, product: Product, parts: Part[], sources: stri
       : undefined;
 
   const step = bought ? product.step : 1;
+  // With some already got, say what the meals use in all; otherwise only when it's less than you buy.
   const needed =
-    bought && product.buySize ? neededText(product, parts, total, bought.amount * product.buySize) : undefined;
+    haveUsed > 0
+      ? baseAmountText(product, total)
+      : bought && product.buySize
+        ? neededText(product, parts, total, bought.amount * product.buySize)
+        : undefined;
   return {
     key,
     name: product.name,
@@ -225,6 +263,8 @@ function productLine(key: string, product: Product, parts: Part[], sources: stri
     note,
     sources,
     ...(needed ? { needed } : {}),
+    ...(haveUsed > 0 ? { have: baseAmountText(product, haveUsed) } : {}),
+    ...(covered ? { covered: true } : {}),
   };
 }
 

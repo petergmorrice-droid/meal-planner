@@ -156,6 +156,19 @@ import {
   mealLinesOutOfDate,
   buildCatalog,
   INITIAL_GROCERY_DATABASE,
+  weekLeftovers,
+  typedLeftover,
+  keepsForDays,
+  leftoverAmountText,
+  productAmountText,
+  toOnHand,
+  suggestWeek,
+  anotherPick,
+  recipeUses,
+  weekUses,
+  unusedLeftovers,
+  pickId,
+  QUICK_MINUTES,
 } from '../.test-build/app.mjs';
 
 let failures = 0,
@@ -2338,6 +2351,342 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
   assert.equal(matchesQuickFilters(r({ slowCook: true }), ['slow_cook'], { freezer: 0, today: '2026-10-26' }), true);
   assert.equal(matchesQuickFilters(r(), ['slow_cook'], { freezer: 0, today: '2026-10-26' }), false);
 });
+
+// ---------- Auto populate: last week's leftovers and a suggested week ----------
+{
+  const catalog = buildCatalog(INITIAL_GROCERY_DATABASE, {});
+  const fajitas = R('fajitas', 'Chicken fajitas', {
+    ingredients: [
+      { name: 'Chicken breasts', amount: 300, unit: 'g' },
+      { name: 'Fresh coriander', amount: 1, unit: 'tbsp' },
+      { name: 'Onion', amount: 1, unit: '' },
+      { name: 'Tortilla wraps', amount: 4, unit: '' },
+    ],
+  });
+  const chilli = R('chilli', 'Chilli', {
+    ingredients: [
+      { name: 'Beef mince', amount: 500, unit: 'g' },
+      { name: 'Chopped tomatoes', amount: 1, unit: 'can' },
+    ],
+  });
+  const lastWeek = (meals, extra = {}) => ({
+    id: 'last',
+    startDate: '2026-10-19',
+    status: 'draft',
+    days: week(meals),
+    ...extra,
+  });
+  const left = (plan, shoppingList = [], today = '2026-10-23') =>
+    weekLeftovers({ plan, recipes: [fajitas, chilli], shoppingList, catalog, today });
+
+  test('leftovers: the rest of the packs, the things that go off first first', () => {
+    const l = left(lastWeek({ Monday: cook('a', 'fajitas') }));
+    assert.deepEqual(
+      l.map((x) => x.name),
+      ['Chicken Breasts', 'Coriander', 'Tortilla Wraps'],
+      'onions keep: not listed',
+    );
+    const [chicken, coriander, wraps] = l;
+    assert.equal(chicken.amount, 200, '2 x 250 g bought for 300 g');
+    assert.equal(chicken.unit, 'g');
+    assert.equal(chicken.useWithin, 2);
+    assert.equal(chicken.why, 'Bought 500 g, the meals use 300 g');
+    assert.equal(leftoverAmountText(chicken, catalog), 'about 200 g');
+    assert.equal(leftoverAmountText(coriander, catalog), 'about 1 bunch', '27 g of a 30 g bunch');
+    assert.equal(wraps.amount, 4, 'a pack of 8 for 4');
+    assert.equal(leftoverAmountText(wraps, catalog), 'about 4');
+  });
+
+  test('leftovers: a past day not ticked as cooked still has its ingredients (when you tick at all)', () => {
+    const plan = lastWeek({ Monday: cook('a', 'fajitas', 2, { cooked: true }), Tuesday: cook('b', 'chilli') });
+    const mince = left(plan).find((x) => x.name === 'Beef Mince');
+    assert.ok(mince, 'mince listed');
+    assert.equal(mince.amount, 500);
+    assert.equal(mince.why, "chilli on Tuesday wasn't cooked");
+    const wraps = left(lastWeek({ Monday: cook('a', 'fajitas', 2, { cooked: true }), Tuesday: cook('b', 'fajitas') }));
+    assert.equal(
+      wraps.find((x) => x.name === 'Coriander')?.why,
+      "fajitas on Tuesday wasn't cooked; bought 1 bunch, the meals use ¼ bunch",
+      'two reasons: the second carries on the sentence',
+    );
+    assert.ok(!left(plan).some((x) => /tomato/i.test(x.name)), 'a can keeps');
+    assert.ok(
+      !left(lastWeek({ Monday: cook('a', 'fajitas'), Tuesday: cook('b', 'chilli') })).some(
+        (x) => x.name === 'Beef Mince',
+      ),
+      'no ticks all week: taken as cooked',
+    );
+    assert.ok(
+      !left(plan, [], '2026-10-20').some((x) => x.name === 'Beef Mince'),
+      'Tuesday still to come: taken as cooked',
+    );
+  });
+
+  test('leftovers: the list says what was really bought', () => {
+    const plan = lastWeek({ Monday: cook('a', 'fajitas') });
+    const line = (extra) => ({
+      id: 'l1',
+      name: 'Chicken Breasts',
+      groceryId: catalog.byId.get(left(plan)[0].groceryId).id,
+      amount: 500,
+      unit: 'g',
+      checked: true,
+      isAdhoc: false,
+      planId: 'last',
+      ...extra,
+    });
+    const has = (list) => left(plan, list).some((x) => x.name === 'Chicken Breasts');
+    assert.equal(has([line({})]), true);
+    assert.equal(has([line({ outOfStock: true, checked: false })]), false, 'out of stock: none bought');
+    assert.equal(has([line({ userAdjusted: true, amount: 300 })]), false, 'changed to 300 g: none left');
+    assert.equal(
+      has([{ ...line({}), id: 'l2', name: 'Coriander', groceryId: undefined }]),
+      false,
+      'on the list without chicken: it was taken off',
+    );
+  });
+
+  test('leftovers: weekly staples are bought every week anyway, so not listed', () => {
+    const plan = lastWeek({ Monday: cook('a', 'fajitas') });
+    const names = (staples) =>
+      weekLeftovers({ plan, recipes: [fajitas], shoppingList: [], catalog, today: '2026-10-23', staples }).map(
+        (l) => l.name,
+      );
+    assert.ok(names([]).includes('Tortilla Wraps'));
+    assert.ok(!names([{ name: 'Tortilla wraps' }]).includes('Tortilla Wraps'));
+  });
+
+  test('leftovers: what you had already counts as well as what you bought', () => {
+    const plan = lastWeek(
+      { Monday: cook('a', 'fajitas') },
+      { onHand: [{ id: 'x', name: 'Chicken Breasts', amount: 200, unit: 'g' }] },
+    );
+    const chicken = left(plan).find((x) => x.name === 'Chicken Breasts');
+    assert.equal(chicken.amount, 150, '200 g had + 250 g bought for the other 100 g, 300 g used');
+  });
+
+  test('keepsForDays: meat soonest, herbs and chilled soon, keepers not at all', () => {
+    assert.equal(keepsForDays('Chicken Breasts', 'meat_seafood'), 2);
+    assert.equal(keepsForDays('Coriander', 'produce'), 3);
+    assert.equal(keepsForDays('Spring Onions', 'produce'), 3);
+    assert.equal(keepsForDays('Crème Fraîche', 'dairy_eggs'), 4);
+    assert.equal(keepsForDays('Courgette', 'produce'), 6);
+    assert.equal(keepsForDays('Onion', 'produce'), null);
+    assert.equal(keepsForDays('Eggs', 'dairy_eggs'), null);
+    assert.equal(keepsForDays('Frozen Peas', 'frozen'), null);
+    assert.equal(keepsForDays('Basmati Rice', 'grains_pasta'), null);
+    assert.equal(keepsForDays('Double Cream', 'dairy_eggs', true), null, 'store cupboard');
+  });
+
+  test('typed leftovers: amounts, counts, halves and things not on the list', () => {
+    const chicken = typedLeftover('200g chicken breasts', catalog);
+    assert.equal(chicken.name, 'Chicken Breasts');
+    assert.equal(chicken.amount, 200);
+    assert.equal(chicken.added, true);
+    assert.equal(leftoverAmountText(chicken, catalog), '200 g', 'typed: no "about"');
+    const pot = typedLeftover('creme fraiche', catalog);
+    assert.equal(pot.name, 'Crème Fraîche');
+    assert.equal(productAmountText(catalog.byId.get(pot.groceryId), pot.amount), '1 pot', 'nothing said: one pack');
+    const half = typedLeftover('half a pot of creme fraiche', catalog);
+    assert.equal(half && productAmountText(catalog.byId.get(half.groceryId), half.amount), '½ pot');
+    const pepper = typedLeftover('bell pepper', catalog);
+    assert.equal(productAmountText(catalog.byId.get(pepper.groceryId), 80), '½', 'bought one at a time: a count');
+    const eggs = typedLeftover('6 eggs', catalog);
+    assert.equal(eggs.amount, 6);
+    assert.equal(eggs.useWithin, 7, 'you want it used even if it keeps');
+    const odd = typedLeftover('dragon fruit', catalog);
+    assert.equal(odd.key.startsWith('n:'), true);
+    assert.equal(odd.name, 'Dragon fruit');
+    assert.equal(typedLeftover('   ', catalog), null);
+    assert.deepEqual(toOnHand(chicken), {
+      id: chicken.key,
+      name: 'Chicken Breasts',
+      amount: 200,
+      unit: 'g',
+      groceryId: chicken.groceryId,
+    });
+  });
+
+  test('already got some: it comes off the week\'s shopping; got it all: "already got"', () => {
+    const recipes = [fajitas];
+    const thisWeek = (onHand) => ({
+      id: 'n',
+      startDate: '2026-10-26',
+      status: 'draft',
+      days: week({ Monday: cook('a', 'fajitas') }),
+      onHand,
+    });
+    const chickenLine = (onHand) =>
+      generateShoppingListForPlan(thisWeek(onHand), recipes, catalog).find((i) => i.name === 'Chicken Breasts');
+    const plain = chickenLine(undefined);
+    assert.equal(plain.amount, 500);
+    assert.equal(plain.haveText, undefined);
+    const some = chickenLine([{ id: 'x', name: 'Chicken Breasts', amount: 200, unit: 'g' }]);
+    assert.equal(some.amount, 250, 'only 100 g more needed: one 250 g pack');
+    assert.equal(some.neededText, '300 g');
+    assert.equal(some.haveText, '200 g');
+    assert.equal(some.cupboard, undefined);
+    const all = chickenLine([{ id: 'x', name: 'Chicken Breasts', amount: 350, unit: 'g' }]);
+    assert.equal(all.cupboard, 'have', 'nothing to buy');
+    assert.equal(all.haveText, '300 g', 'what the meals use of it');
+    assert.equal(all.amount, 500, 'still says what you would buy, for "Need it after all"');
+  });
+
+  test('"Already got" follows the leftovers when the list is worked out again; your own answers stay', () => {
+    const recipes = [fajitas];
+    const thisWeek = (onHand) => ({
+      id: 'n',
+      startDate: '2026-10-26',
+      status: 'finalized',
+      days: week({ Monday: cook('a', 'fajitas') }),
+      ...(onHand ? { onHand } : {}),
+    });
+    const covered = [{ id: 'x', name: 'Chicken Breasts', amount: 300, unit: 'g' }];
+    const chicken = (list) => list.find((i) => i.planId === 'n' && i.name === 'Chicken Breasts');
+    const sent = listWithWeek([], thisWeek(covered), recipes, [], [], catalog);
+    assert.equal(chicken(sent).cupboard, 'have', 'got it all: already got');
+    for (const resetMeals of [true, false]) {
+      const again = listWithWeek(sent, thisWeek(undefined), recipes, [], [], catalog, { resetMeals });
+      assert.equal(
+        chicken(again).cupboard,
+        undefined,
+        `unticked in Auto populate: back on the list (reset ${resetMeals})`,
+      );
+      assert.equal(chicken(again).haveText, undefined);
+    }
+    const said = sent.map((i) => (i.name === 'Chicken Breasts' ? { ...i, cupboard: 'need' } : i));
+    const kept = listWithWeek(said, thisWeek(covered), recipes, [], [], catalog, { resetMeals: true });
+    assert.equal(chicken(kept).cupboard, 'need', '"Need it after all" stays');
+  });
+
+  // Suggesting a week
+  const stirFry = R('stirfry', 'Chicken stir fry', {
+    prepTime: 10,
+    cookTime: 15,
+    ingredients: [
+      { name: 'Chicken breasts', amount: 200, unit: 'g' },
+      { name: 'Fresh coriander', amount: 2, unit: 'tbsp' },
+    ],
+  });
+  const risotto = R('risotto', 'Mushroom risotto', { prepTime: 10, cookTime: 30, favourite: true });
+  const pasta = R('pasta', 'Pesto pasta', { prepTime: 5, cookTime: 10 });
+  const fishPie = R('fishpie', 'Chicken pie', {
+    prepTime: 20,
+    cookTime: 40,
+    verdict: 'not_for_us',
+    ingredients: [{ name: 'Chicken breasts', amount: 400, unit: 'g' }],
+  });
+  const cookbook = [risotto, pasta, fishPie, stirFry];
+  const leftovers = left(lastWeek({ Monday: cook('a', 'fajitas') })).filter((l) => l.name !== 'Tortilla Wraps');
+  const soup = {
+    key: 'n:lentil soup',
+    name: 'Lentil soup',
+    batches: [{ id: 'b1', name: 'Lentil soup', portions: 4, dateAdded: '2026-06-01' }],
+    portions: 4,
+    oldest: '2026-06-01',
+    ageDays: 145,
+    useSoon: true,
+    planned: [],
+    plannedPortions: 0,
+    spare: 4,
+  };
+  const ctx = (extra = {}) => ({
+    recipes: cookbook,
+    leftovers,
+    catalog,
+    history: new Map(),
+    ratings: [],
+    freezer: [soup],
+    weekStart: '2026-10-26',
+    today: '2026-10-23',
+    plannedRecipeIds: [],
+    seed: 1,
+    ...extra,
+  });
+  const answers = (extra = {}) => ({
+    days: ['Monday', 'Tuesday', 'Wednesday'],
+    busyDays: ['Wednesday'],
+    people: 2,
+    mood: 'mix',
+    useFreezer: true,
+    ...extra,
+  });
+  const byDay = (picks) => Object.fromEntries(picks.map((p) => [p.day, p.name]));
+
+  test('suggest: leftovers first, the freezer on a busy night, never "Not for us"', () => {
+    const picks = suggestWeek(answers(), ctx());
+    assert.deepEqual(byDay(picks), {
+      Monday: 'Chicken stir fry',
+      Tuesday: 'Mushroom risotto',
+      Wednesday: 'Lentil soup',
+    });
+    assert.deepEqual(picks[0].reasons, ['Uses your chicken breasts and coriander', 'Not had it yet']);
+    assert.equal(picks[2].kind, 'freezer');
+    assert.equal(picks[2].batchId, 'b1');
+    assert.equal(picks[2].portions, 2);
+    assert.match(picks[2].reasons[0], /^From the freezer, frozen \d+ months ago$/);
+    assert.ok(!picks.some((p) => p.recipeId === 'fishpie'));
+  });
+
+  test('suggest: a busy night without the freezer gets something quick (kept back for it)', () => {
+    const picks = suggestWeek(answers({ useFreezer: false }), ctx());
+    assert.equal(byDay(picks).Wednesday, 'Pesto pasta');
+    assert.ok(picks[2].reasons.includes('Quick: 15 min'));
+    assert.equal(byDay(picks).Tuesday, 'Mushroom risotto');
+    assert.ok(QUICK_MINUTES === 30);
+  });
+
+  test('suggest: not something you had last week, and meals already planned use their share', () => {
+    const history = new Map([['risotto', { lastHad: '2026-10-21' }]]);
+    assert.equal(byDay(suggestWeek(answers({ busyDays: [] }), ctx({ history }))).Tuesday, 'Pesto pasta');
+    const used = weekUses(
+      { id: 'n', startDate: '2026-10-26', status: 'draft', days: week({ Friday: cook('f', 'fajitas') }) },
+      [fajitas],
+      leftovers,
+      catalog,
+    );
+    assert.equal(used[leftovers[0].key], 300, 'fajitas on Friday use the chicken');
+    const picks = suggestWeek(answers({ busyDays: [] }), ctx({ alreadyUses: used }));
+    const stir = picks.find((p) => p.recipeId === 'stirfry');
+    assert.equal(stir?.reasons[0], 'Uses your coriander', 'the chicken is spoken for: only the coriander counts');
+  });
+
+  test('suggest: "Another" skips what you have seen and what other days have', () => {
+    const picks = suggestWeek(answers(), ctx());
+    const other = anotherPick('Monday', picks, answers(), ctx(), [pickId(picks[0])]);
+    assert.ok(other);
+    assert.notEqual(other.recipeId, 'stirfry');
+    assert.notEqual(other.recipeId, 'risotto', "Tuesday's pick");
+    const none = anotherPick('Wednesday', picks, answers({ useFreezer: false }), ctx(), ['pasta']);
+    assert.equal(none, null, 'nothing else quick enough and nothing to fall back on but taken ones');
+  });
+
+  test('suggest: "Favourites" leans to what you like; "Something new" to what you have not had', () => {
+    const history = new Map([['risotto', { lastHad: '2026-08-01' }]]);
+    assert.equal(
+      byDay(
+        suggestWeek(answers({ days: ['Tuesday'], busyDays: [], mood: 'favourites' }), ctx({ history, leftovers: [] })),
+      ).Tuesday,
+      'Mushroom risotto',
+    );
+    assert.equal(
+      byDay(suggestWeek(answers({ days: ['Tuesday'], busyDays: [], mood: 'new' }), ctx({ history, leftovers: [] })))
+        .Tuesday,
+      'Chicken stir fry',
+      'never had (pasta and stir fry tie on that; the seed decides)',
+    );
+  });
+
+  test('suggest: what the picks leave mostly untouched (for Gemini ideas)', () => {
+    const picks = suggestWeek(answers({ days: ['Tuesday'], busyDays: [] }), ctx({ recipes: [risotto] }));
+    assert.deepEqual(
+      unusedLeftovers(leftovers, picks).map((l) => l.name),
+      ['Chicken Breasts', 'Coriander'],
+    );
+    const uses = recipeUses(stirFry, 4, leftovers, catalog);
+    assert.equal(uses[leftovers[0].key], 400, 'for 4: twice the recipe');
+  });
+}
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);
 process.exit(failures ? 1 : 0);

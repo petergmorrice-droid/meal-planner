@@ -394,3 +394,105 @@ export async function askAboutRecipeApi(
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/** A meal idea for using up what's left (Auto populate): a card, not yet a recipe. */
+export interface MealIdea {
+  name: string;
+  /** One sentence about it. */
+  description: string;
+  /** The leftovers it uses, worded as they were given. */
+  uses: string[];
+  /** About how long it takes in all, if Gemini said. */
+  minutes: number | null;
+}
+
+/**
+ * Ideas for dinners that use up what's left: four short cards. Writing one out is the usual
+ * "Ask Gemini to write one" (generateRecipeApi), so only the one you pick costs a full request.
+ */
+export async function suggestMealIdeasApi(
+  leftovers: string[],
+  context: {
+    people: number;
+    appliance: 'ninja' | 'oven_hob' | 'all';
+    /** Meals you like (favourites, high stars), for a sense of taste. */
+    liked: string[];
+    /** Meals you said are "Not for us". */
+    disliked: string[];
+    /** Meals already in the cookbook (not suggested again). */
+    have: string[];
+  },
+): Promise<MealIdea[]> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new NoGeminiKeyError();
+  const cooking =
+    context.appliance === 'ninja'
+      ? 'a Ninja Combi multi-cooker'
+      : context.appliance === 'oven_hob'
+        ? 'an oven and hob'
+        : 'an oven and hob, or a Ninja Combi multi-cooker';
+  const taste = [
+    context.liked.length ? `Meals we like: ${context.liked.slice(0, 12).join('; ')}.` : '',
+    context.disliked.length ? `Not for us: ${context.disliked.slice(0, 12).join('; ')}.` : '',
+    context.have.length
+      ? `Already in our cookbook (suggest something else): ${context.have.slice(0, 60).join('; ')}.`
+      : '',
+  ].filter(Boolean);
+  const prompt = [
+    `Suggest 4 different dinners for ${Math.max(1, context.people)} people that use up these leftovers before they go off. Each should use as many of them as makes sense:`,
+    ...leftovers.map((x) => `- ${x}`),
+    '',
+    `Everyday home cooking from UK supermarket ingredients, made with ${cooking}.`,
+    ...taste,
+    '',
+    'For each: a short plain name, one sentence about it, which of the leftovers above it uses (worded exactly as listed), and roughly how many minutes it takes in all.',
+  ].join('\n');
+  const schema = {
+    type: 'OBJECT',
+    properties: {
+      ideas: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            name: { type: 'STRING', description: 'Short plain name, e.g. "Chicken and coriander noodles"' },
+            description: { type: 'STRING', description: 'One sentence about it' },
+            uses: { type: 'ARRAY', items: { type: 'STRING' }, description: 'The leftovers it uses, exactly as listed' },
+            minutes: { type: 'INTEGER', description: 'Roughly how long it takes in all, in minutes' },
+          },
+          required: ['name', 'description', 'uses'],
+        },
+      },
+    },
+    required: ['ideas'],
+  };
+  try {
+    const rawText = await askGeminiText(apiKey, prompt, {
+      systemInstruction:
+        'You suggest practical family dinners in British English. Never suggest anything unsafe to eat; leftovers are raw ingredients still in date.',
+      responseSchema: schema,
+      thinking: 'low',
+      waitSeconds: 45,
+    });
+    const data: { ideas?: ({ name?: unknown; description?: unknown; uses?: unknown; minutes?: unknown } | null)[] } =
+      readJsonAnswer(rawText);
+    const out: MealIdea[] = [];
+    for (const idea of Array.isArray(data?.ideas) ? data.ideas : []) {
+      const name = typeof idea?.name === 'string' ? idea.name.trim() : '';
+      if (!name || out.some((o) => o.name.toLowerCase() === name.toLowerCase())) continue;
+      const minutes = Number(idea?.minutes);
+      out.push({
+        name,
+        description: typeof idea?.description === 'string' ? idea.description.trim() : '',
+        uses: Array.isArray(idea?.uses)
+          ? idea.uses.filter((u): u is string => typeof u === 'string' && !!u.trim())
+          : [],
+        minutes: isFinite(minutes) && minutes > 0 ? Math.round(minutes) : null,
+      });
+    }
+    return out.slice(0, 4);
+  } catch (err) {
+    console.error('Gemini suggestMealIdeasApi failed:', err);
+    throw geminiFailure(err, "suggest meals for what's left");
+  }
+}

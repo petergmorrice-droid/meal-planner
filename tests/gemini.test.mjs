@@ -10,6 +10,7 @@ import {
   nextAllowanceReset,
   setBusyRetryWait,
   saveGeminiApiKey,
+  suggestMealIdeasApi,
 } from '../.test-build/gemini.mjs';
 
 console.warn = () => {}; // each failed try is logged for the phone's console; not needed here
@@ -300,6 +301,45 @@ await test('Test it: works, a bad key, and a used-up allowance (the key still wo
   const used = await testGeminiKeyApi('k');
   assert.equal(used.ok, true);
   assert.match(used.message, /today's free allowance is used up\. It comes back at about 8am/);
+});
+
+await test('meal ideas for leftovers: what is left and your taste go in; tidy cards come out', async () => {
+  google(
+    says(
+      JSON.stringify({
+        ideas: [
+          { name: 'Chicken noodles', description: 'Quick.', uses: ['about 200 g chicken breasts'], minutes: 25 },
+          { name: 'chicken noodles', description: 'The same again', uses: [] },
+          { name: '', description: 'No name', uses: [] },
+          { name: 'Coriander rice', description: 'A side.', uses: [1, 'about 1 bunch coriander'], minutes: 'soon' },
+        ],
+      }),
+    ),
+  );
+  saveGeminiApiKey('k');
+  const ideas = await suggestMealIdeasApi(['about 200 g chicken breasts', 'about 1 bunch coriander'], {
+    people: 2,
+    appliance: 'ninja',
+    liked: ['Fajitas'],
+    disliked: ['Fish pie'],
+    have: ['Chilli'],
+  });
+  assert.deepEqual(
+    ideas.map((i) => i.name),
+    ['Chicken noodles', 'Coriander rice'],
+    'no repeats, nothing without a name',
+  );
+  assert.deepEqual(ideas[1].uses, ['about 1 bunch coriander']);
+  assert.equal(ideas[0].minutes, 25);
+  assert.equal(ideas[1].minutes, null);
+  const sent = calls[0].body.contents[0].parts[0].text;
+  assert.match(sent, /for 2 people/);
+  assert.match(sent, /^- about 200 g chicken breasts$/m);
+  assert.match(sent, /Ninja Combi/);
+  assert.match(sent, /Meals we like: Fajitas\./);
+  assert.match(sent, /Not for us: Fish pie\./);
+  assert.match(sent, /suggest something else\): Chilli\./);
+  assert.equal(calls[0].body.generationConfig.responseMimeType, 'application/json');
 });
 
 console.log(failures ? `\n${failures} FAILED, ${passes} passed` : `\nall ${passes} passed`);

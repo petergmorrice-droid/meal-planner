@@ -120,12 +120,15 @@ async function open(browser) {
       .click()
       .catch(() => {});
     await page
-      .locator('div.absolute button', { hasText: /0 meals planned/ })
+      .locator('[data-week-menu] button', { hasText: /0 meals planned/ })
       .first()
       .click();
     await page.waitForTimeout(600);
-    const copyBtn = page.locator('button:visible', { hasText: /^Copy a week$/ });
-    check((await copyBtn.count()) === 1, '"Copy a week" shown on an empty week');
+    // "Copy a week" is in the week menu, under Past weeks
+    await page.locator('[data-week-name]').click();
+    await page.waitForTimeout(300);
+    const copyBtn = page.locator('[data-menu-action="copy"]');
+    check((await copyBtn.count()) === 1 && (await copyBtn.isEnabled()), '"Copy a week" in the week menu');
     await copyBtn.click();
     await page.waitForTimeout(500);
     await page.screenshot({ path: OUT + '/n2-copy-dialog.png' });
@@ -174,7 +177,7 @@ async function open(browser) {
       .first()
       .click();
     await page.waitForTimeout(400);
-    await page.locator('button:visible', { hasText: /^Copy meals from another week$/ }).click();
+    await page.locator('[data-menu-action="copy"]').click();
     await page.waitForTimeout(400);
     await page
       .locator('[role="dialog"] button', { hasText: /^Next Week/ })

@@ -61,6 +61,7 @@ export default function ItemInfoSheet({
             <h3 className="text-lg font-bold text-zinc-900 leading-snug">{row.name}</h3>
             <p className="text-sm text-zinc-600 tabular-nums">{shopQuantityText(row)} on the list</p>
             {row.neededText && <p className="text-sm text-zinc-600 tabular-nums">Your meals use {row.neededText}</p>}
+            {row.haveText && <p className="text-sm text-emerald-800 tabular-nums">You've already got {row.haveText}</p>}
           </div>
           <button
             type="button"

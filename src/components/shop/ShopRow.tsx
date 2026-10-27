@@ -120,6 +120,15 @@ export default function ShopRow({
                 need {row.neededText}
               </span>
             )}
+            {row.haveText && !row.checked && (
+              <span
+                className="text-[11px] text-emerald-700 tabular-nums"
+                data-item-have
+                title="Already got (from Auto populate)"
+              >
+                have {row.haveText}
+              </span>
+            )}
           </span>
         )}
       </button>

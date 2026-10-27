@@ -97,6 +97,22 @@ export interface MealPlan {
   dayModifiedAt?: Record<string, number>;
   /** When the week's own details (status, sent to the list) last changed. */
   headModifiedAt?: number;
+  /**
+   * What you said you'd already got when the week was auto-populated (last week's leftovers):
+   * it comes off this week's shopping.
+   */
+  onHand?: OnHandItem[];
+}
+
+/** Something already in the fridge or cupboard (Auto populate's "Still got these?"). */
+export interface OnHandItem {
+  id: string;
+  name: string;
+  amount: number;
+  /** The amount's unit ('g', 'ml', '' for a count, or a recipe unit). */
+  unit: string;
+  /** The product it is, when it's on the product list. */
+  groceryId?: string;
 }
 
 export interface BatchItem {
@@ -141,6 +157,8 @@ export interface ShoppingListItem {
   checkCupboard?: boolean;
   /** What the recipes actually use, when it's less than you buy: "100 g" of a 300 g pack. */
   neededText?: string;
+  /** What you've already got of it (the week's on-hand leftovers), taken off what you buy: "200 g". */
+  haveText?: string;
   /** Part of the amount couldn't be worked out from the recipe; see quantityNote. */
   needsCheck?: boolean;
   quantityNote?: string;
@@ -245,7 +263,15 @@ export interface UserPreferences {
   ratings?: RecipeRating[];
   /** Things you said aren't weekly staples (lower case): the Shop stops suggesting them. */
   notStaples?: string[];
+  /** Auto populate: the days you're usually short of time (quick meals or the freezer only). */
+  autoPlanBusyDays?: string[];
+  /** Auto populate: favourites only, a mix, or something new. */
+  autoPlanMood?: AutoPlanMood;
+  /** Auto populate: put freezer meals on busy nights (on unless switched off). */
+  autoPlanFreezer?: boolean;
 }
+
+export type AutoPlanMood = 'favourites' | 'mix' | 'new';
 
 /** One person's rating of one recipe: 1 to 5 stars. */
 export interface RecipeRating {

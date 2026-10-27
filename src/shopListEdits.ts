@@ -13,6 +13,7 @@ import {
   convertToShoppingQuantity,
 } from './utils';
 import { productKey, inProductUnit } from './shopList';
+import { cupboardAfterUpdate } from './planShopping';
 
 type List = ShoppingListItem[];
 
@@ -271,13 +272,19 @@ export function restoreRemoved(list: List, plan: MealPlan, recipes: Recipe[], st
     const existing = existingMealItems.find((e) => e.name.toLowerCase().trim() === key);
     if (existing) {
       const keepUserAmount = existing.userAdjusted;
-      syncedMealItems.push({
+      const line = {
         ...existing,
         amount: keepUserAmount ? existing.amount : target.amount,
         unit: keepUserAmount ? existing.unit : target.unit,
         recipeNames: target.recipeNames,
         neededText: target.neededText,
-      });
+        haveText: target.haveText,
+      };
+      if (!line.haveText) delete line.haveText;
+      const cupboard = cupboardAfterUpdate(existing, target);
+      if (cupboard) line.cupboard = cupboard;
+      else delete line.cupboard;
+      syncedMealItems.push(line);
     } else {
       syncedMealItems.push(target);
     }
