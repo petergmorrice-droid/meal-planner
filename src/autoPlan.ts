@@ -24,6 +24,7 @@ import {
   formatAgo,
   formatMinutes,
   isSlowCookRecipe,
+  isQuickRecipe,
   recipeMethods,
   totalMinutes,
   type RecipeHistory,
@@ -256,7 +257,7 @@ function candidates(day: string, answers: AutoPlanAnswers, ctx: AutoPlanContext,
   for (const r of ctx.recipes) {
     if (!r?.id || r.verdict === 'not_for_us' || state.taken.has(r.id) || !cookedWith(r, cooking)) continue;
     const minutes = totalMinutes(r);
-    const quick = minutes !== null && minutes <= QUICK_MINUTES;
+    const quick = isQuickRecipe(r);
     // A slow-cooker meal is ready when you get in: fine on a busy night when you're using it.
     const slowBusy = busy && slowCooker && isSlowCookRecipe(r);
     if (busy && !quick && !slowBusy) continue;

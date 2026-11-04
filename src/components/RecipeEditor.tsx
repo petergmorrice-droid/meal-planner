@@ -16,6 +16,7 @@ import {
   tidyRecipeTags,
   BUILT_IN_TAGS,
   AUTOMATIC_TAGS,
+  quickSetByYou,
   QUICK_MINUTES,
   SUGGESTED_TAGS,
   type BuiltInTag,
@@ -95,23 +96,6 @@ export function RecipeEditor({
   const builtInChip = (key: BuiltInTag, label: string) => {
     const on = hasBuiltInTag(recipe, key, true);
     const tag = { key, label };
-    if (AUTOMATIC_TAGS.includes(key))
-      // Worked out from the times above: shown, not tapped.
-      return (
-        <span
-          key={key}
-          data-edit-tag={key}
-          aria-label={`${label}: ${on ? 'on' : 'off'}, set by the times (${QUICK_MINUTES} min or less)`}
-          title={`Set by the times: ${QUICK_MINUTES} min or less, prep + cook`}
-          className={`h-9 px-3 rounded-full border text-sm font-semibold inline-flex items-center gap-1.5 ${
-            on ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-zinc-50 text-zinc-400 border-zinc-200'
-          }`}
-        >
-          <TagIcon tag={tag} className="w-4 h-4" plain={on} />
-          {label}
-          <span className={`text-[11px] font-medium ${on ? 'text-emerald-100' : 'text-zinc-400'}`}>auto</span>
-        </span>
-      );
     return (
       <button
         key={key}
@@ -119,6 +103,13 @@ export function RecipeEditor({
         onClick={() => onChange(setBuiltInTag(recipe, key, !on))}
         aria-pressed={on}
         data-edit-tag={key}
+        {...(key === 'quick'
+          ? {
+              title: quickSetByYou(recipe)
+                ? `Set by you. Tap to follow the times again (${QUICK_MINUTES} min or less).`
+                : `Automatic: ${QUICK_MINUTES} min or less, prep + cook. Tap to set it yourself.`,
+            }
+          : {})}
         {...(key === 'slow_cook' ? { 'data-editor-slow-cook': '' } : {})}
         className={`h-9 px-3 rounded-full border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
           on ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-zinc-700 border-zinc-300 border-dashed'
@@ -126,6 +117,12 @@ export function RecipeEditor({
       >
         <TagIcon tag={tag} className="w-4 h-4" plain={on} />
         {label}
+        {AUTOMATIC_TAGS.includes(key) && (
+          // Quick follows the times unless you tap it; tapping it back to match the times makes it automatic again.
+          <span className={`text-[11px] font-medium ${on ? 'text-emerald-100' : 'text-zinc-400'}`} data-quick-source>
+            {quickSetByYou(recipe) ? 'set by you' : 'auto'}
+          </span>
+        )}
       </button>
     );
   };

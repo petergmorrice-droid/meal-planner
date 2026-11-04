@@ -241,6 +241,66 @@ const popupText = async (page) => (await popup(page).innerText()).replace(/\s+/g
       (await page.state()).recipes.find((r) => r.id === 'r-tikka').name === 'Chicken tikka masala',
     'Cancel throws the edit away',
   );
+
+  // Tags: tap built-in ones (Quick set by hand on a 45-minute recipe, Meat), add your own
+  await page.locator('[aria-label="Edit recipe"]').click();
+  await page.waitForTimeout(200);
+  const quickChip = page.locator('[data-edit-tag="quick"]');
+  check(
+    (await quickChip.getAttribute('aria-pressed')) === 'false' &&
+      (await page.locator('[data-quick-source]').innerText()) === 'auto',
+    'editor: Quick off for a 45-minute recipe, worked out from the times',
+  );
+  await quickChip.click();
+  await page.locator('[data-edit-tag="meat"]').click();
+  await page.locator('input[aria-label="New tag"]').fill('kids');
+  await page.locator('input[aria-label="New tag"]').press('Enter');
+  await page.waitForTimeout(150);
+  check(
+    (await quickChip.getAttribute('aria-pressed')) === 'true' &&
+      (await page.locator('[data-quick-source]').innerText()) === 'set by you' &&
+      (await page.locator('[data-edit-tag="meat"]').getAttribute('aria-pressed')) === 'true' &&
+      (await page.locator('[data-tag="Kids"]').count()) === 1,
+    'editor: tapping Quick sets it by hand; Meat on; your own tag added',
+  );
+  await page.screenshot({ path: OUT + '/r4b-tags.png' });
+  await page.getByRole('button', { name: 'Save recipe' }).click();
+  await page.waitForTimeout(400);
+  tikka = (await page.state()).recipes.find((r) => r.id === 'r-tikka');
+  check(
+    tikka.quick === true && tikka.tags.includes('Meat') && tikka.tags.includes('Kids'),
+    'saved: Quick set by hand, Meat and Kids tags',
+    JSON.stringify({ q: tikka.quick, t: tikka.tags }),
+  );
+  await page.locator('[aria-label="Close"]').first().click();
+  await page.waitForTimeout(300);
+  const tikkaCard = page.locator('[data-recipe-card="Chicken tikka masala"]');
+  check(
+    (await tikkaCard.locator('[data-card-tag="quick"]').count()) === 1 &&
+      (await tikkaCard.locator('[data-card-tag="meat"]').count()) === 1 &&
+      (await tikkaCard.locator('[data-card-tag="tag:Kids"]').count()) === 1,
+    'card shows Quick, Meat and Kids',
+  );
+  await page.locator('[data-filter="quick"]').click();
+  await page.waitForTimeout(200);
+  check((await tikkaCard.count()) === 1, 'the Quick filter includes it');
+  await page.locator('[data-filter="quick"]').click();
+  await page.waitForTimeout(200);
+  // Tap Quick again: back to following the times
+  await tikkaCard.click();
+  await page.waitForTimeout(400);
+  await page.locator('[aria-label="Edit recipe"]').click();
+  await page.waitForTimeout(200);
+  await quickChip.click();
+  check(
+    (await quickChip.getAttribute('aria-pressed')) === 'false' &&
+      (await page.locator('[data-quick-source]').innerText()) === 'auto',
+    'tapping Quick again goes back to automatic',
+  );
+  await page.getByRole('button', { name: 'Save recipe' }).click();
+  await page.waitForTimeout(400);
+  tikka = (await page.state()).recipes.find((r) => r.id === 'r-tikka');
+  check(tikka.quick === undefined, 'saved: automatic again', JSON.stringify(tikka.quick));
   await page.locator('[aria-label="Close"]').first().click();
   await page.waitForTimeout(300);
 

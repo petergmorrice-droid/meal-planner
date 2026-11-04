@@ -44,6 +44,8 @@ import {
   hasBuiltInTag,
   setBuiltInTag,
   tidyRecipeTags,
+  isQuickRecipe,
+  quickSetByYou,
   tagFilterOptions,
   matchesTagFilters,
   isVeganRecipe,
@@ -285,7 +287,7 @@ test('your own tags: tidied, not twice, removed whatever the capitals; a built-i
   const base = R('a', 'A', { tags: ['Spicy'] });
   assert.equal(tidyTag('  kids  love it '), 'Kids Love It');
   assert.deepEqual(addTag(base, 'batch cook').tags, ['Spicy', 'Batch Cook']);
-  assert.equal(addTag(base, 'QUICK'), base, 'already there');
+  assert.equal(addTag(base, 'SPICY'), base, 'already there');
   assert.equal(addTag(base, '   '), base, 'nothing typed');
   const veg = addTag(base, 'veggie');
   assert.deepEqual([veg.isVegetarian, veg.tags], [true, ['Spicy']], '"veggie" is the Vegetarian tag, not a word');
@@ -329,24 +331,51 @@ test('one set of tags: appliance, diet and yours, each kept where it belongs', (
   );
 });
 
-test('Quick: worked out from the times (30 min or less), never typed or tapped', () => {
+test('Quick: worked out from the times (30 min or less) unless you set it', () => {
   const quick = R('a', 'A', { prepTime: 10, cookTime: 20, tags: [] });
-  const slow = R('b', 'B', { prepTime: 10, cookTime: 25, tags: ['Quick'] });
+  const slow = R('b', 'B', { prepTime: 10, cookTime: 25, tags: [] });
   const noTimes = R('c', 'C', { tags: [] });
   assert.deepEqual(
     recipeTags(quick).map((t) => t.key),
     ['quick'],
   );
-  assert.equal(hasBuiltInTag(slow, 'quick'), false, '35 min: not quick, even with an old hand-typed "Quick"');
-  assert.deepEqual(
-    recipeTags(slow).map((t) => t.key),
-    [],
-    'the old typed "Quick" is not shown',
-  );
+  assert.equal(hasBuiltInTag(slow, 'quick'), false, '35 min: not quick');
   assert.equal(hasBuiltInTag(noTimes, 'quick'), false, 'no times: not counted');
-  assert.equal(setBuiltInTag(slow, 'quick', true), slow, 'cannot be switched on by hand');
-  assert.equal(addTag(noTimes, 'quick'), noTimes, 'typing "quick" adds nothing');
-  assert.deepEqual(tidyRecipeTags(slow).tags, [], 'an old typed "Quick" is tidied away');
+  assert.equal(quickSetByYou(quick), false);
+
+  // Set by you: a 35-minute recipe you know is quick, and a 30-minute one you don't count
+  const slowOn = setBuiltInTag(slow, 'quick', true);
+  assert.deepEqual([slowOn.quick, isQuickRecipe(slowOn), quickSetByYou(slowOn)], [true, true, true]);
+  const quickOff = setBuiltInTag(quick, 'quick', false);
+  assert.deepEqual(
+    [quickOff.quick, isQuickRecipe(quickOff), matchesTagFilters(quickOff, ['quick'])],
+    [false, false, false],
+  );
+  // Tapped back to what the times say: automatic again (follows the times from then on)
+  const back = setBuiltInTag(slowOn, 'quick', false);
+  assert.equal('quick' in back, false);
+  assert.equal(quickSetByYou(back), false);
+  assert.equal(hasBuiltInTag({ ...back, cookTime: 5 }, 'quick'), true, 'and follows the times');
+  // Your setting wins over the times
+  assert.equal(isQuickRecipe({ ...slowOn, cookTime: 90 }), true);
+
+  // Typing "quick" sets it; an old hand-typed "Quick" counts and is kept as set by you
+  assert.equal(addTag(slow, 'quick').quick, true);
+  const typed = R('d', 'D', { prepTime: 20, cookTime: 40, tags: ['Quick'] });
+  assert.deepEqual([isQuickRecipe(typed), quickSetByYou(typed)], [true, true]);
+  assert.deepEqual(
+    recipeTags(typed).map((t) => t.key),
+    ['quick'],
+    'shown once, as the Quick tag',
+  );
+  const tidied = tidyRecipeTags(typed);
+  assert.deepEqual([tidied.tags, tidied.quick], [[], true]);
+  const typedQuickAnyway = tidyRecipeTags(R('e', 'E', { prepTime: 5, cookTime: 5, tags: ['Quick'] }));
+  assert.deepEqual(
+    [typedQuickAnyway.tags, 'quick' in typedQuickAnyway],
+    [[], false],
+    'already quick by its times: automatic',
+  );
   assert.deepEqual(
     tagFilterOptions([quick, slow, noTimes]).map((t) => t.key),
     ['quick'],

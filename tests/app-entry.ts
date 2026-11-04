@@ -32,6 +32,8 @@ export {
   hasBuiltInTag,
   setBuiltInTag,
   tidyRecipeTags,
+  isQuickRecipe,
+  quickSetByYou,
   tagFilterOptions,
   matchesTagFilters,
 } from '../src/recipeInfo';

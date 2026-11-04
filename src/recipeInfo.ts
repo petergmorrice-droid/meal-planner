@@ -451,17 +451,24 @@ const WORD_TAGS: Partial<Record<BuiltInTag, string[]>> = {
 };
 /**
  * Old copies of the appliance and vegetarian / vegan buttons in `tags`, and "Quick" typed by hand
- * (Quick is worked out from the times now).
+ * (Quick is worked out from the times now, or set on the recipe).
  */
 const COPY_TAGS = ['stovetop', 'ninja combi', 'vegetarian', 'vegi', 'veggie', 'vegan', 'quick'];
 
 /** Quick: prep + cook this long or less (a recipe without times isn't counted). */
 export const QUICK_MINUTES = 30;
-export const isQuickRecipe = (recipe: Recipe) => {
+export const isQuickByTimes = (recipe: Recipe) => {
   const t = totalMinutes(recipe);
   return t !== null && t <= QUICK_MINUTES;
 };
-/** Built-in tags worked out from the recipe, not switched on or off. */
+const typedQuick = (recipe: Recipe) => (recipe.tags || []).some((t) => lower(t) === 'quick');
+/** Quick: as you set it on the recipe, or else from the times (an old hand-typed "Quick" counts too). */
+export const isQuickRecipe = (recipe: Recipe) =>
+  typeof recipe.quick === 'boolean' ? recipe.quick : isQuickByTimes(recipe) || typedQuick(recipe);
+/** Is Quick set by you rather than worked out from the times? */
+export const quickSetByYou = (recipe: Recipe) =>
+  typeof recipe.quick === 'boolean' || (typedQuick(recipe) && !isQuickByTimes(recipe));
+/** Built-in tags worked out from the recipe unless you set them. */
 export const AUTOMATIC_TAGS: BuiltInTag[] = ['quick'];
 
 const lower = (t: string) =>
@@ -525,6 +532,8 @@ export function tidyRecipeTags(recipe: Recipe): Recipe {
   let next: Recipe = { ...recipe, tags: tags.filter((t) => !COPY_TAGS.includes(lower(t))) };
   if (tags.some((t) => ['vegetarian', 'vegi', 'veggie'].includes(lower(t)))) next.isVegetarian = true;
   if (tags.some((t) => lower(t) === 'vegan')) next = { ...next, isVegetarian: true, isVegan: true };
+  // A "Quick" you typed on a recipe whose times don't say so: kept as Quick set by you.
+  if (typedQuick(recipe) && typeof recipe.quick !== 'boolean' && !isQuickByTimes(recipe)) next.quick = true;
   if (!recipe.cookingMethods?.length) {
     const marked = METHOD_ORDER.filter((m) =>
       tags.some((t) => lower(t) === (m === 'ninja' ? 'ninja combi' : 'stovetop')),
@@ -579,8 +588,12 @@ export function setVeg(recipe: Recipe, which: 'vegetarian' | 'vegan', on: boolea
 /** Switch a built-in tag on or off. Meat or Fish on means not vegetarian. */
 export function setBuiltInTag(recipe: Recipe, key: BuiltInTag, on: boolean): Recipe {
   switch (key) {
-    case 'quick':
-      return recipe; // worked out from the times
+    case 'quick': {
+      // Matching the times again means back to automatic; otherwise it's set by you.
+      const next: Recipe = { ...recipe, tags: (recipe.tags || []).filter((t) => lower(t) !== 'quick') };
+      delete next.quick;
+      return on === isQuickByTimes(next) ? next : { ...next, quick: on };
+    }
     case 'oven_hob':
     case 'ninja': {
       const cur = recipe.cookingMethods?.length ? recipe.cookingMethods : recipeMethods(recipe);

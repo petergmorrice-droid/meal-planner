@@ -48,6 +48,8 @@ export interface Recipe {
   isVegan?: boolean;
   /** Made with a slow cooker or the slow-cook setting. Not set: worked out from the recipe's steps. */
   slowCook?: boolean;
+  /** Quick, set by you. Not set: worked out from the times (prep + cook 30 min or less). */
+  quick?: boolean;
   costEstimate?: number;
   healthScore?: number;
 }
