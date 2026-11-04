@@ -468,8 +468,6 @@ export const isQuickRecipe = (recipe: Recipe) =>
 /** Is Quick set by you rather than worked out from the times? */
 export const quickSetByYou = (recipe: Recipe) =>
   typeof recipe.quick === 'boolean' || (typedQuick(recipe) && !isQuickByTimes(recipe));
-/** Built-in tags worked out from the recipe unless you set them. */
-export const AUTOMATIC_TAGS: BuiltInTag[] = ['quick'];
 
 const lower = (t: string) =>
   String(t ?? '')

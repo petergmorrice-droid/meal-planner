@@ -247,8 +247,7 @@ const popupText = async (page) => (await popup(page).innerText()).replace(/\s+/g
   await page.waitForTimeout(200);
   const quickChip = page.locator('[data-edit-tag="quick"]');
   check(
-    (await quickChip.getAttribute('aria-pressed')) === 'false' &&
-      (await page.locator('[data-quick-source]').innerText()) === 'auto',
+    (await quickChip.getAttribute('aria-pressed')) === 'false',
     'editor: Quick off for a 45-minute recipe, worked out from the times',
   );
   await quickChip.click();
@@ -258,7 +257,7 @@ const popupText = async (page) => (await popup(page).innerText()).replace(/\s+/g
   await page.waitForTimeout(150);
   check(
     (await quickChip.getAttribute('aria-pressed')) === 'true' &&
-      (await page.locator('[data-quick-source]').innerText()) === 'set by you' &&
+      (await quickChip.innerText()).trim() === 'Quick' &&
       (await page.locator('[data-edit-tag="meat"]').getAttribute('aria-pressed')) === 'true' &&
       (await page.locator('[data-tag="Kids"]').count()) === 1,
     'editor: tapping Quick sets it by hand; Meat on; your own tag added',
@@ -293,9 +292,8 @@ const popupText = async (page) => (await popup(page).innerText()).replace(/\s+/g
   await page.waitForTimeout(200);
   await quickChip.click();
   check(
-    (await quickChip.getAttribute('aria-pressed')) === 'false' &&
-      (await page.locator('[data-quick-source]').innerText()) === 'auto',
-    'tapping Quick again goes back to automatic',
+    (await quickChip.getAttribute('aria-pressed')) === 'false',
+    'tapping Quick again switches it off (back to following the times)',
   );
   await page.getByRole('button', { name: 'Save recipe' }).click();
   await page.waitForTimeout(400);

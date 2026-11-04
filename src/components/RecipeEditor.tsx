@@ -15,7 +15,6 @@ import {
   setBuiltInTag,
   tidyRecipeTags,
   BUILT_IN_TAGS,
-  AUTOMATIC_TAGS,
   quickSetByYou,
   QUICK_MINUTES,
   SUGGESTED_TAGS,
@@ -117,12 +116,6 @@ export function RecipeEditor({
       >
         <TagIcon tag={tag} className="w-4 h-4" plain={on} />
         {label}
-        {AUTOMATIC_TAGS.includes(key) && (
-          // Quick follows the times unless you tap it; tapping it back to match the times makes it automatic again.
-          <span className={`text-[11px] font-medium ${on ? 'text-emerald-100' : 'text-zinc-400'}`} data-quick-source>
-            {quickSetByYou(recipe) ? 'set by you' : 'auto'}
-          </span>
-        )}
       </button>
     );
   };
