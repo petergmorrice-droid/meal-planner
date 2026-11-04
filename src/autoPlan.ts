@@ -27,13 +27,14 @@ import {
   recipeMethods,
   totalMinutes,
   type RecipeHistory,
+  QUICK_MINUTES,
 } from './recipeInfo';
 import { averageStars, ratingsFor } from './ratings';
 import { planIngredientInputs } from './utils';
 import { canonicalUnit, groupingKey, matchProduct, parseAmount, toBase, type Catalog } from './shopping';
 
-/** Busy nights: this long or less (the same as the "Under 30 min" filter). */
-export const QUICK_MINUTES = 30;
+/** Busy nights: this long or less (the same as the "Quick" tag). */
+export { QUICK_MINUTES };
 
 export interface AutoPlanAnswers {
   /** The days to fill. */

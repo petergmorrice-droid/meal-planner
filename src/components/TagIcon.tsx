@@ -37,6 +37,7 @@ import {
 import type { RecipeTag } from '../recipeInfo';
 
 const BUILT_IN: Record<string, { icon: LucideIcon; color: string }> = {
+  quick: { icon: Timer, color: 'text-violet-600' },
   oven_hob: { icon: Flame, color: 'text-rose-500' },
   ninja: { icon: Zap, color: 'text-amber-500' },
   slow_cook: { icon: CookingPot, color: 'text-orange-600' },
@@ -50,7 +51,7 @@ const BUILT_IN: Record<string, { icon: LucideIcon; color: string }> = {
 
 /** Words in your own tags and the symbol they get (first match wins). */
 const BY_WORD: [RegExp, LucideIcon, string][] = [
-  [/quick|fast|speedy|easy|minute|\bmin\b/, Timer, 'text-violet-600'],
+  [/fast|speedy|easy|minute|\bmin\b/, Timer, 'text-violet-600'],
   [/freez/, Snowflake, 'text-cyan-600'],
   [/kid|child|toddler|baby|family/, Baby, 'text-pink-500'],
   [/spic|\bhot\b|chilli|chili/, Flame, 'text-red-600'],

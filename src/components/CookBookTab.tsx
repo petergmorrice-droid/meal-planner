@@ -1,6 +1,6 @@
 import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { ratingsFor, averagesById } from '../ratings';
-import { Search, Plus, X, SlidersHorizontal, BookOpen, Star, Clock, Snowflake, History } from 'lucide-react';
+import { Search, Plus, X, SlidersHorizontal, BookOpen, Star, Snowflake, History } from 'lucide-react';
 import { Recipe, UserPreferences, TabName } from '../types';
 import CookMode from './CookMode';
 import { RecipeModal } from './RecipePopup';
@@ -31,7 +31,6 @@ import { EMPTY_LIST } from '../emptyList';
 const FILTER_ICON: Record<QuickFilter, React.ReactNode> = {
   favourites: <Star className="w-3.5 h-3.5" />,
   not_lately: <History className="w-3.5 h-3.5" />,
-  quick: <Clock className="w-3.5 h-3.5" />,
   freezer: <Snowflake className="w-3.5 h-3.5" />,
 };
 

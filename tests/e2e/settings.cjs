@@ -180,7 +180,8 @@ function seed() {
   await page.waitForTimeout(200);
   check((await page.locator('[data-more-menu]').count()) === 0, 'More: Escape closes the menu');
   await more.click();
-  await page.mouse.click(20, 200);
+  // Somewhere with nothing to tap (the top bar's padding), so it doesn't also open a recipe card.
+  await page.mouse.click(200, 3);
   await page.waitForTimeout(200);
   check((await page.locator('[data-more-menu]').count()) === 0, 'More: tapping elsewhere closes the menu');
   check((await more.getAttribute('aria-current')) === null, 'More: not highlighted on another tab');

@@ -15,6 +15,8 @@ import {
   setBuiltInTag,
   tidyRecipeTags,
   BUILT_IN_TAGS,
+  AUTOMATIC_TAGS,
+  QUICK_MINUTES,
   SUGGESTED_TAGS,
   type BuiltInTag,
 } from '../recipeInfo';
@@ -93,6 +95,23 @@ export function RecipeEditor({
   const builtInChip = (key: BuiltInTag, label: string) => {
     const on = hasBuiltInTag(recipe, key, true);
     const tag = { key, label };
+    if (AUTOMATIC_TAGS.includes(key))
+      // Worked out from the times above: shown, not tapped.
+      return (
+        <span
+          key={key}
+          data-edit-tag={key}
+          aria-label={`${label}: ${on ? 'on' : 'off'}, set by the times (${QUICK_MINUTES} min or less)`}
+          title={`Set by the times: ${QUICK_MINUTES} min or less, prep + cook`}
+          className={`h-9 px-3 rounded-full border text-sm font-semibold inline-flex items-center gap-1.5 ${
+            on ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-zinc-50 text-zinc-400 border-zinc-200'
+          }`}
+        >
+          <TagIcon tag={tag} className="w-4 h-4" plain={on} />
+          {label}
+          <span className={`text-[11px] font-medium ${on ? 'text-emerald-100' : 'text-zinc-400'}`}>auto</span>
+        </span>
+      );
     return (
       <button
         key={key}
@@ -209,7 +228,7 @@ export function RecipeEditor({
           </span>
           {(
             [
-              ['cook', 'Cooked with'],
+              ['cook', 'Cooking'],
               ['diet', 'Diet'],
             ] as const
           ).map(([group, title]) => (

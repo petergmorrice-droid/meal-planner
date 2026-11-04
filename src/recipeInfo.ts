@@ -259,11 +259,10 @@ export function isSlowCookRecipe(recipe: Recipe): boolean {
 }
 
 /** Filters that aren't tags (Vegetarian, Ninja, Slow cook and the rest are tags: see `tagFilterOptions`). */
-export type QuickFilter = 'favourites' | 'not_lately' | 'quick' | 'freezer';
+export type QuickFilter = 'favourites' | 'not_lately' | 'freezer';
 export const QUICK_FILTERS: { id: QuickFilter; label: string }[] = [
   { id: 'favourites', label: 'Favourites' },
   { id: 'not_lately', label: 'Not had lately' },
-  { id: 'quick', label: 'Under 30 min' },
   { id: 'freezer', label: 'In the freezer' },
 ];
 /** "Not had lately": not in the last 4 weeks and not already planned. */
@@ -282,10 +281,6 @@ export function matchesQuickFilters(
       case 'not_lately': {
         if (ctx.history?.nextPlanned) return false;
         return !ctx.history?.lastHad || daysBetween(ctx.history.lastHad, ctx.today) >= NOT_LATELY_DAYS;
-      }
-      case 'quick': {
-        const t = totalMinutes(recipe);
-        return t !== null && t <= 30;
       }
       case 'freezer':
         return ctx.freezer > 0;
@@ -416,6 +411,7 @@ export function changedFields<T extends object>(before: T, after: T): Partial<T>
 
 export type TagGroup = 'cook' | 'diet' | 'own';
 export type BuiltInTag =
+  | 'quick'
   | 'oven_hob'
   | 'ninja'
   | 'slow_cook'
@@ -433,6 +429,7 @@ export interface RecipeTag {
 }
 
 export const BUILT_IN_TAGS: { key: BuiltInTag; label: string; group: TagGroup }[] = [
+  { key: 'quick', label: 'Quick', group: 'cook' },
   { key: 'oven_hob', label: 'Oven/Hob', group: 'cook' },
   { key: 'ninja', label: 'Ninja', group: 'cook' },
   { key: 'slow_cook', label: 'Slow cook', group: 'cook' },
@@ -452,8 +449,20 @@ const WORD_TAGS: Partial<Record<BuiltInTag, string[]>> = {
   meat: ['meat'],
   fish: ['fish', 'seafood'],
 };
-/** Old copies of the appliance and vegetarian / vegan buttons in `tags`. */
-const COPY_TAGS = ['stovetop', 'ninja combi', 'vegetarian', 'vegi', 'veggie', 'vegan'];
+/**
+ * Old copies of the appliance and vegetarian / vegan buttons in `tags`, and "Quick" typed by hand
+ * (Quick is worked out from the times now).
+ */
+const COPY_TAGS = ['stovetop', 'ninja combi', 'vegetarian', 'vegi', 'veggie', 'vegan', 'quick'];
+
+/** Quick: prep + cook this long or less (a recipe without times isn't counted). */
+export const QUICK_MINUTES = 30;
+export const isQuickRecipe = (recipe: Recipe) => {
+  const t = totalMinutes(recipe);
+  return t !== null && t <= QUICK_MINUTES;
+};
+/** Built-in tags worked out from the recipe, not switched on or off. */
+export const AUTOMATIC_TAGS: BuiltInTag[] = ['quick'];
 
 const lower = (t: string) =>
   String(t ?? '')
@@ -484,6 +493,8 @@ export function builtInFor(t: string): BuiltInTag | undefined {
  */
 export function hasBuiltInTag(recipe: Recipe, key: BuiltInTag, forEditing = false): boolean {
   switch (key) {
+    case 'quick':
+      return isQuickRecipe(recipe);
     case 'oven_hob':
     case 'ninja': {
       const methods =
@@ -568,6 +579,8 @@ export function setVeg(recipe: Recipe, which: 'vegetarian' | 'vegan', on: boolea
 /** Switch a built-in tag on or off. Meat or Fish on means not vegetarian. */
 export function setBuiltInTag(recipe: Recipe, key: BuiltInTag, on: boolean): Recipe {
   switch (key) {
+    case 'quick':
+      return recipe; // worked out from the times
     case 'oven_hob':
     case 'ninja': {
       const cur = recipe.cookingMethods?.length ? recipe.cookingMethods : recipeMethods(recipe);
@@ -639,4 +652,4 @@ export const matchesTagFilters = (recipe: Recipe, keys: string[]) =>
   );
 
 /** Tags offered when adding one of your own, before any recipe uses them. */
-export const SUGGESTED_TAGS = ['Quick', 'Freezer-Friendly', 'Kids Love It', 'Batch Cook'];
+export const SUGGESTED_TAGS = ['Freezer-Friendly', 'Kids Love It', 'Batch Cook', 'One Pan'];

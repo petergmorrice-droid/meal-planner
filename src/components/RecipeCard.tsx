@@ -79,9 +79,15 @@ export function RecipeCard({
   dragProps?: Pick<React.HTMLAttributes<HTMLDivElement>, 'onDragStart' | 'onDragEnd'> & { draggable?: boolean };
 }) {
   const mins = fields.time ? totalMinutes(recipe) : null;
-  // Tags, each with its symbol: appliance (the "Oven/Hob or Ninja" field), vegetarian / vegan, the rest.
+  // Tags, each with its symbol: Quick (the Time field), appliance ("Oven/Hob or Ninja"), vegetarian / vegan, the rest.
   const tags = recipeTags(recipe).filter((t) =>
-    t.group === 'cook' ? fields.method : t.key === 'veggie' || t.key === 'vegan' ? fields.veg : fields.tags,
+    t.key === 'quick'
+      ? fields.time
+      : t.group === 'cook'
+        ? fields.method
+        : t.key === 'veggie' || t.key === 'vegan'
+          ? fields.veg
+          : fields.tags,
   );
   const emojis = fields.emojis ? getRecipeEmojis(recipe) : [];
 
