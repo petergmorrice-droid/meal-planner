@@ -6,8 +6,9 @@ import { useRef } from 'react';
 import { Columns2, Eye, Rows, Search, X } from 'lucide-react';
 import { UserPreferences } from '../../types';
 import { CARD_FIELD_OPTIONS, CardPref } from '../RecipeCard';
-import { RECIPE_SORTS, RecipeSort, QUICK_FILTERS, QuickFilter } from '../../recipeInfo';
+import { RECIPE_SORTS, RecipeSort, QUICK_FILTERS, QuickFilter, type RecipeTag } from '../../recipeInfo';
 import type { PlanningView } from './useMealBrowser';
+import { TagFilterChips } from '../TagFilterChips';
 
 export default function PlanningToolbar({
   planningView,
@@ -18,6 +19,9 @@ export default function PlanningToolbar({
   onSearch,
   quickFilters,
   onToggleFilter,
+  tagOptions,
+  tagFilters,
+  onToggleTag,
   optionsOpen,
   onOptionsOpen,
   mealRowsLayout,
@@ -37,6 +41,10 @@ export default function PlanningToolbar({
   onSearch: (text: string) => void;
   quickFilters: QuickFilter[];
   onToggleFilter: (f: QuickFilter) => void;
+  /** Tags to filter by, the ones chosen, and choosing one. */
+  tagOptions: RecipeTag[];
+  tagFilters: string[];
+  onToggleTag: (tag: string) => void;
   optionsOpen: boolean;
   onOptionsOpen: (open: boolean) => void;
   mealRowsLayout: 1 | 2;
@@ -130,6 +138,7 @@ export default function PlanningToolbar({
                     </button>
                   );
                 })}
+                <TagFilterChips tags={tagOptions} chosen={tagFilters} onToggle={onToggleTag} />
               </div>
             </>
           )

@@ -48,6 +48,8 @@ export interface Recipe {
   isVegan?: boolean;
   /** Made with a slow cooker or the slow-cook setting. Not set: worked out from the recipe's steps. */
   slowCook?: boolean;
+  /** Quick, set by you. Not set: worked out from the times (prep + cook 30 min or less). */
+  quick?: boolean;
   costEstimate?: number;
   healthScore?: number;
 }
@@ -201,6 +203,8 @@ export interface UserPreferences {
   showLastHad?: boolean;
   /** Recipe cards: portions in the freezer. */
   showFreezer?: boolean;
+  /** Recipe cards: the recipe's tags ("Meat", "Quick"). */
+  showTags?: boolean;
   mealRowsLayout?: 1 | 2;
   // Additional configurable variables for the app:
   defaultServings?: number; // default number of people cooking for (e.g. 2)

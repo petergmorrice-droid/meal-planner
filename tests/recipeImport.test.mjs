@@ -172,8 +172,16 @@ test('"Gluten-Free" / "Dairy-Free" only when the ingredients and Gemini agree', 
     [],
   );
   // Vegan curry with Gemini agreeing
-  const curry = tags({ ...COPIED.aubergineCurry, isGlutenFree: true, isDairyFree: true });
-  assert.ok(curry.includes('Vegan') && curry.includes('Gluten-Free') && curry.includes('Dairy-Free'), curry.join());
+  const curryRecipe = normalizeParsedRecipe(
+    { ...COPIED.aubergineCurry, isGlutenFree: true, isDairyFree: true },
+    'oven_hob',
+  );
+  const curry = curryRecipe.tags;
+  assert.ok(curryRecipe.isVegan && curry.includes('Gluten-Free') && curry.includes('Dairy-Free'), curry.join());
+  assert.ok(
+    !curry.includes('Vegan') && !curry.includes('Stovetop'),
+    'vegan and the appliance are fields, not copied into tags',
+  );
   // Look-alikes that are not dairy / gluten
   const lookalikes = tags({
     name: 'Bean stew',
@@ -194,6 +202,36 @@ test('"Gluten-Free" / "Dairy-Free" only when the ingredients and Gemini agree', 
   assert.ok(lookalikes.includes('Gluten-Free') && lookalikes.includes('Dairy-Free'), lookalikes.join());
   // Gemini says not gluten-free (e.g. stock cubes with wheat) -> no label even though no word matched
   assert.ok(!tags({ ...COPIED.aubergineCurry, isGlutenFree: false, isDairyFree: true }).includes('Gluten-Free'));
+});
+
+test('"Meat" / "Fish" from the ingredients, never on a vegetarian recipe', () => {
+  const tags = (ingredients, extra = {}) =>
+    normalizeParsedRecipe(
+      {
+        name: 'Dish',
+        servings: 2,
+        instructions: ['Cook.'],
+        ingredients: ingredients.map((name) => ({ name, amount: 1, unit: '' })),
+        ...extra,
+      },
+      'oven_hob',
+    ).tags;
+  const has = (t, tag) => t.includes(tag);
+  const meat = tags(['beef mince', 'onion']);
+  assert.ok(has(meat, 'Meat') && !has(meat, 'Fish'), meat.join());
+  const fish = tags(['salmon fillets', 'lemon']);
+  assert.ok(has(fish, 'Fish') && !has(fish, 'Meat'), fish.join());
+  const both = tags(['chorizo', 'king prawns', 'rice']);
+  assert.ok(has(both, 'Meat') && has(both, 'Fish'), both.join());
+  // Not a meat or fish dish just for its stock, sauce or a look-alike
+  const lookalikes = tags(['chicken stock', 'fish sauce', 'kidney beans', "goat's cheese", 'vegan sausages', 'rice'], {
+    isVegetarian: false,
+  });
+  assert.ok(!has(lookalikes, 'Meat') && !has(lookalikes, 'Fish'), lookalikes.join());
+  // A vegetarian recipe never gets either, even if a word matched
+  const veg = tags(['quorn chicken pieces', 'peppers'], { isVegetarian: true });
+  assert.ok(!has(veg, 'Meat') && !has(veg, 'Fish'), veg.join());
+  assert.ok(has(tags(['cod loins'], { isVegetarian: false }), 'Fish'));
 });
 
 test('the recipe is saved under the appliance it was written for', () => {
@@ -382,7 +420,7 @@ test('a recipe Gemini wrote or changed: gaps filled, its extras kept, every ingr
   assert.equal(r.isVegetarian, false);
   assert.equal(r.isVegan, false);
   assert.deepEqual(r.cookingMethods, ['ninja']);
-  assert.equal(r.tags.includes('Ninja Combi'), true);
+  assert.equal(r.tags.includes('Ninja Combi'), false, 'the appliance is cookingMethods, not a tag');
   assert.equal(r.imageUrl, 'kept.jpg', 'anything else it sent back is kept');
   assert.equal(typeof r.id === 'string' && r.id.length > 0, true);
 });
@@ -480,7 +518,30 @@ test('a Gemini edit keeps what it did not change: servings, both appliances, fav
   assert.equal(r.prepTime, 12);
   assert.equal(r.methodPrepTime.oven_hob, 12);
   assert.equal(r.methodCookTime.ninja, 35, "the other appliance's time stays");
-  assert.equal(r.tags.includes('Freezer-Friendly') && r.tags.includes('Ninja Combi'), true, 'your tags stay');
+  assert.equal(r.tags.includes('Freezer-Friendly'), true, 'your tags stay');
+  assert.equal(r.tags.includes('Ninja Combi') || r.tags.includes('Stovetop'), false, 'old copies of the appliance go');
+});
+
+test('a Gemini edit keeps the tags you set unless the ingredients changed', () => {
+  const mine = { ...curry(), tags: ['Quick', 'Ninja Combi'] }; // you took off "Gluten-Free" and "Meat"
+  const sameFood = applyGeminiEdit(mine, {
+    name: 'Quick chicken curry',
+    ingredients: mine.ingredients.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit })),
+    instructions: ['Cook it all faster.'],
+  });
+  assert.deepEqual(sameFood.tags, ['Quick', 'Ninja Combi']);
+  const newFood = applyGeminiEdit(mine, {
+    ingredients: [
+      ...mine.ingredients.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit })),
+      { name: 'King prawns', amount: 150, unit: 'g' },
+    ],
+    instructions: ['Add prawns.'],
+    isVegetarian: false,
+  });
+  assert.ok(
+    newFood.tags.includes('Quick') && newFood.tags.includes('Meat') && newFood.tags.includes('Fish'),
+    newFood.tags.join(),
+  );
 });
 
 test('a Gemini edit: steps it left out are kept; a new number of people is taken; no ingredients changes nothing', () => {

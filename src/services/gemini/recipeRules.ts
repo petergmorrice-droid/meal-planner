@@ -180,6 +180,15 @@ const DAIRY_WORDS =
 const NOT_DAIRY =
   /\b(coconut|oat|almond|soy|soya|rice|cashew|peanut|vegan|dairy[- ]free|plant[- ]based|butter ?beans?|butternut|cream of tartar)\b/;
 
+// Words that mean an ingredient is meat / fish or seafood, and what doesn't make it a meat or fish
+// dish ("chicken stock", "fish sauce", "vegan sausages").
+const MEAT_WORDS =
+  /\b(chicken|beef|pork|steak|bacon|pancetta|lardons?|ham|gammon|turkey|lamb|mutton|sausages?|chipolatas?|meat|meatballs?|mince|duck|veal|venison|chorizo|salami|pepperoni|prosciutto|serrano|nduja|black pudding|haggis|goat|rabbit|pheasant|pigeon|oxtail|liver|kidneys?|brisket|ribs|burgers?|hot dogs?|frankfurters?)\b/;
+const FISH_WORDS =
+  /\b(fish|salmon|tuna|cod|haddock|pollock|hake|plaice|sole|halibut|trout|mackerel|sardines?|anchov(y|ies)|seabass|sea bass|bream|monkfish|kippers?|prawns?|shrimps?|crab|lobster|langoustines?|scallops?|mussels?|clams?|oysters?|squid|calamari|octopus|seafood|scampi|whitebait|swordfish|tilapia|basa)\b/;
+const NOT_MEAT_OR_FISH =
+  /\b(stock|broth|bouillon|kidney beans?|goats?'?s? cheese|gravy|fish sauce|oyster sauce|shrimp paste|vegan|vegetarian|veggie|plant[- ]based|meat[- ]free|meatless|quorn|tofu|soya|soy)\b/;
+
 /**
  * Recipe tags. "Gluten-Free" / "Dairy-Free" are only added when no ingredient looks like
  * gluten or dairy AND (for imported recipes) Gemini agreed - a wrong "free-from" label is
@@ -189,12 +198,10 @@ function generateFunctionalTags(
   ingredients: { name?: string }[],
   isVegetarian: boolean,
   isVegan: boolean,
-  method: string,
   ai?: { glutenFree?: unknown; dairyFree?: unknown },
 ): string[] {
+  // Vegetarian / vegan and the appliance aren't written here: they're the recipe's own fields.
   const tags: string[] = [];
-  if (isVegan) tags.push('Vegan');
-  else if (isVegetarian) tags.push('Vegetarian');
 
   let hasGluten = false;
   let hasDairy = false;
@@ -207,11 +214,15 @@ function generateFunctionalTags(
   const aiAgrees = (v: unknown) => (ai ? v === true : true);
 
   if (!hasGluten && aiAgrees(ai?.glutenFree)) tags.push('Gluten-Free');
-  if (!hasDairy && !isVegan && aiAgrees(ai?.dairyFree)) tags.push('Dairy-Free');
-  if (isVegan) tags.push('Dairy-Free');
+  if (isVegan || (!hasDairy && aiAgrees(ai?.dairyFree))) tags.push('Dairy-Free');
 
-  if (method === 'ninja') tags.push('Ninja Combi');
-  else tags.push('Stovetop');
+  // Meat / Fish: only for recipes that aren't vegetarian, so a "Vegetarian" recipe never gets either.
+  if (!isVegetarian) {
+    const names = ingredients.map((ing) => String(ing?.name ?? '').toLowerCase());
+    const has = (words: RegExp) => names.some((n) => words.test(n) && !NOT_MEAT_OR_FISH.test(n));
+    if (has(MEAT_WORDS)) tags.push('Meat');
+    if (has(FISH_WORDS)) tags.push('Fish');
+  }
 
   return tags;
 }
@@ -279,7 +290,7 @@ export function validateAndNormalizeRecipe(
     methodCookTime,
     isVegetarian,
     isVegan,
-    tags: generateFunctionalTags(ingredients, isVegetarian, isVegan, selectedMethod),
+    tags: generateFunctionalTags(ingredients, isVegetarian, isVegan),
     cookingMethods: [selectedMethod],
   };
 }
@@ -340,7 +351,7 @@ export function normalizeParsedRecipe(
     cookTime,
     methodPrepTime: { [selectedMethod]: prepTime },
     methodCookTime: { [selectedMethod]: cookTime },
-    tags: generateFunctionalTags(ingredients, isVegetarian, isVegan, selectedMethod, {
+    tags: generateFunctionalTags(ingredients, isVegetarian, isVegan, {
       glutenFree: data?.isGlutenFree,
       dairyFree: data?.isDairyFree,
     }),
@@ -349,8 +360,15 @@ export function normalizeParsedRecipe(
     isVegan,
   };
 }
-/** Tags that follow from the ingredients (worked out again after an edit); any others are yours and kept. */
-const DIET_TAGS = new Set(['Vegan', 'Vegetarian', 'Gluten-Free', 'Dairy-Free']);
+/**
+ * Tags that follow from the ingredients (worked out again when an edit changes them), and old copies
+ * of the vegetarian / appliance fields (dropped); any others are yours and kept.
+ */
+const DIET_TAGS = new Set(
+  ['Vegan', 'Vegetarian', 'Veggie', 'Stovetop', 'Ninja Combi', 'Gluten-Free', 'Dairy-Free', 'Meat', 'Fish'].map((t) =>
+    t.toLowerCase(),
+  ),
+);
 
 /**
  * Gemini's changed version of a recipe, applied onto the recipe as it was: what the edit changed is
@@ -402,8 +420,14 @@ export function applyGeminiEdit(original: Recipe, reply: GeminiRecipe): Recipe {
   const flags = analyzeDietaryFlags(ingredients);
   const isVegetarian = typeof reply.isVegetarian === 'boolean' ? reply.isVegetarian : flags.isVegetarian;
   const isVegan = typeof reply.isVegan === 'boolean' ? reply.isVegan && isVegetarian : flags.isVegan;
-  const dietTags = generateFunctionalTags(ingredients, isVegetarian, isVegan, main).filter((t) => DIET_TAGS.has(t));
+  const dietTags = generateFunctionalTags(ingredients, isVegetarian, isVegan);
   const servings = positive(reply.servings);
+  const names = (list: { name: string }[]) =>
+    list
+      .map((i) => i.name.trim().toLowerCase())
+      .sort()
+      .join('\n');
+  const sameIngredients = names(ingredients) === names(original.ingredients);
 
   return {
     ...original,
@@ -419,6 +443,9 @@ export function applyGeminiEdit(original: Recipe, reply: GeminiRecipe): Recipe {
     methodCookTime: { ...(original.methodCookTime || {}), [main]: cookTime },
     isVegetarian,
     isVegan,
-    tags: [...new Set([...(original.tags || []).filter((t) => !DIET_TAGS.has(t)), ...dietTags])],
+    // Same ingredients: your tags stay exactly as you left them (a tag you took off doesn't come back).
+    tags: sameIngredients
+      ? original.tags || []
+      : [...new Set([...(original.tags || []).filter((t) => !DIET_TAGS.has(t.toLowerCase())), ...dietTags])],
   };
 }

@@ -7,6 +7,7 @@ import { MealPlan, Recipe, UserPreferences } from '../../types';
 import { DAYS_OF_WEEK } from '../../utils';
 import { averagesById } from '../../ratings';
 import { cardFieldsFromPrefs } from '../RecipeCard';
+import { toggleTag } from '../TagFilterChips';
 import {
   recipeHistories,
   sortRecipes,
@@ -19,6 +20,8 @@ import {
   readFavouritesFirst,
   saveFavouritesFirst,
   matchesQuickFilters,
+  matchesTagFilters,
+  tagFilterOptions,
   QuickFilter,
 } from '../../recipeInfo';
 import type { AppStore } from '../../store';
@@ -69,17 +72,21 @@ export function useMealBrowser(store: AppStore, currentPlan: MealPlan | undefine
   const [quickFilters, setQuickFilters] = useState<QuickFilter[]>([]);
   const toggleQuickFilter = (f: QuickFilter) =>
     setQuickFilters((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const toggleTagFilter = (t: string) => setTagFilters((cur) => toggleTag(cur, t));
+  const tagOptions = useMemo(() => tagFilterOptions(store.state.recipes), [store.state.recipes]);
   const filteredRecipes: Recipe[] = useMemo(() => {
     return store.state.recipes.filter(
       (r: Recipe) =>
         recipeMatchesSearch(r, recipeSearch) &&
+        matchesTagFilters(r, tagFilters) &&
         matchesQuickFilters(r, quickFilters, {
           history: recipeHistory.get(r.id),
           freezer: freezerPortions(r, store.state.batches),
           today,
         }),
     );
-  }, [store.state.recipes, recipeSearch, quickFilters, recipeHistory, store.state.batches, today]);
+  }, [store.state.recipes, recipeSearch, quickFilters, tagFilters, recipeHistory, store.state.batches, today]);
   const [recipeSort, setRecipeSortState] = useState<RecipeSort>(readRecipeSort);
   const setRecipeSort = (sort: RecipeSort) => {
     setRecipeSortState(sort);
@@ -115,6 +122,7 @@ export function useMealBrowser(store: AppStore, currentPlan: MealPlan | undefine
   /** Clear the search and filters (and close the search box). */
   const clearFilters = () => {
     setQuickFilters([]);
+    setTagFilters([]);
     setRecipeSearch('');
     setIsSearchExpanded(false);
   };
@@ -127,6 +135,9 @@ export function useMealBrowser(store: AppStore, currentPlan: MealPlan | undefine
     setIsSearchExpanded,
     quickFilters,
     toggleQuickFilter,
+    tagFilters,
+    toggleTagFilter,
+    tagOptions,
     clearFilters,
     recipeHistory,
     filteredRecipes,

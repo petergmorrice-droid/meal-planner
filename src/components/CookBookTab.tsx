@@ -1,24 +1,12 @@
 import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { ratingsFor, averagesById } from '../ratings';
-import {
-  Search,
-  Plus,
-  X,
-  SlidersHorizontal,
-  BookOpen,
-  Star,
-  Clock,
-  Leaf,
-  Zap,
-  Snowflake,
-  History,
-  CookingPot,
-} from 'lucide-react';
+import { Search, Plus, X, SlidersHorizontal, BookOpen, Star, Snowflake, History } from 'lucide-react';
 import { Recipe, UserPreferences, TabName } from '../types';
 import CookMode from './CookMode';
 import { RecipeModal } from './RecipePopup';
 import { AddRecipe } from './AddRecipe';
 import { RecipeCard, CARD_FIELD_OPTIONS, cardFieldsFromPrefs } from './RecipeCard';
+import { TagFilterChips, toggleTag } from './TagFilterChips';
 import {
   recipeHistories,
   sortRecipes,
@@ -30,6 +18,8 @@ import {
   freezerPortions,
   recipeMatchesSearch,
   matchesQuickFilters,
+  matchesTagFilters,
+  tagFilterOptions,
   QUICK_FILTERS,
   QuickFilter,
   readFavouritesFirst,
@@ -41,10 +31,6 @@ import { EMPTY_LIST } from '../emptyList';
 const FILTER_ICON: Record<QuickFilter, React.ReactNode> = {
   favourites: <Star className="w-3.5 h-3.5" />,
   not_lately: <History className="w-3.5 h-3.5" />,
-  quick: <Clock className="w-3.5 h-3.5" />,
-  veggie: <Leaf className="w-3.5 h-3.5" />,
-  ninja: <Zap className="w-3.5 h-3.5" />,
-  slow_cook: <CookingPot className="w-3.5 h-3.5" />,
   freezer: <Snowflake className="w-3.5 h-3.5" />,
 };
 
@@ -72,6 +58,7 @@ export default function CookBookTab({
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [filters, setFilters] = useState<QuickFilter[]>([]);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [showOptions, setShowOptions] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [cookModeRecipe, setCookModeRecipe] = useState<Recipe | null>(null);
@@ -113,6 +100,7 @@ export default function CookBookTab({
     const list = recipes.filter(
       (r) =>
         recipeMatchesSearch(r, search) &&
+        matchesTagFilters(r, tagFilters) &&
         matchesQuickFilters(r, filters, {
           history: history.get(r.id),
           freezer: freezerPortions(r, store.state.batches),
@@ -120,14 +108,27 @@ export default function CookBookTab({
         }),
     );
     return sortRecipes(list, sort, history, favFirst, averagesById(store.state.preferences?.ratings));
-  }, [recipes, search, filters, history, store.state.batches, today, sort, favFirst, store.state.preferences?.ratings]);
+  }, [
+    recipes,
+    search,
+    filters,
+    tagFilters,
+    history,
+    store.state.batches,
+    today,
+    sort,
+    favFirst,
+    store.state.preferences?.ratings,
+  ]);
+  const tagOptions = useMemo(() => tagFilterOptions(recipes), [recipes]);
 
   const cardFields = cardFieldsFromPrefs(prefs);
-  const filtering = search.trim() !== '' || filters.length > 0;
+  const filtering = search.trim() !== '' || filters.length > 0 || tagFilters.length > 0;
   const toggleFilter = (f: QuickFilter) =>
     setFilters((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
   const clearAll = () => {
     setFilters([]);
+    setTagFilters([]);
     setSearch('');
     setSearchOpen(false);
   };
@@ -289,6 +290,11 @@ export default function CookBookTab({
                 </button>
               );
             })}
+            <TagFilterChips
+              tags={tagOptions}
+              chosen={tagFilters}
+              onToggle={(t) => setTagFilters((cur) => toggleTag(cur, t))}
+            />
           </div>
         )}
         {filtering && (

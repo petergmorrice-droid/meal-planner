@@ -24,16 +24,18 @@ import {
   formatAgo,
   formatMinutes,
   isSlowCookRecipe,
+  isQuickRecipe,
   recipeMethods,
   totalMinutes,
   type RecipeHistory,
+  QUICK_MINUTES,
 } from './recipeInfo';
 import { averageStars, ratingsFor } from './ratings';
 import { planIngredientInputs } from './utils';
 import { canonicalUnit, groupingKey, matchProduct, parseAmount, toBase, type Catalog } from './shopping';
 
-/** Busy nights: this long or less (the same as the "Under 30 min" filter). */
-export const QUICK_MINUTES = 30;
+/** Busy nights: this long or less (the same as the "Quick" tag). */
+export { QUICK_MINUTES };
 
 export interface AutoPlanAnswers {
   /** The days to fill. */
@@ -255,7 +257,7 @@ function candidates(day: string, answers: AutoPlanAnswers, ctx: AutoPlanContext,
   for (const r of ctx.recipes) {
     if (!r?.id || r.verdict === 'not_for_us' || state.taken.has(r.id) || !cookedWith(r, cooking)) continue;
     const minutes = totalMinutes(r);
-    const quick = minutes !== null && minutes <= QUICK_MINUTES;
+    const quick = isQuickRecipe(r);
     // A slow-cooker meal is ready when you get in: fine on a busy night when you're using it.
     const slowBusy = busy && slowCooker && isSlowCookRecipe(r);
     if (busy && !quick && !slowBusy) continue;

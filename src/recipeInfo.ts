@@ -233,6 +233,7 @@ export function recipeMatchesSearch(recipe: Recipe, query: string): boolean {
     has(recipe.name) ||
     (recipe.ingredients || []).some((i) => has(i?.name) || has(i?.note)) ||
     (recipe.tags || []).some((t) => has(t)) ||
+    recipeTags(recipe).some((t) => has(t.label)) ||
     has(recipe.description) ||
     has(recipe.notes)
   );
@@ -257,14 +258,11 @@ export function isSlowCookRecipe(recipe: Recipe): boolean {
   return texts.some((t) => typeof t === 'string' && SLOW_COOK.test(t));
 }
 
-export type QuickFilter = 'favourites' | 'not_lately' | 'quick' | 'veggie' | 'ninja' | 'slow_cook' | 'freezer';
+/** Filters that aren't tags (Vegetarian, Ninja, Slow cook and the rest are tags: see `tagFilterOptions`). */
+export type QuickFilter = 'favourites' | 'not_lately' | 'freezer';
 export const QUICK_FILTERS: { id: QuickFilter; label: string }[] = [
   { id: 'favourites', label: 'Favourites' },
   { id: 'not_lately', label: 'Not had lately' },
-  { id: 'quick', label: 'Under 30 min' },
-  { id: 'veggie', label: 'Veggie' },
-  { id: 'ninja', label: 'Ninja' },
-  { id: 'slow_cook', label: 'Slow cook' },
   { id: 'freezer', label: 'In the freezer' },
 ];
 /** "Not had lately": not in the last 4 weeks and not already planned. */
@@ -284,16 +282,6 @@ export function matchesQuickFilters(
         if (ctx.history?.nextPlanned) return false;
         return !ctx.history?.lastHad || daysBetween(ctx.history.lastHad, ctx.today) >= NOT_LATELY_DAYS;
       }
-      case 'quick': {
-        const t = totalMinutes(recipe);
-        return t !== null && t <= 30;
-      }
-      case 'veggie':
-        return isVegetarianRecipe(recipe);
-      case 'ninja':
-        return recipeMethods(recipe).includes('ninja');
-      case 'slow_cook':
-        return isSlowCookRecipe(recipe);
       case 'freezer':
         return ctx.freezer > 0;
       default:
@@ -412,3 +400,267 @@ export function changedFields<T extends object>(before: T, after: T): Partial<T>
   }
   return out;
 }
+
+// ---- Tags ----
+//
+// One set of tags on screen, kept in three places underneath: the appliance (`cookingMethods`) and
+// slow cook (`slowCook`) decide which steps you see; vegetarian / vegan are yes-or-no flags; and the
+// rest (Gluten-Free, Meat, your own) are words in `tags`. Older recipes also have copies of the first
+// two in `tags` ("Stovetop", "Ninja Combi", "Vegetarian", "Vegan"); those are read, never shown, and
+// tidied away when the recipe is next saved.
+
+export type TagGroup = 'cook' | 'diet' | 'own';
+export type BuiltInTag =
+  | 'quick'
+  | 'oven_hob'
+  | 'ninja'
+  | 'slow_cook'
+  | 'veggie'
+  | 'vegan'
+  | 'gluten_free'
+  | 'dairy_free'
+  | 'meat'
+  | 'fish';
+export interface RecipeTag {
+  /** A built-in tag's id, or "tag:" and the word for one of yours. */
+  key: string;
+  label: string;
+  group: TagGroup;
+}
+
+export const BUILT_IN_TAGS: { key: BuiltInTag; label: string; group: TagGroup }[] = [
+  { key: 'quick', label: 'Quick', group: 'cook' },
+  { key: 'oven_hob', label: 'Oven/Hob', group: 'cook' },
+  { key: 'ninja', label: 'Ninja', group: 'cook' },
+  { key: 'slow_cook', label: 'Slow cook', group: 'cook' },
+  { key: 'veggie', label: 'Vegetarian', group: 'diet' },
+  { key: 'vegan', label: 'Vegan', group: 'diet' },
+  { key: 'gluten_free', label: 'Gluten-Free', group: 'diet' },
+  { key: 'dairy_free', label: 'Dairy-Free', group: 'diet' },
+  { key: 'meat', label: 'Meat', group: 'diet' },
+  { key: 'fish', label: 'Fish', group: 'diet' },
+];
+const BUILT_IN = new Map(BUILT_IN_TAGS.map((t) => [t.key as string, t]));
+
+/** Diet tags kept as words in `tags`, and the spellings that count as each. */
+const WORD_TAGS: Partial<Record<BuiltInTag, string[]>> = {
+  gluten_free: ['gluten-free', 'gluten free', 'gf'],
+  dairy_free: ['dairy-free', 'dairy free', 'df'],
+  meat: ['meat'],
+  fish: ['fish', 'seafood'],
+};
+/**
+ * Old copies of the appliance and vegetarian / vegan buttons in `tags`, and "Quick" typed by hand
+ * (Quick is worked out from the times now, or set on the recipe).
+ */
+const COPY_TAGS = ['stovetop', 'ninja combi', 'vegetarian', 'vegi', 'veggie', 'vegan', 'quick'];
+
+/** Quick: prep + cook this long or less (a recipe without times isn't counted). */
+export const QUICK_MINUTES = 30;
+export const isQuickByTimes = (recipe: Recipe) => {
+  const t = totalMinutes(recipe);
+  return t !== null && t <= QUICK_MINUTES;
+};
+const typedQuick = (recipe: Recipe) => (recipe.tags || []).some((t) => lower(t) === 'quick');
+/** Quick: as you set it on the recipe, or else from the times (an old hand-typed "Quick" counts too). */
+export const isQuickRecipe = (recipe: Recipe) =>
+  typeof recipe.quick === 'boolean' ? recipe.quick : isQuickByTimes(recipe) || typedQuick(recipe);
+/** Is Quick set by you rather than worked out from the times? */
+export const quickSetByYou = (recipe: Recipe) =>
+  typeof recipe.quick === 'boolean' || (typedQuick(recipe) && !isQuickByTimes(recipe));
+
+const lower = (t: string) =>
+  String(t ?? '')
+    .trim()
+    .toLowerCase();
+const hasWord = (recipe: Recipe, words: string[]) => (recipe.tags || []).some((t) => words.includes(lower(t)));
+
+/** Is this word one of the built-in tags (or an old copy of one)? Those are set by tapping, not typed. */
+export const isBuiltInWord = (t: string) =>
+  COPY_TAGS.includes(lower(t)) ||
+  BUILT_IN_TAGS.some((b) => lower(b.label) === lower(t)) ||
+  Object.values(WORD_TAGS).some((words) => words!.includes(lower(t)));
+
+/** The built-in tag a typed word means ("veggie" → Vegetarian, "gluten free" → Gluten-Free), if any. */
+export function builtInFor(t: string): BuiltInTag | undefined {
+  const w = lower(t);
+  if (['vegetarian', 'vegi', 'veggie'].includes(w)) return 'veggie';
+  if (w === 'stovetop') return 'oven_hob';
+  if (w === 'ninja combi') return 'ninja';
+  const byLabel = BUILT_IN_TAGS.find((b) => lower(b.label) === w);
+  if (byLabel) return byLabel.key;
+  return (Object.keys(WORD_TAGS) as BuiltInTag[]).find((k) => WORD_TAGS[k]!.includes(w));
+}
+
+/**
+ * Is a built-in tag on? `forEditing`: the appliances as marked (what the editor's taps change);
+ * otherwise only those with steps, as the cards and filters show them.
+ */
+export function hasBuiltInTag(recipe: Recipe, key: BuiltInTag, forEditing = false): boolean {
+  switch (key) {
+    case 'quick':
+      return isQuickRecipe(recipe);
+    case 'oven_hob':
+    case 'ninja': {
+      const methods =
+        forEditing && recipe.cookingMethods && recipe.cookingMethods.length > 0
+          ? recipe.cookingMethods
+          : recipeMethods(recipe);
+      return methods.includes(key);
+    }
+    case 'slow_cook':
+      return isSlowCookRecipe(recipe);
+    case 'veggie':
+      return isVegetarianRecipe(recipe);
+    case 'vegan':
+      return isVeganRecipe(recipe);
+    default:
+      return hasWord(recipe, WORD_TAGS[key] || []);
+  }
+}
+
+/** Your own tags: the words in `tags` that aren't a built-in tag or an old copy of one. */
+export const ownTags = (recipe: Recipe): string[] =>
+  (recipe.tags || []).filter((t) => typeof t === 'string' && t.trim() && !isBuiltInWord(t));
+
+/** Old copies of the buttons taken out of `tags`, with the buttons set to match (nothing is lost). */
+export function tidyRecipeTags(recipe: Recipe): Recipe {
+  const tags = recipe.tags || [];
+  if (!tags.some((t) => COPY_TAGS.includes(lower(t)))) return recipe;
+  let next: Recipe = { ...recipe, tags: tags.filter((t) => !COPY_TAGS.includes(lower(t))) };
+  if (tags.some((t) => ['vegetarian', 'vegi', 'veggie'].includes(lower(t)))) next.isVegetarian = true;
+  if (tags.some((t) => lower(t) === 'vegan')) next = { ...next, isVegetarian: true, isVegan: true };
+  // A "Quick" you typed on a recipe whose times don't say so: kept as Quick set by you.
+  if (typedQuick(recipe) && typeof recipe.quick !== 'boolean' && !isQuickByTimes(recipe)) next.quick = true;
+  if (!recipe.cookingMethods?.length) {
+    const marked = METHOD_ORDER.filter((m) =>
+      tags.some((t) => lower(t) === (m === 'ninja' ? 'ninja combi' : 'stovetop')),
+    );
+    if (marked.length) next.cookingMethods = marked;
+  }
+  return next;
+}
+
+/** A tag tidied for saving: single spaces, each word starting with a capital ("kids love it" → "Kids Love It"). */
+export const tidyTag = (t: string) =>
+  t
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/(^|[\s-])(\p{L})/gu, (_, sep: string, c: string) => sep + c.toUpperCase());
+
+/** The recipe with one of your tags added (not twice, whatever its capitals). A built-in word switches that tag on. */
+export function addTag(recipe: Recipe, raw: string): Recipe {
+  const tag = tidyTag(raw);
+  if (!tag) return recipe;
+  const built = builtInFor(tag);
+  if (built) return hasBuiltInTag(recipe, built, true) ? recipe : setBuiltInTag(recipe, built, true);
+  const tags = recipe.tags || [];
+  if (tags.some((t) => lower(t) === lower(tag))) return recipe;
+  return { ...recipe, tags: [...tags, tag] };
+}
+
+export function removeTag(recipe: Recipe, tag: string): Recipe {
+  return { ...recipe, tags: (recipe.tags || []).filter((t) => lower(t) !== lower(tag)) };
+}
+
+/**
+ * The Vegetarian / Vegan tags: the flags set, and any old copies in `tags` taken off, so a recipe
+ * switched off isn't still vegetarian by an old "Veggie". Vegetarian takes off Meat and Fish; vegan
+ * means vegetarian too.
+ */
+export function setVeg(recipe: Recipe, which: 'vegetarian' | 'vegan', on: boolean): Recipe {
+  const vegetarian = which === 'vegan' ? (on ? true : isVegetarianRecipe(recipe)) : on;
+  const vegan = which === 'vegetarian' ? on && isVeganRecipe(recipe) : on;
+  const meatOrFish = [...WORD_TAGS.meat!, ...WORD_TAGS.fish!];
+  return {
+    ...recipe,
+    isVegetarian: vegetarian,
+    isVegan: vegan,
+    tags: (recipe.tags || []).filter(
+      (t) =>
+        !['vegetarian', 'vegi', 'veggie', 'vegan'].includes(lower(t)) && !(vegetarian && meatOrFish.includes(lower(t))),
+    ),
+  };
+}
+
+/** Switch a built-in tag on or off. Meat or Fish on means not vegetarian. */
+export function setBuiltInTag(recipe: Recipe, key: BuiltInTag, on: boolean): Recipe {
+  switch (key) {
+    case 'quick': {
+      // Matching the times again means back to automatic; otherwise it's set by you.
+      const next: Recipe = { ...recipe, tags: (recipe.tags || []).filter((t) => lower(t) !== 'quick') };
+      delete next.quick;
+      return on === isQuickByTimes(next) ? next : { ...next, quick: on };
+    }
+    case 'oven_hob':
+    case 'ninja': {
+      const cur = recipe.cookingMethods?.length ? recipe.cookingMethods : recipeMethods(recipe);
+      const next = on ? [...cur.filter((m) => m !== key), key] : cur.filter((m) => m !== key);
+      return { ...recipe, cookingMethods: METHOD_ORDER.filter((m) => next.includes(m)) };
+    }
+    case 'slow_cook':
+      return { ...recipe, slowCook: on };
+    case 'veggie':
+      return setVeg(recipe, 'vegetarian', on);
+    case 'vegan':
+      return setVeg(recipe, 'vegan', on);
+    default: {
+      const words = WORD_TAGS[key] || [];
+      const label = BUILT_IN.get(key)!.label;
+      let next: Recipe = { ...recipe, tags: (recipe.tags || []).filter((t) => !words.includes(lower(t))) };
+      if (on) {
+        if ((key === 'meat' || key === 'fish') && isVegetarianRecipe(next)) next = setVeg(next, 'vegetarian', false);
+        next = { ...next, tags: [...(next.tags || []), label] };
+      }
+      return next;
+    }
+  }
+}
+
+/** Every tag a recipe has, as the cards show them: appliance, diet, then yours. Vegan shows instead of Vegetarian. */
+export function recipeTags(recipe: Recipe): RecipeTag[] {
+  const vegan = isVeganRecipe(recipe);
+  const built: RecipeTag[] = BUILT_IN_TAGS.filter(
+    (b) => (b.key !== 'veggie' || !vegan) && hasBuiltInTag(recipe, b.key),
+  ).map(({ key, label, group }) => ({ key, label, group }));
+  const seen = new Set<string>();
+  const own: RecipeTag[] = [];
+  for (const t of ownTags(recipe)) {
+    const label = t.trim();
+    if (seen.has(lower(label))) continue;
+    seen.add(lower(label));
+    own.push({ key: `tag:${label}`, label, group: 'own' });
+  }
+  return [...built, ...own];
+}
+
+/** The tags to filter by: the built-in ones any recipe has, in their usual order, then yours (most used first). */
+export function tagFilterOptions(recipes: Recipe[]): RecipeTag[] {
+  const built = BUILT_IN_TAGS.filter((b) => recipes.some((r) => hasBuiltInTag(r, b.key))).map(
+    ({ key, label, group }) => ({ key, label, group }),
+  );
+  const counts = new Map<string, { tag: RecipeTag; n: number }>();
+  for (const r of recipes) {
+    for (const t of recipeTags(r).filter((x) => x.group === 'own')) {
+      const k = lower(t.label);
+      const c = counts.get(k);
+      if (c) c.n++;
+      else counts.set(k, { tag: t, n: 1 });
+    }
+  }
+  const own = [...counts.values()]
+    .sort((a, b) => b.n - a.n || a.tag.label.localeCompare(b.tag.label))
+    .map((c) => c.tag);
+  return [...built, ...own];
+}
+
+/** Does a recipe have every tag chosen to filter by? (Vegetarian includes vegan recipes.) */
+export const matchesTagFilters = (recipe: Recipe, keys: string[]) =>
+  keys.every((k) =>
+    BUILT_IN.has(k)
+      ? hasBuiltInTag(recipe, k as BuiltInTag)
+      : ownTags(recipe).some((t) => lower(t) === lower(k.replace(/^tag:/, ''))),
+  );
+
+/** Tags offered when adding one of your own, before any recipe uses them. */
+export const SUGGESTED_TAGS = ['Freezer-Friendly', 'Kids Love It', 'Batch Cook', 'One Pan'];
