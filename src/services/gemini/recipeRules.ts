@@ -366,7 +366,7 @@ export function normalizeParsedRecipe(
     isVegan,
   };
 }
-/** Tags that follow from the ingredients (worked out again after an edit); any others are yours and kept. */
+/** Tags that follow from the ingredients (worked out again when an edit changes them); any others are yours and kept. */
 const DIET_TAGS = new Set(['Vegan', 'Vegetarian', 'Gluten-Free', 'Dairy-Free', 'Meat', 'Fish']);
 
 /**
@@ -421,6 +421,12 @@ export function applyGeminiEdit(original: Recipe, reply: GeminiRecipe): Recipe {
   const isVegan = typeof reply.isVegan === 'boolean' ? reply.isVegan && isVegetarian : flags.isVegan;
   const dietTags = generateFunctionalTags(ingredients, isVegetarian, isVegan, main).filter((t) => DIET_TAGS.has(t));
   const servings = positive(reply.servings);
+  const names = (list: { name: string }[]) =>
+    list
+      .map((i) => i.name.trim().toLowerCase())
+      .sort()
+      .join('\n');
+  const sameIngredients = names(ingredients) === names(original.ingredients);
 
   return {
     ...original,
@@ -436,6 +442,9 @@ export function applyGeminiEdit(original: Recipe, reply: GeminiRecipe): Recipe {
     methodCookTime: { ...(original.methodCookTime || {}), [main]: cookTime },
     isVegetarian,
     isVegan,
-    tags: [...new Set([...(original.tags || []).filter((t) => !DIET_TAGS.has(t)), ...dietTags])],
+    // Same ingredients: your tags stay exactly as you left them (a tag you took off doesn't come back).
+    tags: sameIngredients
+      ? original.tags || []
+      : [...new Set([...(original.tags || []).filter((t) => !DIET_TAGS.has(t)), ...dietTags])],
   };
 }

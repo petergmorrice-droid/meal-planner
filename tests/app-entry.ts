@@ -23,6 +23,10 @@ export {
   normaliseRecipeName,
   isJustAUrl,
   recipeShareText,
+  addTag,
+  removeTag,
+  setVeg,
+  tidyTag,
 } from '../src/recipeInfo';
 export {
   aggregateShoppingItems,

@@ -35,6 +35,10 @@ import {
   siteName,
   recipeIntro,
   isVegetarianRecipe,
+  addTag,
+  removeTag,
+  setVeg,
+  tidyTag,
   isVeganRecipe,
   changedFields,
   recipeMatchesSearch,
@@ -268,6 +272,34 @@ test('methods: only the ones it really has steps for', () => {
   // no steps per method: fall back to what it's marked for; nothing known = no label
   assert.deepEqual(recipeMethods(R('a', 'A', { cookingMethods: ['ninja'] })), ['ninja']);
   assert.deepEqual(recipeMethods(R('a', 'A', { instructions: ['Cook.'] })), []);
+});
+
+test('tags edited by hand: tidied, not twice, removed whatever the capitals', () => {
+  const base = R('a', 'A', { tags: ['Stovetop'] });
+  assert.equal(tidyTag('  gluten-free  pasta '), 'Gluten-Free Pasta');
+  assert.deepEqual(addTag(base, 'meat').tags, ['Stovetop', 'Meat']);
+  assert.equal(addTag(base, 'STOVETOP'), base, 'already there');
+  assert.equal(addTag(base, '   '), base, 'nothing typed');
+  assert.equal(addTag(base, 'veggie'), base, 'vegetarian is the button, not a tag');
+  assert.deepEqual(removeTag(addTag(base, 'Fish'), 'fish').tags, ['Stovetop']);
+});
+
+test('Vegetarian / Vegan buttons keep the flags and tags in step', () => {
+  const meaty = R('a', 'A', { tags: ['Meat', 'Fish', 'Quick'], isVegetarian: false, isVegan: false });
+  const veg = setVeg(meaty, 'vegetarian', true);
+  assert.deepEqual([veg.isVegetarian, veg.isVegan, veg.tags], [true, false, ['Vegetarian', 'Quick']]);
+  const vegan = setVeg(veg, 'vegan', true);
+  assert.deepEqual([vegan.isVegetarian, vegan.isVegan, vegan.tags], [true, true, ['Vegan', 'Quick']]);
+  const notVegan = setVeg(vegan, 'vegan', false);
+  assert.deepEqual([notVegan.isVegetarian, notVegan.isVegan, notVegan.tags], [true, false, ['Vegetarian', 'Quick']]);
+  // Off means off: an old "Veggie" tag doesn't keep it vegetarian
+  const off = setVeg(
+    R('b', 'B', { tags: ['Veggie', 'Vegan', 'Quick'], isVegetarian: true, isVegan: true }),
+    'vegetarian',
+    false,
+  );
+  assert.deepEqual([off.isVegetarian, off.isVegan, off.tags], [false, false, ['Quick']]);
+  assert.equal(isVegetarianRecipe(off), false);
 });
 
 test('vegetarian / vegan from the flags or tags', () => {

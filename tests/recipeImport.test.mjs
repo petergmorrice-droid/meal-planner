@@ -513,6 +513,28 @@ test('a Gemini edit keeps what it did not change: servings, both appliances, fav
   assert.equal(r.tags.includes('Freezer-Friendly') && r.tags.includes('Ninja Combi'), true, 'your tags stay');
 });
 
+test('a Gemini edit keeps the tags you set unless the ingredients changed', () => {
+  const mine = { ...curry(), tags: ['Quick', 'Ninja Combi'] }; // you took off "Gluten-Free" and "Meat"
+  const sameFood = applyGeminiEdit(mine, {
+    name: 'Quick chicken curry',
+    ingredients: mine.ingredients.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit })),
+    instructions: ['Cook it all faster.'],
+  });
+  assert.deepEqual(sameFood.tags, ['Quick', 'Ninja Combi']);
+  const newFood = applyGeminiEdit(mine, {
+    ingredients: [
+      ...mine.ingredients.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit })),
+      { name: 'King prawns', amount: 150, unit: 'g' },
+    ],
+    instructions: ['Add prawns.'],
+    isVegetarian: false,
+  });
+  assert.ok(
+    newFood.tags.includes('Quick') && newFood.tags.includes('Meat') && newFood.tags.includes('Fish'),
+    newFood.tags.join(),
+  );
+});
+
 test('a Gemini edit: steps it left out are kept; a new number of people is taken; no ingredients changes nothing', () => {
   const r = applyGeminiEdit(curry(), {
     servings: 6,

@@ -412,3 +412,50 @@ export function changedFields<T extends object>(before: T, after: T): Partial<T>
   }
   return out;
 }
+
+// ---- Tags you edit by hand ----
+
+/** Tags that mean vegetarian / vegan: set with the Vegetarian and Vegan buttons, not as tags. */
+const VEG_TAGS = ['vegetarian', 'vegi', 'veggie', 'vegan'];
+export const isVegTag = (t: string) => VEG_TAGS.includes(t.trim().toLowerCase());
+
+/** Tags offered when adding one, before any recipe uses them. */
+export const SUGGESTED_TAGS = ['Meat', 'Fish', 'Gluten-Free', 'Dairy-Free', 'Quick', 'Freezer-Friendly'];
+
+/** A tag tidied for saving: single spaces, each word starting with a capital ("gluten-free" → "Gluten-Free"). */
+export const tidyTag = (t: string) =>
+  t
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/(^|[\s-])(\p{L})/gu, (_, sep: string, c: string) => sep + c.toUpperCase());
+
+/** The recipe with a tag added (not twice, whatever its capitals). Vegetarian / vegan go through the buttons. */
+export function addTag(recipe: Recipe, raw: string): Recipe {
+  const tag = tidyTag(raw);
+  if (!tag || isVegTag(tag)) return recipe;
+  const tags = recipe.tags || [];
+  if (tags.some((t) => t.toLowerCase() === tag.toLowerCase())) return recipe;
+  return { ...recipe, tags: [...tags, tag] };
+}
+
+export function removeTag(recipe: Recipe, tag: string): Recipe {
+  return { ...recipe, tags: (recipe.tags || []).filter((t) => t.toLowerCase() !== tag.toLowerCase()) };
+}
+
+/**
+ * The Vegetarian / Vegan buttons: the flags and the tags kept in step, so a recipe switched off
+ * isn't still vegetarian by an old tag. Vegetarian takes off "Meat" and "Fish"; vegan means vegetarian too.
+ */
+export function setVeg(recipe: Recipe, which: 'vegetarian' | 'vegan', on: boolean): Recipe {
+  const vegetarian = which === 'vegan' ? (on ? true : isVegetarianRecipe(recipe)) : on;
+  const vegan = which === 'vegetarian' ? on && isVeganRecipe(recipe) : on;
+  const others = (recipe.tags || []).filter(
+    (t) => !isVegTag(t) && !(vegetarian && ['meat', 'fish'].includes(t.toLowerCase())),
+  );
+  return {
+    ...recipe,
+    isVegetarian: vegetarian,
+    isVegan: vegan,
+    tags: vegan ? ['Vegan', ...others] : vegetarian ? ['Vegetarian', ...others] : others,
+  };
+}
