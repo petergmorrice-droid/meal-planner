@@ -172,8 +172,16 @@ test('"Gluten-Free" / "Dairy-Free" only when the ingredients and Gemini agree', 
     [],
   );
   // Vegan curry with Gemini agreeing
-  const curry = tags({ ...COPIED.aubergineCurry, isGlutenFree: true, isDairyFree: true });
-  assert.ok(curry.includes('Vegan') && curry.includes('Gluten-Free') && curry.includes('Dairy-Free'), curry.join());
+  const curryRecipe = normalizeParsedRecipe(
+    { ...COPIED.aubergineCurry, isGlutenFree: true, isDairyFree: true },
+    'oven_hob',
+  );
+  const curry = curryRecipe.tags;
+  assert.ok(curryRecipe.isVegan && curry.includes('Gluten-Free') && curry.includes('Dairy-Free'), curry.join());
+  assert.ok(
+    !curry.includes('Vegan') && !curry.includes('Stovetop'),
+    'vegan and the appliance are fields, not copied into tags',
+  );
   // Look-alikes that are not dairy / gluten
   const lookalikes = tags({
     name: 'Bean stew',
@@ -412,7 +420,7 @@ test('a recipe Gemini wrote or changed: gaps filled, its extras kept, every ingr
   assert.equal(r.isVegetarian, false);
   assert.equal(r.isVegan, false);
   assert.deepEqual(r.cookingMethods, ['ninja']);
-  assert.equal(r.tags.includes('Ninja Combi'), true);
+  assert.equal(r.tags.includes('Ninja Combi'), false, 'the appliance is cookingMethods, not a tag');
   assert.equal(r.imageUrl, 'kept.jpg', 'anything else it sent back is kept');
   assert.equal(typeof r.id === 'string' && r.id.length > 0, true);
 });
@@ -510,7 +518,8 @@ test('a Gemini edit keeps what it did not change: servings, both appliances, fav
   assert.equal(r.prepTime, 12);
   assert.equal(r.methodPrepTime.oven_hob, 12);
   assert.equal(r.methodCookTime.ninja, 35, "the other appliance's time stays");
-  assert.equal(r.tags.includes('Freezer-Friendly') && r.tags.includes('Ninja Combi'), true, 'your tags stay');
+  assert.equal(r.tags.includes('Freezer-Friendly'), true, 'your tags stay');
+  assert.equal(r.tags.includes('Ninja Combi') || r.tags.includes('Stovetop'), false, 'old copies of the appliance go');
 });
 
 test('a Gemini edit keeps the tags you set unless the ingredients changed', () => {

@@ -39,7 +39,11 @@ import {
   removeTag,
   setVeg,
   tidyTag,
-  cardTags,
+  recipeTags,
+  ownTags,
+  hasBuiltInTag,
+  setBuiltInTag,
+  tidyRecipeTags,
   tagFilterOptions,
   matchesTagFilters,
   isVeganRecipe,
@@ -277,36 +281,96 @@ test('methods: only the ones it really has steps for', () => {
   assert.deepEqual(recipeMethods(R('a', 'A', { instructions: ['Cook.'] })), []);
 });
 
-test('tags edited by hand: tidied, not twice, removed whatever the capitals', () => {
-  const base = R('a', 'A', { tags: ['Stovetop'] });
-  assert.equal(tidyTag('  gluten-free  pasta '), 'Gluten-Free Pasta');
-  assert.deepEqual(addTag(base, 'meat').tags, ['Stovetop', 'Meat']);
-  assert.equal(addTag(base, 'STOVETOP'), base, 'already there');
+test('your own tags: tidied, not twice, removed whatever the capitals; a built-in word switches that tag on', () => {
+  const base = R('a', 'A', { tags: ['Quick'] });
+  assert.equal(tidyTag('  kids  love it '), 'Kids Love It');
+  assert.deepEqual(addTag(base, 'batch cook').tags, ['Quick', 'Batch Cook']);
+  assert.equal(addTag(base, 'QUICK'), base, 'already there');
   assert.equal(addTag(base, '   '), base, 'nothing typed');
-  assert.equal(addTag(base, 'veggie'), base, 'vegetarian is the button, not a tag');
-  assert.deepEqual(removeTag(addTag(base, 'Fish'), 'fish').tags, ['Stovetop']);
+  const veg = addTag(base, 'veggie');
+  assert.deepEqual([veg.isVegetarian, veg.tags], [true, ['Quick']], '"veggie" is the Vegetarian tag, not a word');
+  assert.deepEqual(addTag(base, 'gluten free').tags, ['Quick', 'Gluten-Free']);
+  assert.deepEqual(removeTag(base, 'quick').tags, []);
 });
 
-test('tags on cards and to filter by: not veg or the appliance; most used first; all chosen must match', () => {
-  const a = R('a', 'A', { tags: ['Vegetarian', 'Stovetop', 'Quick', 'Gluten-Free'] });
-  const b = R('b', 'B', { tags: ['Meat', 'Ninja Combi', 'quick'] });
-  const c = R('c', 'C', { tags: ['Fish', 'Quick'] });
-  assert.deepEqual(cardTags(a), ['Quick', 'Gluten-Free']);
-  assert.deepEqual(tagFilterOptions([a, b, c]), ['Quick', 'Fish', 'Gluten-Free', 'Meat']);
-  assert.equal(matchesTagFilters(b, ['Quick']), true, 'whatever the capitals');
-  assert.equal(matchesTagFilters(b, ['Quick', 'Meat']), true);
-  assert.equal(matchesTagFilters(c, ['Quick', 'Meat']), false);
+test('one set of tags: appliance, diet and yours, each kept where it belongs', () => {
+  const r = R('a', 'A', {
+    cookingMethods: ['oven_hob'],
+    methodInstructions: { oven_hob: ['Cook it.'] },
+    tags: ['Gluten-Free', 'Quick', 'Stovetop'],
+  });
+  assert.deepEqual(
+    recipeTags(r).map((t) => [t.key, t.group]),
+    [
+      ['oven_hob', 'cook'],
+      ['gluten_free', 'diet'],
+      ['tag:Quick', 'own'],
+    ],
+    'the old "Stovetop" copy is not shown twice',
+  );
+  assert.deepEqual(ownTags(r), ['Quick']);
+  // Tapping the built-in tags sets the fields underneath
+  const ninja = setBuiltInTag(r, 'ninja', true);
+  assert.deepEqual(ninja.cookingMethods, ['oven_hob', 'ninja']);
+  assert.deepEqual(setBuiltInTag(ninja, 'oven_hob', false).cookingMethods, ['ninja']);
+  assert.equal(setBuiltInTag(r, 'slow_cook', true).slowCook, true);
+  assert.equal(hasBuiltInTag(setBuiltInTag(r, 'slow_cook', true), 'slow_cook'), true);
+  const df = setBuiltInTag(r, 'dairy_free', true);
+  assert.deepEqual(df.tags, ['Gluten-Free', 'Quick', 'Stovetop', 'Dairy-Free']);
+  assert.deepEqual(setBuiltInTag(df, 'gluten_free', false).tags, ['Quick', 'Stovetop', 'Dairy-Free']);
+  // Meat on a vegetarian recipe: no longer vegetarian
+  const meat = setBuiltInTag(R('b', 'B', { isVegetarian: true, isVegan: true, tags: [] }), 'meat', true);
+  assert.deepEqual([meat.isVegetarian, meat.isVegan, meat.tags], [false, false, ['Meat']]);
+  // Vegan shows instead of Vegetarian
+  const vegan = R('c', 'C', { isVegetarian: true, isVegan: true, tags: [] });
+  assert.deepEqual(
+    recipeTags(vegan).map((t) => t.key),
+    ['vegan'],
+  );
+});
+
+test('old copies of the buttons in tags are tidied away without losing anything', () => {
+  const old = R('a', 'A', { tags: ['Vegan', 'Ninja Combi', 'Quick'] });
+  const t = tidyRecipeTags(old);
+  assert.deepEqual([t.tags, t.isVegetarian, t.isVegan, t.cookingMethods], [['Quick'], true, true, ['ninja']]);
+  const already = R('b', 'B', { tags: ['Quick'] });
+  assert.equal(tidyRecipeTags(already), already, 'nothing to tidy: the same recipe');
+  const marked = tidyRecipeTags(R('c', 'C', { tags: ['Stovetop'], cookingMethods: ['ninja'] }));
+  assert.deepEqual([marked.tags, marked.cookingMethods], [[], ['ninja']], 'the appliance set already wins');
+});
+
+test('filtering by tags: built-in ones any recipe has, then yours by use; all chosen must match', () => {
+  const a = R('a', 'A', { isVegetarian: true, tags: ['Quick', 'Gluten-Free'] });
+  const b = R('b', 'B', {
+    cookingMethods: ['ninja'],
+    methodInstructions: { ninja: ['Air fry.'] },
+    tags: ['Meat', 'quick'],
+  });
+  const c = R('c', 'C', { tags: ['Fish', 'Quick', 'Kids'] });
+  assert.deepEqual(
+    tagFilterOptions([a, b, c]).map((t) => t.label),
+    ['Ninja', 'Vegetarian', 'Gluten-Free', 'Meat', 'Fish', 'Quick', 'Kids'],
+  );
+  assert.equal(matchesTagFilters(b, ['tag:Quick']), true, 'whatever the capitals');
+  assert.equal(matchesTagFilters(b, ['tag:Quick', 'meat', 'ninja']), true);
+  assert.equal(matchesTagFilters(c, ['tag:Quick', 'meat']), false);
+  assert.equal(matchesTagFilters(R('v', 'V', { isVegan: true }), ['veggie']), true, 'Vegetarian includes vegan');
+  const marked = R('m', 'Chilli', {
+    cookingMethods: ['oven_hob', 'ninja'],
+    methodInstructions: { oven_hob: ['Simmer.'] },
+  });
+  assert.equal(matchesTagFilters(marked, ['ninja']), false, 'marked Ninja but no Ninja steps');
   assert.equal(matchesTagFilters(R('d', 'D', { tags: undefined }), []), true);
 });
 
-test('Vegetarian / Vegan buttons keep the flags and tags in step', () => {
+test('Vegetarian / Vegan keep the flags and old tags in step', () => {
   const meaty = R('a', 'A', { tags: ['Meat', 'Fish', 'Quick'], isVegetarian: false, isVegan: false });
   const veg = setVeg(meaty, 'vegetarian', true);
-  assert.deepEqual([veg.isVegetarian, veg.isVegan, veg.tags], [true, false, ['Vegetarian', 'Quick']]);
+  assert.deepEqual([veg.isVegetarian, veg.isVegan, veg.tags], [true, false, ['Quick']]);
   const vegan = setVeg(veg, 'vegan', true);
-  assert.deepEqual([vegan.isVegetarian, vegan.isVegan, vegan.tags], [true, true, ['Vegan', 'Quick']]);
+  assert.deepEqual([vegan.isVegetarian, vegan.isVegan], [true, true]);
   const notVegan = setVeg(vegan, 'vegan', false);
-  assert.deepEqual([notVegan.isVegetarian, notVegan.isVegan, notVegan.tags], [true, false, ['Vegetarian', 'Quick']]);
+  assert.deepEqual([notVegan.isVegetarian, notVegan.isVegan], [true, false]);
   // Off means off: an old "Veggie" tag doesn't keep it vegetarian
   const off = setVeg(
     R('b', 'B', { tags: ['Veggie', 'Vegan', 'Quick'], isVegetarian: true, isVegan: true }),
@@ -464,14 +528,10 @@ test('search looks in names, ingredients, notes and tags', () => {
   assert.equal(recipeMatchesSearch(r, 'salmon'), false);
 });
 
-test('filter buttons: quick, veggie, ninja, freezer, favourites, not had lately (and all together)', () => {
+test('filter buttons: quick, freezer, favourites, not had lately (and all together)', () => {
   const today = '2026-10-17';
   const quick = R('q', 'Omelette', { prepTime: 5, cookTime: 5, isVegetarian: true, favourite: true });
   const notimes = R('n', 'Salmon');
-  const ninja = R('j', 'Fajitas', {
-    cookingMethods: ['oven_hob', 'ninja'],
-    methodInstructions: { oven_hob: ['Fry.'], ninja: ['Air fry.'] },
-  });
   const markedOnly = R('m', 'Chilli', {
     cookingMethods: ['oven_hob', 'ninja'],
     methodInstructions: { oven_hob: ['Simmer.'] },
@@ -479,9 +539,7 @@ test('filter buttons: quick, veggie, ninja, freezer, favourites, not had lately 
   const ctx = (h = undefined, freezer = 0) => ({ history: h, freezer, today });
   assert.equal(matchesQuickFilters(quick, ['quick'], ctx()), true);
   assert.equal(matchesQuickFilters(notimes, ['quick'], ctx()), false, 'no time written down is not "quick"');
-  assert.equal(matchesQuickFilters(quick, ['veggie', 'quick', 'favourites'], ctx()), true);
-  assert.equal(matchesQuickFilters(ninja, ['ninja'], ctx()), true);
-  assert.equal(matchesQuickFilters(markedOnly, ['ninja'], ctx()), false, 'marked Ninja but no Ninja steps');
+  assert.equal(matchesQuickFilters(quick, ['quick', 'favourites'], ctx()), true);
   assert.equal(matchesQuickFilters(markedOnly, ['freezer'], ctx(undefined, 3)), true);
   assert.equal(matchesQuickFilters(markedOnly, ['freezer'], ctx()), false);
   assert.equal(matchesQuickFilters(quick, ['not_lately'], ctx()), true, 'never had');
@@ -2398,8 +2456,8 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
   );
   assert.equal(isSlowCookRecipe(r({ slowCook: true })), true, 'marked on');
   assert.equal(isSlowCookRecipe(r({ name: 'Slow cooker stew', slowCook: false })), false, 'marked off wins');
-  assert.equal(matchesQuickFilters(r({ slowCook: true }), ['slow_cook'], { freezer: 0, today: '2026-10-26' }), true);
-  assert.equal(matchesQuickFilters(r(), ['slow_cook'], { freezer: 0, today: '2026-10-26' }), false);
+  assert.equal(matchesTagFilters(r({ slowCook: true }), ['slow_cook']), true);
+  assert.equal(matchesTagFilters(r(), ['slow_cook']), false);
 });
 
 // ---------- Auto populate: last week's leftovers and a suggested week ----------

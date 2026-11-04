@@ -27,7 +27,11 @@ export {
   removeTag,
   setVeg,
   tidyTag,
-  cardTags,
+  recipeTags,
+  ownTags,
+  hasBuiltInTag,
+  setBuiltInTag,
+  tidyRecipeTags,
   tagFilterOptions,
   matchesTagFilters,
 } from '../src/recipeInfo';

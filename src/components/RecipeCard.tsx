@@ -1,20 +1,9 @@
 import React from 'react';
-import { Clock, Flame, Zap, Leaf, Snowflake, CalendarCheck, Star, CookingPot } from 'lucide-react';
+import { Clock, Snowflake, CalendarCheck, Star } from 'lucide-react';
 import { Recipe, UserPreferences } from '../types';
 import { getRecipeEmojis, getEmojiLabel } from '../utils';
-import {
-  RecipeHistory,
-  recipeMethods,
-  totalMinutes,
-  formatMinutes,
-  isVegetarianRecipe,
-  isVeganRecipe,
-  isSlowCookRecipe,
-  formatAgo,
-  formatPlannedDay,
-  METHOD_LABEL,
-  cardTags,
-} from '../recipeInfo';
+import { RecipeHistory, totalMinutes, formatMinutes, formatAgo, formatPlannedDay, recipeTags } from '../recipeInfo';
+import { TagIcon } from './TagIcon';
 import { RatingChip } from './Stars';
 import type { PersonRatings } from '../ratings';
 
@@ -90,11 +79,11 @@ export function RecipeCard({
   dragProps?: Pick<React.HTMLAttributes<HTMLDivElement>, 'onDragStart' | 'onDragEnd'> & { draggable?: boolean };
 }) {
   const mins = fields.time ? totalMinutes(recipe) : null;
-  const methods = fields.method ? recipeMethods(recipe) : [];
-  const slow = fields.method && isSlowCookRecipe(recipe);
-  const veg = fields.veg ? (isVeganRecipe(recipe) ? 'Vegan' : isVegetarianRecipe(recipe) ? 'Veggie' : null) : null;
+  // Tags, each with its symbol: appliance (the "Oven/Hob or Ninja" field), vegetarian / vegan, the rest.
+  const tags = recipeTags(recipe).filter((t) =>
+    t.group === 'cook' ? fields.method : t.key === 'veggie' || t.key === 'vegan' ? fields.veg : fields.tags,
+  );
   const emojis = fields.emojis ? getRecipeEmojis(recipe) : [];
-  const tags = fields.tags ? cardTags(recipe) : [];
 
   let status: React.ReactNode = null;
   if (fields.lastHad) {
@@ -130,36 +119,25 @@ export function RecipeCard({
     ) : null;
 
   const facts =
-    mins || methods.length > 0 || slow || veg ? (
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[13px] text-zinc-700">
+    mins || tags.length > 0 ? (
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[13px] text-zinc-700" data-card-tags>
         {mins && (
           <span className="inline-flex items-center gap-1">
             <Clock className="w-3.5 h-3.5 text-zinc-400" />
             {formatMinutes(mins)}
           </span>
         )}
-        {methods.map((m) => (
-          <span key={m} className="inline-flex items-center gap-1">
-            {m === 'ninja' ? (
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-            ) : (
-              <Flame className="w-3.5 h-3.5 text-rose-500" />
-            )}
-            {METHOD_LABEL[m]}
+        {tags.map((t) => (
+          <span
+            key={t.key}
+            className={`inline-flex items-center gap-1 ${t.group === 'diet' && (t.key === 'veggie' || t.key === 'vegan') ? 'text-emerald-800' : ''}`}
+            data-card-tag={t.key}
+            {...(t.key === 'slow_cook' ? { 'data-card-slow-cook': '' } : {})}
+          >
+            <TagIcon tag={t} />
+            {t.label}
           </span>
         ))}
-        {slow && (
-          <span className="inline-flex items-center gap-1" data-card-slow-cook>
-            <CookingPot className="w-3.5 h-3.5 text-orange-600" />
-            Slow cook
-          </span>
-        )}
-        {veg && (
-          <span className="inline-flex items-center gap-1 text-emerald-800">
-            <Leaf className="w-3.5 h-3.5 text-emerald-600" />
-            {veg}
-          </span>
-        )}
       </div>
     ) : null;
 
@@ -197,18 +175,6 @@ export function RecipeCard({
         )}
       </h3>
       {facts}
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1" data-card-tags>
-          {tags.map((t) => (
-            <span
-              key={t}
-              className="text-[11px] font-medium text-zinc-600 bg-zinc-100 border border-zinc-200 rounded-full px-1.5 leading-[18px]"
-            >
-              {t}
-            </span>
-          ))}
-        </div>
-      )}
       {(status || frozen || (ratings && (ratings.P || ratings.R))) && (
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           {ratings && <RatingChip ratings={ratings} />}

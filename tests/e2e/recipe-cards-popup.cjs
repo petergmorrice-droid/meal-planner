@@ -104,12 +104,12 @@ const popupText = async (page) => (await popup(page).innerText()).replace(/\s+/g
   );
   t = await cardText(page, 'Cheese omelette');
   check(
-    !/min|hr/.test(t) && /Veggie/.test(t) && /Not had yet/.test(t),
-    'omelette card: no made-up time, Veggie, Not had yet',
+    !/min|hr/.test(t) && /Vegetarian/.test(t) && /Not had yet/.test(t),
+    'omelette card: no made-up time, Vegetarian, Not had yet',
     t,
   );
   t = await cardText(page, 'Aubergine & chickpea curry');
-  check(/Vegan/.test(t) && !/Veggie/.test(t), 'aubergine card: Vegan', t);
+  check(/Vegan/.test(t) && !/Vegetarian/.test(t), 'aubergine card: Vegan', t);
   await page.screenshot({ path: OUT + '/r1-cookbook.png' });
 
   // Sort: not had lately (shared with Planning, remembered on this phone)

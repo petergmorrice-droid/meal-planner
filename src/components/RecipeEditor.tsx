@@ -1,34 +1,24 @@
 import { useMemo, useState } from 'react';
 import Fuse from 'fuse.js';
-import {
-  X,
-  Plus,
-  Flame,
-  Zap,
-  Leaf,
-  CookingPot,
-  Sparkles,
-  Trash2,
-  ShoppingCart,
-  ChevronRight,
-  Search,
-  Check,
-  Tag,
-} from 'lucide-react';
+import { X, Plus, Flame, Zap, Sparkles, Trash2, ShoppingCart, ChevronRight, Search, Check, Tag } from 'lucide-react';
 import { Recipe, CookingMethod, Ingredient, GroceryItem } from '../types';
 import { catalogForState, productUnit } from '../shopping';
 import { GROCERY_AISLES, getGroceryAisle, type FoodAisle } from '../utils';
 import {
   recipeMethods,
-  isSlowCookRecipe,
   METHOD_LABEL,
   METHOD_ORDER,
-  isVegTag,
   addTag,
   removeTag,
-  setVeg,
+  ownTags,
+  hasBuiltInTag,
+  setBuiltInTag,
+  tidyRecipeTags,
+  BUILT_IN_TAGS,
   SUGGESTED_TAGS,
+  type BuiltInTag,
 } from '../recipeInfo';
+import { TagIcon } from './TagIcon';
 import type { AppStore } from '../store';
 
 const sectionTitle = 'text-[13px] font-bold uppercase tracking-wide text-zinc-500';
@@ -58,7 +48,7 @@ export function methodSteps(recipe: Recipe, method: CookingMethod) {
  */
 export function RecipeEditor({
   recipe,
-  onChange,
+  onChange: onChangeRaw,
   method,
   onMethod,
   store,
@@ -78,31 +68,47 @@ export function RecipeEditor({
   onWriteMethod?: (m: CookingMethod) => void;
   writing?: CookingMethod | null;
 }) {
+  // Any change also tidies old copies of the appliance / vegetarian tags out of `tags`.
+  const onChange = (next: Recipe) => onChangeRaw(tidyRecipeTags(next));
   const { methods, steps, writeSteps } = methodSteps(recipe, method);
   const missingMethod = methods.length === 1 ? METHOD_ORDER.find((m) => !methods.includes(m)) : undefined;
   const [shopFor, setShopFor] = useState<number | null>(null);
   const [newTag, setNewTag] = useState('');
 
-  // Tags shown here (vegetarian / vegan are the buttons above), and ones to offer: the usual ones
-  // and any your other recipes have.
-  const shownTags = (recipe.tags || []).filter((t) => !isVegTag(t));
+  // Your own tags, and ones to offer: the usual ones and any your other recipes have.
+  const mine = ownTags(recipe);
   const allRecipes = store?.state?.recipes;
   const tagChoices = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const t of [...SUGGESTED_TAGS, ...(allRecipes || []).flatMap((r) => r.tags || [])]) {
-      if (t && !isVegTag(t) && !seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t);
+    for (const t of [...SUGGESTED_TAGS, ...(allRecipes || []).flatMap(ownTags)]) {
+      if (!seen.has(t.trim().toLowerCase())) seen.set(t.trim().toLowerCase(), t.trim());
     }
     return [...seen.values()];
   }, [allRecipes]);
-  const vegetarian = !!(recipe.isVegetarian || recipe.isVegan);
-  const unusedTags = tagChoices.filter(
-    (t) =>
-      !shownTags.some((x) => x.toLowerCase() === t.toLowerCase()) &&
-      !(vegetarian && ['meat', 'fish'].includes(t.toLowerCase())),
-  );
+  const unusedTags = tagChoices.filter((t) => !mine.some((x) => x.trim().toLowerCase() === t.toLowerCase()));
   const commitNewTag = () => {
     if (newTag.trim()) onChange(addTag(recipe, newTag));
     setNewTag('');
+  };
+  const builtInChip = (key: BuiltInTag, label: string) => {
+    const on = hasBuiltInTag(recipe, key, true);
+    const tag = { key, label };
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => onChange(setBuiltInTag(recipe, key, !on))}
+        aria-pressed={on}
+        data-edit-tag={key}
+        {...(key === 'slow_cook' ? { 'data-editor-slow-cook': '' } : {})}
+        className={`h-9 px-3 rounded-full border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+          on ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-zinc-700 border-zinc-300 border-dashed'
+        }`}
+      >
+        <TagIcon tag={tag} className="w-4 h-4" plain={on} />
+        {label}
+      </button>
+    );
   };
 
   // The products as they are now (the same object until a product changes, so the list below
@@ -197,133 +203,96 @@ export function RecipeEditor({
             </label>
           ))}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {METHOD_ORDER.map((m) => {
-            const on = (recipe.cookingMethods || methods).includes(m);
-            return (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  const cur = recipe.cookingMethods || methods;
-                  onChange({
-                    ...recipe,
-                    cookingMethods: (on ? cur.filter((x) => x !== m) : [...cur, m]) as CookingMethod[],
-                  });
-                }}
-                aria-pressed={on}
-                className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-300'}`}
-              >
-                {m === 'ninja' ? <Zap className="w-4 h-4" /> : <Flame className="w-4 h-4" />}
-                {METHOD_LABEL[m]}
-              </button>
-            );
-          })}
-          {(() => {
-            // Slow cook: on by itself when the steps say "slow cook"; tap to mark it either way.
-            const on = isSlowCookRecipe(recipe);
-            return (
-              <button
-                type="button"
-                onClick={() => onChange({ ...recipe, slowCook: !on })}
-                aria-pressed={on}
-                className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-zinc-700 border-zinc-300'}`}
-                data-editor-slow-cook
-              >
-                <CookingPot className="w-4 h-4" />
-                Slow cook
-              </button>
-            );
-          })()}
-          {(
-            [
-              ['Vegetarian', 'isVegetarian'],
-              ['Vegan', 'isVegan'],
-            ] as const
-          ).map(([label, key]) => {
-            const on = !!recipe[key];
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => onChange(setVeg(recipe, key === 'isVegan' ? 'vegan' : 'vegetarian', !on))}
-                aria-pressed={on}
-                className={`h-10 px-3 rounded-xl border text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer ${on ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-zinc-700 border-zinc-300'}`}
-              >
-                <Leaf className="w-4 h-4" />
-                {label}
-              </button>
-            );
-          })}
-        </div>
-        <div data-edit-tags>
-          <span className="text-xs font-semibold text-zinc-600 mb-1 flex items-center gap-1">
+        <div className="space-y-3" data-edit-tags>
+          <span className="text-xs font-semibold text-zinc-600 flex items-center gap-1">
             <Tag className="w-3.5 h-3.5" /> Tags
           </span>
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {shownTags.length === 0 && <span className="text-sm text-zinc-400">No tags yet</span>}
-            {shownTags.map((t) => (
-              <span
-                key={t}
-                className="h-8 pl-3 pr-1 rounded-full bg-zinc-100 border border-zinc-200 text-sm font-medium text-zinc-800 inline-flex items-center gap-1"
-                data-tag={t}
-              >
-                {t}
-                <button
-                  type="button"
-                  onClick={() => onChange(removeTag(recipe, t))}
-                  aria-label={`Remove tag ${t}`}
-                  className="w-6 h-6 rounded-full inline-flex items-center justify-center text-zinc-500 hover:bg-zinc-200 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+          {(
+            [
+              ['cook', 'Cooked with'],
+              ['diet', 'Diet'],
+            ] as const
+          ).map(([group, title]) => (
+            <div key={group} data-edit-tag-group={group}>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 block mb-1">
+                {title}
               </span>
-            ))}
-          </div>
-          <form
-            className="flex gap-1.5"
-            onSubmit={(e) => {
-              e.preventDefault();
-              commitNewTag();
-            }}
-          >
-            <input
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              placeholder="Add a tag"
-              aria-label="New tag"
-              list="recipe-tag-choices"
-              maxLength={30}
-              className="flex-1 min-w-0 h-10 rounded-xl border border-zinc-300 px-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-            />
-            <datalist id="recipe-tag-choices">
-              {unusedTags.map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-            <button
-              type="submit"
-              disabled={!newTag.trim()}
-              className="h-10 px-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-default"
-            >
-              <Plus className="w-4 h-4" /> Add
-            </button>
-          </form>
-          {unusedTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2" data-tag-suggestions>
-              {unusedTags.slice(0, 8).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => onChange(addTag(recipe, t))}
-                  className="h-8 px-2.5 rounded-full border border-dashed border-zinc-300 text-sm text-zinc-600 inline-flex items-center gap-1 cursor-pointer hover:bg-zinc-50"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {t}
-                </button>
-              ))}
+              <div className="flex flex-wrap gap-1.5">
+                {BUILT_IN_TAGS.filter((b) => b.group === group).map((b) => builtInChip(b.key, b.label))}
+              </div>
             </div>
-          )}
+          ))}
+          <div data-edit-tag-group="own">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 block mb-1">
+              Your tags
+            </span>
+            {mine.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {mine.map((t) => (
+                  <span
+                    key={t}
+                    className="h-9 pl-3 pr-1 rounded-full bg-emerald-700 border border-emerald-700 text-sm font-semibold text-white inline-flex items-center gap-1.5"
+                    data-tag={t}
+                  >
+                    <TagIcon tag={{ key: `tag:${t}`, label: t }} className="w-4 h-4" plain />
+                    {t}
+                    <button
+                      type="button"
+                      onClick={() => onChange(removeTag(recipe, t))}
+                      aria-label={`Remove tag ${t}`}
+                      className="w-7 h-7 rounded-full inline-flex items-center justify-center text-emerald-100 hover:bg-emerald-800 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <form
+              className="flex gap-1.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                commitNewTag();
+              }}
+            >
+              <input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="Add your own tag"
+                aria-label="New tag"
+                list="recipe-tag-choices"
+                maxLength={30}
+                className="flex-1 min-w-0 h-10 rounded-xl border border-zinc-300 px-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              />
+              <datalist id="recipe-tag-choices">
+                {unusedTags.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+              <button
+                type="submit"
+                disabled={!newTag.trim()}
+                className="h-10 px-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-default"
+              >
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </form>
+            {unusedTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2" data-tag-suggestions>
+                {unusedTags.slice(0, 8).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => onChange(addTag(recipe, t))}
+                    className="h-8 px-2.5 rounded-full border border-dashed border-zinc-300 text-sm text-zinc-600 inline-flex items-center gap-1 cursor-pointer hover:bg-zinc-50"
+                  >
+                    <TagIcon tag={{ key: `tag:${t}`, label: t }} />
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
