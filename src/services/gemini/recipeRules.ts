@@ -180,6 +180,15 @@ const DAIRY_WORDS =
 const NOT_DAIRY =
   /\b(coconut|oat|almond|soy|soya|rice|cashew|peanut|vegan|dairy[- ]free|plant[- ]based|butter ?beans?|butternut|cream of tartar)\b/;
 
+// Words that mean an ingredient is meat / fish or seafood, and what doesn't make it a meat or fish
+// dish ("chicken stock", "fish sauce", "vegan sausages").
+const MEAT_WORDS =
+  /\b(chicken|beef|pork|steak|bacon|pancetta|lardons?|ham|gammon|turkey|lamb|mutton|sausages?|chipolatas?|meat|meatballs?|mince|duck|veal|venison|chorizo|salami|pepperoni|prosciutto|serrano|nduja|black pudding|haggis|goat|rabbit|pheasant|pigeon|oxtail|liver|kidneys?|brisket|ribs|burgers?|hot dogs?|frankfurters?)\b/;
+const FISH_WORDS =
+  /\b(fish|salmon|tuna|cod|haddock|pollock|hake|plaice|sole|halibut|trout|mackerel|sardines?|anchov(y|ies)|seabass|sea bass|bream|monkfish|kippers?|prawns?|shrimps?|crab|lobster|langoustines?|scallops?|mussels?|clams?|oysters?|squid|calamari|octopus|seafood|scampi|whitebait|swordfish|tilapia|basa)\b/;
+const NOT_MEAT_OR_FISH =
+  /\b(stock|broth|bouillon|kidney beans?|goats?'?s? cheese|gravy|fish sauce|oyster sauce|shrimp paste|vegan|vegetarian|veggie|plant[- ]based|meat[- ]free|meatless|quorn|tofu|soya|soy)\b/;
+
 /**
  * Recipe tags. "Gluten-Free" / "Dairy-Free" are only added when no ingredient looks like
  * gluten or dairy AND (for imported recipes) Gemini agreed - a wrong "free-from" label is
@@ -209,6 +218,14 @@ function generateFunctionalTags(
   if (!hasGluten && aiAgrees(ai?.glutenFree)) tags.push('Gluten-Free');
   if (!hasDairy && !isVegan && aiAgrees(ai?.dairyFree)) tags.push('Dairy-Free');
   if (isVegan) tags.push('Dairy-Free');
+
+  // Meat / Fish: only for recipes that aren't vegetarian, so a "Vegetarian" recipe never gets either.
+  if (!isVegetarian) {
+    const names = ingredients.map((ing) => String(ing?.name ?? '').toLowerCase());
+    const has = (words: RegExp) => names.some((n) => words.test(n) && !NOT_MEAT_OR_FISH.test(n));
+    if (has(MEAT_WORDS)) tags.push('Meat');
+    if (has(FISH_WORDS)) tags.push('Fish');
+  }
 
   if (method === 'ninja') tags.push('Ninja Combi');
   else tags.push('Stovetop');
@@ -350,7 +367,7 @@ export function normalizeParsedRecipe(
   };
 }
 /** Tags that follow from the ingredients (worked out again after an edit); any others are yours and kept. */
-const DIET_TAGS = new Set(['Vegan', 'Vegetarian', 'Gluten-Free', 'Dairy-Free']);
+const DIET_TAGS = new Set(['Vegan', 'Vegetarian', 'Gluten-Free', 'Dairy-Free', 'Meat', 'Fish']);
 
 /**
  * Gemini's changed version of a recipe, applied onto the recipe as it was: what the edit changed is

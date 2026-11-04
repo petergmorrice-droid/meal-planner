@@ -196,6 +196,36 @@ test('"Gluten-Free" / "Dairy-Free" only when the ingredients and Gemini agree', 
   assert.ok(!tags({ ...COPIED.aubergineCurry, isGlutenFree: false, isDairyFree: true }).includes('Gluten-Free'));
 });
 
+test('"Meat" / "Fish" from the ingredients, never on a vegetarian recipe', () => {
+  const tags = (ingredients, extra = {}) =>
+    normalizeParsedRecipe(
+      {
+        name: 'Dish',
+        servings: 2,
+        instructions: ['Cook.'],
+        ingredients: ingredients.map((name) => ({ name, amount: 1, unit: '' })),
+        ...extra,
+      },
+      'oven_hob',
+    ).tags;
+  const has = (t, tag) => t.includes(tag);
+  const meat = tags(['beef mince', 'onion']);
+  assert.ok(has(meat, 'Meat') && !has(meat, 'Fish'), meat.join());
+  const fish = tags(['salmon fillets', 'lemon']);
+  assert.ok(has(fish, 'Fish') && !has(fish, 'Meat'), fish.join());
+  const both = tags(['chorizo', 'king prawns', 'rice']);
+  assert.ok(has(both, 'Meat') && has(both, 'Fish'), both.join());
+  // Not a meat or fish dish just for its stock, sauce or a look-alike
+  const lookalikes = tags(['chicken stock', 'fish sauce', 'kidney beans', "goat's cheese", 'vegan sausages', 'rice'], {
+    isVegetarian: false,
+  });
+  assert.ok(!has(lookalikes, 'Meat') && !has(lookalikes, 'Fish'), lookalikes.join());
+  // A vegetarian recipe never gets either, even if a word matched
+  const veg = tags(['quorn chicken pieces', 'peppers'], { isVegetarian: true });
+  assert.ok(!has(veg, 'Meat') && !has(veg, 'Fish'), veg.join());
+  assert.ok(has(tags(['cod loins'], { isVegetarian: false }), 'Fish'));
+});
+
 test('the recipe is saved under the appliance it was written for', () => {
   const n = normalizeParsedRecipe(COPIED.bolognese, 'ninja');
   assert.deepEqual(n.cookingMethods, ['ninja']);
