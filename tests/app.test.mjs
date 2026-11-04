@@ -39,6 +39,9 @@ import {
   removeTag,
   setVeg,
   tidyTag,
+  cardTags,
+  tagFilterOptions,
+  matchesTagFilters,
   isVeganRecipe,
   changedFields,
   recipeMatchesSearch,
@@ -282,6 +285,18 @@ test('tags edited by hand: tidied, not twice, removed whatever the capitals', ()
   assert.equal(addTag(base, '   '), base, 'nothing typed');
   assert.equal(addTag(base, 'veggie'), base, 'vegetarian is the button, not a tag');
   assert.deepEqual(removeTag(addTag(base, 'Fish'), 'fish').tags, ['Stovetop']);
+});
+
+test('tags on cards and to filter by: not veg or the appliance; most used first; all chosen must match', () => {
+  const a = R('a', 'A', { tags: ['Vegetarian', 'Stovetop', 'Quick', 'Gluten-Free'] });
+  const b = R('b', 'B', { tags: ['Meat', 'Ninja Combi', 'quick'] });
+  const c = R('c', 'C', { tags: ['Fish', 'Quick'] });
+  assert.deepEqual(cardTags(a), ['Quick', 'Gluten-Free']);
+  assert.deepEqual(tagFilterOptions([a, b, c]), ['Quick', 'Fish', 'Gluten-Free', 'Meat']);
+  assert.equal(matchesTagFilters(b, ['Quick']), true, 'whatever the capitals');
+  assert.equal(matchesTagFilters(b, ['Quick', 'Meat']), true);
+  assert.equal(matchesTagFilters(c, ['Quick', 'Meat']), false);
+  assert.equal(matchesTagFilters(R('d', 'D', { tags: undefined }), []), true);
 });
 
 test('Vegetarian / Vegan buttons keep the flags and tags in step', () => {

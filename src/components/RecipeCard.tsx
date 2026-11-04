@@ -13,6 +13,7 @@ import {
   formatAgo,
   formatPlannedDay,
   METHOD_LABEL,
+  cardTags,
 } from '../recipeInfo';
 import { RatingChip } from './Stars';
 import type { PersonRatings } from '../ratings';
@@ -25,10 +26,18 @@ export interface CardFields {
   lastHad: boolean;
   freezer: boolean;
   emojis: boolean;
+  tags: boolean;
 }
 
 /** The card fields you can turn on and off, and the preference that holds each. */
-export type CardPref = 'showTotalTime' | 'showMethod' | 'showVegetarian' | 'showLastHad' | 'showFreezer' | 'showEmojis';
+export type CardPref =
+  | 'showTotalTime'
+  | 'showMethod'
+  | 'showVegetarian'
+  | 'showLastHad'
+  | 'showFreezer'
+  | 'showEmojis'
+  | 'showTags';
 export const CARD_FIELD_OPTIONS: { pref: CardPref; label: string; field: keyof CardFields }[] = [
   { pref: 'showTotalTime', label: 'Time', field: 'time' },
   { pref: 'showMethod', label: 'Oven/Hob or Ninja', field: 'method' },
@@ -36,6 +45,7 @@ export const CARD_FIELD_OPTIONS: { pref: CardPref; label: string; field: keyof C
   { pref: 'showLastHad', label: 'Last had / planned', field: 'lastHad' },
   { pref: 'showFreezer', label: 'In the freezer', field: 'freezer' },
   { pref: 'showEmojis', label: 'Emojis', field: 'emojis' },
+  { pref: 'showTags', label: 'Tags', field: 'tags' },
 ];
 
 export function cardFieldsFromPrefs(prefs: Partial<UserPreferences> | undefined): CardFields {
@@ -47,6 +57,7 @@ export function cardFieldsFromPrefs(prefs: Partial<UserPreferences> | undefined)
     lastHad: on('showLastHad'),
     freezer: on('showFreezer'),
     emojis: on('showEmojis'),
+    tags: on('showTags'),
   };
 }
 
@@ -83,6 +94,7 @@ export function RecipeCard({
   const slow = fields.method && isSlowCookRecipe(recipe);
   const veg = fields.veg ? (isVeganRecipe(recipe) ? 'Vegan' : isVegetarianRecipe(recipe) ? 'Veggie' : null) : null;
   const emojis = fields.emojis ? getRecipeEmojis(recipe) : [];
+  const tags = fields.tags ? cardTags(recipe) : [];
 
   let status: React.ReactNode = null;
   if (fields.lastHad) {
@@ -185,6 +197,18 @@ export function RecipeCard({
         )}
       </h3>
       {facts}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1" data-card-tags>
+          {tags.map((t) => (
+            <span
+              key={t}
+              className="text-[11px] font-medium text-zinc-600 bg-zinc-100 border border-zinc-200 rounded-full px-1.5 leading-[18px]"
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
       {(status || frozen || (ratings && (ratings.P || ratings.R))) && (
         <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
           {ratings && <RatingChip ratings={ratings} />}

@@ -201,6 +201,8 @@ export interface UserPreferences {
   showLastHad?: boolean;
   /** Recipe cards: portions in the freezer. */
   showFreezer?: boolean;
+  /** Recipe cards: the recipe's tags ("Meat", "Quick"). */
+  showTags?: boolean;
   mealRowsLayout?: 1 | 2;
   // Additional configurable variables for the app:
   defaultServings?: number; // default number of people cooking for (e.g. 2)

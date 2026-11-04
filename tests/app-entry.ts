@@ -27,6 +27,9 @@ export {
   removeTag,
   setVeg,
   tidyTag,
+  cardTags,
+  tagFilterOptions,
+  matchesTagFilters,
 } from '../src/recipeInfo';
 export {
   aggregateShoppingItems,

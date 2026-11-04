@@ -94,7 +94,12 @@ export function RecipeEditor({
     }
     return [...seen.values()];
   }, [allRecipes]);
-  const unusedTags = tagChoices.filter((t) => !shownTags.some((x) => x.toLowerCase() === t.toLowerCase()));
+  const vegetarian = !!(recipe.isVegetarian || recipe.isVegan);
+  const unusedTags = tagChoices.filter(
+    (t) =>
+      !shownTags.some((x) => x.toLowerCase() === t.toLowerCase()) &&
+      !(vegetarian && ['meat', 'fish'].includes(t.toLowerCase())),
+  );
   const commitNewTag = () => {
     if (newTag.trim()) onChange(addTag(recipe, newTag));
     setNewTag('');

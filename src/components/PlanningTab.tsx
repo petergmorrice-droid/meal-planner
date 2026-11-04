@@ -196,6 +196,9 @@ export default function PlanningTab({
           onSearch={meals.setRecipeSearch}
           quickFilters={meals.quickFilters}
           onToggleFilter={meals.toggleQuickFilter}
+          tagOptions={meals.tagOptions}
+          tagFilters={meals.tagFilters}
+          onToggleTag={meals.toggleTagFilter}
           optionsOpen={showViewOptions}
           onOptionsOpen={setShowViewOptions}
           mealRowsLayout={mealRowsLayout}
@@ -213,7 +216,7 @@ export default function PlanningTab({
             recipes={meals.sortedRecipes}
             matching={meals.filteredRecipes.length}
             total={store.state.recipes.length}
-            filtering={!!meals.recipeSearch.trim() || meals.quickFilters.length > 0}
+            filtering={!!meals.recipeSearch.trim() || meals.quickFilters.length > 0 || meals.tagFilters.length > 0}
             quickFilters={meals.quickFilters}
             noFavourites={!store.state.recipes.some((r: Recipe) => r.favourite)}
             onClear={meals.clearFilters}

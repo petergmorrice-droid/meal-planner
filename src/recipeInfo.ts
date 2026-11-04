@@ -459,3 +459,28 @@ export function setVeg(recipe: Recipe, which: 'vegetarian' | 'vegan', on: boolea
     tags: vegan ? ['Vegan', ...others] : vegetarian ? ['Vegetarian', ...others] : others,
   };
 }
+
+/** Tags the cards already show another way: the appliance ("Stovetop", "Ninja Combi"). */
+const METHOD_TAGS = ['stovetop', 'ninja combi'];
+
+/** The tags to show on a card or filter by: not vegetarian / vegan or the appliance, which show already. */
+export const cardTags = (recipe: Recipe): string[] =>
+  (recipe.tags || []).filter((t) => t && t.trim() && !isVegTag(t) && !METHOD_TAGS.includes(t.trim().toLowerCase()));
+
+/** Every tag your recipes have, to filter by: the most used first. */
+export function tagFilterOptions(recipes: Recipe[]): string[] {
+  const counts = new Map<string, { tag: string; n: number }>();
+  for (const r of recipes) {
+    for (const t of new Set(cardTags(r).map((x) => x.trim()))) {
+      const k = t.toLowerCase();
+      const c = counts.get(k);
+      if (c) c.n++;
+      else counts.set(k, { tag: t, n: 1 });
+    }
+  }
+  return [...counts.values()].sort((a, b) => b.n - a.n || a.tag.localeCompare(b.tag)).map((c) => c.tag);
+}
+
+/** Does a recipe have every tag chosen to filter by? */
+export const matchesTagFilters = (recipe: Recipe, tags: string[]) =>
+  tags.every((want) => (recipe.tags || []).some((t) => t.trim().toLowerCase() === want.trim().toLowerCase()));
