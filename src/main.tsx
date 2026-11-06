@@ -21,3 +21,12 @@ if ('serviceWorker' in navigator && !onDevServer) {
     navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('Offline support unavailable:', err));
   });
 }
+
+// Ask the browser to keep this app's data (recipes, plans, sync token) when the phone runs low on
+// space, instead of clearing it like a cached web page. Installed home-screen apps are usually allowed.
+if (navigator.storage?.persist) {
+  void navigator.storage
+    .persisted()
+    .then((already) => (already ? true : navigator.storage.persist()))
+    .catch(() => false);
+}

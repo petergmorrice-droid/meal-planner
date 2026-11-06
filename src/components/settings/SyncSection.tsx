@@ -39,6 +39,21 @@ export function SyncSection({
       setProblem('Paste the GitHub token first.');
       return;
     }
+    // No sync code: this starts a brand new sync file. If this phone was wiped and the recipes are
+    // on GitHub already, that's the wrong thing, so check first.
+    if (!code.trim()) {
+      setConfirm({
+        title: 'Start a new sync file?',
+        body: "This makes a new, separate file on GitHub from what's on this phone. If you already synced before (on this phone or another), paste that sync code instead, or your recipes won't come back.",
+        action: 'Start a new one',
+        run: () => void connectNow(),
+      });
+      return;
+    }
+    await connectNow();
+  };
+
+  const connectNow = async () => {
     setBusy(true);
     setProblem('');
     try {
@@ -190,7 +205,10 @@ export function SyncSection({
                 aria-label="Sync code"
                 data-sync-code-input
               />
-              <span className="block text-xs text-zinc-500 mt-1">Leave this empty on the first phone.</span>
+              <span className="block text-xs text-zinc-500 mt-1">
+                Leave empty only the very first time. Starting again? Paste your sync code (on gist.github.com if no
+                other phone has it).
+              </span>
             </div>
             <details className="text-sm text-zinc-600">
               <summary className="cursor-pointer font-semibold">Advanced: what if both have data?</summary>
