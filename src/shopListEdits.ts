@@ -14,6 +14,7 @@ import {
 } from './utils';
 import { productKey, inProductUnit } from './shopList';
 import { cupboardAfterUpdate } from './planShopping';
+import type { WeekNeighbours } from './planning';
 
 type List = ShoppingListItem[];
 
@@ -254,13 +255,19 @@ export function addRecipeIngredients(
  * "Bring back meal ingredients you removed": this week's staples come back, and (once the week has
  * been sent) its meal ingredients too, keeping any amounts you changed.
  */
-export function restoreRemoved(list: List, plan: MealPlan, recipes: Recipe[], staples: RecurringItem[]): List {
+export function restoreRemoved(
+  list: List,
+  plan: MealPlan,
+  recipes: Recipe[],
+  staples: RecurringItem[],
+  around?: WeekNeighbours,
+): List {
   // Passing no removed ids re-adds all the staples.
   let baseList: List = [...list];
   if (staples.length > 0) baseList = syncRecurringStaplesForPlan(plan, baseList, staples, []);
   if (plan.status !== 'finalized') return baseList;
 
-  const targetItems = generateShoppingListForPlan(plan, recipes);
+  const targetItems = generateShoppingListForPlan(plan, recipes, undefined, around);
   const existingItemsForPlan = baseList.filter((i) => i.planId === plan.id);
   const adhocOrBatchItems = existingItemsForPlan.filter((i) => i.isAdhoc || i.isBatch);
   const existingMealItems = existingItemsForPlan.filter((i) => !i.isAdhoc && !i.isBatch && !i.isRecurring);

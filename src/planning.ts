@@ -8,6 +8,183 @@ export const cleanMealName = (name: string) => (name || '').replace(/^(leftovers
 /** A day that cooks this recipe from scratch (so later days can have its leftovers). */
 const cooksFresh = (x: PlannedMeal, recipeId: string) =>
   x.recipeId === recipeId && !isLeftoverMeal(x) && x.type !== 'batch';
+const dayCooks = (days: Record<string, DayPlan> | undefined, day: string, recipeId: string) =>
+  (days?.[day]?.meals || []).some((x) => cooksFresh(x, recipeId));
+
+// ---------- Leftovers carried over from the end of one week into the next ----------
+
+/**
+ * How many days back leftovers can come from a cook in the week before: last Thursday to Sunday for
+ * Monday, Friday to Sunday for Tuesday, Saturday or Sunday for Wednesday, Sunday for Thursday.
+ * Within a week, leftovers can come from any earlier day, as they always have.
+ */
+export const CARRY_OVER_DAYS = 4;
+
+/** The weeks either side of a week: leftovers can carry over from the end of one into the next. */
+export interface WeekNeighbours {
+  prev?: MealPlan | null;
+  next?: MealPlan | null;
+}
+
+const shiftDate = (iso: string, days: number) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/** The week before and the week after a week, if they've been made. */
+export function weekNeighbours(
+  plans: MealPlan[] | null | undefined,
+  plan: MealPlan | null | undefined,
+): WeekNeighbours {
+  if (!plan?.startDate || !plans?.length) return {};
+  const prev = shiftDate(plan.startDate, -7);
+  const next = shiftDate(plan.startDate, 7);
+  return {
+    prev: plans.find((p) => p.startDate === prev) || null,
+    next: plans.find((p) => p.startDate === next) || null,
+  };
+}
+
+/**
+ * A day in the week before or after the one you're looking at, by its date so it's clear which:
+ * "Tue 10 Nov" ("Tue next week" if the day has no date).
+ */
+export function otherWeekDay(
+  days: Record<string, DayPlan> | null | undefined,
+  day: string,
+  which: 'last' | 'next' = 'next',
+): string {
+  const iso = days?.[day]?.date;
+  if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const d = new Date(`${iso}T12:00:00`);
+    const weekday = d.toLocaleDateString('en-GB', { weekday: 'short' });
+    return `${weekday} ${d.getDate()} ${d.toLocaleDateString('en-GB', { month: 'short' })}`;
+  }
+  return `${day.slice(0, 3)} ${which} week`;
+}
+
+/** Where a leftovers meal comes from: a day this week, or a day at the end of last week. */
+export interface LeftoverSource {
+  day: string;
+  lastWeek: boolean;
+}
+
+/**
+ * The cook a leftovers meal comes from: the nearest earlier day this week that cooks it from
+ * scratch, or else (given last week's days) one at the end of last week, no more than
+ * CARRY_OVER_DAYS before.
+ */
+export function leftoverSource(
+  days: Record<string, DayPlan>,
+  day: string,
+  meal: PlannedMeal | null,
+  prevDays?: Record<string, DayPlan> | null,
+): LeftoverSource | null {
+  if (!meal || !isLeftoverMeal(meal) || !meal.recipeId) return null;
+  const i = WEEK_DAYS.indexOf(day);
+  if (i < 0) return null;
+  for (let j = i - 1; j >= 0; j--)
+    if (dayCooks(days, WEEK_DAYS[j], meal.recipeId)) return { day: WEEK_DAYS[j], lastWeek: false };
+  if (prevDays) {
+    for (let j = WEEK_DAYS.length - 1; j >= 0 && WEEK_DAYS.length - j + i <= CARRY_OVER_DAYS; j--) {
+      if (dayCooks(prevDays, WEEK_DAYS[j], meal.recipeId)) return { day: WEEK_DAYS[j], lastWeek: true };
+    }
+  }
+  return null;
+}
+
+/** A cook at the end of last week that a day this week could have the leftovers of (nearest first). */
+export function lastWeekCookFor(
+  day: string,
+  recipeId: string | undefined,
+  prevDays?: Record<string, DayPlan> | null,
+): string | null {
+  if (!recipeId || !prevDays) return null;
+  return leftoverSource({}, day, { id: '', type: 'leftover', recipeId, name: '' }, prevDays)?.day ?? null;
+}
+
+/** Next week's leftovers of a cook at the end of this week (they're bought with it, this week). */
+export function carriedLeftovers(
+  days: Record<string, DayPlan>,
+  day: string,
+  meal: PlannedMeal | null,
+  nextDays?: Record<string, DayPlan> | null,
+): { day: string; meal: PlannedMeal }[] {
+  const out: { day: string; meal: PlannedMeal }[] = [];
+  if (!nextDays || !meal?.recipeId || !cooksFresh(meal, meal.recipeId)) return out;
+  const j = WEEK_DAYS.indexOf(day);
+  if (j < 0) return out;
+  for (let i = 0; WEEK_DAYS.length - j + i <= CARRY_OVER_DAYS; i++) {
+    const d = WEEK_DAYS[i];
+    for (const m of nextDays[d]?.meals || []) {
+      if (!isLeftoverMeal(m) || m.recipeId !== meal.recipeId) continue;
+      const src = leftoverSource(nextDays, d, m, days);
+      if (src?.lastWeek && src.day === day) out.push({ day: d, meal: m });
+    }
+  }
+  return out;
+}
+
+/** The week after's leftovers that came from this week before a change and have no cook after it. */
+export function carriedOrphans(
+  nextDays: Record<string, DayPlan>,
+  before: Record<string, DayPlan>,
+  after: Record<string, DayPlan>,
+): string[] {
+  const lost: string[] = [];
+  for (const d of WEEK_DAYS.slice(0, CARRY_OVER_DAYS)) {
+    const gone = (nextDays[d]?.meals || []).some(
+      (m) => leftoverSource(nextDays, d, m, before)?.lastWeek && !leftoverSource(nextDays, d, m, after),
+    );
+    if (gone) lost.push(d);
+  }
+  return lost;
+}
+
+/**
+ * The week after, once this week's days have changed: its leftovers of this week's cooks follow them
+ * (the note says the day they're from now), and any whose cook has gone are cooked fresh instead
+ * (`freshDays`), or taken off with `removeOrphans` (`removedDays`). Null when nothing changes.
+ */
+export function followWeekBefore(
+  nextDays: Record<string, DayPlan>,
+  before: Record<string, DayPlan>,
+  after: Record<string, DayPlan>,
+  { removeOrphans = false }: { removeOrphans?: boolean } = {},
+): { days: Record<string, DayPlan>; freshDays: string[]; removedDays: string[] } | null {
+  const key = (s: LeftoverSource | null) => (s ? `${s.day}|${s.lastWeek}` : '');
+  const moved = WEEK_DAYS.slice(0, CARRY_OVER_DAYS).some((d) =>
+    (nextDays[d]?.meals || []).some(
+      (m) => key(leftoverSource(nextDays, d, m, before)) !== key(leftoverSource(nextDays, d, m, after)),
+    ),
+  );
+  if (!moved) return null;
+  let days = nextDays;
+  const removedDays = removeOrphans ? carriedOrphans(nextDays, before, after) : [];
+  if (removedDays.length) {
+    days = { ...nextDays };
+    for (const d of removedDays) {
+      days[d] = {
+        ...days[d],
+        meals: days[d].meals.filter(
+          (m) => !(leftoverSource(nextDays, d, m, before)?.lastWeek && !leftoverSource(nextDays, d, m, after)),
+        ),
+      };
+    }
+  }
+  const r = relinkLeftovers(days, after);
+  return { days: r.days, freshDays: r.freshDays, removedDays };
+}
+
+/** A meal's signature with what carries over: "last week" on leftovers bought then, "next week" portions on a cook. */
+function carriedSignature(plan: MealPlan, day: string, m: PlannedMeal, around?: WeekNeighbours): string {
+  let sig = mealSignature(m);
+  if (around?.prev && leftoverSource(plan.days, day, m, around.prev.days)?.lastWeek) sig += '|from last week';
+  const carried = carriedLeftovers(plan.days, day, m, around?.next?.days);
+  if (carried.length) sig += `|next week ${carried.map((c) => `${c.day}:${c.meal.servings || 0}`).join(',')}`;
+  return sig;
+}
 
 /** What a day's meal adds to the shopping list (notes don't). */
 export function mealSignature(m?: PlannedMeal | null): string {
@@ -19,10 +196,15 @@ export function mealSignature(m?: PlannedMeal | null): string {
   return [m.type, m.recipeId || m.batchId || cleanMealName(m.name).toLowerCase(), m.servings || 0, sides].join('|');
 }
 
-/** The week as the shopping list saw it: one signature per day. Stored when the list is made. */
-export function listSnapshot(plan: MealPlan): string {
+/**
+ * The week as the shopping list saw it: one signature per day. Stored when the list is made. With
+ * the weeks either side, it also says what carries over (Sunday's cook buying for Tuesday next
+ * week's leftovers), so changing those makes "Update list" appear on the week that buys for them.
+ */
+export function listSnapshot(plan: MealPlan, around?: WeekNeighbours): string {
   const out: Record<string, string> = {};
-  for (const d of WEEK_DAYS) out[d] = (plan.days[d]?.meals || []).map(mealSignature).join('+');
+  for (const d of WEEK_DAYS)
+    out[d] = (plan.days[d]?.meals || []).map((m) => carriedSignature(plan, d, m, around)).join('+');
   return JSON.stringify(out);
 }
 
@@ -30,7 +212,7 @@ export function listSnapshot(plan: MealPlan): string {
  * Days changed since the week was sent to the shopping list. Empty when it hasn't been sent, or
  * when it was sent before the app kept a record (nothing to compare with), or nothing changed.
  */
-export function changedDaysSinceList(plan?: MealPlan | null): string[] {
+export function changedDaysSinceList(plan?: MealPlan | null, around?: WeekNeighbours): string[] {
   if (!plan || plan.status !== 'finalized' || !plan.lastFinalizedSnapshot) return [];
   let before: Record<string, string>;
   try {
@@ -39,28 +221,29 @@ export function changedDaysSinceList(plan?: MealPlan | null): string[] {
     return [];
   }
   if (!before || typeof before !== 'object') return [];
-  const now = JSON.parse(listSnapshot(plan));
+  const now = JSON.parse(listSnapshot(plan, around));
   return WEEK_DAYS.filter((d) => (before[d] ?? '') !== (now[d] ?? ''));
 }
 
 /**
  * After meals move around, point each leftover day at the cook it comes from ("Reheat from
- * Tuesday"). A leftover day left with no earlier cook becomes a fresh cook of that recipe.
+ * Tuesday"). A leftover day left with no earlier cook becomes a fresh cook of that recipe. Given
+ * last week's days, a cook at the end of last week counts too (see leftoverSource).
  */
-export function relinkLeftovers(days: Record<string, DayPlan>): { days: Record<string, DayPlan>; freshDays: string[] } {
+export function relinkLeftovers(
+  days: Record<string, DayPlan>,
+  prevDays?: Record<string, DayPlan> | null,
+): { days: Record<string, DayPlan>; freshDays: string[] } {
   const next: Record<string, DayPlan> = {};
   const freshDays: string[] = [];
-  WEEK_DAYS.forEach((day, i) => {
+  WEEK_DAYS.forEach((day) => {
     const dp = days[day];
     if (!dp) return;
     next[day] = {
       ...dp,
       meals: (dp.meals || []).map((m) => {
         if (!isLeftoverMeal(m) || !m.recipeId) return m;
-        let source: string | null = null;
-        for (let j = i - 1; j >= 0 && !source; j--) {
-          if ((days[WEEK_DAYS[j]]?.meals || []).some((x) => cooksFresh(x, m.recipeId!))) source = WEEK_DAYS[j];
-        }
+        const source = leftoverSource(days, day, m, prevDays)?.day ?? null;
         const autoNote = !m.note || /^Reheat (from |leftovers)/i.test(m.note);
         if (source) return autoNote ? { ...m, note: `Reheat from ${source}` } : m;
         freshDays.push(day);
@@ -79,6 +262,7 @@ export function moveMeal(
   days: Record<string, DayPlan>,
   from: string,
   to: string,
+  prevDays?: Record<string, DayPlan> | null,
 ): { days: Record<string, DayPlan>; swapped: boolean; freshDays: string[] } {
   if (from === to) return { days, swapped: false, freshDays: [] };
   const a = days[from]?.meals || [];
@@ -88,21 +272,33 @@ export function moveMeal(
     [from]: { ...(days[from] || { date: '', meals: [] }), meals: b.map((m) => ({ ...m })) },
     [to]: { ...(days[to] || { date: '', meals: [] }), meals: a.map((m) => ({ ...m })) },
   };
-  const r = relinkLeftovers(moved);
+  const r = relinkLeftovers(moved, prevDays);
   return { days: r.days, swapped: b.length > 0, freshDays: r.freshDays };
 }
 
-/** The day a leftover meal was cooked (nearest earlier day with the same recipe, cooked fresh). */
-export function leftoverSourceDay(days: Record<string, DayPlan>, day: string, meal: PlannedMeal | null): string | null {
-  if (!meal || !isLeftoverMeal(meal) || !meal.recipeId) return null;
-  for (let j = WEEK_DAYS.indexOf(day) - 1; j >= 0; j--) {
-    if ((days[WEEK_DAYS[j]]?.meals || []).some((x) => cooksFresh(x, meal.recipeId!))) return WEEK_DAYS[j];
-  }
-  return null;
+/**
+ * The day a leftover meal was cooked (nearest earlier day with the same recipe, cooked fresh; given
+ * last week's days, possibly one at the end of last week).
+ */
+export function leftoverSourceDay(
+  days: Record<string, DayPlan>,
+  day: string,
+  meal: PlannedMeal | null,
+  prevDays?: Record<string, DayPlan> | null,
+): string | null {
+  return leftoverSource(days, day, meal, prevDays)?.day ?? null;
 }
 
-/** "Cook for 6: leftovers Tue, Thu" for a fresh cook that later leftover days rely on. */
-export function cooksForText(days: Record<string, DayPlan>, day: string, meal: PlannedMeal | null): string | null {
+/**
+ * "Cook for 6: leftovers Tue, Thu" for a fresh cook that later leftover days rely on ("leftovers
+ * Tue 10 Nov" for a Sunday cook, given next week's days).
+ */
+export function cooksForText(
+  days: Record<string, DayPlan>,
+  day: string,
+  meal: PlannedMeal | null,
+  nextDays?: Record<string, DayPlan> | null,
+): string | null {
   if (!meal || meal.type !== 'recipe' || !meal.recipeId) return null;
   const later: string[] = [];
   let extra = 0;
@@ -114,6 +310,9 @@ export function cooksForText(days: Record<string, DayPlan>, day: string, meal: P
       extra += m.servings || 2;
     } else break;
   }
+  const carried = carriedLeftovers(days, day, meal, nextDays);
+  for (const c of carried) extra += c.meal.servings || 2;
+  for (const c of carried) later.push(otherWeekDay(nextDays, c.day));
   return later.length ? `Cook for ${(meal.servings || 2) + extra}: leftovers ${later.join(', ')}` : null;
 }
 

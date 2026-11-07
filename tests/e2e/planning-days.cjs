@@ -1,5 +1,5 @@
 // Planning: today/past/cooked, labels, day panel, move/swap with leftovers, Undo, week arrows and
-// glance, filter buttons, "This week" cards, send to list, "Update list" (Planning and Shop), List view, tablet.
+// glance, filter buttons, "This week" cards, send to list, the list following changes (no "Update list"), List view, tablet.
 const { chromium, devices, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
@@ -119,7 +119,7 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
     'tap M jumps the strip to Monday',
   );
 
-  // ---------- Day panel on a sent week: people + notes; then "Update list" ----------
+  // ---------- Day panel on a sent week: people + notes; the list follows ----------
   await openDay(page, 'Thursday');
   check((await page.locator('[data-day-sheet="Thursday"]').count()) === 1, 'tap a day: one panel for it');
   await page.screenshot({ path: OUT + '/w2-day-panel.png' });
@@ -131,57 +131,26 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
   let thu = st.mealPlans.find((p) => p.id === thisId).days.Thursday.meals[0];
   check(thu.servings === 3 && thu.note === 'Use thighs', 'people and notes saved', JSON.stringify(thu));
   check((await page.getByText('Confirm Plan Change').count()) === 0, 'no "Confirm Plan Change" pop-up on a sent week');
+  // The sent week's list follows by itself: no "Update list" to remember.
   check(
-    (await page.locator('[data-update-list]').count()) === 1 &&
-      /1/.test(await page.locator('[data-update-list]').innerText()),
-    '"Update list · 1" appears',
+    (await page.locator('[data-update-list]').count()) === 0 && (await page.locator('[data-sent]').count()) === 1,
+    'no "Update list": the button still says "Sent"',
   );
-  await page.screenshot({ path: OUT + '/w3-update-list.png' });
+  check(
+    /added to the shopping list/.test(await toast(page)) &&
+      (await page.locator('[data-toast-action]').innerText()) === 'Undo',
+    'the message says what went on the list, with Undo',
+    await toast(page),
+  );
+  const chickenLines = async () =>
+    (await page.state()).shoppingList.filter((i) => i.planId === thisId && /chicken breast/i.test(i.name));
+  let chicken = await chickenLines();
+  check(chicken.length === 1 && !chicken[0].checked, "the list has the tikka's chicken", JSON.stringify(chicken));
+  await page.screenshot({ path: OUT + '/w3-in-step.png' });
 
-  // Shop shows it too
-  await page.tab('Shop');
-  // Shop may show next week by default; switch it to this week via its own week control if needed
-  if ((await page.locator('[data-shop-out-of-date]').count()) === 0) {
-    await page.tab('Planning');
-  } else {
-    check(
-      /Thursday changed/.test(await page.locator('[data-shop-out-of-date]').innerText()),
-      'Shop: "The meal plan has changed · Update list"',
-    );
-    await page.screenshot({ path: OUT + '/w4-shop-note.png' });
-    await page.tab('Planning');
-  }
-  if ((await weekName(page)) !== 'This Week') {
-    await page.locator('[data-week-prev]').click();
-    await page.waitForTimeout(500);
-  }
-  // Update list opens the same window as Send to list, saying what changed and what updating does.
-  await page.locator('[data-update-list]').click();
-  await page.waitForTimeout(400);
-  check(
-    (await page.getByText('Update the shopping list').count()) === 1 &&
-      (await page.locator('[data-send-breakdown] [data-send-day]').count()) === 7,
-    'Update list: the send window, with every day',
-  );
-  check(
-    /Changed since the list was made: Thursday/.test(await page.locator('[data-update-summary]').innerText()),
-    'Update list: says what changed',
-    await page
-      .locator('[data-update-summary]')
-      .innerText()
-      .catch(() => ''),
-  );
-  check((await page.locator('[data-update-shopped]').count()) === 0, 'Update list: nothing bought yet, no warning');
-  await page.locator('[data-send-confirm]').click();
-  await page.waitForTimeout(600);
-  check(
-    /Shopping list updated/.test(await toast(page)) && (await page.locator('[data-sent]').count()) === 1,
-    'Update list: list rebuilt, button back to "Sent"',
-  );
-
-  // ---------- Some shopping done, then the week changes again: the meal ingredients start again ----------
-  const mealLine = (s) => s.shoppingList.find((i) => i.planId === thisId && !i.isAdhoc && !i.isBatch && !i.isRecurring);
-  const bought = mealLine(await page.state()).name;
+  // ---------- Some shopping done, then more people: what's ticked stays ticked, the rest goes on ----------
+  const bought = chicken[0].name;
+  const boughtAmount = chicken[0].amount;
   await page.tab('Shop');
   for (let i = 0; i < 4 && (await page.locator(`[data-item="${bought}"] [data-tick]`).count()) === 0; i++) {
     await page.locator('[data-shop-week-prev]').click();
@@ -189,33 +158,52 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
   }
   await page.locator(`[data-item="${bought}"] [data-tick]`).first().click();
   await page.waitForTimeout(600);
-  const boughtLine = async () =>
-    (await page.state()).shoppingList.find((i) => i.planId === thisId && i.name === bought);
-  check((await boughtLine())?.checked === true, `Shop: ${bought} ticked`);
+  check((await chickenLines())[0]?.checked === true, `Shop: ${bought} ticked`);
   await page.tab('Planning');
   if ((await weekName(page)) !== 'This Week') {
     await page.locator('[data-week-prev]').click();
     await page.waitForTimeout(500);
   }
+  // Two more people (the 600 g bought for 3 would still do for 4: chicken comes in packs)
   await openDay(page, 'Thursday');
+  await page.locator('[aria-label="One more person"]').click();
   await page.locator('[aria-label="One more person"]').click();
   await page.locator('[data-day-done]').click();
   await page.waitForTimeout(500);
-  await page.locator('[data-update-list]').click();
-  await page.waitForTimeout(400);
+  chicken = await chickenLines();
+  const got = chicken.find((i) => i.checked);
+  const more = chicken.find((i) => !i.checked);
   check(
-    /1 meal ingredient has already been ticked/.test(
-      await page
-        .locator('[data-update-shopped]')
-        .innerText()
-        .catch(() => ''),
-    ),
-    'Update list: warns the ticked ingredient will go back on unticked',
+    got?.amount === boughtAmount && more && more.id.endsWith('-more') && chicken.length === 2,
+    'two more people: what you bought stays ticked, and the extra goes on as its own line',
+    JSON.stringify(chicken),
   );
-  await page.screenshot({ path: OUT + '/w3b-update-window.png' });
-  await page.locator('[data-send-confirm]').click();
-  await page.waitForTimeout(600);
-  check((await boughtLine())?.checked === false, 'Update list: the meal ingredients start again (it is unticked)');
+  check(/More chicken/i.test(await toast(page)), 'the message says more is on the list', await toast(page));
+  check((await page.locator('[data-update-list]').count()) === 0, 'still no "Update list"');
+  await page.tab('Shop');
+  for (let i = 0; i < 4 && (await page.locator(`[data-item="${bought}"]`).count()) === 0; i++) {
+    await page.locator('[data-shop-week-prev]').click();
+    await page.waitForTimeout(400);
+  }
+  const row = (
+    await page
+      .locator(`[data-item="${bought}"]`)
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).replace(/\s+/g, ' ');
+  check(/already got/.test(row), 'Shop: the row is what is still to buy, and says what you have got', row);
+  await page
+    .locator(`[data-item="${bought}"]`)
+    .first()
+    .scrollIntoViewIfNeeded()
+    .catch(() => {});
+  await page.screenshot({ path: OUT + '/w3b-top-up.png' });
+  await page.tab('Planning');
+  if ((await weekName(page)) !== 'This Week') {
+    await page.locator('[data-week-prev]').click();
+    await page.waitForTimeout(500);
+  }
 
   // ---------- Move and swap with leftovers following ----------
   await openDay(page, 'Monday');
@@ -376,16 +364,10 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
   await page.locator('[data-day-done]').click();
   await page.waitForTimeout(400);
   await page.tab('Shop');
-  const note = page.locator('[data-shop-out-of-date]');
   check(
-    (await note.count()) === 1 && /Tuesday changed since this list was made/.test(await note.innerText()),
-    'Shop: "The meal plan has changed · Update list"',
-    (await note.count()) ? await note.innerText() : 'no note',
+    (await page.locator('[data-shop-out-of-date]').count()) === 0,
+    'Shop: no "plan has changed" note; the list followed',
   );
-  await page.screenshot({ path: OUT + '/w4-shop-note.png' });
-  await page.locator('[data-shop-update-list]').click();
-  await page.waitForTimeout(600);
-  check((await page.locator('[data-shop-out-of-date]').count()) === 0, 'Shop: Update list brings it up to date');
   await page.tab('Planning');
 
   // ---------- List view ----------

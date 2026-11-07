@@ -6,7 +6,7 @@ import { Check, Copy, Search, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { MealPlan, Recipe, TabName } from '../../types';
 import { formatDateISO, getMonday, DAYS_OF_WEEK } from '../../utils';
 import { describeMeal, mealTitle } from '../planner/DayListRow';
-import { leftoverSourceDay } from '../../planning';
+import { leftoverSourceDay, weekNeighbours } from '../../planning';
 import { formatWeekSpan } from '../../shopList';
 import { Sheet, SubHeader } from './parts';
 import { Confirm, SettingsTabProps } from './types';
@@ -84,7 +84,8 @@ export function HistoryPage({
               <ul className="px-4 divide-y divide-zinc-100">
                 {DAYS_OF_WEEK.map((d) => {
                   const m = p.days?.[d]?.meals?.[0] || null;
-                  const label = m ? describeMeal(m, leftoverSourceDay(p.days, d, m)).label?.text : '';
+                  const prevDays = weekNeighbours(store.state.mealPlans, p).prev?.days;
+                  const label = m ? describeMeal(m, leftoverSourceDay(p.days, d, m, prevDays)).label?.text : '';
                   const recipe = m?.recipeId ? recipes.find((r) => r.id === m.recipeId) : null;
                   return (
                     <li key={d} className="py-1.5 flex items-center gap-2 text-sm" data-history-day={d}>

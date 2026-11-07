@@ -95,12 +95,16 @@ const howText = async (page) => (await page.locator('[data-how-question]').inner
   );
   await page.screenshot({ path: OUT + '/fz2-freezer-sunday.png' });
 
-  // Monday: nothing earlier in the week -> freezer or fresh only. Choose fresh.
+  // Monday: nothing earlier in the week, but last Saturday cooks chilli (two days before) -> leftovers
+  // from last week, the freezer, or fresh. Choose fresh.
   await drag('Chilli con carne', 'Monday');
   t = await howText(page);
   check(
-    !/Leftovers from/.test(t) && /From the freezer/.test(t) && /Cook it fresh/.test(t),
-    'Monday: no leftovers choice, just freezer or fresh',
+    /Leftovers from Saturday/.test(t) &&
+      /Cook extra on Sat 17 Oct/.test(t) &&
+      /From the freezer/.test(t) &&
+      /Cook it fresh/.test(t),
+    'Monday: leftovers from last Saturday, the freezer or fresh',
     t,
   );
   await page.locator('[data-how="fresh"]').click();

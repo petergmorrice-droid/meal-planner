@@ -5,12 +5,13 @@
 import { AlertCircle, BookOpen, Check, CheckCircle2, Sparkles, StickyNote, X } from 'lucide-react';
 import { MealPlan, Recipe } from '../../types';
 import { DAYS_OF_WEEK, formatWeekRange } from '../../utils';
-import { cooksForText, leftoverSourceDay } from '../../planning';
+import { cooksForText, leftoverSourceDay, type WeekNeighbours } from '../../planning';
 import PersonMark, { noteLook } from '../PersonMark';
 import { describeMeal, mealTitle, dayTone } from './DayListRow';
 
 export default function SendToListModal({
   plan,
+  around,
   recipes,
   emptyDays,
   onEditDay,
@@ -19,6 +20,8 @@ export default function SendToListModal({
   update,
 }: {
   plan: MealPlan;
+  /** The weeks either side (leftovers that carry over from Sunday into the next week). */
+  around?: WeekNeighbours;
   recipes: Recipe[];
   /** Days with nothing planned. */
   emptyDays: string[];
@@ -27,7 +30,7 @@ export default function SendToListModal({
   onSend: () => void;
   onClose: () => void;
   /** Updating a week that's already been sent: the days changed, and how many meal ingredients were already ticked. */
-  update?: { changedDays: string[]; shopped: number };
+  update?: { changedDays: string[] };
 }) {
   return (
     <div
@@ -71,13 +74,6 @@ export default function SendToListModal({
               <p className="font-semibold">
                 Changed since the list was made: {update.changedDays.length ? update.changedDays.join(', ') : 'nothing'}
               </p>
-              {update.shopped > 0 && (
-                <p data-update-shopped>
-                  {update.shopped} meal {update.shopped === 1 ? 'ingredient has' : 'ingredients have'} already been
-                  ticked on the Shop tab. Updating starts the meal ingredients again, so{' '}
-                  {update.shopped === 1 ? 'it goes' : 'they go'} back on the list unticked.
-                </p>
-              )}
             </div>
           )}
           {/* Days with nothing planned, or all seven done */}
@@ -122,8 +118,8 @@ export default function SendToListModal({
                 const dayDate = dayPlan?.date
                   ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                   : '';
-                const d = meal ? describeMeal(meal, leftoverSourceDay(plan.days, day, meal)) : null;
-                const cooks = meal ? cooksForText(plan.days, day, meal) : null;
+                const d = meal ? describeMeal(meal, leftoverSourceDay(plan.days, day, meal, around?.prev?.days)) : null;
+                const cooks = meal ? cooksForText(plan.days, day, meal, around?.next?.days) : null;
                 const tone = dayTone(meal);
                 const recipe = meal?.recipeId ? recipes.find((r: Recipe) => r.id === meal.recipeId) : null;
                 const recipeNotes = (recipe?.notes || '').trim();
@@ -217,15 +213,15 @@ export default function SendToListModal({
             </div>
             {update ? (
               <p className="text-zinc-500 leading-relaxed">
-                The meal ingredients on the <strong>shopping list</strong> are worked out again from these meals, all
-                unticked, with the amounts the meals need. Weekly staples and things you added yourself stay as they
-                are, and so do your notes.
+                The meal ingredients on the <strong>shopping list</strong> follow these meals. Anything new goes on;
+                anything you've already ticked stays ticked, and if the meals now need more of it, the rest goes on as
+                its own line. Weekly staples, things you added yourself and your notes stay as they are.
               </p>
             ) : (
               <p className="text-zinc-500 leading-relaxed">
                 The week's ingredients go on the <strong>shopping list</strong> and the meals appear in the{' '}
-                <strong>Cook</strong> tab. You can still change the week afterwards: an <strong>Update list</strong>{' '}
-                button appears.
+                <strong>Cook</strong> tab. You can still change the week afterwards: the list follows by itself, keeping
+                what you've ticked.
               </p>
             )}
           </div>

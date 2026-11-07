@@ -136,6 +136,18 @@ import {
   earlierDaysWithRecipe,
   copyWeekMeals,
   undoDays,
+  CARRY_OVER_DAYS,
+  weekNeighbours,
+  leftoverSource,
+  lastWeekCookFor,
+  carriedLeftovers,
+  carriedOrphans,
+  followWeekBefore,
+  otherWeekDay,
+  changeWeek,
+  undoWeekChange,
+  followOnText,
+  leftoversAfter,
   stampShoppingItem,
   stampPlanDays,
   stampBatch,
@@ -167,6 +179,9 @@ import {
   listWithWeek,
   mealLinesShopped,
   mealLinesOutOfDate,
+  syncWeekMeals,
+  keepListsInStep,
+  listSyncText,
   buildCatalog,
   INITIAL_GROCERY_DATABASE,
   weekLeftovers,
@@ -2956,6 +2971,393 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
     );
     const uses = recipeUses(stirFry, 4, leftovers, catalog);
     assert.equal(uses[leftovers[0].key], 400, 'for 4: twice the recipe');
+  });
+}
+
+// ---------- Leftovers carried over from Sunday into the next week ----------
+{
+  // Two weeks: 2 Nov (Sunday the 8th cooks the roast) and 9 Nov (its leftovers on Tuesday the 10th).
+  const weekOf = (start, meals) =>
+    Object.fromEntries(
+      DAY_NAMES.map((d, i) => {
+        const dt = new Date(`${start}T12:00:00Z`);
+        dt.setUTCDate(dt.getUTCDate() + i);
+        return [d, { date: dt.toISOString().slice(0, 10), meals: meals[d] ? [meals[d]] : [] }];
+      }),
+    );
+  const planOf = (start, meals, extra = {}) => ({
+    id: `plan-${start}`,
+    startDate: start,
+    status: 'draft',
+    isCurrent: false,
+    days: weekOf(start, meals),
+    ...extra,
+  });
+  const roast = R('roast', 'Sunday roast', { ingredients: [{ name: 'Beef mince', amount: 500, unit: 'g' }] });
+  const recipes = [roast];
+  const sunday = (servings = 2) => cook('sun', 'roast', servings);
+  const tuesday = lefto('tue', 'roast', 'Reheat from Sunday');
+  const A = (meals = { Sunday: sunday() }, extra) => planOf('2026-11-02', meals, extra);
+  const B = (meals = { Tuesday: tuesday }, extra) => planOf('2026-11-09', meals, extra);
+  const lines = (plan, around) =>
+    generateShoppingListForPlan(plan, recipes, undefined, around).map((l) => `${l.name} ${l.amount} ${l.unit}`);
+
+  test('carry over: the weeks either side are found by date', () => {
+    const a = A();
+    const b = B();
+    const other = planOf('2026-11-23', {});
+    assert.deepEqual(weekNeighbours([other, b, a], b), { prev: a, next: null });
+    assert.deepEqual(weekNeighbours([other, b, a], a), { prev: null, next: b });
+    assert.deepEqual(weekNeighbours(undefined, a), {});
+  });
+
+  test('carry over: leftovers can come from the end of last week, up to 4 days back', () => {
+    assert.equal(CARRY_OVER_DAYS, 4);
+    const last = A({ Saturday: cook('sat', 'roast'), Sunday: sunday() }).days;
+    const at = (day) => leftoverSource(B({ [day]: lefto('x', 'roast') }).days, day, lefto('x', 'roast'), last);
+    assert.deepEqual(at('Monday'), { day: 'Sunday', lastWeek: true }, 'the nearest cook');
+    assert.deepEqual(at('Tuesday'), { day: 'Sunday', lastWeek: true });
+    assert.deepEqual(at('Thursday'), { day: 'Sunday', lastWeek: true }, 'four days');
+    assert.equal(at('Friday'), null, 'five days is too long');
+    const satOnly = A({ Saturday: cook('sat', 'roast') }).days;
+    const from = (day, days) => leftoverSource({}, day, tuesday, days)?.day ?? null;
+    assert.equal(from('Wednesday', satOnly), 'Saturday', 'Saturday to Wednesday is four days');
+    assert.equal(from('Thursday', satOnly), null, 'Saturday to Thursday is five');
+    const thuOnly = A({ Thursday: cook('thu', 'roast') }).days;
+    assert.equal(from('Monday', thuOnly), 'Thursday');
+    assert.equal(from('Tuesday', thuOnly), null);
+    assert.equal(from('Monday', A({ Wednesday: cook('wed', 'roast') }).days), null, 'Wednesday to Monday is five');
+    // A cook this week comes first; without last week, nothing's found there
+    const b = B({ Monday: cook('mon', 'roast'), Tuesday: tuesday }).days;
+    assert.deepEqual(leftoverSource(b, 'Tuesday', tuesday, last), { day: 'Monday', lastWeek: false });
+    assert.equal(leftoverSource(B().days, 'Tuesday', tuesday), null);
+    assert.equal(leftoverSourceDay(B().days, 'Tuesday', tuesday, last), 'Sunday');
+    // Out of the freezer isn't a cook to have leftovers of
+    const frozen = { id: 'f', type: 'batch', batchId: 'b1', recipeId: 'roast', name: 'Batch: roast', servings: 2 };
+    assert.equal(leftoverSource({}, 'Monday', tuesday, A({ Sunday: frozen }).days), null);
+  });
+
+  test('carry over: "How are you having it?" can offer last Sunday', () => {
+    const last = A().days;
+    assert.equal(lastWeekCookFor('Monday', 'roast', last), 'Sunday');
+    assert.equal(lastWeekCookFor('Tuesday', 'roast', last), 'Sunday');
+    assert.equal(lastWeekCookFor('Thursday', 'roast', last), 'Sunday');
+    assert.equal(lastWeekCookFor('Friday', 'roast', last), null);
+    assert.equal(lastWeekCookFor('Tuesday', 'other', last), null);
+    assert.equal(lastWeekCookFor('Tuesday', 'roast', null), null);
+    assert.equal(otherWeekDay(last, 'Sunday', 'last'), 'Sun 8 Nov');
+    assert.equal(otherWeekDay(B().days, 'Tuesday'), 'Tue 10 Nov');
+    assert.equal(otherWeekDay({}, 'Tuesday'), 'Tue next week', 'no date');
+  });
+
+  test('carry over: the leftovers are bought once, with the Sunday cook', () => {
+    const a = A();
+    const b = B();
+    assert.deepEqual(lines(a, { next: b }), lines(A({ Sunday: sunday(4) })), 'Sunday buys for 4');
+    assert.deepEqual(lines(b, { prev: a }), [], "Tuesday's leftovers need nothing");
+    // Without the other week (older callers), each week buys for itself, as before
+    assert.deepEqual(lines(a), lines(A({ Sunday: sunday(2) })));
+    assert.equal(lines(b).length, 1);
+    // Sides on the leftovers day are still bought that week
+    const side = { id: 's', name: 'Peas', amount: 1, unit: 'bag', category: 'Frozen Foods' };
+    const withSide = B({ Tuesday: { ...tuesday, sides: [side] } });
+    const sideLines = lines(withSide, { prev: a });
+    assert.equal(sideLines.length, 1);
+    assert.match(sideLines[0], /Peas/);
+    // Too far back: Friday's "leftovers" are bought that week
+    const fri = B({ Friday: lefto('f', 'roast') });
+    assert.equal(lines(fri, { prev: a }).length, 1);
+    assert.deepEqual(lines(a, { next: fri }), lines(A()));
+  });
+
+  test('carry over: changing next week makes "Update list" appear on the week that buys for it', () => {
+    const before = B({});
+    const a = A({ Sunday: sunday() }, { status: 'finalized' });
+    a.lastFinalizedSnapshot = listSnapshot(a, { next: before });
+    assert.deepEqual(changedDaysSinceList(a, { next: before }), []);
+    assert.deepEqual(changedDaysSinceList(a, { next: B() }), ['Sunday'], 'Tuesday leftovers added');
+    // Next week, Tuesday changed from a fresh cook to leftovers bought last week
+    const b = B({ Tuesday: cook('tue', 'roast') }, { status: 'finalized' });
+    b.lastFinalizedSnapshot = listSnapshot(b, { prev: a });
+    assert.deepEqual(changedDaysSinceList({ ...b, days: B().days }, { prev: a }), ['Tuesday']);
+    // Weeks with nothing carried over look the same as before (no "Update list" from this change)
+    const plain = A({ Monday: cook('m', 'roast'), Wednesday: lefto('w', 'roast', 'Reheat from Monday') });
+    assert.equal(listSnapshot(plain, { prev: B(), next: B() }), listSnapshot(plain));
+  });
+
+  test('carry over: Sunday says who it cooks for, here and on the Cook tab', () => {
+    const a = A().days;
+    const b = B().days;
+    assert.equal(cooksForText(a, 'Sunday', sunday(), b), 'Cook for 4: leftovers Tue 10 Nov');
+    assert.equal(cooksForText(a, 'Sunday', sunday()), null, 'without next week');
+    assert.deepEqual(leftoversAfter(a, 'Sunday', sunday(), b), { extra: 2, days: ['Tue 10 Nov'] });
+    assert.deepEqual(
+      carriedLeftovers(a, 'Sunday', sunday(), b).map((c) => c.day),
+      ['Tuesday'],
+    );
+    // Saturday's cook claims Tuesday (three days), Thursday's doesn't (five); a fresh Monday cook takes them
+    const sat = cook('sat', 'roast');
+    assert.deepEqual(
+      carriedLeftovers(A({ Saturday: sat }).days, 'Saturday', sat, b).map((c) => c.day),
+      ['Tuesday'],
+    );
+    const thu = cook('thu', 'roast');
+    assert.deepEqual(carriedLeftovers(A({ Thursday: thu }).days, 'Thursday', thu, b), []);
+    const monCooks = B({ Monday: cook('mon', 'roast'), Tuesday: tuesday }).days;
+    assert.deepEqual(carriedLeftovers(a, 'Sunday', sunday(), monCooks), []);
+  });
+
+  test('carry over: moving meals next week keeps the leftovers from last Sunday', () => {
+    const last = A().days;
+    const b = B({ Tuesday: tuesday, Thursday: cook('th', 'roast') }).days;
+    const kept = relinkLeftovers(b, last);
+    assert.equal(kept.days.Tuesday.meals[0].type, 'leftover');
+    assert.equal(kept.days.Tuesday.meals[0].note, 'Reheat from Sunday');
+    assert.deepEqual(kept.freshDays, []);
+    // Without last week it would become a fresh cook (and the roast back on the list)
+    assert.deepEqual(relinkLeftovers(b).freshDays, ['Tuesday']);
+    const moved = moveMeal(B({ Tuesday: tuesday, Thursday: cook('th', 'pie') }).days, 'Tuesday', 'Monday', last);
+    assert.deepEqual(names(moved.days), ['Mon:L-roast', 'Thu:pie']);
+    assert.deepEqual(moved.freshDays, []);
+    const tooLate = moveMeal(B().days, 'Tuesday', 'Friday', last);
+    assert.deepEqual(tooLate.freshDays, ['Friday'], 'five days after Sunday: cooked fresh');
+    const filled = fillDays(B().days, [{ day: 'Monday', kind: 'recipe', recipeId: 'pie', name: 'pie' }], 2, {
+      newId: () => 'n',
+      prevDays: last,
+    });
+    assert.equal(filled.days.Tuesday.meals[0].type, 'leftover');
+    const frozen = planFreezerMeal(B().days, 'Monday', { name: 'Chilli', batches: [{ id: 'b' }] }, 2, 'f', last);
+    assert.equal(frozen.days.Tuesday.meals[0].type, 'leftover');
+  });
+
+  test('carry over: next week follows a change to Sunday', () => {
+    const before = A().days;
+    const next = B().days;
+    const removed = changeDayMeal(before, 'Sunday', before.Sunday.meals[0], null).days;
+    assert.deepEqual(carriedOrphans(next, before, removed), ['Tuesday']);
+    const fresh = followWeekBefore(next, before, removed);
+    assert.deepEqual(fresh.freshDays, ['Tuesday']);
+    assert.equal(fresh.days.Tuesday.meals[0].type, 'recipe');
+    const gone = followWeekBefore(next, before, removed, { removeOrphans: true });
+    assert.deepEqual(gone.removedDays, ['Tuesday']);
+    assert.deepEqual(gone.days.Tuesday.meals, []);
+    // Sunday's roast moved to Saturday: the leftovers follow it; to Wednesday, it's too far, so they're cooked fresh
+    const both = B({ Monday: lefto('mon', 'roast', 'Reheat from Sunday'), Tuesday: tuesday }).days;
+    const toSat = followWeekBefore(both, before, moveMeal(before, 'Sunday', 'Saturday').days);
+    assert.equal(toSat.days.Monday.meals[0].note, 'Reheat from Saturday');
+    assert.equal(toSat.days.Tuesday.meals[0].note, 'Reheat from Saturday');
+    assert.deepEqual(toSat.freshDays, []);
+    const toWed = followWeekBefore(both, before, moveMeal(before, 'Sunday', 'Wednesday').days);
+    assert.deepEqual(toWed.freshDays, ['Monday', 'Tuesday'], 'five and six days');
+    // Thursday's leftovers (four days after Sunday) follow it too
+    const thu = B({ Thursday: lefto('th', 'roast', 'Reheat from Sunday') }).days;
+    assert.deepEqual(carriedOrphans(thu, before, removed), ['Thursday']);
+    // Nothing next week depends on the change: nothing to do
+    const otherDay = changeDayMeal(before, 'Wednesday', null, cook('w', 'pie')).days;
+    assert.equal(followWeekBefore(next, before, otherDay), null);
+  });
+
+  test('carry over: a change and its Undo cover both weeks', () => {
+    let state = { mealPlans: [A(), B()] };
+    const store = {
+      getState: () => state,
+      changeMealPlan: (id, change) => {
+        const p = state.mealPlans.find((x) => x.id === id);
+        const next = p && change(p);
+        if (next && next !== p) state = { mealPlans: state.mealPlans.map((x) => (x.id === id ? next : x)) };
+      },
+    };
+    const week = (start) => state.mealPlans.find((p) => p.startDate === start);
+    const c = changeWeek(store, 'plan-2026-11-02', (p) => ({
+      ...p,
+      days: changeDayMeal(p.days, 'Sunday', p.days.Sunday.meals[0], null).days,
+    }));
+    assert.deepEqual(week('2026-11-02').days.Sunday.meals, []);
+    assert.equal(week('2026-11-09').days.Tuesday.meals[0].type, 'recipe', 'Tuesday now cooked fresh');
+    assert.equal(followOnText(c), ' Tue 10 Nov now cooked fresh.');
+    undoWeekChange(store, c);
+    assert.equal(week('2026-11-02').days.Sunday.meals[0].id, 'sun');
+    assert.equal(week('2026-11-09').days.Tuesday.meals[0].type, 'leftover', 'back to leftovers');
+    // "Remove Leftovers" takes them off next week too
+    const r = changeWeek(
+      store,
+      'plan-2026-11-02',
+      (p) => ({ ...p, days: changeDayMeal(p.days, 'Sunday', p.days.Sunday.meals[0], null).days }),
+      { removeOrphansNextWeek: true },
+    );
+    assert.deepEqual(week('2026-11-09').days.Tuesday.meals, []);
+    assert.equal(followOnText(r), ' Removed the leftovers on Tue 10 Nov.');
+    // A change that doesn't touch next week leaves it alone
+    undoWeekChange(store, r);
+    const nextBefore = week('2026-11-09');
+    const n = changeWeek(store, 'plan-2026-11-02', (p) => ({
+      ...p,
+      days: changeDayMeal(p.days, 'Monday', null, cook('m', 'pie')).days,
+    }));
+    assert.equal(n.next, undefined);
+    assert.equal(week('2026-11-09'), nextBefore);
+    assert.equal(
+      changeWeek(store, 'plan-2026-11-02', () => null),
+      null,
+      'no change',
+    );
+  });
+}
+
+// ---------- A sent week's list keeps in step with its meals, keeping what's ticked ----------
+{
+  const weekOf = (meals) =>
+    Object.fromEntries(
+      DAY_NAMES.map((d, i) => [
+        d,
+        { date: `2026-11-0${2 + i}`.replace(/-0(\d\d)$/, '-$1'), meals: meals[d] ? [meals[d]] : [] },
+      ]),
+    );
+  const roast = R('roast', 'Sunday roast', { ingredients: [{ name: 'Beef mince', amount: 500, unit: 'g' }] });
+  const pizza = R('pizza', 'Pizza', { ingredients: [{ name: 'Frozen pizza', amount: 1, unit: '' }] });
+  const recipes = [roast, pizza];
+  const corn = { id: 'gdb-112', name: 'Sweetcorn', amount: 1, unit: 'can', category: 'Canned & Jarred Goods' };
+  const planOf = (meals) => ({
+    id: 'plan-2026-11-02',
+    startDate: '2026-11-02',
+    status: 'finalized',
+    isCurrent: true,
+    days: weekOf(meals),
+  });
+  const sent = planOf({ Tuesday: cook('tue', 'pizza'), Sunday: cook('sun', 'roast') });
+  const changed = planOf({
+    Tuesday: cook('tue', 'pizza', 2, { sides: [corn] }),
+    Sunday: cook('sun', 'roast', 4),
+  });
+  const first = syncWeekMeals([], sent, recipes, []);
+  const mince = (list) => list.filter((i) => /mince/i.test(i.name));
+  const tickAll = (list) => list.map((i) => ({ ...i, checked: true }));
+
+  test('in step: sending puts everything on, and nothing changes when nothing has', () => {
+    assert.equal(first.list.length, 2);
+    assert.deepEqual(first.added.length, 2);
+    const again = syncWeekMeals(first.list, sent, recipes, []);
+    assert.deepEqual(again.list, first.list);
+    assert.deepEqual([again.added, again.more], [[], []]);
+  });
+
+  test('in step: a new side goes on, and more of something already bought goes on as its own line', () => {
+    const bought = tickAll(first.list);
+    const r = syncWeekMeals(bought, changed, recipes, []);
+    assert.deepEqual(r.added, ['Sweetcorn']);
+    assert.equal(r.more.length, 1);
+    assert.match(r.more[0], /mince/i);
+    const [got, topUp] = mince(r.list);
+    assert.equal(got.checked, true, 'what you bought stays ticked');
+    assert.equal(got.amount, mince(first.list)[0].amount, '…with the amount you bought');
+    assert.equal(topUp.checked, false);
+    assert.equal(topUp.id, `${got.id}-more`);
+    const forFour = generateShoppingListForPlan(changed, recipes).find((i) => /mince/i.test(i.name));
+    assert.equal(got.amount + topUp.amount, forFour.amount, 'together, what the meals need now');
+    assert.ok(r.list.find((i) => i.name === 'Sweetcorn' && !i.checked));
+    assert.ok(
+      r.list.filter((i) => /pizza/i.test(i.name)).every((i) => i.checked),
+      'the pizza is still ticked',
+    );
+    // Steady: syncing again changes nothing
+    const again = syncWeekMeals(r.list, changed, recipes, []);
+    assert.deepEqual(again.list, r.list);
+    assert.deepEqual([again.added, again.more], [[], []]);
+    // On the Shop, the row is what's still to buy, and says what you've got
+    const row = aggregateShoppingItems(mince(r.list))[0];
+    assert.equal(row.checked, false);
+    assert.equal(row.amount, topUp.amount);
+    assert.match(row.description, /already got/);
+  });
+
+  test('in step: back down to 2, the top-up goes; meals taken off keep what you ticked', () => {
+    const r = syncWeekMeals(tickAll(first.list), changed, recipes, []);
+    const back = syncWeekMeals(r.list, sent, recipes, []);
+    assert.equal(mince(back.list).length, 1);
+    assert.equal(mince(back.list)[0].checked, true);
+    assert.equal(
+      back.list.find((i) => i.name === 'Sweetcorn'),
+      undefined,
+      'the unticked sweetcorn goes',
+    );
+    // Pizza off the week: ticked, so it stays; unticked, it goes
+    const noPizza = planOf({ Sunday: cook('sun', 'roast') });
+    assert.ok(syncWeekMeals(tickAll(first.list), noPizza, recipes, []).list.some((i) => /pizza/i.test(i.name)));
+    assert.ok(!syncWeekMeals(first.list, noPizza, recipes, []).list.some((i) => /pizza/i.test(i.name)));
+  });
+
+  test('in step: unticked lines take the new amount; yours, and things you removed, are left alone', () => {
+    const r = syncWeekMeals(first.list, changed, recipes, []);
+    assert.equal(mince(r.list).length, 1, 'no top-up when nothing is ticked');
+    assert.equal(mince(r.list)[0].checked, false);
+    assert.equal(r.more.length, 1);
+    const mine = first.list.map((i) => (/mince/i.test(i.name) ? { ...i, amount: 3, userAdjusted: true } : i));
+    assert.equal(mince(syncWeekMeals(mine, changed, recipes, []).list)[0].amount, 3);
+    const cornId = generateShoppingListForPlan(changed, recipes).find((i) => i.name === 'Sweetcorn').id;
+    const gone = syncWeekMeals(first.list, changed, recipes, [cornId]);
+    assert.deepEqual(gone.added, []);
+    // Staples and things added by hand aren't touched
+    const hand = { id: 'h', name: 'Bin bags', amount: 1, unit: '', checked: false, isAdhoc: true, planId: sent.id };
+    assert.ok(syncWeekMeals([...first.list, hand], changed, recipes, []).list.includes(hand));
+  });
+
+  test('in step: what the message says', () => {
+    assert.equal(listSyncText({ added: ['Sweetcorn'], more: [] }), ' Sweetcorn added to the shopping list.');
+    assert.equal(
+      listSyncText({ added: ['Sweetcorn', 'Peas'], more: ['Beef Mince'] }),
+      ' Sweetcorn and Peas added to the shopping list. More beef mince on the shopping list.',
+    );
+    assert.equal(listSyncText({ added: [], more: [] }), '');
+    assert.equal(listSyncText(undefined), '');
+  });
+
+  // A pretend store: plans and a list, changed the way the app's store changes them.
+  const storeWith = (plans, list) => {
+    let state = { mealPlans: plans, recipes, shoppingList: list };
+    return {
+      getState: () => state,
+      changeMealPlan: (id, change) => {
+        const p = state.mealPlans.find((x) => x.id === id);
+        const next = p && change(p);
+        if (next && next !== p) state = { ...state, mealPlans: state.mealPlans.map((x) => (x.id === id ? next : x)) };
+      },
+      updateShoppingList: (change) => {
+        state = { ...state, shoppingList: change(state.shoppingList) };
+      },
+      dismissedShoppingItemIds: [],
+    };
+  };
+
+  test('in step: straight after a change, with no "Update list" left to do', () => {
+    const store = storeWith([{ ...sent, lastFinalizedSnapshot: listSnapshot(sent) }], tickAll(first.list));
+    const c = changeWeek(store, sent.id, (p) => ({ ...p, days: changed.days }));
+    assert.deepEqual(c.list.added, ['Sweetcorn']);
+    assert.match(followOnText(c), /Sweetcorn added to the shopping list\. More .*mince on the shopping list\./i);
+    const plan = store.getState().mealPlans[0];
+    assert.deepEqual(changedDaysSinceList(plan), [], 'the list matches the week');
+    assert.equal(store.getState().shoppingList.length, 4, 'pizza, mince, mince top-up, sweetcorn');
+    // Undo: the sweetcorn and the top-up go again; what you ticked stays
+    undoWeekChange(store, c);
+    const list = store.getState().shoppingList;
+    assert.equal(list.length, 2);
+    assert.ok(list.every((i) => i.checked));
+    assert.deepEqual(changedDaysSinceList(store.getState().mealPlans[0]), []);
+  });
+
+  test('in step: weeks not yet sent are left alone, and so are weeks already in step', () => {
+    const draft = { ...sent, status: 'draft' };
+    const store = storeWith([draft], []);
+    assert.deepEqual(keepListsInStep(store, [draft.id]), { added: [], more: [] });
+    assert.deepEqual(store.getState().shoppingList, []);
+    const inStep = storeWith([{ ...sent, lastFinalizedSnapshot: listSnapshot(sent) }], first.list);
+    const before = inStep.getState();
+    keepListsInStep(inStep, [sent.id, null, 'nope']);
+    assert.equal(inStep.getState(), before, 'nothing written');
+    // "Update list" (always) brings amounts in line even when the meals haven't changed
+    const short = first.list.map((i) => (/mince/i.test(i.name) ? { ...i, amount: 1 } : i));
+    const fix = storeWith([{ ...sent, lastFinalizedSnapshot: listSnapshot(sent) }], short);
+    keepListsInStep(fix, [sent.id], { always: true });
+    assert.deepEqual(mince(fix.getState().shoppingList)[0].amount, mince(first.list)[0].amount);
   });
 }
 

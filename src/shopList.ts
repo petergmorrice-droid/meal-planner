@@ -104,7 +104,12 @@ export function aggregateShoppingItems(
     // The row takes its name from the meal ingredient if there is one, then extra recipe, staple, added by hand.
     const score = (i: ShoppingListItem) => (isPlanned(i) ? 4 : i.isBatch ? 3 : i.isRecurring ? 2 : 1);
     const canonical = [...groupItems].sort((a, b) => score(b) - score(a))[0];
-    const { amount, unit, displayQuantity } = aggregateIngredients(groupItems);
+    // Part already ticked (more needed since you bought it): the row is what's still to buy.
+    const ticked = groupItems.filter((i) => i.checked);
+    const mixed = ticked.length > 0 && ticked.length < groupItems.length;
+    const { amount, unit, displayQuantity } = aggregateIngredients(
+      mixed ? groupItems.filter((i) => !i.checked) : groupItems,
+    );
 
     const recipeNames = new Set<string>();
     const extraRecipes = new Set<string>();
@@ -126,12 +131,18 @@ export function aggregateShoppingItems(
     if (extraRecipes.size) desc.push(`for ${Array.from(extraRecipes).join(', ')} (extra)`);
     if (hasStaple) desc.push('weekly staple');
     if (extraAmount > 0 && desc.length) desc.push('some added by you');
+    // Said first, so it isn't cut off: "600 g already got · for Chicken tikka masala".
+    if (mixed) desc.unshift(`${shopQuantityText(aggregateIngredients(ticked))} already got`);
 
     const notes = Array.from(new Set(groupItems.map((i) => (i.note || '').trim()).filter(Boolean)));
-    const needs = groupItems
-      .filter(isPlanned)
-      .map((i) => (neededOf ? neededOf(i) : undefined) ?? i.neededText)
-      .filter((t): t is string => Boolean(t));
+    const needs = [
+      ...new Set(
+        groupItems
+          .filter(isPlanned)
+          .map((i) => (neededOf ? neededOf(i) : undefined) ?? i.neededText)
+          .filter((t): t is string => Boolean(t)),
+      ),
+    ];
     result.push({
       key,
       id: canonical.id,
@@ -159,7 +170,8 @@ export function aggregateShoppingItems(
           .map((i) => i.quantityNote)
           .filter(Boolean)
           .join('; ') || undefined,
-      neededText: needs.join(' + ') || undefined,
+      // What the meals use in all would muddle a row that's only the rest of it.
+      neededText: mixed ? undefined : needs.join(' + ') || undefined,
       haveText:
         groupItems
           .filter(isPlanned)

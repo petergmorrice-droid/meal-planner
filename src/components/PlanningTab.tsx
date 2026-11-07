@@ -9,7 +9,7 @@ import Notice from './Notice';
 import { Recipe, MealPlan, PlannedMeal, TabName } from '../types';
 import { DAYS_OF_WEEK, canPlanFollowingWeek } from '../utils';
 import { planDayDate } from '../freezer';
-import { changedDaysSinceList, cooksForText, leftoverSourceDay } from '../planning';
+import { changedDaysSinceList, cooksForText, leftoverSourceDay, weekNeighbours } from '../planning';
 import { todayISO } from '../recipeInfo';
 import { RecipeModal } from './CookBookTab';
 import { DayListRow, WeekDayCard, WeekGlance, DaySheet } from './planner/DayListRow';
@@ -20,7 +20,6 @@ import AddToDaySheet from './planner/AddToDaySheet';
 import DayPickerModal, { QuickMeal } from './planner/DayPickerModal';
 import CustomMealModal, { CustomMealDraft } from './planner/CustomMealModal';
 import SendToListModal, { NoMealsModal } from './planner/SendToListModal';
-import { mealLinesShopped } from '../planShopping';
 import CopyWeekModal from './planner/CopyWeekModal';
 import AutoPopulateSheet from './planner/AutoPopulateSheet';
 import { HowAreYouHavingIt, RemoveLeftoversQuestion } from './planner/LeftoverPrompts';
@@ -97,8 +96,13 @@ export default function PlanningTab({
     setShowWeekDropdown(false);
   };
   const canPlanNext = canPlanFollowingWeek(currentPlan?.startDate, undefined, maxWeeks);
+  // The weeks either side: leftovers can carry over from Sunday into the next week.
+  const allPlans = store.state.mealPlans;
+  const around = useMemo(() => weekNeighbours(allPlans, currentPlan), [allPlans, currentPlan]);
+  const prevDays = around.prev?.days;
+  const nextDays = around.next?.days;
   // Days changed since this week was sent to the shopping list
-  const changedDays = changedDaysSinceList(currentPlan);
+  const changedDays = changedDaysSinceList(currentPlan, around);
 
   // Jump to a day (week-at-a-glance), and open each week on today when it's in view
   const stripRef = useRef<HTMLDivElement>(null);
@@ -322,8 +326,8 @@ export default function PlanningTab({
                     dayPlan={dayPlan}
                     meal={meal}
                     today={today}
-                    cooksFor={cooksForText(currentPlan!.days, day, meal)}
-                    fromDay={leftoverSourceDay(currentPlan!.days, day, meal)}
+                    cooksFor={cooksForText(currentPlan!.days, day, meal, nextDays)}
+                    fromDay={leftoverSourceDay(currentPlan!.days, day, meal, prevDays)}
                     onOpen={() => (meal ? setDaySheet(day) : setSelectedDay(day))}
                   />
                 );
@@ -349,8 +353,8 @@ export default function PlanningTab({
                       dayPlan={dayPlan}
                       meal={meal}
                       today={today}
-                      cooksFor={cooksForText(currentPlan!.days, day, meal)}
-                      fromDay={leftoverSourceDay(currentPlan!.days, day, meal)}
+                      cooksFor={cooksForText(currentPlan!.days, day, meal, nextDays)}
+                      fromDay={leftoverSourceDay(currentPlan!.days, day, meal, prevDays)}
                       dragActive={!!draggedRecipe}
                       onDrop={() => handleDrop(day)}
                       onOpen={() => setDaySheet(day)}
@@ -377,8 +381,8 @@ export default function PlanningTab({
               day={day}
               dayPlan={currentPlan.days[day]}
               meal={meal}
-              cooksFor={cooksForText(currentPlan.days, day, meal)}
-              fromDay={leftoverSourceDay(currentPlan.days, day, meal)}
+              cooksFor={cooksForText(currentPlan.days, day, meal, nextDays)}
+              fromDay={leftoverSourceDay(currentPlan.days, day, meal, prevDays)}
               plannedDays={DAYS_OF_WEEK.map((d) => ({
                 day: d,
                 date: currentPlan!.days[d]?.date,
@@ -467,6 +471,7 @@ export default function PlanningTab({
       {showFinalizeConfirmModal && currentPlan && (
         <SendToListModal
           plan={currentPlan}
+          around={around}
           recipes={store.state.recipes}
           emptyDays={unallocatedDays}
           onEditDay={(day, hasMeal) => {
@@ -480,11 +485,7 @@ export default function PlanningTab({
             else editor.sendToList();
           }}
           onClose={() => setShowFinalizeConfirmModal(false)}
-          update={
-            updatingList && currentPlan.status === 'finalized'
-              ? { changedDays, shopped: mealLinesShopped(store.state.shoppingList, currentPlan.id) }
-              : undefined
-          }
+          update={updatingList && currentPlan.status === 'finalized' ? { changedDays } : undefined}
         />
       )}
 

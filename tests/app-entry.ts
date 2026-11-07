@@ -103,7 +103,17 @@ export {
   earlierDaysWithRecipe,
   copyWeekMeals,
   undoDays,
+  CARRY_OVER_DAYS,
+  weekNeighbours,
+  leftoverSource,
+  lastWeekCookFor,
+  carriedLeftovers,
+  carriedOrphans,
+  followWeekBefore,
+  otherWeekDay,
 } from '../src/planning';
+export { changeWeek, undoWeekChange, followOnText } from '../src/weekChange';
+export { leftoversAfter } from '../src/components/cook/cookDays';
 export { speechChunks, forSpeech } from '../src/speech';
 export { parseVoiceCommand, parseAlternatives } from '../src/voiceCommands';
 export { frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText, USE_SOON_DAYS } from '../src/freezer';
@@ -144,7 +154,14 @@ export {
   listWithStaples,
 } from '../src/staples';
 export { getCatalog } from '../src/utils';
-export { listWithWeek, mealLinesOutOfDate, mealLinesShopped } from '../src/planShopping';
+export {
+  listWithWeek,
+  mealLinesOutOfDate,
+  mealLinesShopped,
+  syncWeekMeals,
+  keepListsInStep,
+  listSyncText,
+} from '../src/planShopping';
 export { buildCatalog } from '../src/shopping';
 export { INITIAL_GROCERY_DATABASE } from '../src/utils/initialGroceryDb';
 export {

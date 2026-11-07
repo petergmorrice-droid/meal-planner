@@ -14,7 +14,9 @@ export function HowAreYouHavingIt({
   onChoose: (how: 'leftover' | 'freezer' | 'fresh') => void;
   onCancel: () => void;
 }) {
-  const lastDay = prompt.existingDays[prompt.existingDays.length - 1];
+  // The day it's cooked: earlier this week, or else at the end of last week ("Sunday (last week)").
+  const lastDay = prompt.existingDays[prompt.existingDays.length - 1] || prompt.lastWeekDay;
+  const fromLastWeek = !prompt.existingDays.length && !!prompt.lastWeekDay;
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
@@ -28,15 +30,20 @@ export function HowAreYouHavingIt({
           <h3 className="text-lg font-semibold text-zinc-900 leading-snug">{prompt.recipe.name}</h3>
           <p className="text-sm text-zinc-600 mt-1 mb-4">How are you having it on {prompt.dayName}?</p>
           <div className="space-y-2">
-            {prompt.existingDays.length > 0 && (
+            {lastDay && (
               <button
                 type="button"
                 onClick={() => onChoose('leftover')}
                 data-how="leftover"
+                {...(fromLastWeek ? { 'data-how-last-week': '' } : {})}
                 className="w-full text-left px-4 py-3 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 cursor-pointer"
               >
                 <span className="block text-[15px] font-semibold text-amber-950">Leftovers from {lastDay}</span>
-                <span className="block text-xs text-amber-900/80">Cook extra on {lastDay} and reheat it</span>
+                <span className="block text-xs text-amber-900/80">
+                  {fromLastWeek
+                    ? `Cook extra on ${prompt.lastWeekDate || lastDay} and reheat it: the extra goes on that week's list`
+                    : `Cook extra on ${lastDay} and reheat it`}
+                </span>
               </button>
             )}
             {prompt.freezer && (
@@ -90,14 +97,19 @@ export function RemoveLeftoversQuestion({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  // This week's leftover days, then next week's ("Tue 10 Nov").
+  const days = [...prompt.leftoverDays, ...(prompt.nextWeekDays || [])];
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150">
+      <div
+        className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-zinc-200 animate-in zoom-in-95 duration-150"
+        data-remove-leftovers-question
+      >
         <h3 className="text-lg font-semibold text-center text-zinc-900 mb-2">Remove Leftovers?</h3>
         <p className="text-xs text-zinc-500 text-center mb-6 leading-relaxed">
           If you {prompt.isReplacement ? 'replace' : 'remove'} {prompt.targetMealName}, you won't have any leftovers for{' '}
-          <span className="font-semibold text-zinc-700">{prompt.leftoverDays.join(' and ')}</span>. The planned
-          leftovers will also be removed.
+          <span className="font-semibold text-zinc-700">{days.join(' and ')}</span>. The planned leftovers will also be
+          removed.
         </p>
         <div className="flex gap-3">
           <button
@@ -108,6 +120,7 @@ export function RemoveLeftoversQuestion({
           </button>
           <button
             onClick={onConfirm}
+            data-remove-leftovers
             className="flex-1 py-2.5 text-white font-medium bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-2xs text-xs cursor-pointer"
           >
             Remove Leftovers

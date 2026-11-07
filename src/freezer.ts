@@ -146,7 +146,8 @@ export function whenText(date: string, todayIso: string): string {
 
 /**
  * Put a freezer meal on a day (replacing what's there). Leftovers that depended on a cook that's
- * been replaced become fresh cooks. Returns the new days and what was replaced.
+ * been replaced become fresh cooks (given last week's days, leftovers of a cook at the end of it
+ * stay leftovers). Returns the new days and what was replaced.
  */
 export function planFreezerMeal(
   days: Record<string, DayPlan>,
@@ -154,6 +155,7 @@ export function planFreezerMeal(
   group: { name: string; recipeId?: string; batches: BatchItem[] },
   servings: number,
   newId: string,
+  prevDays?: Record<string, DayPlan> | null,
 ): { days: Record<string, DayPlan>; replaced: PlannedMeal | null; freshDays: string[] } {
   const dp = days[day] || { date: '', meals: [] };
   const replaced = dp.meals?.[0] || null;
@@ -166,6 +168,6 @@ export function planFreezerMeal(
     servings,
     note: '',
   };
-  const r = relinkLeftovers({ ...days, [day]: { ...dp, meals: [meal] } });
+  const r = relinkLeftovers({ ...days, [day]: { ...dp, meals: [meal] } }, prevDays);
   return { days: r.days, replaced, freshDays: r.freshDays };
 }

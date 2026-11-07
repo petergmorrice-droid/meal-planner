@@ -36,7 +36,8 @@ import {
   restoreRemoved,
   HandLine,
 } from '../shopListEdits';
-import { mealLinesOutOfDate, sendWeekToShoppingList } from '../planShopping';
+import { keepListsInStep, mealLinesOutOfDate } from '../planShopping';
+import { weekNeighbours } from '../planning';
 import {
   formatWeekRange,
   createEmptyPlan,
@@ -135,7 +136,14 @@ export default function ShopTab({
 
   const trip = useShoppingTrip(store, activePlan, openPlanId);
   const { isShoppingMode, setIsShoppingMode } = trip;
-  const { requirementFor, neededOf, mealBreakdown, partDetail } = usePlannedNeeds(activePlan, store.state.recipes);
+  // The weeks either side: Sunday's cook buys for next week's leftovers of it, and those need nothing.
+  const allPlans = store.state.mealPlans;
+  const around = useMemo(() => weekNeighbours(allPlans, activePlan), [allPlans, activePlan]);
+  const { requirementFor, neededOf, mealBreakdown, partDetail } = usePlannedNeeds(
+    activePlan,
+    store.state.recipes,
+    around,
+  );
 
   // Meal ingredients and staples either of you removed, so they don't come back by themselves.
   // Shared between phones via sync; removing an item adds it here automatically.
@@ -172,7 +180,13 @@ export default function ShopTab({
   const handleRestoreDismissed = () => {
     if (!activePlan) return;
     store.updateShoppingList((list, s) =>
-      restoreRemoved(list, activePlan, s.recipes, s.preferences?.recurringItems || []),
+      restoreRemoved(
+        list,
+        activePlan,
+        s.recipes,
+        s.preferences?.recurringItems || [],
+        weekNeighbours(s.mealPlans, activePlan),
+      ),
     );
     setToastMessage('Restored recipe ingredients');
   };
@@ -487,9 +501,17 @@ export default function ShopTab({
   const staleLines = useMemo(
     () =>
       activePlan?.status === 'finalized'
-        ? mealLinesOutOfDate(shoppingList || [], activePlan, recipes, staplesNow || [], dismissedItemIds, catalog)
+        ? mealLinesOutOfDate(
+            shoppingList || [],
+            activePlan,
+            recipes,
+            staplesNow || [],
+            dismissedItemIds,
+            catalog,
+            around,
+          )
         : [],
-    [shoppingList, activePlan, recipes, staplesNow, dismissedItemIds, catalog],
+    [shoppingList, activePlan, recipes, staplesNow, dismissedItemIds, catalog, around],
   );
   const quickAddSuggestions = useMemo(() => {
     const seen = new Set<string>();
@@ -696,8 +718,9 @@ export default function ShopTab({
           {activePlan && isPlanFinalized && (
             <OutOfDateNotice
               plan={activePlan}
+              around={around}
               staleLines={staleLines}
-              onUpdate={() => sendWeekToShoppingList(store, activePlan)}
+              onUpdate={() => keepListsInStep(store, [activePlan.id], { always: true })}
             />
           )}
           <SaveForNextTime items={newProducts.newItems} onPick={newProducts.offerToSave} />
