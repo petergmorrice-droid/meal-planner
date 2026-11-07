@@ -121,7 +121,8 @@ export function DayCard({
     facts.push(
       after.extra > 0 ? (
         <span key="p" className="text-amber-800 font-semibold" data-cook-extra>
-          Cook for {people} ({after.extra} for {after.days.map((x) => x.slice(0, 3)).join(', ')})
+          Cook for {people} ({after.extra} for {after.days.map((x) => (x.includes(' ') ? x : x.slice(0, 3))).join(', ')}
+          )
         </span>
       ) : (
         <span key="p">

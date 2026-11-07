@@ -103,7 +103,17 @@ export {
   earlierDaysWithRecipe,
   copyWeekMeals,
   undoDays,
+  CARRY_OVER_DAYS,
+  weekNeighbours,
+  leftoverSource,
+  lastWeekCookFor,
+  carriedLeftovers,
+  carriedOrphans,
+  followWeekBefore,
+  otherWeekDay,
 } from '../src/planning';
+export { changeWeek, undoWeekChange, nextWeekText } from '../src/weekChange';
+export { leftoversAfter } from '../src/components/cook/cookDays';
 export { speechChunks, forSpeech } from '../src/speech';
 export { parseVoiceCommand, parseAlternatives } from '../src/voiceCommands';
 export { frozenAgo, mealsFor, freezerGroups, planFreezerMeal, whenText, USE_SOON_DAYS } from '../src/freezer';

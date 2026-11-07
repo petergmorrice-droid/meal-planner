@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Recipe, PlannedMeal, MealPlan, CookingMethod } from '../types';
 import { scaleRecipeStepQuantities, DAYS_OF_WEEK } from '../utils';
+import { carriedLeftovers, otherWeekDay, weekNeighbours } from '../planning';
 import { ingredientsForStep, stepMinutes, stepTimerLabel, timeLeft } from '../cookInfo';
 import { useCookTimers } from '../hooks/useCookTimers';
 import { TimerBar } from './cook/TimerBar';
@@ -91,7 +92,9 @@ export default function CookMode({
     [store.state.recipes, meal],
   );
 
-  // Cook extra for later leftovers ("Cook for 6: extra for Wednesday").
+  // Cook extra for later leftovers ("Cook for 6: extra for Wednesday"), and for next week's leftovers
+  // of a cook at the end of the week ("2 extra for Tue 10 Nov").
+  const allPlans = store.state.mealPlans;
   const plan = useMemo(() => {
     if (!meal || !recipe) return { servings: 2, leftoverDays: [] as string[], extra: 0, banner: null as string | null };
     if (meal.type === 'leftover')
@@ -119,6 +122,11 @@ export default function CookMode({
         leftoverDays.push(days[i]);
       } else break;
     }
+    const nextDays = activePlan ? weekNeighbours(allPlans, activePlan).next?.days : null;
+    for (const c of activePlan ? carriedLeftovers(activePlan.days, dayName, meal, nextDays) : []) {
+      extra += c.meal.servings || 2;
+      leftoverDays.push(otherWeekDay(nextDays, c.day));
+    }
     const own = meal.servings || 2;
     return {
       servings: own + extra,
@@ -126,7 +134,7 @@ export default function CookMode({
       extra,
       banner: extra ? `Cook for ${own + extra}: ${extra} extra for ${leftoverDays.join(' and ')}.` : null,
     };
-  }, [meal, recipe, activePlan, dayName]);
+  }, [meal, recipe, activePlan, dayName, allPlans]);
 
   const baseServings = recipe?.servings || 2;
   const [servings, setServings] = useState<number>(initialServings ?? plan.servings);

@@ -21,15 +21,18 @@ import {
 } from '../../types';
 import { canPlanFollowingWeek, createEmptyPlan, formatDateISO, syncRecurringStaplesForPlan } from '../../utils';
 import {
+  carriedOrphans,
   changeDayMeal,
   copyWeekMeals,
   describeMealChange,
   earlierDaysWithRecipe,
-  listSnapshot,
+  lastWeekCookFor,
   mealOnDay,
+  otherWeekDay,
   moveMeal,
-  undoDays,
+  type WeekNeighbours,
 } from '../../planning';
+import { aroundWeek, changeWeek, nextWeekText, undoWeekChange, type WeekChange } from '../../weekChange';
 import { sendWeekToShoppingList } from '../../planShopping';
 import { freezerBatchesFor } from '../../recipeInfo';
 import { fillDays, type DayPick } from '../../autoPlan';
@@ -41,6 +44,10 @@ export interface HowPrompt {
   dayName: string;
   recipe: Recipe;
   existingDays: string[];
+  /** No earlier day this week cooks it, but this day at the end of last week does (Sunday's roast on Tuesday). */
+  lastWeekDay?: string;
+  /** That day by its date ("Sun 8 Nov"). */
+  lastWeekDate?: string;
   freezer?: { batchId: string; portions: number };
 }
 
@@ -49,6 +56,8 @@ export interface RemoveLeftoversPrompt {
   targetDayName: string;
   targetMealName: string;
   leftoverDays: string[];
+  /** Leftover days next week that come from it (a Sunday cook's Monday or Tuesday), by date ("Tue 10 Nov"). */
+  nextWeekDays: string[];
   /** The change being asked about (made on the latest week when you say yes). */
   mealToRemove: PlannedMeal;
   newMeal: PlannedMeal | null;
@@ -80,12 +89,13 @@ export function useWeekEditor({
   const live = (): MealPlan | undefined =>
     currentPlan && (store.getState().mealPlans.find((p) => p.id === currentPlan.id) || currentPlan);
 
-  // "Removed Chicken fajitas · Undo": the days the change touched go back as they were.
-  const offerUndo = (label: string, planId: string, before: Days, after: Days) => {
+  // "Removed Chicken fajitas · Undo": the days the change touched go back as they were (in the
+  // week after too, when its leftovers followed).
+  const offerUndo = (label: string, change: WeekChange) => {
     setToastMessage(label, {
       label: 'Undo',
       run: () => {
-        store.changeMealPlan(planId, (p) => ({ ...p, days: undoDays(p.days, before, after) }));
+        undoWeekChange(store, change);
         setToastMessage('Undone');
       },
     });
@@ -94,25 +104,30 @@ export function useWeekEditor({
   /**
    * Change the week's days, starting from the latest copy (null: no change). A week already sent
    * to the shopping list just gets an "Update list" button afterwards; weeks sent before the app
-   * kept a record are taken as matching the list. With `undoLabel`, says so with Undo.
-   * True if it changed something.
+   * kept a record are taken as matching the list. Next week's leftovers of a cook at the end of
+   * this week follow it (see changeWeek). With `undoLabel`, says so with Undo (and says what
+   * happened to next week's leftovers). Null if nothing changed.
    */
-  const editDays = (change: (days: Days) => Days | null, undoLabel?: string): boolean => {
-    if (!currentPlan) return false;
-    let before: Days | null = null;
-    let after: Days | null = null;
-    store.changeMealPlan(currentPlan.id, (p) => {
-      const next = change(p.days);
-      if (!next) return null;
-      before = p.days;
-      after = next;
-      const keepRecord =
-        p.status === 'finalized' && !p.lastFinalizedSnapshot ? { lastFinalizedSnapshot: listSnapshot(p) } : {};
-      return { ...p, ...keepRecord, days: next };
-    });
-    if (!before || !after) return false;
-    if (undoLabel) offerUndo(undoLabel, currentPlan.id, before, after);
-    return true;
+  const editDays = (
+    change: (days: Days, around: WeekNeighbours) => Days | null,
+    undoLabel?: string,
+    opts?: { removeOrphansNextWeek?: boolean },
+  ): WeekChange | null => {
+    if (!currentPlan) return null;
+    const c = changeWeek(
+      store,
+      currentPlan.id,
+      (p, around) => {
+        const next = change(p.days, around);
+        return next ? { ...p, days: next } : null;
+      },
+      opts,
+    );
+    if (!c) return null;
+    const nextWeek = nextWeekText(c);
+    if (undoLabel) offerUndo(undoLabel + nextWeek, c);
+    else if (nextWeek) offerUndo(nextWeek.trim(), c);
+    return c;
   };
 
   /** Change one meal on a day (null if the day or meal isn't there any more). */
@@ -127,19 +142,25 @@ export function useWeekEditor({
     return { ...days, [dayName]: { ...day, meals: day.meals.map((m) => (m.id === mealId ? patch(m) : m)) } };
   };
 
-  /** Cooked earlier in the week, or in the freezer? Then ask how you're having it. True if it asked. */
+  /**
+   * Cooked earlier in the week (or at the end of last week, close enough for leftovers), or in the
+   * freezer? Then ask how you're having it. True if it asked.
+   */
   const askHow = (dayName: string, recipe: Recipe): boolean => {
     const plan = live();
     if (!plan) return false;
     const existingDays = earlierDaysWithRecipe(plan.days, dayName, recipe);
+    const prevDays = aroundWeek(store, plan).prev?.days;
+    const lastWeekDay = existingDays.length ? null : lastWeekCookFor(dayName, recipe.id, prevDays);
     // Portions of it in the freezer (use the oldest batch first)
     const batches = freezerBatchesFor(recipe, store.state.batches);
     const portions = batches.reduce((n: number, b: BatchItem) => n + (Number(b.portions) || 0), 0);
-    if (existingDays.length > 0 || portions > 0) {
+    if (existingDays.length > 0 || lastWeekDay || portions > 0) {
       setHowPrompt({
         dayName,
         recipe,
         existingDays,
+        ...(lastWeekDay ? { lastWeekDay, lastWeekDate: otherWeekDay(prevDays, lastWeekDay, 'last') } : {}),
         freezer: portions > 0 ? { batchId: batches[0].id, portions } : undefined,
       });
       return true;
@@ -154,13 +175,19 @@ export function useWeekEditor({
   const changeMeal = (dayName: string, mealToRemove: PlannedMeal | null, newMeal: PlannedMeal | null) => {
     const plan = live();
     if (!plan) return;
-    const { orphanedDays } = changeDayMeal(plan.days, dayName, mealToRemove, newMeal);
+    const { orphanedDays, days: afterDays } = changeDayMeal(plan.days, dayName, mealToRemove, newMeal);
+    const following = aroundWeek(store, plan).next;
+    const nextWeekDays =
+      mealToRemove && following
+        ? carriedOrphans(following.days, plan.days, afterDays).map((d) => otherWeekDay(following.days, d))
+        : [];
     const description = describeMealChange(dayName, mealToRemove, newMeal);
-    if (orphanedDays.length > 0 && mealToRemove) {
+    if ((orphanedDays.length > 0 || nextWeekDays.length > 0) && mealToRemove) {
       setRemoveLeftoversPrompt({
         targetDayName: dayName,
         targetMealName: mealToRemove.name,
         leftoverDays: orphanedDays,
+        nextWeekDays,
         mealToRemove,
         newMeal,
         isReplacement: Boolean(newMeal),
@@ -200,8 +227,9 @@ export function useWeekEditor({
   /** The answer to "How are you having it?". */
   const confirmHow = (how: 'leftover' | 'freezer' | 'fresh'): boolean => {
     if (!howPrompt || !currentPlan) return false;
-    const { dayName, recipe, existingDays, freezer } = howPrompt;
-    const sourceDay = existingDays && existingDays.length > 0 ? existingDays[existingDays.length - 1] : null;
+    const { dayName, recipe, existingDays, lastWeekDay, freezer } = howPrompt;
+    const sourceDay =
+      existingDays && existingDays.length > 0 ? existingDays[existingDays.length - 1] : lastWeekDay || null;
     const newMeal: PlannedMeal =
       how === 'freezer' && freezer
         ? {
@@ -263,7 +291,7 @@ export function useWeekEditor({
 
   /** People and notes from the day panel. */
   const saveDayDetails = (dayName: string, mealId: string, patch: { servings: number; note: string }) => {
-    const saved = editDays((days) =>
+    const saved = !!editDays((days) =>
       editMeal(days, dayName, mealId, (m) => ({
         ...m,
         servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)),
@@ -277,10 +305,10 @@ export function useWeekEditor({
   const moveDayMeal = (from: string, to: string) => {
     const plan = live();
     if (!plan || from === to) return;
-    const r = moveMeal(plan.days, from, to);
+    const r = moveMeal(plan.days, from, to, aroundWeek(store, plan).prev?.days);
     const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
     editDays(
-      (days) => moveMeal(days, from, to).days,
+      (days, around) => moveMeal(days, from, to, around.prev?.days).days,
       (r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh,
     );
   };
@@ -295,15 +323,17 @@ export function useWeekEditor({
   const confirmRemoveWithLeftovers = () => {
     const p = removeLeftoversPrompt;
     if (!currentPlan || !p) return;
-    editDays(
-      (days) => changeDayMeal(days, p.targetDayName, p.mealToRemove, p.newMeal).days,
-      `Removed, with the leftovers on ${p.leftoverDays.join(' and ')}.`,
-    );
+    const all = [...p.leftoverDays, ...p.nextWeekDays];
+    // Next week's leftovers are said here, so don't say them twice.
+    const c = editDays((days) => changeDayMeal(days, p.targetDayName, p.mealToRemove, p.newMeal).days, undefined, {
+      removeOrphansNextWeek: true,
+    });
+    if (c) offerUndo(`Removed, with the leftovers on ${all.join(' and ')}.`, c);
     setRemoveLeftoversPrompt(null);
   };
 
   const saveSides = (dayName: string, mealId: string, sides: PlannedMealSide[]): boolean => {
-    const saved = editDays((days) => editMeal(days, dayName, mealId, (m) => ({ ...m, sides })));
+    const saved = !!editDays((days) => editMeal(days, dayName, mealId, (m) => ({ ...m, sides })));
     if (saved) setToastMessage(sides.length ? 'Sides saved.' : 'Sides removed.');
     return saved;
   };
@@ -315,7 +345,7 @@ export function useWeekEditor({
   const copyWeek = (source: MealPlan): boolean => {
     if (!currentPlan) return false;
     let copied = 0;
-    const done = editDays((days) => {
+    const done = !!editDays((days) => {
       const r = copyWeekMeals(days, source);
       copied = r.copied;
       return r.days;
@@ -335,30 +365,27 @@ export function useWeekEditor({
     let added = 0;
     let replaced: PlannedMeal[] = [];
     let freshDays: string[] = [];
-    let before: Days | null = null;
-    let after: Days | null = null;
-    store.changeMealPlan(currentPlan.id, (p) => {
-      const r = fillDays(p.days, picks, people, { replace: replaceDay ? [replaceDay] : [] });
+    const c = changeWeek(store, currentPlan.id, (p, around) => {
+      const r = fillDays(p.days, picks, people, {
+        replace: replaceDay ? [replaceDay] : [],
+        prevDays: around.prev?.days,
+      });
       if (!r.added && (!onHand || JSON.stringify(p.onHand || []) === JSON.stringify(onHand))) return null;
       added = r.added;
       replaced = r.replaced;
       freshDays = r.freshDays;
-      before = p.days;
-      after = r.days;
       const { onHand: was, ...rest } = p;
-      const keepRecord =
-        p.status === 'finalized' && !p.lastFinalizedSnapshot ? { lastFinalizedSnapshot: listSnapshot(p) } : {};
       const got = onHand ?? was ?? [];
-      return { ...rest, ...keepRecord, ...(got.length ? { onHand: got } : {}), days: r.days };
+      return { ...rest, ...(got.length ? { onHand: got } : {}), days: r.days };
     });
-    if (before && after && added) {
+    if (c && added) {
       const one = added === 1 && picks.length === 1 ? picks[0] : null;
       const label =
         one && replaceDay
-          ? describeMealChange(one.day, replaced[0] || null, mealOnDay(after as Days, one.day) || null)
+          ? describeMealChange(one.day, replaced[0] || null, mealOnDay(c.after, one.day) || null)
           : `Added ${added} meal${added === 1 ? '' : 's'}`;
-      const fresh = freshDays.length ? ` ${freshDays.join(' and ')} now cooked fresh.` : '';
-      offerUndo(label + (fresh ? '.' + fresh : ''), currentPlan.id, before, after);
+      const fresh = (freshDays.length ? ` ${freshDays.join(' and ')} now cooked fresh.` : '') + nextWeekText(c);
+      offerUndo(label + (fresh ? '.' + fresh : ''), c);
     }
     return added;
   };

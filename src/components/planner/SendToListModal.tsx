@@ -5,12 +5,13 @@
 import { AlertCircle, BookOpen, Check, CheckCircle2, Sparkles, StickyNote, X } from 'lucide-react';
 import { MealPlan, Recipe } from '../../types';
 import { DAYS_OF_WEEK, formatWeekRange } from '../../utils';
-import { cooksForText, leftoverSourceDay } from '../../planning';
+import { cooksForText, leftoverSourceDay, type WeekNeighbours } from '../../planning';
 import PersonMark, { noteLook } from '../PersonMark';
 import { describeMeal, mealTitle, dayTone } from './DayListRow';
 
 export default function SendToListModal({
   plan,
+  around,
   recipes,
   emptyDays,
   onEditDay,
@@ -19,6 +20,8 @@ export default function SendToListModal({
   update,
 }: {
   plan: MealPlan;
+  /** The weeks either side (leftovers that carry over from Sunday into the next week). */
+  around?: WeekNeighbours;
   recipes: Recipe[];
   /** Days with nothing planned. */
   emptyDays: string[];
@@ -122,8 +125,8 @@ export default function SendToListModal({
                 const dayDate = dayPlan?.date
                   ? new Date(dayPlan.date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                   : '';
-                const d = meal ? describeMeal(meal, leftoverSourceDay(plan.days, day, meal)) : null;
-                const cooks = meal ? cooksForText(plan.days, day, meal) : null;
+                const d = meal ? describeMeal(meal, leftoverSourceDay(plan.days, day, meal, around?.prev?.days)) : null;
+                const cooks = meal ? cooksForText(plan.days, day, meal, around?.next?.days) : null;
                 const tone = dayTone(meal);
                 const recipe = meal?.recipeId ? recipes.find((r: Recipe) => r.id === meal.recipeId) : null;
                 const recipeNotes = (recipe?.notes || '').trim();

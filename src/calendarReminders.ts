@@ -8,7 +8,7 @@ import { BatchItem, MealPlan, PlannedMeal, Recipe, UserPreferences } from './typ
 import { eatAtFor, parseClock, prepTonight, recipeMinutes, clockText } from './cookInfo';
 import { REHEAT_MINUTES, dayISO, isCookable } from './components/cook/cookDays';
 import { DAYS_OF_WEEK, formatWeekRange } from './utils';
-import { changedDaysSinceList } from './planning';
+import { changedDaysSinceList, weekNeighbours } from './planning';
 import { reminderSettings } from './reminderSettings';
 
 /** A recipe with no times in it: assume this long. */
@@ -172,7 +172,7 @@ export function planReminders(
     const week = isoDay(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7 - weekday));
     const plan = (state.mealPlans || []).find((p) => p.startDate === week);
     const empty = DAYS_OF_WEEK.filter((day) => !plan?.days?.[day]?.meals?.length);
-    const changed = changedDaysSinceList(plan);
+    const changed = changedDaysSinceList(plan, weekNeighbours(state.mealPlans, plan));
     const range = formatWeekRange(week);
     const say: [string, string] | null =
       empty.length === 7

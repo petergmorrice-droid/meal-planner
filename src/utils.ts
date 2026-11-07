@@ -120,39 +120,58 @@ export function createEmptyPlan(mondayDate: Date): MealPlan {
 
 import { getCatalog } from './utils/shoppingConversion';
 import { buildShoppingLines, matchKey, formatCookingAmount, type IngredientInput, type Catalog } from './shopping';
+import { carriedLeftovers, leftoverSource, type WeekNeighbours } from './planning';
 
 export * from './utils/shoppingConversion';
 
 /** One ingredient of a planned meal, scaled to the meal's people, with the day and meal it's for. */
-export type PlannedIngredient = IngredientInput & { day: string; meal: PlannedMeal };
+export type PlannedIngredient = IngredientInput & {
+  day: string;
+  meal: PlannedMeal;
+  /** Bought with this cook for leftovers next week: the day they're for ("Tuesday"). */
+  leftoversFor?: string;
+};
 
-/** Every recipe ingredient and side on the week, scaled to the number of people, day by day. */
-export function planIngredientInputs(plan: MealPlan, recipes: Recipe[]): PlannedIngredient[] {
+/**
+ * Every recipe ingredient and side on the week, scaled to the number of people, day by day. Given
+ * the weeks either side, leftovers that carry over are bought with their cook: a cook at the end of
+ * the week buys for next week's leftovers of it too, and leftovers of a cook last week add nothing
+ * (their sides still go on this week).
+ */
+export function planIngredientInputs(plan: MealPlan, recipes: Recipe[], around?: WeekNeighbours): PlannedIngredient[] {
   const inputs: PlannedIngredient[] = [];
   if (!plan || !plan.days) return inputs;
+  const addRecipe = (recipe: Recipe, servings: number, dayName: string, meal: PlannedMeal, leftoversFor?: string) => {
+    if (!Array.isArray(recipe.ingredients)) return;
+    const baseServings = recipe.servings && recipe.servings > 0 ? recipe.servings : 2;
+    const scale = servings / baseServings;
+    recipe.ingredients.forEach((ing) => {
+      if (!ing || !ing.name) return;
+      const amount = typeof ing.amount === 'number' ? ing.amount : parseFloat(String(ing.amount));
+      inputs.push({
+        name: ing.name,
+        amount: isFinite(amount) ? amount * scale : ing.amount,
+        unit: ing.unit,
+        category: ing.category,
+        groceryId: ing.groceryId,
+        source: recipe.name,
+        day: dayName,
+        meal,
+        ...(leftoversFor ? { leftoversFor } : {}),
+      });
+    });
+  };
   (Object.entries(plan.days) as [string, DayPlan][]).forEach(([dayName, day]) => {
     if (!day || !day.meals) return;
     day.meals.forEach((meal) => {
       if ((meal.type === 'recipe' || meal.type === 'leftover') && meal.recipeId) {
         const recipe = recipes.find((r) => r.id === meal.recipeId);
-        if (recipe && Array.isArray(recipe.ingredients)) {
-          const mealServings = meal.servings ?? 2;
-          const baseServings = recipe.servings && recipe.servings > 0 ? recipe.servings : 2;
-          const scale = mealServings / baseServings;
-          recipe.ingredients.forEach((ing) => {
-            if (!ing || !ing.name) return;
-            const amount = typeof ing.amount === 'number' ? ing.amount : parseFloat(String(ing.amount));
-            inputs.push({
-              name: ing.name,
-              amount: isFinite(amount) ? amount * scale : ing.amount,
-              unit: ing.unit,
-              category: ing.category,
-              groceryId: ing.groceryId,
-              source: recipe.name,
-              day: dayName,
-              meal,
-            });
-          });
+        const boughtLastWeek = !!around?.prev && !!leftoverSource(plan.days, dayName, meal, around.prev.days)?.lastWeek;
+        if (recipe && !boughtLastWeek) {
+          addRecipe(recipe, meal.servings ?? 2, dayName, meal);
+          for (const c of carriedLeftovers(plan.days, dayName, meal, around?.next?.days)) {
+            addRecipe(recipe, c.meal.servings ?? 2, dayName, meal, c.day);
+          }
         }
       }
 
@@ -176,14 +195,20 @@ export function planIngredientInputs(plan: MealPlan, recipes: Recipe[]): Planned
 }
 
 /**
- * The shopping list for one week's plan: every recipe ingredient and side,
- * scaled to the number of people, combined per product and rounded up to what
- * you actually buy, less anything you said you've already got (`plan.onHand`, from Auto populate).
+ * A week's meal ingredients as shopping-list lines. Pass the weeks either side so leftovers that
+ * carry over from Sunday into the next week are bought once, with the cook.
  */
-export function generateShoppingListForPlan(plan: MealPlan, recipes: Recipe[], catalog?: Catalog): ShoppingListItem[] {
+export function generateShoppingListForPlan(
+  plan: MealPlan,
+  recipes: Recipe[],
+  catalog?: Catalog,
+  around?: WeekNeighbours,
+): ShoppingListItem[] {
   if (!plan || !plan.days) return [];
   const weekLabel = `Week of ${formatWeekRange(plan.startDate)}`;
-  const inputs: IngredientInput[] = planIngredientInputs(plan, recipes).map(({ day: _d, meal: _m, ...input }) => input);
+  const inputs: IngredientInput[] = planIngredientInputs(plan, recipes, around).map(
+    ({ day: _d, meal: _m, leftoversFor: _l, ...input }) => input,
+  );
   const have: IngredientInput[] = (plan.onHand || []).map((h) => ({
     name: h.name,
     amount: h.amount,

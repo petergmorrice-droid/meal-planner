@@ -2,7 +2,7 @@
 // "Update list") and by Shop's "Planning has changed" note.
 import { MealPlan, Recipe, RecurringItem, ShoppingListItem } from './types';
 import { generateShoppingListForPlan, getCurrentMondayStr, getNextMondayStr, formatWeekRange } from './utils';
-import { listSnapshot } from './planning';
+import { listSnapshot, weekNeighbours, type WeekNeighbours } from './planning';
 import type { Catalog } from './shopping';
 import type { AppStore } from './store';
 
@@ -21,12 +21,18 @@ export function weekLabelFor(startDate: string): string {
  * latest copy of the week and the list (the screen's may be a moment behind).
  */
 export function sendWeekToShoppingList(store: AppStore, plan: MealPlan, opts: { resetMeals?: boolean } = {}) {
-  const latest = store.getState().mealPlans.find((p) => p.id === plan.id) || plan;
-  const sentPlan: MealPlan = { ...latest, status: 'finalized', lastFinalizedSnapshot: listSnapshot(latest) };
+  const plans = store.getState().mealPlans;
+  const latest = plans.find((p) => p.id === plan.id) || plan;
+  // Leftovers carried over from Sunday into next week are bought with the cook (see planIngredientInputs).
+  const around = weekNeighbours(plans, latest);
+  const sentPlan: MealPlan = { ...latest, status: 'finalized', lastFinalizedSnapshot: listSnapshot(latest, around) };
   store.updateMealPlan(sentPlan);
   const removed: string[] = store.dismissedShoppingItemIds || [];
   store.updateShoppingList((list, s) =>
-    listWithWeek(list, sentPlan, s.recipes, s.preferences?.recurringItems || [], removed, undefined, opts),
+    listWithWeek(list, sentPlan, s.recipes, s.preferences?.recurringItems || [], removed, undefined, {
+      ...opts,
+      around: weekNeighbours(s.mealPlans, sentPlan),
+    }),
   );
 }
 
@@ -62,6 +68,7 @@ export function mealLinesShopped(list: ShoppingListItem[], planId: string): numb
  * The shopping list with this week's staples and meal ingredients brought up to date (see above).
  * With `resetMeals` (Planning's "Update list"), the meal ingredients start again from the meals:
  * ticks, out-of-stock marks and amounts changed by hand go; notes and cupboard answers stay.
+ * `around` (the weeks either side) lets leftovers that carry over be bought with their cook.
  */
 export function listWithWeek(
   list: ShoppingListItem[],
@@ -70,9 +77,9 @@ export function listWithWeek(
   staples: RecurringItem[],
   dismissedItemIds: string[],
   catalog?: Catalog,
-  { resetMeals = false }: { resetMeals?: boolean } = {},
+  { resetMeals = false, around }: { resetMeals?: boolean; around?: WeekNeighbours } = {},
 ): ShoppingListItem[] {
-  const targetItems = generateShoppingListForPlan(plan, recipes, catalog);
+  const targetItems = generateShoppingListForPlan(plan, recipes, catalog, around);
   const existingItemsForPlan = list.filter((i) => i.planId === plan.id);
   const adhocOrBatchItems = existingItemsForPlan.filter((i) => i.isAdhoc || i.isBatch);
   const existingMealItems = existingItemsForPlan.filter((i) => !i.isAdhoc && !i.isBatch && !i.isRecurring);
@@ -164,11 +171,12 @@ export function mealLinesOutOfDate(
   staples: RecurringItem[],
   dismissedItemIds: string[],
   catalog?: Catalog,
+  around?: WeekNeighbours,
 ): string[] {
   if (plan.status !== 'finalized') return [];
   const isMeal = (i: ShoppingListItem) => isMealLine(i, plan.id);
   const updated = new Map(
-    listWithWeek(list, plan, recipes, staples, dismissedItemIds, catalog)
+    listWithWeek(list, plan, recipes, staples, dismissedItemIds, catalog, { around })
       .filter(isMeal)
       .map((i) => [i.id, i]),
   );

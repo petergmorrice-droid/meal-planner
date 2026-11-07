@@ -2,7 +2,7 @@
 import { Info, PackageCheck, PackagePlus, RefreshCw, Repeat } from 'lucide-react';
 import { MealPlan, ShoppingListItem } from '../../types';
 import { StapleSuggestion } from '../../shopList';
-import { changedDaysSinceList } from '../../planning';
+import { changedDaysSinceList, type WeekNeighbours } from '../../planning';
 import { formatListWithAnd } from './needs';
 
 /** The week's meals aren't on the list yet (or there are none). */
@@ -40,14 +40,17 @@ export function UnsentNotice({ plan, onPlanning }: { plan: MealPlan; onPlanning?
  */
 export function OutOfDateNotice({
   plan,
+  around,
   staleLines,
   onUpdate,
 }: {
   plan: MealPlan;
+  /** The weeks either side (leftovers that carry over from Sunday into the next week). */
+  around?: WeekNeighbours;
   staleLines: string[];
   onUpdate: () => void;
 }) {
-  const changed = changedDaysSinceList(plan);
+  const changed = changedDaysSinceList(plan, around);
   if (!changed.length && !staleLines.length) return null;
   const named =
     staleLines.length > 3

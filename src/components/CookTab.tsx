@@ -5,7 +5,8 @@ import Notice from './Notice';
 import { ChevronLeft, ChevronRight, ChefHat, Check, Pencil } from 'lucide-react';
 import { MealPlan, PlannedMeal, Recipe, BatchItem, DayPlan, UserPreferences, TabName } from '../types';
 import { DAYS_OF_WEEK, formatDateISO, getMonday, getNextMonday, isWeekWithinForwardLimit } from '../utils';
-import { leftoverSourceDay, moveMeal, relinkLeftovers, cooksForText, undoDays } from '../planning';
+import { leftoverSourceDay, moveMeal, relinkLeftovers, cooksForText, weekNeighbours } from '../planning';
+import { changeWeek, nextWeekText, undoWeekChange } from '../weekChange';
 import { formatWeekSpan, weekStartShort } from '../shopList';
 import {
   recipeMinutes,
@@ -100,6 +101,10 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
           ? 'Next week'
           : `w/c ${weekStartShort(start)}`;
   const isThisWeek = plan?.startDate === currentMondayStr;
+  // The weeks either side by date: leftovers carry over from Sunday into Monday and Tuesday.
+  const around = useMemo(() => weekNeighbours(store.state.mealPlans, plan), [store.state.mealPlans, plan]);
+  const prevDays = around.prev?.days;
+  const nextDays = around.next?.days;
 
   // ---------- What's on ----------
   /** Any plan's meal on a date (tomorrow may be in next week's plan). */
@@ -315,38 +320,42 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
   };
 
   // ---------- Day panel actions (same panel as Planning) ----------
-  /** Change the week's days (from its latest copy), with Undo that puts back just the days it changed. */
-  const changeDays = (change: (days: Record<string, DayPlan>) => Record<string, DayPlan>, text: string) => {
-    const before = plan && livePlan(plan.id);
-    if (!before) return;
-    const after = change(before.days);
-    storeRef.current.changeMealPlan(before.id, (p) => ({ ...p, days: change(p.days) }));
-    setToast({
-      text,
-      undo: () =>
-        storeRef.current.changeMealPlan(before.id, (p) => ({ ...p, days: undoDays(p.days, before.days, after) })),
-    });
+  /**
+   * Change the week's days (from its latest copy), with Undo that puts back just the days it changed.
+   * Next week's leftovers of a cook at the end of this week follow it (they're cooked fresh if it goes).
+   */
+  const changeDays = (
+    change: (days: Record<string, DayPlan>, prev?: Record<string, DayPlan>) => Record<string, DayPlan>,
+    text: string,
+  ) => {
+    if (!plan) return;
+    const c = changeWeek(storeRef.current, plan.id, (p, near) => ({ ...p, days: change(p.days, near.prev?.days) }));
+    if (!c) return;
+    setToast({ text: text + nextWeekText(c), undo: () => undoWeekChange(storeRef.current, c) });
   };
   const moveDay = (from: string, to: string) => {
     const before = plan && livePlan(plan.id);
     if (!before) return;
-    const r = moveMeal(before.days, from, to);
+    const r = moveMeal(before.days, from, to, prevDays);
     const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
     changeDays(
-      (days) => moveMeal(days, from, to).days,
+      (days, prev) => moveMeal(days, from, to, prev).days,
       (r.swapped ? `Swapped ${from} and ${to}.` : `Moved to ${to}.`) + fresh,
     );
   };
   const removeDay = (day: string, mealId: string) => {
     const before = plan && livePlan(plan.id);
     if (!before) return;
-    const without = (days: Record<string, DayPlan>) =>
+    const without = (days: Record<string, DayPlan>, prev?: Record<string, DayPlan>) =>
       days[day]
-        ? relinkLeftovers({ ...days, [day]: { ...days[day], meals: days[day].meals.filter((m) => m.id !== mealId) } })
+        ? relinkLeftovers(
+            { ...days, [day]: { ...days[day], meals: days[day].meals.filter((m) => m.id !== mealId) } },
+            prev,
+          )
         : { days, freshDays: [] as string[] };
-    const fresh = without(before.days).freshDays;
+    const fresh = without(before.days, prevDays).freshDays;
     changeDays(
-      (days) => without(days).days,
+      (days, prev) => without(days, prev).days,
       `Removed from ${day}.${fresh.length ? ` ${fresh.join(' and ')} now cooked fresh.` : ''}`,
     );
   };
@@ -535,8 +544,8 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
                   isToday={isToday}
                   isTomorrow={iso === tomorrowIso}
                   isPast={isPast}
-                  fromDay={meal ? leftoverSourceDay(plan.days, day, meal) : null}
-                  after={meal ? leftoversAfter(plan.days, day, meal) : { extra: 0, days: [] }}
+                  fromDay={meal ? leftoverSourceDay(plan.days, day, meal, prevDays) : null}
+                  after={meal ? leftoversAfter(plan.days, day, meal, nextDays) : { extra: 0, days: [] }}
                   prep={
                     recipe
                       ? Number(
@@ -557,7 +566,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
                   onCook={() => meal && startCooking(plan.id, day, meal)}
                   onRecipe={() => {
                     if (!meal || !recipe) return;
-                    const a = leftoversAfter(plan.days, day, meal);
+                    const a = leftoversAfter(plan.days, day, meal, nextDays);
                     setViewing({ planId: plan.id, day, meal, recipe, servings: (meal.servings || 2) + a.extra });
                   }}
                   onNote={() => setNoting(day)}
@@ -665,8 +674,8 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
           day={daySheet}
           dayPlan={plan.days[daySheet]}
           meal={sheetMeal}
-          cooksFor={cooksForText(plan.days, daySheet, sheetMeal)}
-          fromDay={leftoverSourceDay(plan.days, daySheet, sheetMeal)}
+          cooksFor={cooksForText(plan.days, daySheet, sheetMeal, nextDays)}
+          fromDay={leftoverSourceDay(plan.days, daySheet, sheetMeal, prevDays)}
           plannedDays={DAYS_OF_WEEK.map((d) => ({
             day: d,
             date: plan.days[d]?.date,
@@ -695,7 +704,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
           onOpenRecipe={
             sheetRecipe
               ? () => {
-                  const after = leftoversAfter(plan.days, daySheet, sheetMeal);
+                  const after = leftoversAfter(plan.days, daySheet, sheetMeal, nextDays);
                   setViewing({
                     planId: plan.id,
                     day: daySheet,

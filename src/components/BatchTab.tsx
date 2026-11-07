@@ -20,7 +20,8 @@ import { freezerGroups, frozenAgo, mealsFor, planDayDate, planFreezerMeal, whenT
 import { mealTitle } from './planner/DayListRow';
 import { RecipeModal } from './RecipePopup';
 import type { AppStore } from '../store';
-import { undoDays } from '../planning';
+import { weekNeighbours } from '../planning';
+import { changeWeek, nextWeekText, undoWeekChange } from '../weekChange';
 import { useLatest } from '../hooks/useLatest';
 import { EMPTY_LIST } from '../emptyList';
 
@@ -197,23 +198,29 @@ export default function BatchTab({
           todayIso={todayIso}
           people={people}
           onPick={(plan, day) => {
-            const live: MealPlan = (latest().mealPlans || []).find((p: MealPlan) => p.id === plan.id) || plan;
-            const before = live;
+            const plans: MealPlan[] = latest().mealPlans || [];
+            const live: MealPlan = plans.find((p: MealPlan) => p.id === plan.id) || plan;
             const mealId = crypto.randomUUID();
-            const r = planFreezerMeal(live.days, day, planGroup, people, mealId);
-            storeRef.current.changeMealPlan(live.id, (p) => ({
+            // Leftovers of a cook at the end of last week stay leftovers; next week's follow this week.
+            const r = planFreezerMeal(
+              live.days,
+              day,
+              planGroup,
+              people,
+              mealId,
+              weekNeighbours(plans, live).prev?.days,
+            );
+            const c = changeWeek(storeRef.current, live.id, (p, near) => ({
               ...p,
-              days: planFreezerMeal(p.days, day, planGroup, people, mealId).days,
+              days: planFreezerMeal(p.days, day, planGroup, people, mealId, near.prev?.days).days,
             }));
             setPlanning(null);
-            const fresh = r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '';
+            if (!c) return;
+            const fresh =
+              (r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '') + nextWeekText(c);
             setToast({
               text: `${planGroup.name} on ${whenText(planDayDate(live, day), todayIso)}${r.replaced ? ` instead of ${mealTitle(r.replaced)}` : ''}.${fresh}`,
-              undo: () =>
-                storeRef.current.changeMealPlan(before.id, (p) => ({
-                  ...p,
-                  days: undoDays(p.days, before.days, r.days),
-                })),
+              undo: () => undoWeekChange(storeRef.current, c),
             });
           }}
           onGoPlanning={() => {

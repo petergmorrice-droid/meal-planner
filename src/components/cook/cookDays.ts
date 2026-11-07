@@ -1,6 +1,7 @@
 /** Working out the Cook tab's days: what can be cooked, each day's date, and leftovers to cook extra for. */
 import { MealPlan, PlannedMeal, DayPlan } from '../../types';
 import { DAYS_OF_WEEK, formatDateISO } from '../../utils';
+import { carriedLeftovers, otherWeekDay } from '../../planning';
 
 export const isCookable = (m?: PlannedMeal | null) =>
   !!m && (m.type === 'recipe' || m.type === 'leftover' || m.type === 'batch');
@@ -16,11 +17,15 @@ export function dayISO(plan: MealPlan, day: string): string {
   return formatDateISO(d);
 }
 
-/** Later days this week that eat leftovers of this cook: how many extra portions, which days. */
+/**
+ * Later days that eat leftovers of this cook: how many extra portions, which days. Given next week's
+ * days, a cook at the end of the week counts next week's leftovers of it too ("Tue 10 Nov").
+ */
 export function leftoversAfter(
   days: Record<string, DayPlan>,
   day: string,
   meal: PlannedMeal,
+  nextDays?: Record<string, DayPlan> | null,
 ): { extra: number; days: string[] } {
   const out = { extra: 0, days: [] as string[] };
   if (meal.type !== 'recipe' || !meal.recipeId) return out;
@@ -31,6 +36,10 @@ export function leftoversAfter(
       out.extra += m.servings || 2;
       out.days.push(DAYS_OF_WEEK[i]);
     } else break;
+  }
+  for (const c of carriedLeftovers(days, day, meal, nextDays)) {
+    out.extra += c.meal.servings || 2;
+    out.days.push(otherWeekDay(nextDays, c.day));
   }
   return out;
 }

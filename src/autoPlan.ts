@@ -396,7 +396,16 @@ export function fillDays(
   days: Record<string, DayPlan>,
   picks: DayPick[],
   people: number,
-  { replace = [], newId = () => crypto.randomUUID() }: { replace?: string[]; newId?: () => string } = {},
+  {
+    replace = [],
+    newId = () => crypto.randomUUID(),
+    prevDays,
+  }: {
+    replace?: string[];
+    newId?: () => string;
+    /** Last week's days: leftovers of a cook at the end of it stay leftovers. */
+    prevDays?: Record<string, DayPlan> | null;
+  } = {},
 ): { days: Record<string, DayPlan>; added: number; replaced: PlannedMeal[]; freshDays: string[] } {
   let out = { ...days };
   let added = 0;
@@ -422,6 +431,6 @@ export function fillDays(
     added++;
   }
   let freshDays: string[] = [];
-  if (replaced.length) ({ days: out, freshDays } = relinkLeftovers(out));
+  if (replaced.length) ({ days: out, freshDays } = relinkLeftovers(out, prevDays));
   return { days: out, added, replaced, freshDays };
 }

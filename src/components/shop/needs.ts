@@ -7,6 +7,7 @@ import { ShoppingListItem, MealPlan, DayPlan, Recipe } from '../../types';
 import { matchProduct, groupingKey, formatUnit, formatCookingAmount } from '../../shopping';
 import { generateShoppingListForPlan, getCatalog, DAYS_OF_WEEK } from '../../utils';
 import { partLabel } from '../../shopList';
+import { carriedLeftovers, leftoverSource, otherWeekDay, type WeekNeighbours } from '../../planning';
 
 export interface MealRequirementDetail {
   recipeName: string;
@@ -15,6 +16,8 @@ export interface MealRequirementDetail {
   amount: number | string;
   displayQuantity?: string;
   unit: string;
+  /** Bought with a cook at the end of this week, for leftovers next week: that day ("Tue 10 Nov"). */
+  nextWeek?: string;
 }
 
 export interface PlannedRequirement {
@@ -43,12 +46,20 @@ export function formatListWithAnd(items: string[]): string {
 /** Is this a line for the week's meals (not added by hand, a staple or an extra recipe)? */
 const isMealLine = (i: ShoppingListItem) => !i.isAdhoc && !i.isBatch && !i.isRecurring;
 
-/** For a sent week: what its meals need of each line, by line name (lower case). */
-export function plannedNeedsByName(plan: MealPlan | null, recipes: Recipe[]): Map<string, PlannedRequirement> {
+/**
+ * For a sent week: what its meals need of each line, by line name (lower case). With the weeks either
+ * side, leftovers that carry over are counted with their cook (Sunday's roast buys for Tuesday next
+ * week; Tuesday's leftovers need nothing).
+ */
+export function plannedNeedsByName(
+  plan: MealPlan | null,
+  recipes: Recipe[],
+  around?: WeekNeighbours,
+): Map<string, PlannedRequirement> {
   const map = new Map<string, PlannedRequirement>();
   if (!plan || !plan.days || plan.status !== 'finalized') return map;
 
-  const targetItems = generateShoppingListForPlan(plan, recipes);
+  const targetItems = generateShoppingListForPlan(plan, recipes, undefined, around);
   const catalog = getCatalog();
   const lineKeyFor = (name: string, unit?: string, amount?: number, groceryId?: string) => {
     const product = matchProduct(catalog, name, { unit, amount, groceryId });
@@ -76,30 +87,37 @@ export function plannedNeedsByName(plan: MealPlan | null, recipes: Recipe[]): Ma
         }
       }
 
+      const addMeal = (recipe: Recipe, mealServings: number, night: string, nextWeek?: string) => {
+        const baseServings = recipe.servings ?? 2;
+        const scale = mealServings / (baseServings || 2);
+        recipe.ingredients.forEach((ing) => {
+          if (!ing || !ing.name) return;
+          if (lineKeyFor(ing.name, ing.unit, ing.amount, ing.groceryId) === targetKey) {
+            const scaled = Math.round(ing.amount * scale * 100) / 100;
+            recipeSet.add(recipe.name);
+            if (!nextWeek) nightSet.add(night);
+            breakdown.push({
+              recipeName: recipe.name,
+              night,
+              servings: mealServings,
+              amount: scaled,
+              unit: ing.unit,
+              ...(nextWeek ? { nextWeek } : {}),
+            });
+          }
+        });
+      };
+
       dp.meals.forEach((meal) => {
         if ((meal.type === 'recipe' || meal.type === 'leftover') && meal.recipeId) {
           const recipe = recipes.find((r: Recipe) => r.id === meal.recipeId);
           if (!recipe || !recipe.ingredients) return;
-
-          const mealServings = meal.servings ?? 2;
-          const baseServings = recipe.servings ?? 2;
-          const scale = mealServings / (baseServings || 2);
-
-          recipe.ingredients.forEach((ing) => {
-            if (!ing || !ing.name) return;
-            if (lineKeyFor(ing.name, ing.unit, ing.amount, ing.groceryId) === targetKey) {
-              const scaled = Math.round(ing.amount * scale * 100) / 100;
-              recipeSet.add(recipe.name);
-              nightSet.add(dayName);
-              breakdown.push({
-                recipeName: recipe.name,
-                night: dayName,
-                servings: mealServings,
-                amount: scaled,
-                unit: ing.unit,
-              });
-            }
-          });
+          // Leftovers of a cook last week were bought then.
+          if (around?.prev && leftoverSource(plan.days, dayKey, meal, around.prev.days)?.lastWeek) return;
+          addMeal(recipe, meal.servings ?? 2, dayName);
+          for (const c of carriedLeftovers(plan.days, dayKey, meal, around?.next?.days)) {
+            addMeal(recipe, c.meal.servings ?? 2, c.day, otherWeekDay(around?.next?.days, c.day));
+          }
         }
       });
     });
@@ -132,7 +150,7 @@ export function mealBreakdownFor(
     // Less than one reads singular: "⅔ can"
     const label = formatUnit(b.unit || '', n > 0 && n < 1 ? 1 : n);
     const amount = n > 0 ? `${formatCookingAmount(n, b.unit)}${label ? ` ${label}` : ''}` : '';
-    const name = `${b.recipeName} (${b.night.slice(0, 3)})`;
+    const name = `${b.recipeName} (${b.nextWeek || b.night.slice(0, 3)})`;
     if (!seen.has(name + amount)) {
       seen.add(name + amount);
       out.push({ label: name, amount });
@@ -141,9 +159,9 @@ export function mealBreakdownFor(
   return out;
 }
 
-/** The week's meal needs, worked out once per change to the week or the recipes. */
-export function usePlannedNeeds(activePlan: MealPlan | null, recipes: Recipe[] | undefined) {
-  const needs = useMemo(() => plannedNeedsByName(activePlan, recipes || []), [activePlan, recipes]);
+/** The week's meal needs, worked out once per change to the week (or the weeks either side) or the recipes. */
+export function usePlannedNeeds(activePlan: MealPlan | null, recipes: Recipe[] | undefined, around?: WeekNeighbours) {
+  const needs = useMemo(() => plannedNeedsByName(activePlan, recipes || [], around), [activePlan, recipes, around]);
 
   /** What the meals need of a meal line (null for anything else, or before the week is sent). */
   const requirementFor = (item: ShoppingListItem): PlannedRequirement | null => {
