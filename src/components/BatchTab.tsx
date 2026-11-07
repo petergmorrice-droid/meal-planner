@@ -21,7 +21,7 @@ import { mealTitle } from './planner/DayListRow';
 import { RecipeModal } from './RecipePopup';
 import type { AppStore } from '../store';
 import { weekNeighbours } from '../planning';
-import { changeWeek, nextWeekText, undoWeekChange } from '../weekChange';
+import { changeWeek, followOnText, undoWeekChange } from '../weekChange';
 import { useLatest } from '../hooks/useLatest';
 import { EMPTY_LIST } from '../emptyList';
 
@@ -217,7 +217,7 @@ export default function BatchTab({
             setPlanning(null);
             if (!c) return;
             const fresh =
-              (r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '') + nextWeekText(c);
+              (r.freshDays.length ? ` ${r.freshDays.join(' and ')} now cooked fresh.` : '') + followOnText(c);
             setToast({
               text: `${planGroup.name} on ${whenText(planDayDate(live, day), todayIso)}${r.replaced ? ` instead of ${mealTitle(r.replaced)}` : ''}.${fresh}`,
               undo: () => undoWeekChange(storeRef.current, c),

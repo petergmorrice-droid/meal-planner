@@ -20,7 +20,6 @@ import AddToDaySheet from './planner/AddToDaySheet';
 import DayPickerModal, { QuickMeal } from './planner/DayPickerModal';
 import CustomMealModal, { CustomMealDraft } from './planner/CustomMealModal';
 import SendToListModal, { NoMealsModal } from './planner/SendToListModal';
-import { mealLinesShopped } from '../planShopping';
 import CopyWeekModal from './planner/CopyWeekModal';
 import AutoPopulateSheet from './planner/AutoPopulateSheet';
 import { HowAreYouHavingIt, RemoveLeftoversQuestion } from './planner/LeftoverPrompts';
@@ -486,11 +485,7 @@ export default function PlanningTab({
             else editor.sendToList();
           }}
           onClose={() => setShowFinalizeConfirmModal(false)}
-          update={
-            updatingList && currentPlan.status === 'finalized'
-              ? { changedDays, shopped: mealLinesShopped(store.state.shoppingList, currentPlan.id) }
-              : undefined
-          }
+          update={updatingList && currentPlan.status === 'finalized' ? { changedDays } : undefined}
         />
       )}
 

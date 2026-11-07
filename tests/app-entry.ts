@@ -112,7 +112,7 @@ export {
   followWeekBefore,
   otherWeekDay,
 } from '../src/planning';
-export { changeWeek, undoWeekChange, nextWeekText } from '../src/weekChange';
+export { changeWeek, undoWeekChange, followOnText } from '../src/weekChange';
 export { leftoversAfter } from '../src/components/cook/cookDays';
 export { speechChunks, forSpeech } from '../src/speech';
 export { parseVoiceCommand, parseAlternatives } from '../src/voiceCommands';
@@ -154,7 +154,14 @@ export {
   listWithStaples,
 } from '../src/staples';
 export { getCatalog } from '../src/utils';
-export { listWithWeek, mealLinesOutOfDate, mealLinesShopped } from '../src/planShopping';
+export {
+  listWithWeek,
+  mealLinesOutOfDate,
+  mealLinesShopped,
+  syncWeekMeals,
+  keepListsInStep,
+  listSyncText,
+} from '../src/planShopping';
 export { buildCatalog } from '../src/shopping';
 export { INITIAL_GROCERY_DATABASE } from '../src/utils/initialGroceryDb';
 export {

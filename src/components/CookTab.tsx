@@ -6,7 +6,8 @@ import { ChevronLeft, ChevronRight, ChefHat, Check, Pencil } from 'lucide-react'
 import { MealPlan, PlannedMeal, Recipe, BatchItem, DayPlan, UserPreferences, TabName } from '../types';
 import { DAYS_OF_WEEK, formatDateISO, getMonday, getNextMonday, isWeekWithinForwardLimit } from '../utils';
 import { leftoverSourceDay, moveMeal, relinkLeftovers, cooksForText, weekNeighbours } from '../planning';
-import { changeWeek, nextWeekText, undoWeekChange } from '../weekChange';
+import { changeWeek, followOnText, listsInStep, undoWeekChange } from '../weekChange';
+import { listSyncText } from '../planShopping';
 import { formatWeekSpan, weekStartShort } from '../shopList';
 import {
   recipeMinutes,
@@ -331,7 +332,7 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
     if (!plan) return;
     const c = changeWeek(storeRef.current, plan.id, (p, near) => ({ ...p, days: change(p.days, near.prev?.days) }));
     if (!c) return;
-    setToast({ text: text + nextWeekText(c), undo: () => undoWeekChange(storeRef.current, c) });
+    setToast({ text: text + followOnText(c), undo: () => undoWeekChange(storeRef.current, c) });
   };
   const moveDay = (from: string, to: string) => {
     const before = plan && livePlan(plan.id);
@@ -682,13 +683,16 @@ export default function CookTab({ store, onNavigateTab }: CookTabProps) {
             meal: plan.days[d]?.meals?.[0] || null,
           }))}
           hasRecipe={!!sheetRecipe}
-          onSave={(patch) =>
+          onSave={(patch) => {
             patchMeal(plan.id, daySheet, sheetMeal.id, (m) => ({
               ...m,
               servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)),
               note: patch.note || undefined,
-            }))
-          }
+            }));
+            // More people: a sent week's list follows (last week's too, for leftovers it buys for).
+            const more = listSyncText(listsInStep(storeRef.current, [plan.id, around.prev?.id]));
+            if (more) setToast({ text: `Saved.${more}` });
+          }}
           onChangeMeal={() => {
             setDaySheet(null);
             onNavigateTab?.('planning', plan.id);

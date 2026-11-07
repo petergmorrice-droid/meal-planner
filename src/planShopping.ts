@@ -2,8 +2,8 @@
 // "Update list") and by Shop's "Planning has changed" note.
 import { MealPlan, Recipe, RecurringItem, ShoppingListItem } from './types';
 import { generateShoppingListForPlan, getCurrentMondayStr, getNextMondayStr, formatWeekRange } from './utils';
-import { listSnapshot, weekNeighbours, type WeekNeighbours } from './planning';
-import type { Catalog } from './shopping';
+import { changedDaysSinceList, listSnapshot, weekNeighbours, type WeekNeighbours } from './planning';
+import { canonicalUnit, type Catalog } from './shopping';
 import type { AppStore } from './store';
 
 export function weekLabelFor(startDate: string): string {
@@ -187,4 +187,185 @@ export function mealLinesOutOfDate(
       return next && (next.amount !== i.amount || next.unit !== i.unit || !!next.needsCheck !== !!i.needsCheck);
     })
     .map((i) => i.name);
+}
+
+// ---------- Keeping a sent week's list in step with its meals ----------
+
+/** What keeping a list in step did, to say so: things newly on the list, and things it now needs more of. */
+export interface ListSync {
+  added: string[];
+  more: string[];
+}
+
+const nameKey = (name: string) => name.toLowerCase().trim();
+const tidy = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * A sent week's meal ingredients brought into line with its meals, without undoing your shopping:
+ * - something new goes on, unticked ("Sweetcorn");
+ * - a line not yet ticked takes the amount the meals need now (unless you changed it by hand);
+ * - a line already ticked stays ticked, and if the meals now need more of it, the rest goes on as a
+ *   separate unticked line (the "top-up", same product, so it shows on the same row);
+ * - lines for meals taken off go, unless they're ticked (you've bought them).
+ * Staples, things you added and extra recipes aren't touched; nor is anything either of you removed.
+ */
+export function syncWeekMeals(
+  list: ShoppingListItem[],
+  plan: MealPlan,
+  recipes: Recipe[],
+  dismissedItemIds: string[],
+  catalog?: Catalog,
+  around?: WeekNeighbours,
+): ListSync & { list: ShoppingListItem[] } {
+  const targets = generateShoppingListForPlan(plan, recipes, catalog, around);
+  const mine = list.filter((i) => isMealLine(i, plan.id));
+  const byName = new Map<string, ShoppingListItem[]>();
+  for (const i of mine) byName.set(nameKey(i.name), [...(byName.get(nameKey(i.name)) || []), i]);
+  const out: ShoppingListItem[] = [];
+  const added: string[] = [];
+  const more: string[] = [];
+  const done = new Set<string>();
+
+  for (const t of targets) {
+    const key = nameKey(t.name);
+    done.add(key);
+    const lines = byName.get(key) || [];
+    if (!lines.length) {
+      if (!dismissedItemIds.includes(t.id)) {
+        out.push(t);
+        added.push(t.name);
+      }
+      continue;
+    }
+    // What the meals say about it, on every line for it (amounts aside).
+    const withInfo = (l: ShoppingListItem): ShoppingListItem => {
+      const line: ShoppingListItem = { ...l, recipeNames: t.recipeNames };
+      setCupboard(line, cupboardAfterUpdate(l, t));
+      return line;
+    };
+    const bought = lines.filter((l) => l.checked);
+    const open = lines.filter((l) => !l.checked);
+
+    if (!bought.length) {
+      // Nothing ticked: one line with what the meals need (as before), any top-up folded back in.
+      const first = open.find((l) => l.id === t.id) || open[0];
+      const keep = first.userAdjusted;
+      const line: ShoppingListItem = {
+        ...withInfo(first),
+        amount: keep ? first.amount : t.amount,
+        unit: keep ? first.unit : t.unit,
+        neededText: t.neededText,
+        haveText: t.haveText,
+      };
+      if (!line.haveText) delete line.haveText;
+      if (!line.neededText) delete line.neededText;
+      if (!keep) {
+        delete line.needsCheck;
+        delete line.quantityNote;
+        if (t.needsCheck) line.needsCheck = true;
+        if (t.quantityNote) line.quantityNote = t.quantityNote;
+        const was = open.reduce((n, l) => n + (canonicalUnit(l.unit) === canonicalUnit(t.unit) ? l.amount : 0), 0);
+        if (canonicalUnit(first.unit) === canonicalUnit(t.unit) && t.amount > tidy(was)) more.push(t.name);
+      }
+      out.push(line);
+      continue;
+    }
+
+    // Some already ticked: those stay as bought; what's still needed goes on an unticked line.
+    for (const b of bought) {
+      const line = { ...withInfo(b), neededText: t.neededText };
+      if (!line.neededText) delete line.neededText;
+      out.push(line);
+    }
+    const sameUnit = bought.every((b) => canonicalUnit(b.unit) === canonicalUnit(t.unit));
+    const got = bought.reduce((n, b) => n + (Number(b.amount) || 0), 0);
+    const need = sameUnit ? tidy(t.amount - got) : 0;
+    const byHand = open.filter((l) => l.userAdjusted);
+    for (const l of byHand) out.push(withInfo(l));
+    if (need > 0 && !byHand.length) {
+      const prev = open.find((l) => !l.userAdjusted);
+      const topUp: ShoppingListItem = prev
+        ? { ...withInfo(prev), amount: need, unit: t.unit }
+        : {
+            ...t,
+            id: `${t.id}-more`,
+            amount: need,
+            checked: false,
+          };
+      delete topUp.neededText;
+      delete topUp.haveText;
+      delete topUp.needsCheck;
+      delete topUp.quantityNote;
+      out.push(topUp);
+      if (!prev || need > (Number(prev.amount) || 0)) more.push(t.name);
+    }
+  }
+
+  // Meals taken off: what you've ticked stays (you've bought it); the rest goes.
+  for (const [key, lines] of byName) {
+    if (done.has(key)) continue;
+    for (const l of lines) if (l.checked) out.push(l);
+  }
+  return { list: [...list.filter((i) => !isMealLine(i, plan.id)), ...out], added, more };
+}
+
+/** The bits of the store keeping lists in step uses (the app's store, or a test's). */
+export interface ListStore {
+  getState: () => { mealPlans: MealPlan[]; recipes: Recipe[]; shoppingList: ShoppingListItem[] };
+  changeMealPlan: (planId: string, change: (latest: MealPlan) => MealPlan | null) => void;
+  updateShoppingList: (change: (latest: ShoppingListItem[]) => ShoppingListItem[]) => unknown;
+  dismissedShoppingItemIds?: string[];
+}
+
+/**
+ * Keep sent weeks' lists in step with their meals (see syncWeekMeals), straight after a change: for
+ * each of `planIds` that's been sent and has changed since, the list follows and the record of what
+ * it was made from is brought up to date, so there's no "Update list" to remember. With `always`,
+ * it's done even when the meals haven't changed (a recipe or product has: Shop's note).
+ */
+export function keepListsInStep(
+  store: ListStore,
+  planIds: (string | null | undefined)[],
+  { always = false }: { always?: boolean } = {},
+): ListSync {
+  const res: ListSync = { added: [], more: [] };
+  for (const id of new Set(planIds.filter((x): x is string => !!x))) {
+    const plans = store.getState().mealPlans;
+    const plan = plans.find((p) => p.id === id);
+    if (!plan || plan.status !== 'finalized') continue;
+    const around = weekNeighbours(plans, plan);
+    if (!always && (!plan.lastFinalizedSnapshot || !changedDaysSinceList(plan, around).length)) continue;
+    store.updateShoppingList((list) => {
+      const r = syncWeekMeals(
+        list,
+        plan,
+        store.getState().recipes,
+        store.dismissedShoppingItemIds || [],
+        undefined,
+        around,
+      );
+      res.added.push(...r.added);
+      res.more.push(...r.more);
+      return r.list;
+    });
+    store.changeMealPlan(id, (p) => ({
+      ...p,
+      lastFinalizedSnapshot: listSnapshot(p, weekNeighbours(store.getState().mealPlans, p)),
+    }));
+  }
+  return res;
+}
+
+const andList = (xs: string[]) =>
+  xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
+
+/** What happened to the shopping list, to add to a message: " Sweetcorn added to the shopping list." */
+export function listSyncText(r: ListSync | null | undefined): string {
+  if (!r) return '';
+  const added = [...new Set(r.added)];
+  const more = [...new Set(r.more)].filter((n) => !added.includes(n));
+  const parts: string[] = [];
+  if (added.length) parts.push(` ${andList(added)} added to the shopping list.`);
+  if (more.length) parts.push(` More ${andList(more.map((n) => n.toLowerCase()))} on the shopping list.`);
+  return parts.join('');
 }

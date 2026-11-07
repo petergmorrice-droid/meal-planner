@@ -32,8 +32,8 @@ import {
   moveMeal,
   type WeekNeighbours,
 } from '../../planning';
-import { aroundWeek, changeWeek, nextWeekText, undoWeekChange, type WeekChange } from '../../weekChange';
-import { sendWeekToShoppingList } from '../../planShopping';
+import { aroundWeek, changeWeek, followOnText, undoWeekChange, type WeekChange } from '../../weekChange';
+import { keepListsInStep, listSyncText, sendWeekToShoppingList } from '../../planShopping';
 import { freezerBatchesFor } from '../../recipeInfo';
 import { fillDays, type DayPick } from '../../autoPlan';
 import type { ToastAction } from './usePlanToast';
@@ -103,15 +103,15 @@ export function useWeekEditor({
 
   /**
    * Change the week's days, starting from the latest copy (null: no change). A week already sent
-   * to the shopping list just gets an "Update list" button afterwards; weeks sent before the app
-   * kept a record are taken as matching the list. Next week's leftovers of a cook at the end of
-   * this week follow it (see changeWeek). With `undoLabel`, says so with Undo (and says what
-   * happened to next week's leftovers). Null if nothing changed.
+   * to the shopping list has its list brought up to date straight away, keeping what's ticked; next
+   * week's leftovers of a cook at the end of this week follow it (see changeWeek). With
+   * `undoLabel`, says so with Undo (and what else changed); `quiet` leaves saying so to the caller
+   * (see say). Null if nothing changed.
    */
   const editDays = (
     change: (days: Days, around: WeekNeighbours) => Days | null,
     undoLabel?: string,
-    opts?: { removeOrphansNextWeek?: boolean },
+    { quiet = false, ...opts }: { removeOrphansNextWeek?: boolean; quiet?: boolean } = {},
   ): WeekChange | null => {
     if (!currentPlan) return null;
     const c = changeWeek(
@@ -123,11 +123,18 @@ export function useWeekEditor({
       },
       opts,
     );
-    if (!c) return null;
-    const nextWeek = nextWeekText(c);
+    if (!c || quiet) return c;
+    const nextWeek = followOnText(c);
     if (undoLabel) offerUndo(undoLabel + nextWeek, c);
     else if (nextWeek) offerUndo(nextWeek.trim(), c);
     return c;
+  };
+
+  /** "Saved", plus what else changed ("Sweetcorn added to the shopping list"), with Undo then. */
+  const say = (text: string, c: WeekChange | null) => {
+    const more = followOnText(c);
+    if (c && more) offerUndo(text + more, c);
+    else setToastMessage(text);
   };
 
   /** Change one meal on a day (null if the day or meal isn't there any more). */
@@ -198,8 +205,9 @@ export function useWeekEditor({
     if (mealToRemove) {
       editDays(write, description);
     } else {
-      if (description) setToastMessage(description);
-      editDays(write);
+      // Adding: just says so, unless the shopping list changed too (then with Undo).
+      const c = editDays(write, undefined, { quiet: true });
+      if (description || followOnText(c)) say(description, c);
     }
   };
 
@@ -291,14 +299,17 @@ export function useWeekEditor({
 
   /** People and notes from the day panel. */
   const saveDayDetails = (dayName: string, mealId: string, patch: { servings: number; note: string }) => {
-    const saved = !!editDays((days) =>
-      editMeal(days, dayName, mealId, (m) => ({
-        ...m,
-        servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)),
-        note: patch.note,
-      })),
+    const c = editDays(
+      (days) =>
+        editMeal(days, dayName, mealId, (m) => ({
+          ...m,
+          servings: m.type === 'no_meal' ? 0 : Math.max(1, Math.min(24, patch.servings)),
+          note: patch.note,
+        })),
+      undefined,
+      { quiet: true },
     );
-    if (saved) setToastMessage('Saved');
+    if (c) say('Saved.', c);
   };
 
   /** Move a meal to another day (or swap two days). Leftovers follow their cook. */
@@ -327,31 +338,38 @@ export function useWeekEditor({
     // Next week's leftovers are said here, so don't say them twice.
     const c = editDays((days) => changeDayMeal(days, p.targetDayName, p.mealToRemove, p.newMeal).days, undefined, {
       removeOrphansNextWeek: true,
+      quiet: true,
     });
-    if (c) offerUndo(`Removed, with the leftovers on ${all.join(' and ')}.`, c);
+    if (c) offerUndo(`Removed, with the leftovers on ${all.join(' and ')}.${listSyncText(c.list)}`, c);
     setRemoveLeftoversPrompt(null);
   };
 
   const saveSides = (dayName: string, mealId: string, sides: PlannedMealSide[]): boolean => {
-    const saved = !!editDays((days) => editMeal(days, dayName, mealId, (m) => ({ ...m, sides })));
-    if (saved) setToastMessage(sides.length ? 'Sides saved.' : 'Sides removed.');
-    return saved;
+    const c = editDays((days) => editMeal(days, dayName, mealId, (m) => ({ ...m, sides })), undefined, {
+      quiet: true,
+    });
+    if (c) say(sides.length ? 'Sides saved.' : 'Sides removed.', c);
+    return !!c;
   };
 
   /**
    * Copy every day's meals from another week into the week on screen. A week already sent to the
-   * list gets an "Update list" button afterwards, as for any other change.
+   * list has its list brought up to date, as for any other change.
    */
   const copyWeek = (source: MealPlan): boolean => {
     if (!currentPlan) return false;
     let copied = 0;
-    const done = !!editDays((days) => {
-      const r = copyWeekMeals(days, source);
-      copied = r.copied;
-      return r.days;
-    });
-    if (done) setToastMessage(`Copied ${copied} meal${copied === 1 ? '' : 's'} from ${weekLabel(source.startDate)}`);
-    return done;
+    const c = editDays(
+      (days) => {
+        const r = copyWeekMeals(days, source);
+        copied = r.copied;
+        return r.days;
+      },
+      undefined,
+      { quiet: true },
+    );
+    if (c) say(`Copied ${copied} meal${copied === 1 ? '' : 's'} from ${weekLabel(source.startDate)}.`, c);
+    return !!c;
   };
 
   /**
@@ -384,7 +402,7 @@ export function useWeekEditor({
         one && replaceDay
           ? describeMealChange(one.day, replaced[0] || null, mealOnDay(c.after, one.day) || null)
           : `Added ${added} meal${added === 1 ? '' : 's'}`;
-      const fresh = (freshDays.length ? ` ${freshDays.join(' and ')} now cooked fresh.` : '') + nextWeekText(c);
+      const fresh = (freshDays.length ? ` ${freshDays.join(' and ')} now cooked fresh.` : '') + followOnText(c);
       offerUndo(label + (fresh ? '.' + fresh : ''), c);
     }
     return added;
@@ -419,14 +437,15 @@ export function useWeekEditor({
   };
 
   /**
-   * "Update list": the week changed after it was sent. The meal ingredients start again from the
-   * meals (anything already ticked on the Shop tab is unticked); staples and things added stay.
+   * "Update list": only there when the list and the week have got out of step some other way (a
+   * week changed on an older copy of the app). Brings the meal ingredients up to date the same way
+   * every change does, keeping what's ticked (see syncWeekMeals).
    */
   const updateList = () => {
     const plan = live();
     if (!plan) return;
-    sendWeekToShoppingList(store, plan, { resetMeals: true });
-    setToastMessage('Shopping list updated.', seeTheList(plan.id));
+    const r = keepListsInStep(store, [plan.id], { always: true });
+    setToastMessage(('Shopping list updated.' + listSyncText(r)).trim(), seeTheList(plan.id));
   };
 
   return {

@@ -36,7 +36,7 @@ import {
   restoreRemoved,
   HandLine,
 } from '../shopListEdits';
-import { mealLinesOutOfDate, sendWeekToShoppingList } from '../planShopping';
+import { keepListsInStep, mealLinesOutOfDate } from '../planShopping';
 import { weekNeighbours } from '../planning';
 import {
   formatWeekRange,
@@ -720,7 +720,7 @@ export default function ShopTab({
               plan={activePlan}
               around={around}
               staleLines={staleLines}
-              onUpdate={() => sendWeekToShoppingList(store, activePlan)}
+              onUpdate={() => keepListsInStep(store, [activePlan.id], { always: true })}
             />
           )}
           <SaveForNextTime items={newProducts.newItems} onPick={newProducts.offerToSave} />

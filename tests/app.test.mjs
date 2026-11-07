@@ -146,7 +146,7 @@ import {
   otherWeekDay,
   changeWeek,
   undoWeekChange,
-  nextWeekText,
+  followOnText,
   leftoversAfter,
   stampShoppingItem,
   stampPlanDays,
@@ -179,6 +179,9 @@ import {
   listWithWeek,
   mealLinesShopped,
   mealLinesOutOfDate,
+  syncWeekMeals,
+  keepListsInStep,
+  listSyncText,
   buildCatalog,
   INITIAL_GROCERY_DATABASE,
   weekLeftovers,
@@ -3171,7 +3174,7 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
     }));
     assert.deepEqual(week('2026-11-02').days.Sunday.meals, []);
     assert.equal(week('2026-11-09').days.Tuesday.meals[0].type, 'recipe', 'Tuesday now cooked fresh');
-    assert.equal(nextWeekText(c), ' Tue 10 Nov now cooked fresh.');
+    assert.equal(followOnText(c), ' Tue 10 Nov now cooked fresh.');
     undoWeekChange(store, c);
     assert.equal(week('2026-11-02').days.Sunday.meals[0].id, 'sun');
     assert.equal(week('2026-11-09').days.Tuesday.meals[0].type, 'leftover', 'back to leftovers');
@@ -3183,7 +3186,7 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
       { removeOrphansNextWeek: true },
     );
     assert.deepEqual(week('2026-11-09').days.Tuesday.meals, []);
-    assert.equal(nextWeekText(r), ' Removed the leftovers on Tue 10 Nov.');
+    assert.equal(followOnText(r), ' Removed the leftovers on Tue 10 Nov.');
     // A change that doesn't touch next week leaves it alone
     undoWeekChange(store, r);
     const nextBefore = week('2026-11-09');
@@ -3198,6 +3201,163 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
       null,
       'no change',
     );
+  });
+}
+
+// ---------- A sent week's list keeps in step with its meals, keeping what's ticked ----------
+{
+  const weekOf = (meals) =>
+    Object.fromEntries(
+      DAY_NAMES.map((d, i) => [
+        d,
+        { date: `2026-11-0${2 + i}`.replace(/-0(\d\d)$/, '-$1'), meals: meals[d] ? [meals[d]] : [] },
+      ]),
+    );
+  const roast = R('roast', 'Sunday roast', { ingredients: [{ name: 'Beef mince', amount: 500, unit: 'g' }] });
+  const pizza = R('pizza', 'Pizza', { ingredients: [{ name: 'Frozen pizza', amount: 1, unit: '' }] });
+  const recipes = [roast, pizza];
+  const corn = { id: 'gdb-112', name: 'Sweetcorn', amount: 1, unit: 'can', category: 'Canned & Jarred Goods' };
+  const planOf = (meals) => ({
+    id: 'plan-2026-11-02',
+    startDate: '2026-11-02',
+    status: 'finalized',
+    isCurrent: true,
+    days: weekOf(meals),
+  });
+  const sent = planOf({ Tuesday: cook('tue', 'pizza'), Sunday: cook('sun', 'roast') });
+  const changed = planOf({
+    Tuesday: cook('tue', 'pizza', 2, { sides: [corn] }),
+    Sunday: cook('sun', 'roast', 4),
+  });
+  const first = syncWeekMeals([], sent, recipes, []);
+  const mince = (list) => list.filter((i) => /mince/i.test(i.name));
+  const tickAll = (list) => list.map((i) => ({ ...i, checked: true }));
+
+  test('in step: sending puts everything on, and nothing changes when nothing has', () => {
+    assert.equal(first.list.length, 2);
+    assert.deepEqual(first.added.length, 2);
+    const again = syncWeekMeals(first.list, sent, recipes, []);
+    assert.deepEqual(again.list, first.list);
+    assert.deepEqual([again.added, again.more], [[], []]);
+  });
+
+  test('in step: a new side goes on, and more of something already bought goes on as its own line', () => {
+    const bought = tickAll(first.list);
+    const r = syncWeekMeals(bought, changed, recipes, []);
+    assert.deepEqual(r.added, ['Sweetcorn']);
+    assert.equal(r.more.length, 1);
+    assert.match(r.more[0], /mince/i);
+    const [got, topUp] = mince(r.list);
+    assert.equal(got.checked, true, 'what you bought stays ticked');
+    assert.equal(got.amount, mince(first.list)[0].amount, '…with the amount you bought');
+    assert.equal(topUp.checked, false);
+    assert.equal(topUp.id, `${got.id}-more`);
+    const forFour = generateShoppingListForPlan(changed, recipes).find((i) => /mince/i.test(i.name));
+    assert.equal(got.amount + topUp.amount, forFour.amount, 'together, what the meals need now');
+    assert.ok(r.list.find((i) => i.name === 'Sweetcorn' && !i.checked));
+    assert.ok(
+      r.list.filter((i) => /pizza/i.test(i.name)).every((i) => i.checked),
+      'the pizza is still ticked',
+    );
+    // Steady: syncing again changes nothing
+    const again = syncWeekMeals(r.list, changed, recipes, []);
+    assert.deepEqual(again.list, r.list);
+    assert.deepEqual([again.added, again.more], [[], []]);
+    // On the Shop, the row is what's still to buy, and says what you've got
+    const row = aggregateShoppingItems(mince(r.list))[0];
+    assert.equal(row.checked, false);
+    assert.equal(row.amount, topUp.amount);
+    assert.match(row.description, /already got/);
+  });
+
+  test('in step: back down to 2, the top-up goes; meals taken off keep what you ticked', () => {
+    const r = syncWeekMeals(tickAll(first.list), changed, recipes, []);
+    const back = syncWeekMeals(r.list, sent, recipes, []);
+    assert.equal(mince(back.list).length, 1);
+    assert.equal(mince(back.list)[0].checked, true);
+    assert.equal(
+      back.list.find((i) => i.name === 'Sweetcorn'),
+      undefined,
+      'the unticked sweetcorn goes',
+    );
+    // Pizza off the week: ticked, so it stays; unticked, it goes
+    const noPizza = planOf({ Sunday: cook('sun', 'roast') });
+    assert.ok(syncWeekMeals(tickAll(first.list), noPizza, recipes, []).list.some((i) => /pizza/i.test(i.name)));
+    assert.ok(!syncWeekMeals(first.list, noPizza, recipes, []).list.some((i) => /pizza/i.test(i.name)));
+  });
+
+  test('in step: unticked lines take the new amount; yours, and things you removed, are left alone', () => {
+    const r = syncWeekMeals(first.list, changed, recipes, []);
+    assert.equal(mince(r.list).length, 1, 'no top-up when nothing is ticked');
+    assert.equal(mince(r.list)[0].checked, false);
+    assert.equal(r.more.length, 1);
+    const mine = first.list.map((i) => (/mince/i.test(i.name) ? { ...i, amount: 3, userAdjusted: true } : i));
+    assert.equal(mince(syncWeekMeals(mine, changed, recipes, []).list)[0].amount, 3);
+    const cornId = generateShoppingListForPlan(changed, recipes).find((i) => i.name === 'Sweetcorn').id;
+    const gone = syncWeekMeals(first.list, changed, recipes, [cornId]);
+    assert.deepEqual(gone.added, []);
+    // Staples and things added by hand aren't touched
+    const hand = { id: 'h', name: 'Bin bags', amount: 1, unit: '', checked: false, isAdhoc: true, planId: sent.id };
+    assert.ok(syncWeekMeals([...first.list, hand], changed, recipes, []).list.includes(hand));
+  });
+
+  test('in step: what the message says', () => {
+    assert.equal(listSyncText({ added: ['Sweetcorn'], more: [] }), ' Sweetcorn added to the shopping list.');
+    assert.equal(
+      listSyncText({ added: ['Sweetcorn', 'Peas'], more: ['Beef Mince'] }),
+      ' Sweetcorn and Peas added to the shopping list. More beef mince on the shopping list.',
+    );
+    assert.equal(listSyncText({ added: [], more: [] }), '');
+    assert.equal(listSyncText(undefined), '');
+  });
+
+  // A pretend store: plans and a list, changed the way the app's store changes them.
+  const storeWith = (plans, list) => {
+    let state = { mealPlans: plans, recipes, shoppingList: list };
+    return {
+      getState: () => state,
+      changeMealPlan: (id, change) => {
+        const p = state.mealPlans.find((x) => x.id === id);
+        const next = p && change(p);
+        if (next && next !== p) state = { ...state, mealPlans: state.mealPlans.map((x) => (x.id === id ? next : x)) };
+      },
+      updateShoppingList: (change) => {
+        state = { ...state, shoppingList: change(state.shoppingList) };
+      },
+      dismissedShoppingItemIds: [],
+    };
+  };
+
+  test('in step: straight after a change, with no "Update list" left to do', () => {
+    const store = storeWith([{ ...sent, lastFinalizedSnapshot: listSnapshot(sent) }], tickAll(first.list));
+    const c = changeWeek(store, sent.id, (p) => ({ ...p, days: changed.days }));
+    assert.deepEqual(c.list.added, ['Sweetcorn']);
+    assert.match(followOnText(c), /Sweetcorn added to the shopping list\. More .*mince on the shopping list\./i);
+    const plan = store.getState().mealPlans[0];
+    assert.deepEqual(changedDaysSinceList(plan), [], 'the list matches the week');
+    assert.equal(store.getState().shoppingList.length, 4, 'pizza, mince, mince top-up, sweetcorn');
+    // Undo: the sweetcorn and the top-up go again; what you ticked stays
+    undoWeekChange(store, c);
+    const list = store.getState().shoppingList;
+    assert.equal(list.length, 2);
+    assert.ok(list.every((i) => i.checked));
+    assert.deepEqual(changedDaysSinceList(store.getState().mealPlans[0]), []);
+  });
+
+  test('in step: weeks not yet sent are left alone, and so are weeks already in step', () => {
+    const draft = { ...sent, status: 'draft' };
+    const store = storeWith([draft], []);
+    assert.deepEqual(keepListsInStep(store, [draft.id]), { added: [], more: [] });
+    assert.deepEqual(store.getState().shoppingList, []);
+    const inStep = storeWith([{ ...sent, lastFinalizedSnapshot: listSnapshot(sent) }], first.list);
+    const before = inStep.getState();
+    keepListsInStep(inStep, [sent.id, null, 'nope']);
+    assert.equal(inStep.getState(), before, 'nothing written');
+    // "Update list" (always) brings amounts in line even when the meals haven't changed
+    const short = first.list.map((i) => (/mince/i.test(i.name) ? { ...i, amount: 1 } : i));
+    const fix = storeWith([{ ...sent, lastFinalizedSnapshot: listSnapshot(sent) }], short);
+    keepListsInStep(fix, [sent.id], { always: true });
+    assert.deepEqual(mince(fix.getState().shoppingList)[0].amount, mince(first.list)[0].amount);
   });
 }
 

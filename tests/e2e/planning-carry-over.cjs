@@ -1,6 +1,6 @@
 // Leftovers carried over from Sunday into next week: Sunday's cook on Tuesday next week is offered as
-// "Leftovers from Sunday"; next week's list has nothing for it, this week's buys for it ("Update list"
-// appears there); the Cook tab says so; removing Sunday asks about Tuesday, moving it to Saturday
+// "Leftovers from Sunday"; next week's list has nothing for it, this week's buys for it (its list
+// follows by itself); the Cook tab says so; removing Sunday asks about Tuesday, moving it to Saturday
 // keeps them leftovers and to Wednesday (too far back) cooks Tuesday fresh, and Undo puts back both weeks.
 const { chromium, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
@@ -134,16 +134,12 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
   check((await weekName(page)) === 'This Week', '‹ goes to This Week');
   const sun = await cardText(page, 'Sunday');
   check(/Cook for 4/.test(sun) && /Tue 20 Oct/.test(sun), 'Sunday: Cook for 4, leftovers Tue 20 Oct', sun);
-  check((await page.locator('[data-update-list]').count()) === 1, '"Update list" appears on this week');
+  // This week's list followed by itself when Tuesday's leftovers were added: no "Update list"
+  check((await page.locator('[data-update-list]').count()) === 0, 'no "Update list" on this week');
   await page.screenshot({ path: OUT + '/co2-this-week.png' });
-  await page.locator('[data-update-list]').click();
-  await page.waitForTimeout(500);
-  await page.locator('[data-send-confirm]').click();
-  await page.waitForTimeout(700);
   const sausages = forSausage(await listFor(thisId)).find((i) => /sausage/i.test(i.name));
   // The recipe is 8 sausages for 4: Sunday's 2 people and Tuesday's 2 (bought in packs).
   check(sausages?.neededText === '8', "this week's list: sausages for 4 (8)", JSON.stringify(sausages));
-  check((await page.locator('[data-update-list]').count()) === 0, 'Update list done');
 
   // ---------- Cook tab: tonight cooks for 4 ----------
   await page.tab('Cook');
