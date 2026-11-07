@@ -1,7 +1,7 @@
 // Leftovers carried over from Sunday into next week: Sunday's cook on Tuesday next week is offered as
 // "Leftovers from Sunday"; next week's list has nothing for it, this week's buys for it ("Update list"
 // appears there); the Cook tab says so; removing Sunday asks about Tuesday, moving it to Saturday
-// cooks Tuesday fresh, and Undo puts back both weeks.
+// keeps them leftovers and to Wednesday (too far back) cooks Tuesday fresh, and Undo puts back both weeks.
 const { chromium, goTab } = require('./pw.cjs');
 const { reviewSeed } = require('./review-seed.cjs');
 const OUT = process.argv[2];
@@ -189,15 +189,30 @@ const weekName = async (page) => (await page.locator('[data-week-name]').innerTe
     JSON.stringify(tue),
   );
 
-  // ---------- Moving Sunday to Saturday: Tuesday is too far, so it's cooked fresh ----------
+  // ---------- Moving Sunday to Saturday: the leftovers follow (3 days); to Wednesday, too far (6) ----------
   await openDay(page, 'Sunday');
   await page.locator('[data-move-meal]').click();
   await page.locator('[data-move-to="Saturday"]').click();
   await page.waitForTimeout(500);
   tue = (await days(nextId)).Tuesday.meals[0];
   check(
+    tue?.type === 'leftover' && tue.note === 'Reheat from Saturday' && !/cooked fresh/.test(await toast(page)),
+    'swap to Saturday: Tuesday next week is leftovers from Saturday',
+    JSON.stringify(tue) + ' ' + (await toast(page)),
+  );
+  await page.locator('[data-toast-action]').click();
+  await page.waitForTimeout(500);
+  tue = (await days(nextId)).Tuesday.meals[0];
+  check(tue?.type === 'leftover' && tue.note === 'Reheat from Sunday', 'Undo: from Sunday again', JSON.stringify(tue));
+
+  await openDay(page, 'Sunday');
+  await page.locator('[data-move-meal]').click();
+  await page.locator('[data-move-to="Wednesday"]').click();
+  await page.waitForTimeout(500);
+  tue = (await days(nextId)).Tuesday.meals[0];
+  check(
     tue?.type === 'recipe' && /Tue 20 Oct now cooked fresh/.test(await toast(page)),
-    'swap to Saturday: Tuesday next week cooked fresh, and the toast says so',
+    'swap to Wednesday: Tuesday next week cooked fresh, and the toast says so',
     await toast(page),
   );
   await page.locator('[data-toast-action]').click();

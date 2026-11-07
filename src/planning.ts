@@ -14,11 +14,11 @@ const dayCooks = (days: Record<string, DayPlan> | undefined, day: string, recipe
 // ---------- Leftovers carried over from the end of one week into the next ----------
 
 /**
- * How many days back leftovers can come from a cook in the week before: Sunday's roast on Monday or
- * Tuesday, Saturday's on Monday. (The Food Standards Agency says to eat cooked leftovers within 2
- * days.) Within a week, leftovers can come from any earlier day, as they always have.
+ * How many days back leftovers can come from a cook in the week before: last Thursday to Sunday for
+ * Monday, Friday to Sunday for Tuesday, Saturday or Sunday for Wednesday, Sunday for Thursday.
+ * Within a week, leftovers can come from any earlier day, as they always have.
  */
-export const CARRY_OVER_DAYS = 2;
+export const CARRY_OVER_DAYS = 4;
 
 /** The weeks either side of a week: leftovers can carry over from the end of one into the next. */
 export interface WeekNeighbours {

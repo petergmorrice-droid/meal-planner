@@ -3008,16 +3008,22 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
     assert.deepEqual(weekNeighbours(undefined, a), {});
   });
 
-  test('carry over: leftovers can come from the end of last week, up to 2 days back', () => {
-    assert.equal(CARRY_OVER_DAYS, 2);
+  test('carry over: leftovers can come from the end of last week, up to 4 days back', () => {
+    assert.equal(CARRY_OVER_DAYS, 4);
     const last = A({ Saturday: cook('sat', 'roast'), Sunday: sunday() }).days;
     const at = (day) => leftoverSource(B({ [day]: lefto('x', 'roast') }).days, day, lefto('x', 'roast'), last);
     assert.deepEqual(at('Monday'), { day: 'Sunday', lastWeek: true }, 'the nearest cook');
     assert.deepEqual(at('Tuesday'), { day: 'Sunday', lastWeek: true });
-    assert.equal(at('Wednesday'), null, 'three days is too long');
+    assert.deepEqual(at('Thursday'), { day: 'Sunday', lastWeek: true }, 'four days');
+    assert.equal(at('Friday'), null, 'five days is too long');
     const satOnly = A({ Saturday: cook('sat', 'roast') }).days;
-    assert.deepEqual(leftoverSource({}, 'Monday', tuesday, satOnly), { day: 'Saturday', lastWeek: true });
-    assert.equal(leftoverSource({}, 'Tuesday', tuesday, satOnly), null, 'Saturday to Tuesday is three days');
+    const from = (day, days) => leftoverSource({}, day, tuesday, days)?.day ?? null;
+    assert.equal(from('Wednesday', satOnly), 'Saturday', 'Saturday to Wednesday is four days');
+    assert.equal(from('Thursday', satOnly), null, 'Saturday to Thursday is five');
+    const thuOnly = A({ Thursday: cook('thu', 'roast') }).days;
+    assert.equal(from('Monday', thuOnly), 'Thursday');
+    assert.equal(from('Tuesday', thuOnly), null);
+    assert.equal(from('Monday', A({ Wednesday: cook('wed', 'roast') }).days), null, 'Wednesday to Monday is five');
     // A cook this week comes first; without last week, nothing's found there
     const b = B({ Monday: cook('mon', 'roast'), Tuesday: tuesday }).days;
     assert.deepEqual(leftoverSource(b, 'Tuesday', tuesday, last), { day: 'Monday', lastWeek: false });
@@ -3032,7 +3038,8 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
     const last = A().days;
     assert.equal(lastWeekCookFor('Monday', 'roast', last), 'Sunday');
     assert.equal(lastWeekCookFor('Tuesday', 'roast', last), 'Sunday');
-    assert.equal(lastWeekCookFor('Wednesday', 'roast', last), null);
+    assert.equal(lastWeekCookFor('Thursday', 'roast', last), 'Sunday');
+    assert.equal(lastWeekCookFor('Friday', 'roast', last), null);
     assert.equal(lastWeekCookFor('Tuesday', 'other', last), null);
     assert.equal(lastWeekCookFor('Tuesday', 'roast', null), null);
     assert.equal(otherWeekDay(last, 'Sunday', 'last'), 'Sun 8 Nov');
@@ -3054,10 +3061,10 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
     const sideLines = lines(withSide, { prev: a });
     assert.equal(sideLines.length, 1);
     assert.match(sideLines[0], /Peas/);
-    // Too far back: Wednesday's "leftovers" are bought that week
-    const wed = B({ Wednesday: lefto('w', 'roast') });
-    assert.equal(lines(wed, { prev: a }).length, 1);
-    assert.deepEqual(lines(a, { next: wed }), lines(A()));
+    // Too far back: Friday's "leftovers" are bought that week
+    const fri = B({ Friday: lefto('f', 'roast') });
+    assert.equal(lines(fri, { prev: a }).length, 1);
+    assert.deepEqual(lines(a, { next: fri }), lines(A()));
   });
 
   test('carry over: changing next week makes "Update list" appear on the week that buys for it', () => {
@@ -3085,11 +3092,14 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
       carriedLeftovers(a, 'Sunday', sunday(), b).map((c) => c.day),
       ['Tuesday'],
     );
-    // Saturday's cook doesn't claim Tuesday (three days), and a fresh Monday cook takes Tuesday's leftovers
+    // Saturday's cook claims Tuesday (three days), Thursday's doesn't (five); a fresh Monday cook takes them
+    const sat = cook('sat', 'roast');
     assert.deepEqual(
-      carriedLeftovers(A({ Saturday: cook('sat', 'roast') }).days, 'Saturday', cook('sat', 'roast'), b),
-      [],
+      carriedLeftovers(A({ Saturday: sat }).days, 'Saturday', sat, b).map((c) => c.day),
+      ['Tuesday'],
     );
+    const thu = cook('thu', 'roast');
+    assert.deepEqual(carriedLeftovers(A({ Thursday: thu }).days, 'Thursday', thu, b), []);
     const monCooks = B({ Monday: cook('mon', 'roast'), Tuesday: tuesday }).days;
     assert.deepEqual(carriedLeftovers(a, 'Sunday', sunday(), monCooks), []);
   });
@@ -3106,8 +3116,8 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
     const moved = moveMeal(B({ Tuesday: tuesday, Thursday: cook('th', 'pie') }).days, 'Tuesday', 'Monday', last);
     assert.deepEqual(names(moved.days), ['Mon:L-roast', 'Thu:pie']);
     assert.deepEqual(moved.freshDays, []);
-    const tooLate = moveMeal(B().days, 'Tuesday', 'Wednesday', last);
-    assert.deepEqual(tooLate.freshDays, ['Wednesday'], 'three days after Sunday: cooked fresh');
+    const tooLate = moveMeal(B().days, 'Tuesday', 'Friday', last);
+    assert.deepEqual(tooLate.freshDays, ['Friday'], 'five days after Sunday: cooked fresh');
     const filled = fillDays(B().days, [{ day: 'Monday', kind: 'recipe', recipeId: 'pie', name: 'pie' }], 2, {
       newId: () => 'n',
       prevDays: last,
@@ -3128,12 +3138,17 @@ test('Slow cook: worked out from the steps, name or tags, or marked on the recip
     const gone = followWeekBefore(next, before, removed, { removeOrphans: true });
     assert.deepEqual(gone.removedDays, ['Tuesday']);
     assert.deepEqual(gone.days.Tuesday.meals, []);
-    // Sunday's roast moved to Saturday: Monday's leftovers follow it, Tuesday's (three days) are cooked fresh
+    // Sunday's roast moved to Saturday: the leftovers follow it; to Wednesday, it's too far, so they're cooked fresh
     const both = B({ Monday: lefto('mon', 'roast', 'Reheat from Sunday'), Tuesday: tuesday }).days;
-    const toSat = moveMeal(before, 'Sunday', 'Saturday').days;
-    const r = followWeekBefore(both, before, toSat);
-    assert.equal(r.days.Monday.meals[0].note, 'Reheat from Saturday');
-    assert.deepEqual(r.freshDays, ['Tuesday']);
+    const toSat = followWeekBefore(both, before, moveMeal(before, 'Sunday', 'Saturday').days);
+    assert.equal(toSat.days.Monday.meals[0].note, 'Reheat from Saturday');
+    assert.equal(toSat.days.Tuesday.meals[0].note, 'Reheat from Saturday');
+    assert.deepEqual(toSat.freshDays, []);
+    const toWed = followWeekBefore(both, before, moveMeal(before, 'Sunday', 'Wednesday').days);
+    assert.deepEqual(toWed.freshDays, ['Monday', 'Tuesday'], 'five and six days');
+    // Thursday's leftovers (four days after Sunday) follow it too
+    const thu = B({ Thursday: lefto('th', 'roast', 'Reheat from Sunday') }).days;
+    assert.deepEqual(carriedOrphans(thu, before, removed), ['Thursday']);
     // Nothing next week depends on the change: nothing to do
     const otherDay = changeDayMeal(before, 'Wednesday', null, cook('w', 'pie')).days;
     assert.equal(followWeekBefore(next, before, otherDay), null);
