@@ -1,6 +1,20 @@
 import { useMemo, useState } from 'react';
 import Fuse from 'fuse.js';
-import { X, Plus, Flame, Zap, Sparkles, Trash2, ShoppingCart, ChevronRight, Search, Check, Tag } from 'lucide-react';
+import {
+  X,
+  Plus,
+  Flame,
+  Zap,
+  Sparkles,
+  Trash2,
+  ShoppingCart,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  Search,
+  Check,
+  Tag,
+} from 'lucide-react';
 import { Recipe, CookingMethod, Ingredient, GroceryItem } from '../types';
 import { catalogForState, productUnit } from '../shopping';
 import { GROCERY_AISLES, getGroceryAisle, type FoodAisle } from '../utils';
@@ -19,6 +33,8 @@ import {
   QUICK_MINUTES,
   SUGGESTED_TAGS,
   type BuiltInTag,
+  moveStep,
+  insertStep,
 } from '../recipeInfo';
 import { TagIcon } from './TagIcon';
 import type { AppStore } from '../store';
@@ -42,6 +58,20 @@ export function methodSteps(recipe: Recipe, method: CookingMethod) {
       ? { ...recipe, methodInstructions: { ...(recipe.methodInstructions || {}), [method]: next } }
       : { ...recipe, instructions: next };
   return { methods, steps, writeSteps };
+}
+
+/** After the steps change, focus something in step `idx` (the moved step's arrow, or a new step's box). */
+function focusStep(idx: number, what: 'up' | 'down' | 'text') {
+  requestAnimationFrame(() => {
+    const row = document.querySelector<HTMLElement>(`[data-step-row="${idx}"]`);
+    if (!row) return;
+    let el = row.querySelector<HTMLElement>(what === 'text' ? 'textarea' : `[data-step-move="${what}"]`);
+    // At the top or bottom that arrow is greyed out; use the other one.
+    if (el instanceof HTMLButtonElement && el.disabled)
+      el = row.querySelector<HTMLElement>(`[data-step-move="${what === 'up' ? 'down' : 'up'}"]`);
+    el?.focus({ preventScroll: true });
+    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
 }
 
 /**
@@ -439,28 +469,75 @@ export function RecipeEditor({
           )}
         </div>
         <div className="space-y-2">
-          {steps.map((step, idx) => (
-            <div key={idx} className="flex gap-2 items-start">
-              <span className="w-8 h-8 rounded-full bg-zinc-200 text-zinc-700 text-sm font-bold flex items-center justify-center shrink-0 mt-1">
-                {idx + 1}
-              </span>
-              <textarea
-                value={step}
-                onChange={(e) => onChange(writeSteps(steps.map((s, i) => (i === idx ? e.target.value : s))))}
-                aria-label={`Step ${idx + 1}`}
-                rows={3}
-                className="flex-1 min-w-0 rounded-xl border border-zinc-300 px-3 py-2 text-base sm:text-sm leading-relaxed resize-y bg-white"
-              />
-              <button
-                type="button"
-                onClick={() => onChange(writeSteps(steps.filter((_, i) => i !== idx)))}
-                className="w-10 h-10 rounded-lg text-zinc-500 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center shrink-0 cursor-pointer"
-                aria-label={`Remove step ${idx + 1}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+          {steps.map((step, idx) => {
+            const move = (to: number, dir: 'up' | 'down') => {
+              onChange(writeSteps(moveStep(steps, idx, to)));
+              focusStep(to, dir);
+            };
+            const arrow =
+              'w-8 h-8 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 flex items-center justify-center cursor-pointer disabled:opacity-25 disabled:cursor-default disabled:hover:bg-transparent';
+            return (
+              <div key={idx} data-step-row={idx} className="flex gap-2 items-start">
+                <div className="flex flex-col items-center shrink-0 mt-1 gap-0.5">
+                  <span className="w-8 h-8 rounded-full bg-zinc-200 text-zinc-700 text-sm font-bold flex items-center justify-center">
+                    {idx + 1}
+                  </span>
+                  <button
+                    type="button"
+                    data-step-move="up"
+                    onClick={() => move(idx - 1, 'up')}
+                    disabled={idx === 0}
+                    className={arrow}
+                    aria-label={`Move step ${idx + 1} up`}
+                  >
+                    <ChevronUp className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    data-step-move="down"
+                    onClick={() => move(idx + 1, 'down')}
+                    disabled={idx === steps.length - 1}
+                    className={arrow}
+                    aria-label={`Move step ${idx + 1} down`}
+                  >
+                    <ChevronDown className="w-5 h-5" />
+                  </button>
+                </div>
+                <textarea
+                  value={step}
+                  onChange={(e) => onChange(writeSteps(steps.map((s, i) => (i === idx ? e.target.value : s))))}
+                  aria-label={`Step ${idx + 1}`}
+                  rows={4}
+                  className="flex-1 min-w-0 rounded-xl border border-zinc-300 px-3 py-2 text-base sm:text-sm leading-relaxed resize-y bg-white"
+                />
+                <div className="flex flex-col items-center shrink-0 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onChange(writeSteps(steps.filter((_, i) => i !== idx)))}
+                    className="w-10 h-10 rounded-lg text-zinc-500 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center cursor-pointer"
+                    aria-label={`Remove step ${idx + 1}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  {idx < steps.length - 1 && (
+                    <button
+                      type="button"
+                      data-step-insert={idx + 1}
+                      onClick={() => {
+                        onChange(writeSteps(insertStep(steps, idx + 1)));
+                        focusStep(idx + 1, 'text');
+                      }}
+                      className="w-10 h-10 rounded-lg text-emerald-700 hover:bg-emerald-50 flex items-center justify-center cursor-pointer"
+                      aria-label={`Add a step after step ${idx + 1}`}
+                      title="Add a step after this one"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
           <button
             type="button"
             onClick={() => onChange(writeSteps([...steps, '']))}

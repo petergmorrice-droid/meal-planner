@@ -401,6 +401,20 @@ export function changedFields<T extends object>(before: T, after: T): Partial<T>
   return out;
 }
 
+// ---- Editing steps ----
+
+/** The steps with one moved from `from` to `to`. */
+export function moveStep(steps: string[], from: number, to: number): string[] {
+  if (from === to || from < 0 || to < 0 || from >= steps.length || to >= steps.length) return steps;
+  const next = [...steps];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+/** The steps with an empty one put in at `at` (the ones after it move down). */
+export const insertStep = (steps: string[], at: number): string[] => [...steps.slice(0, at), '', ...steps.slice(at)];
+
 // ---- Tags ----
 //
 // One set of tags on screen, kept in three places underneath: the appliance (`cookingMethods`) and
@@ -420,7 +434,9 @@ export type BuiltInTag =
   | 'gluten_free'
   | 'dairy_free'
   | 'meat'
-  | 'fish';
+  | 'fish'
+  | 'pasta'
+  | 'curry';
 export interface RecipeTag {
   /** A built-in tag's id, or "tag:" and the word for one of yours. */
   key: string;
@@ -439,6 +455,8 @@ export const BUILT_IN_TAGS: { key: BuiltInTag; label: string; group: TagGroup }[
   { key: 'dairy_free', label: 'Dairy-Free', group: 'diet' },
   { key: 'meat', label: 'Meat', group: 'diet' },
   { key: 'fish', label: 'Fish', group: 'diet' },
+  { key: 'pasta', label: 'Pasta', group: 'diet' },
+  { key: 'curry', label: 'Curry', group: 'diet' },
 ];
 const BUILT_IN = new Map(BUILT_IN_TAGS.map((t) => [t.key as string, t]));
 
@@ -448,6 +466,8 @@ const WORD_TAGS: Partial<Record<BuiltInTag, string[]>> = {
   dairy_free: ['dairy-free', 'dairy free', 'df'],
   meat: ['meat'],
   fish: ['fish', 'seafood'],
+  pasta: ['pasta'],
+  curry: ['curry', 'curries'],
 };
 /**
  * Old copies of the appliance and vegetarian / vegan buttons in `tags`, and "Quick" typed by hand

@@ -36,6 +36,8 @@ export {
   quickSetByYou,
   tagFilterOptions,
   matchesTagFilters,
+  moveStep,
+  insertStep,
 } from '../src/recipeInfo';
 export {
   aggregateShoppingItems,

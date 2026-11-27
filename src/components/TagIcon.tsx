@@ -30,6 +30,7 @@ import {
   Users,
   Utensils,
   Wallet,
+  Wheat,
   WheatOff,
   Zap,
   type LucideIcon,
@@ -47,6 +48,8 @@ const BUILT_IN: Record<string, { icon: LucideIcon; color: string }> = {
   dairy_free: { icon: MilkOff, color: 'text-sky-600' },
   meat: { icon: Beef, color: 'text-red-700' },
   fish: { icon: Fish, color: 'text-blue-600' },
+  pasta: { icon: Wheat, color: 'text-amber-600' },
+  curry: { icon: Soup, color: 'text-orange-600' },
 };
 
 /** Words in your own tags and the symbol they get (first match wins). */

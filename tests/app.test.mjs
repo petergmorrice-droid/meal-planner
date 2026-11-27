@@ -43,6 +43,8 @@ import {
   ownTags,
   hasBuiltInTag,
   setBuiltInTag,
+  moveStep,
+  insertStep,
   tidyRecipeTags,
   isQuickRecipe,
   quickSetByYou,
@@ -429,6 +431,38 @@ test('filtering by tags: built-in ones any recipe has, then yours by use; all ch
   });
   assert.equal(matchesTagFilters(marked, ['ninja']), false, 'marked Ninja but no Ninja steps');
   assert.equal(matchesTagFilters(R('d', 'D', { tags: undefined }), []), true);
+});
+
+test('Pasta and Curry are diet tags; typed words switch them on', () => {
+  const r = R('p', 'Penne', { tags: [] });
+  const on = setBuiltInTag(setBuiltInTag(r, 'pasta', true), 'curry', true);
+  assert.deepEqual(on.tags, ['Pasta', 'Curry']);
+  assert.equal(hasBuiltInTag(on, 'pasta'), true);
+  assert.deepEqual(
+    recipeTags(on).map((t) => [t.label, t.group]),
+    [
+      ['Pasta', 'diet'],
+      ['Curry', 'diet'],
+    ],
+  );
+  assert.deepEqual(ownTags(on), [], 'not shown again as your own tags');
+  const typed = addTag(r, 'curry');
+  assert.equal(hasBuiltInTag(typed, 'curry'), true, 'typing "curry" is the built-in tag');
+  assert.equal(hasBuiltInTag(R('o', 'Old', { tags: ['pasta'] }), 'pasta'), true, 'an old own "pasta" tag counts');
+  assert.deepEqual(setBuiltInTag(on, 'pasta', false).tags, ['Curry']);
+});
+
+test('steps can be moved and new ones put in between', () => {
+  const s = ['a', 'b', 'c', 'd'];
+  assert.deepEqual(moveStep(s, 2, 1), ['a', 'c', 'b', 'd'], 'up one');
+  assert.deepEqual(moveStep(s, 0, 1), ['b', 'a', 'c', 'd'], 'down one');
+  assert.deepEqual(moveStep(s, 3, 0), ['d', 'a', 'b', 'c']);
+  assert.equal(moveStep(s, 0, -1), s, 'past the top: unchanged');
+  assert.equal(moveStep(s, 3, 4), s, 'past the bottom: unchanged');
+  assert.deepEqual(s, ['a', 'b', 'c', 'd'], 'the original is left alone');
+  assert.deepEqual(insertStep(s, 2), ['a', 'b', '', 'c', 'd']);
+  assert.deepEqual(insertStep(s, 0), ['', 'a', 'b', 'c', 'd']);
+  assert.deepEqual(insertStep([], 0), ['']);
 });
 
 test('Vegetarian / Vegan keep the flags and old tags in step', () => {
