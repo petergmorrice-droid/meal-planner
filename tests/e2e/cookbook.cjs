@@ -1,7 +1,7 @@
 // Cookbook: search, one-tap filters, favourites, share, and the new add-recipe flow (paste, link, photo,
 // check screen with Shop as, duplicates), plus Android share target. iPhone-sized screen, Gemini simulated.
 const { chromium, devices, goTab } = require('./pw.cjs');
-const { reviewSeed } = require('./review-seed.cjs');
+const { reviewSeed, TEST_NOW } = require('./review-seed.cjs');
 const OUT = process.argv[2];
 const URL = process.env.APP_URL || 'http://127.0.0.1:4173/';
 let failures = 0;
@@ -49,6 +49,8 @@ let copied = (name) => ({
 
 async function open(browser, { s = seed(), url = URL, pageRead = 'ok' } = {}) {
   const ctx = await browser.newContext({ ...devices['iPhone 13'], locale: 'en-GB', timezoneId: 'Europe/London' });
+  // "Today" as the sample data has it, so "not had lately" etc. don't depend on when the tests run.
+  await ctx.clock.install({ time: TEST_NOW });
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new globalThis.URL(URL).origin });
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   const calls = [];
